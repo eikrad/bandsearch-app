@@ -7,6 +7,8 @@
     "lint": "eslint \"src/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test",
+    "build": "esbuild src/browserEntry.js --bundle --outfile=dist/bundle.js --platform=browser --minify",
+    "build:watch": "esbuild src/browserEntry.js --bundle --outfile=dist/bundle.js --platform=browser --sourcemap --watch",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml"
@@ -16,6 +18,7 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "esbuild": "^0.28.0"
   }
 }

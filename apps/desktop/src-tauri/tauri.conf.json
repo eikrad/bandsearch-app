@@ -5,7 +5,8 @@
   "identifier": "app.bandsearch",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420"
+    "beforeDevCommand": "npm run build:watch --workspace @bandsearch/desktop",
+    "beforeBuildCommand": "npm run build --workspace @bandsearch/desktop"
   },
   "app": {
     "windows": [
