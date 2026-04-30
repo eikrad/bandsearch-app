@@ -13,8 +13,8 @@ function validateRecommendationOutput(output) {
 
 function createRecommendationAgent({ runModel }) {
   return {
-    async recommend({ query, artists }) {
-      const output = await runModel({ query, artists });
+    async recommend({ query, artists, preferenceContext = "" }) {
+      const output = await runModel({ query, artists, preferenceContext });
       return validateRecommendationOutput(output);
     },
   };
@@ -42,10 +42,11 @@ async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
     temperature: 0.4,
   });
 
-  return async function runModel({ query, artists }) {
+  return async function runModel({ query, artists, preferenceContext = "" }) {
     const artistContext = artists
       .map((artist) => `${artist.name} (score: ${artist.score})`)
       .join(", ");
+    const prefBlock = preferenceContext ? `\nuser_preferences: ${preferenceContext}` : "";
     const prompt = [
       {
         role: "system",
@@ -54,7 +55,7 @@ async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
       },
       {
         role: "user",
-        content: `query: ${query}\nartist_context: ${artistContext}\nlimit: 3`,
+        content: `query: ${query}\nartist_context: ${artistContext}${prefBlock}\nlimit: 3`,
       },
     ];
 

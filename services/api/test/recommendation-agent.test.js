@@ -27,6 +27,36 @@ test("recommendation agent maps structured model output", async () => {
   assert.equal(recommendations[0].sourceSignals[0], "musicbrainz_search");
 });
 
+test("recommendation agent forwards preferenceContext to runModel", async () => {
+  let capturedArgs;
+  const fakeRunner = async (args) => {
+    capturedArgs = args;
+    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+  };
+
+  const agent = createRecommendationAgent({ runModel: fakeRunner });
+  await agent.recommend({
+    query: "dark ambient",
+    artists: [],
+    preferenceContext: "saved: Sunn O))) rated 5",
+  });
+
+  assert.equal(capturedArgs.preferenceContext, "saved: Sunn O))) rated 5");
+});
+
+test("recommendation agent defaults preferenceContext to empty string when omitted", async () => {
+  let capturedArgs;
+  const fakeRunner = async (args) => {
+    capturedArgs = args;
+    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+  };
+
+  const agent = createRecommendationAgent({ runModel: fakeRunner });
+  await agent.recommend({ query: "dark ambient", artists: [] });
+
+  assert.equal(capturedArgs.preferenceContext, "");
+});
+
 test("recommendation agent rejects invalid model output shape", async () => {
   const agent = createRecommendationAgent({
     runModel: async () => [{ name: "missing fields" }],
