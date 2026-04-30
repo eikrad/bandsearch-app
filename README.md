@@ -1,25 +1,29 @@
 # Bandsearch
 
-Bandsearch is an AI-powered music recommendation app focused on niche bands and lesser-known artists.
-This repository is structured as a monorepo for the Tauri desktop client, the API, and shared schemas.
+[![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
+![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
+![Version: 0.2.0--alpha.1](https://img.shields.io/badge/version-0.2.0--alpha.1-blue)
 
-## Current Status
+Bandsearch is an AI-powered music recommendation app for niche and lesser-known artists.
+It combines conversational AI with MusicBrainz metadata and preference memory.
 
-- Phase 0 foundation is complete: repository structure, CI baseline, Apache-2.0 license.
-- Phase 1 is in progress: recommendation core with MusicBrainz + LangChain + Gemini.
+Current release stage: **alpha**.
 
 ## Monorepo Structure
 
-- `apps/desktop` - desktop app (Tauri + React, placeholder in Phase 0)
+- `apps/desktop` - desktop app (Tauri + React shell)
 - `services/api` - Node.js/Express API
 - `shared/schemas` - shared API and domain schemas
 - `docs/ROADMAP.md` - product and technical roadmap
 
-## Local Start (API)
+## Quick Start (API)
 
 ```bash
 npm install
 cp .env.example .env
+## optional for Postgres:
+## set PREFERENCE_STORE=postgres and DATABASE_URL in .env
+## npm run migrate --workspace @bandsearch/api
 node services/api/src/server.js
 ```
 
@@ -48,7 +52,7 @@ Default port: `3001` (configurable via `PORT`).
 - Error contract: structured error payloads (`error.code`, `error.message`) across endpoints
 - Observability: JSON request logging with request IDs and response timings
 
-## Data Persistence (MVP)
+## Persistence
 
 Saved preferences are currently stored in-memory. Data is reset on API restart and not yet persisted to a database.
 The API now uses a `PreferenceRepository` abstraction so a database-backed implementation can be plugged in without changing route contracts.
@@ -63,7 +67,7 @@ npm run migrate --workspace @bandsearch/api
 node services/api/src/server.js
 ```
 
-## API Reference (Current)
+## API Reference
 
 ### System
 
@@ -127,9 +131,13 @@ Example:
   - recommendation mode normalization (`fresh` / `preference-aware`)
 - The API and tests already use these contracts so backend and frontend can share the same data contract.
 
-## CI
+## CI Quality Gates
 
-CI runs via `.github/workflows/ci.yml` and currently executes lint, typecheck, and tests across all workspaces.
+CI runs via `.github/workflows/ci.yml` and executes:
+- JavaScript linting (ESLint)
+- Python lint/format checks (Ruff + Black)
+- Type checks (`tsc --noEmit`)
+- Workspace tests (`node --test`)
 
 ## License
 
