@@ -1,4 +1,6 @@
 const express = require("express");
+const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
+const { version: appVersion } = require("../../../package.json");
 const {
   validateRecommendationRequest,
   createRecommendationService,
@@ -14,13 +16,21 @@ function createApp({ recommendationService, preferenceMemory } = {}) {
 
   const resolvedRecommendationService = recommendationService;
 
+  app.get("/health", (_req, res) => {
+    return res.status(200).json({ status: "ok" });
+  });
+
+  app.get("/version", (_req, res) => {
+    return res.status(200).json({ version: appVersion });
+  });
+
   app.post("/recommendations", (req, res) => {
     const validation = validateRecommendationRequest(req.body);
     if (!validation.ok) {
       return res.status(400).json({ error: validation.error });
     }
 
-    const requestedMode = req.body?.mode === "preference-aware" ? "preference-aware" : "fresh";
+    const requestedMode = validateRecommendationMode(req.body?.mode);
     const preferenceContext =
       requestedMode === "preference-aware" ? resolvedPreferenceMemory.buildContext() : "";
 

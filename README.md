@@ -26,6 +26,14 @@ Standard-Port: `3001` (ueber `PORT` anpassbar).
 
 ## API Referenz (aktueller Stand)
 
+### System
+
+- `GET /health`
+  - Zweck: einfacher Liveness-Check (`{ "status": "ok" }`)
+
+- `GET /version`
+  - Zweck: liefert die aktuelle App-Version aus `package.json`
+
 ### Recommendations
 
 - `POST /recommendations`
@@ -69,6 +77,15 @@ Beispiel:
 
 - `GET /preferences/context`
   - Zweck: liefert verdichteten Preference-Kontext fuer `preference-aware` Suche
+
+## Shared Contracts
+
+- Gemeinsame Validierungs-Contracts liegen in `shared/schemas/src/contracts.js`.
+- Aktuell zentralisiert:
+  - Recommendation-Item-Validierung
+  - Saved-Band-Validierung
+  - Recommendation-Mode-Normalisierung (`fresh` / `preference-aware`)
+- API und Tests nutzen diese Contracts bereits, damit Backend und spaeter Frontend denselben Datenvertrag teilen.
 
 ## CI
 

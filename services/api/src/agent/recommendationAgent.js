@@ -1,11 +1,7 @@
+const { validateRecommendationItem } = require("../../../../shared/schemas/src/contracts");
+
 function isValidRecommendation(item) {
-  return (
-    item &&
-    typeof item.artist === "string" &&
-    item.artist.length > 0 &&
-    typeof item.why === "string" &&
-    Array.isArray(item.sourceSignals)
-  );
+  return validateRecommendationItem(item).ok;
 }
 
 function validateRecommendationOutput(output) {

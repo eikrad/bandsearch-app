@@ -6,6 +6,6 @@
   "scripts": {
     "lint": "echo \"schemas lint placeholder\"",
     "typecheck": "echo \"schemas typecheck placeholder\"",
-    "test": "echo \"schemas test placeholder\""
+    "test": "node --test"
   }
 }

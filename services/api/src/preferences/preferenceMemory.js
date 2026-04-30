@@ -1,27 +1,5 @@
 const { randomUUID } = require("node:crypto");
-
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function validateSavedBandInput(input) {
-  if (!input || !isNonEmptyString(input.musicbrainzArtistId)) {
-    return { ok: false, error: "musicbrainzArtistId is required" };
-  }
-  if (!isNonEmptyString(input.name)) {
-    return { ok: false, error: "name is required" };
-  }
-  if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
-    return { ok: false, error: "rating must be an integer between 1 and 5" };
-  }
-  if (!Array.isArray(input.categories)) {
-    return { ok: false, error: "categories must be an array" };
-  }
-  if (typeof input.note !== "string") {
-    return { ok: false, error: "note must be a string" };
-  }
-  return { ok: true };
-}
+const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
 
 function createPreferenceMemory() {
   const savedBands = [];
