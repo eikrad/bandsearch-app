@@ -60,7 +60,8 @@ async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
     ];
 
     const response = await withTimeout(model.invoke(prompt), timeoutMs);
-    const text = typeof response.content === "string" ? response.content : "";
+    const raw = typeof response.content === "string" ? response.content : "";
+    const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     const parsed = JSON.parse(text);
     return parsed;
   };
