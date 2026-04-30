@@ -2,6 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createApp } = require("../src/app");
+const { createPreferenceRepository } = require("../src/preferences/preferenceRepository");
+
+function freshApp() {
+  return createApp({ preferenceRepository: createPreferenceRepository({ preferenceStore: "memory" }) });
+}
 
 async function makeRequest(app, method, path, payload) {
   const server = app.listen(0);
@@ -22,7 +27,7 @@ async function makeRequest(app, method, path, payload) {
 }
 
 test("POST /preferences stores a saved band", async () => {
-  const app = createApp();
+  const app = freshApp();
   const result = await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -37,7 +42,7 @@ test("POST /preferences stores a saved band", async () => {
 });
 
 test("POST /preferences rejects invalid rating", async () => {
-  const app = createApp();
+  const app = freshApp();
   const result = await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -52,7 +57,7 @@ test("POST /preferences rejects invalid rating", async () => {
 });
 
 test("GET /preferences/context returns condensed preference context", async () => {
-  const app = createApp();
+  const app = freshApp();
   await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -68,7 +73,7 @@ test("GET /preferences/context returns condensed preference context", async () =
 });
 
 test("GET /preferences returns all saved bands", async () => {
-  const app = createApp();
+  const app = freshApp();
   await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -92,7 +97,7 @@ test("GET /preferences returns all saved bands", async () => {
 });
 
 test("PATCH /preferences/:id updates saved band fields", async () => {
-  const app = createApp();
+  const app = freshApp();
   const created = await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -114,7 +119,7 @@ test("PATCH /preferences/:id updates saved band fields", async () => {
 });
 
 test("PATCH /preferences/:id returns 404 for unknown id", async () => {
-  const app = createApp();
+  const app = freshApp();
   const result = await makeRequest(app, "PATCH", "/preferences/does-not-exist", {
     rating: 4,
   });
@@ -125,7 +130,7 @@ test("PATCH /preferences/:id returns 404 for unknown id", async () => {
 });
 
 test("DELETE /preferences/:id removes a saved band", async () => {
-  const app = createApp();
+  const app = freshApp();
   const created = await makeRequest(app, "POST", "/preferences", {
     musicbrainzArtistId: "a1",
     name: "Alcest",
@@ -148,7 +153,7 @@ test("DELETE /preferences/:id removes a saved band", async () => {
 });
 
 test("DELETE /preferences/:id returns 404 for unknown id", async () => {
-  const app = createApp();
+  const app = freshApp();
   const result = await makeRequest(app, "DELETE", "/preferences/does-not-exist");
 
   assert.equal(result.status, 404);

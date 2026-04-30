@@ -10,7 +10,8 @@
     "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
-    "@langchain/google-genai": "^0.2.13",
+    "@langchain/google-genai": "^2.1.29",
+    "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^4.21.2",

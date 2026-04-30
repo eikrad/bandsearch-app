@@ -1,6 +1,8 @@
 const { Pool } = require("pg");
+const Database = require("better-sqlite3");
 const { createInMemoryPreferenceRepository } = require("./preferenceMemory");
 const { createPostgresPreferenceRepository } = require("./postgresPreferenceRepository");
+const { createSqlitePreferenceRepository } = require("./sqlitePreferenceRepository");
 
 /**
  * PreferenceRepository contract (storage abstraction):
@@ -36,7 +38,24 @@ function createPreferenceRepository(runtimeConfig = {}) {
     });
     return createPostgresPreferenceRepository({ pool });
   }
-  return createInMemoryPreferenceRepository();
+  if (runtimeConfig.preferenceStore === "memory") {
+    return createInMemoryPreferenceRepository();
+  }
+  // Default: SQLite — persistent, zero-config, works everywhere
+  const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS saved_bands (
+      id TEXT PRIMARY KEY,
+      musicbrainz_artist_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+      categories TEXT NOT NULL DEFAULT '[]',
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  return createSqlitePreferenceRepository({ db });
 }
 
 module.exports = {

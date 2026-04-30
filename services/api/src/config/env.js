@@ -24,9 +24,17 @@ function validateRuntimeEnv(env = process.env) {
     throw new Error("LANGSMITH_API_KEY is required when LANGSMITH_TRACING=true");
   }
 
-  const preferenceStore = env.PREFERENCE_STORE === "postgres" ? "postgres" : "memory";
+  const preferenceStore =
+    env.PREFERENCE_STORE === "postgres"
+      ? "postgres"
+      : env.PREFERENCE_STORE === "memory"
+        ? "memory"
+        : "sqlite";
+
   const databaseSsl = normalizeBoolean(env.DATABASE_SSL, true);
   const databaseUrl = env.DATABASE_URL || "";
+  const databasePath = env.DATABASE_PATH || "bandsearch.db";
+
   if (preferenceStore === "postgres" && !databaseUrl) {
     throw new Error("DATABASE_URL is required when PREFERENCE_STORE=postgres");
   }
@@ -40,6 +48,7 @@ function validateRuntimeEnv(env = process.env) {
     preferenceStore,
     databaseUrl,
     databaseSsl,
+    databasePath,
   };
 }
 
