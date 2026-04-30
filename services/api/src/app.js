@@ -12,13 +12,13 @@ const {
 } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
-const { createPreferenceMemory } = require("./preferences/preferenceMemory");
+const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { sendError } = require("./http/errors");
 
 /**
- * @param {{ recommendationService?: any, preferenceMemory?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationService?: any, preferenceRepository?: any, runtimeConfig?: any }} [options]
  */
-function createApp({ recommendationService, preferenceMemory, runtimeConfig = {} } = {}) {
+function createApp({ recommendationService, preferenceRepository, runtimeConfig = {} } = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -59,7 +59,9 @@ function createApp({ recommendationService, preferenceMemory, runtimeConfig = {}
     },
   });
 
-  const resolvedPreferenceMemory = preferenceMemory || createPreferenceMemory();
+  const resolvedPreferenceRepository = assertPreferenceRepository(
+    preferenceRepository || createPreferenceRepository(runtimeConfig),
+  );
 
   const resolvedRecommendationService = recommendationService;
 
@@ -71,7 +73,7 @@ function createApp({ recommendationService, preferenceMemory, runtimeConfig = {}
     return res.status(200).json({ version: appVersion });
   });
 
-  app.post("/recommendations", recommendationsLimiter, (req, res) => {
+  app.post("/recommendations", recommendationsLimiter, async (req, res) => {
     const validation = validateRecommendationRequest(req.body);
     if (!validation.ok) {
       return sendError(res, 400, "validation_error", validation.error);
@@ -79,60 +81,63 @@ function createApp({ recommendationService, preferenceMemory, runtimeConfig = {}
 
     const requestedMode = validateRecommendationMode(req.body?.mode);
     const preferenceContext =
-      requestedMode === "preference-aware" ? resolvedPreferenceMemory.buildContext() : "";
+      requestedMode === "preference-aware" ? await resolvedPreferenceRepository.buildContext() : "";
 
-    return getRecommendationService(resolvedRecommendationService, runtimeConfig)
-      .getRecommendations(validation.query, {
+    try {
+      const recommendations = await getRecommendationService(
+        resolvedRecommendationService,
+        runtimeConfig,
+      ).getRecommendations(validation.query, {
         mode: requestedMode,
         preferenceContext,
-      })
-      .then((recommendations) =>
-        res.status(200).json({
-          recommendations,
-          meta: {
-            modeUsed: requestedMode,
-            usedPreferenceContext: preferenceContext.length > 0,
-          },
-        }),
-      )
-      .catch(() =>
-        sendError(res, 502, "recommendation_unavailable", "recommendation service unavailable"),
-      );
+      });
+      return res.status(200).json({
+        recommendations,
+        meta: {
+          modeUsed: requestedMode,
+          usedPreferenceContext: preferenceContext.length > 0,
+        },
+      });
+    } catch {
+      return sendError(res, 502, "recommendation_unavailable", "recommendation service unavailable");
+    }
   });
 
-  app.post("/preferences", (req, res) => {
-    const result = resolvedPreferenceMemory.addSavedBand(req.body);
+  app.post("/preferences", async (req, res) => {
+    const result = await resolvedPreferenceRepository.addSavedBand(req.body);
     if (!result.ok) {
       return sendError(res, 400, "validation_error", result.error);
     }
     return res.status(201).json({ savedBand: result.savedBand });
   });
 
-  app.get("/preferences", (_req, res) => {
+  app.get("/preferences", async (_req, res) => {
+    const savedBands = await resolvedPreferenceRepository.listSavedBands();
     return res.status(200).json({
-      savedBands: resolvedPreferenceMemory.listSavedBands(),
+      savedBands,
     });
   });
 
-  app.patch("/preferences/:id", (req, res) => {
-    const result = resolvedPreferenceMemory.updateSavedBand(req.params.id, req.body || {});
+  app.patch("/preferences/:id", async (req, res) => {
+    const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {});
     if (!result.ok) {
       return sendError(res, result.status, "preference_update_failed", result.error);
     }
     return res.status(200).json({ savedBand: result.savedBand });
   });
 
-  app.delete("/preferences/:id", (req, res) => {
-    const result = resolvedPreferenceMemory.deleteSavedBand(req.params.id);
+  app.delete("/preferences/:id", async (req, res) => {
+    const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id);
     if (!result.ok) {
       return sendError(res, result.status, "preference_delete_failed", result.error);
     }
     return res.status(200).json({ deletedId: result.deletedId });
   });
 
-  app.get("/preferences/context", (_req, res) => {
+  app.get("/preferences/context", async (_req, res) => {
+    const context = await resolvedPreferenceRepository.buildContext();
     return res.status(200).json({
-      context: resolvedPreferenceMemory.buildContext(),
+      context,
     });
   });
 

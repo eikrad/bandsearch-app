@@ -5,7 +5,7 @@ function createPreferenceMemory() {
   const savedBands = [];
 
   return {
-    addSavedBand(input) {
+    async addSavedBand(input) {
       const validation = validateSavedBandInput(input);
       if (!validation.ok) {
         return validation;
@@ -27,11 +27,11 @@ function createPreferenceMemory() {
       return { ok: true, savedBand };
     },
 
-    listSavedBands() {
+    async listSavedBands() {
       return [...savedBands];
     },
 
-    updateSavedBand(id, updates) {
+    async updateSavedBand(id, updates) {
       const index = savedBands.findIndex((band) => band.id === id);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
@@ -68,7 +68,7 @@ function createPreferenceMemory() {
       return { ok: true, savedBand: savedBands[index] };
     },
 
-    deleteSavedBand(id) {
+    async deleteSavedBand(id) {
       const index = savedBands.findIndex((band) => band.id === id);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
@@ -78,7 +78,7 @@ function createPreferenceMemory() {
       return { ok: true, deletedId: deleted.id };
     },
 
-    buildContext() {
+    async buildContext() {
       if (savedBands.length === 0) {
         return "";
       }
@@ -93,7 +93,12 @@ function createPreferenceMemory() {
   };
 }
 
+function createInMemoryPreferenceRepository() {
+  return createPreferenceMemory();
+}
+
 module.exports = {
   createPreferenceMemory,
+  createInMemoryPreferenceRepository,
   validateSavedBandInput,
 };

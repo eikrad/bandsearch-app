@@ -3,6 +3,16 @@ const assert = require("node:assert/strict");
 
 const { createApp } = require("../src/app");
 
+function createPreferenceRepositoryStub(buildContext) {
+  return {
+    addSavedBand: async () => ({ ok: true, savedBand: null }),
+    listSavedBands: async () => [],
+    updateSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
+    deleteSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
+    buildContext: async () => buildContext(),
+  };
+}
+
 async function makeRequest(app, path, payload) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
@@ -61,9 +71,9 @@ test("POST /recommendations uses injected recommendation service", async () => {
         ];
       },
     },
-    preferenceMemory: {
-      buildContext: () => "Alcest (rating 5/5) tags: blackgaze note: dreamy",
-    },
+    preferenceRepository: createPreferenceRepositoryStub(
+      () => "Alcest (rating 5/5) tags: blackgaze note: dreamy",
+    ),
   });
 
   const result = await makeRequest(app, "/recommendations", {
@@ -115,9 +125,9 @@ test("POST /recommendations defaults to fresh mode", async () => {
         ];
       },
     },
-    preferenceMemory: {
-      buildContext: () => "This should not be used in fresh mode.",
-    },
+    preferenceRepository: createPreferenceRepositoryStub(
+      () => "This should not be used in fresh mode.",
+    ),
   });
 
   const result = await makeRequest(app, "/recommendations", {

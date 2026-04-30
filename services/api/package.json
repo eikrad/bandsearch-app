@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint \"src/**/*.js\" \"test/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test"
+    "test": "node --test",
+    "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
     "@langchain/google-genai": "^0.2.13",
@@ -14,6 +15,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
     "express-rate-limit": "^8.4.1",
-    "helmet": "^8.1.0"
+    "helmet": "^8.1.0",
+    "pg": "^8.20.0"
   }
 }

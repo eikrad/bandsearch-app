@@ -11,6 +11,9 @@
 - Preference memory: save bands, ratings, categories, notes.
 - Search modes: `fresh` and `preference-aware`.
 - Tauri UX hardening and E2E smoke coverage.
+- Persistence abstraction: `PreferenceRepository` interface to decouple storage from API routes.
+- Database-backed preferences (Postgres/Supabase) replacing in-memory repository.
+- Multi-user support: auth/session layer and user-scoped preference ownership.
 
 ## Later (Phase 4+)
 

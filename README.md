@@ -36,6 +36,9 @@ Default port: `3001` (configurable via `PORT`).
 - `RECOMMENDATION_TIMEOUT_MS`: model request timeout in milliseconds
 - `MUSICBRAINZ_TIMEOUT_MS`: MusicBrainz request timeout in milliseconds
 - `MUSICBRAINZ_RETRIES`: retry attempts for MusicBrainz requests
+- `PREFERENCE_STORE`: `memory` (default) or `postgres`
+- `DATABASE_URL`: required when `PREFERENCE_STORE=postgres`
+- `DATABASE_SSL`: `true`/`false` for Postgres TLS mode
 
 ## API Hardening (Current)
 
@@ -48,6 +51,17 @@ Default port: `3001` (configurable via `PORT`).
 ## Data Persistence (MVP)
 
 Saved preferences are currently stored in-memory. Data is reset on API restart and not yet persisted to a database.
+The API now uses a `PreferenceRepository` abstraction so a database-backed implementation can be plugged in without changing route contracts.
+If `PREFERENCE_STORE=postgres`, preferences are stored in Postgres using the migration in `services/api/migrations/001_create_saved_bands.sql`.
+
+### Postgres Setup
+
+```bash
+cp .env.example .env
+# set PREFERENCE_STORE=postgres and DATABASE_URL in .env
+npm run migrate --workspace @bandsearch/api
+node services/api/src/server.js
+```
 
 ## API Reference (Current)
 

@@ -18,3 +18,10 @@ test("validateRuntimeEnv requires LangSmith API key when tracing enabled", () =>
     /LANGSMITH_API_KEY is required/,
   );
 });
+
+test("validateRuntimeEnv requires database URL when postgres store enabled", () => {
+  assert.throws(
+    () => validateRuntimeEnv({ PREFERENCE_STORE: "postgres" }),
+    /DATABASE_URL is required/,
+  );
+});
