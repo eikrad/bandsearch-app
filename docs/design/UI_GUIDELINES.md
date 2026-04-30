@@ -37,6 +37,23 @@ Scope:
 - On subtle section separators and small emphasis elements.
 - Never as full-screen or full-card fill for standard content states.
 
+## Iconography (Recommended)
+
+### Icon family and style
+- Use one icon family across the product (no mixing families in MVP).
+- Prefer outline icons with consistent visual weight.
+- Keep geometry restrained and editorial (not playful/cartoonish).
+
+### Size and density rules
+- Use a fixed icon size scale (for example: 16, 20, 24).
+- Avoid arbitrary icon sizing per component.
+- Keep icon density low: prioritize readability over decoration.
+
+### Semantic consistency
+- One meaning per icon across the app (e.g. save, rate, retry).
+- Use icon + text when meaning may be ambiguous.
+- Avoid relying on color-only cues for icon meaning.
+
 ## Typography
 
 ### Hierarchy intent
@@ -86,6 +103,12 @@ Action row policy (desktop MVP):
 - Save/Rate should provide immediate visual confirmation.
 - Category/Note interactions should not block the main flow.
 
+### Component state matrix (recommended baseline)
+- Recommendation card: default, hover, focus, loading, fallback, error.
+- Primary actions: default, hover, focus, disabled, success.
+- Mode toggle: default, active, hover, focus.
+- Input area: idle, typing, submitting, error.
+
 ## Mode Behavior
 
 ### Fresh mode
@@ -102,6 +125,28 @@ Action row policy (desktop MVP):
 - Visible focus states on interactive controls.
 - Strong contrast for body/meta text against dark backgrounds.
 - Touch/click targets sized for reliable interaction.
+
+## AI Microcopy and Content Rules (Recommended)
+
+- Keep "why selected" concise (prefer 1-2 short sentences).
+- Keep connection text explicit and user-relevant (reference prior bands by name).
+- Avoid generic claims ("best match", "perfect choice") without concrete rationale.
+- If deterministic fallback is used, label it clearly but calmly.
+- Keep microcopy consistent across cards: same tone and sentence structure.
+
+## Empty, Error, and Feedback Patterns (Recommended)
+
+### Empty states
+- First-use state: prompt user to enter favorite bands.
+- No saved preferences state: explain that preference-aware mode improves after saving bands.
+
+### Error states
+- Show request errors inline in chat context.
+- Provide a clear retry action near the failed interaction.
+
+### Feedback states
+- Use local confirmations for Save/Rate actions.
+- Avoid disruptive global notifications for routine success events.
 
 ## Responsiveness Policy
 

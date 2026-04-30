@@ -26,6 +26,18 @@ Example content structure:
 - Don't hide all actions behind menus on desktop.
 - Don't show long generic AI paragraphs as rationale text.
 
+## Iconography Example
+
+### Do
+- Use a single icon family with consistent stroke style.
+- Keep icon sizing on approved steps (e.g. 16/20/24).
+- Pair unclear icons with text labels in action-heavy areas.
+
+### Don't
+- Don't mix outlined and filled icon sets without purpose.
+- Don't use decorative icons where text hierarchy already communicates meaning.
+- Don't rely on icon color alone to indicate status.
+
 ## Mode Accent Example
 
 ### Fresh mode
@@ -61,6 +73,26 @@ Example content structure:
 ### Don't
 - Don't replace the whole screen with blocking error modals.
 - Don't lose user-entered query text on failure.
+
+## AI Microcopy Example
+
+### Good rationale style
+- `Why selected: Atmospheric progression and guitar texture align with your Alcest and Fen preferences.`
+- `Connected to: Similar mood arc to Agalloch, but with a cleaner post-black production profile.`
+
+### Avoid
+- `Why selected: This is a perfect match for your taste.`
+- `Connected to: It is related to many bands.` (too vague)
+
+## Empty State Example
+
+### First-run chat empty state
+- Headline: `Start with 1-3 bands you already like`
+- Body: `We use those to generate niche recommendations with clear connection notes.`
+
+### Preference-aware empty state
+- Headline: `No saved preferences yet`
+- Body: `Save or rate a few artists to improve preference-aware recommendations.`
 
 ## Desktop-first to Mobile-next Mapping
 
