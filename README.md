@@ -4,141 +4,118 @@
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
 ![Version: 0.2.0--alpha.1](https://img.shields.io/badge/version-0.2.0--alpha.1-blue)
 
-Bandsearch is an AI-powered music recommendation app for niche and lesser-known artists.
-It combines conversational AI with MusicBrainz metadata and preference memory.
+AI-powered music recommendations for niche and lesser-known artists.
+Combines conversational AI with MusicBrainz metadata and preference memory.
 
-Current release stage: **alpha**.
+---
 
-## Monorepo Structure
+## Quick Start
 
-- `apps/desktop` - desktop app (Tauri + React shell)
-- `services/api` - Node.js/Express API
-- `shared/schemas` - shared API and domain schemas
-- `docs/ROADMAP.md` - product and technical roadmap
-
-## Quick Start (API)
+**Prerequisites:** Node.js 20+, a [Gemini API key](https://aistudio.google.com/app/apikey)
 
 ```bash
+git clone https://github.com/eikrad/bandsearch-app
+cd bandsearch-app
 npm install
-cp .env.example .env
-## optional for Postgres:
-## set PREFERENCE_STORE=postgres and DATABASE_URL in .env
-## npm run migrate --workspace @bandsearch/api
-node services/api/src/server.js
+cp .env.example .env        # then add your GEMINI_API_KEY
+npm run dev                 # API starts on http://localhost:3001
 ```
 
-Default port: `3001` (configurable via `PORT`).
-
-### Environment Variables
-
-- `PORT`: API port (default `3001`)
-- `GEMINI_API_KEY`: required for LangChain + Gemini recommendations
-- `LANGSMITH_API_KEY`: optional but recommended for tracing
-- `LANGSMITH_TRACING`: set `true` to enable tracing
-- `LANGSMITH_PROJECT`: LangSmith project name
-- `CORS_ORIGIN`: allowed web origin for browser clients
-- `RECOMMENDATION_TIMEOUT_MS`: model request timeout in milliseconds
-- `MUSICBRAINZ_TIMEOUT_MS`: MusicBrainz request timeout in milliseconds
-- `MUSICBRAINZ_RETRIES`: retry attempts for MusicBrainz requests
-- `PREFERENCE_STORE`: `memory` (default) or `postgres`
-- `DATABASE_URL`: required when `PREFERENCE_STORE=postgres`
-- `DATABASE_SSL`: `true`/`false` for Postgres TLS mode
-
-## API Hardening (Current)
-
-- Security middleware: `helmet`, `cors`, request body limit (`32kb`)
-- Abuse protection: rate limit on `POST /recommendations` (30 requests/minute per IP)
-- Reliability: outbound timeout/retry for MusicBrainz and timeout for model calls
-- Error contract: structured error payloads (`error.code`, `error.message`) across endpoints
-- Observability: JSON request logging with request IDs and response timings
-
-## Persistence
-
-Saved preferences are currently stored in-memory. Data is reset on API restart and not yet persisted to a database.
-The API now uses a `PreferenceRepository` abstraction so a database-backed implementation can be plugged in without changing route contracts.
-If `PREFERENCE_STORE=postgres`, preferences are stored in Postgres using the migration in `services/api/migrations/001_create_saved_bands.sql`.
-
-### Postgres Setup
+Test it:
 
 ```bash
-cp .env.example .env
-# set PREFERENCE_STORE=postgres and DATABASE_URL in .env
-npm run migrate --workspace @bandsearch/api
-node services/api/src/server.js
+curl -X POST http://localhost:3001/recommendations \
+  -H "content-type: application/json" \
+  -d '{"query": "I like Alcest and Agalloch"}'
 ```
+
+---
+
+## Desktop App (Tauri)
+
+**Additional prerequisites:** [Rust](https://rustup.rs) + Linux system deps (see below)
+
+```bash
+npm run desktop             # opens native window, starts API automatically
+```
+
+**Linux system dependencies:**
+
+```bash
+# Arch / Manjaro
+sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
+
+# Debian / Ubuntu
+sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
+
+---
+
+## Postgres (optional)
+
+By default preferences are stored in memory (reset on restart). To persist them:
+
+```bash
+# in .env:
+PREFERENCE_STORE=postgres
+DATABASE_URL=postgres://user:pass@host/dbname
+
+npm run migrate             # creates the saved_bands table
+npm run dev
+```
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3001` | API port |
+| `GEMINI_API_KEY` | — | Required for AI recommendations |
+| `PREFERENCE_STORE` | `memory` | `memory` or `postgres` |
+| `DATABASE_URL` | — | Required when `PREFERENCE_STORE=postgres` |
+| `DATABASE_SSL` | `true` | TLS for Postgres connection |
+| `CORS_ORIGIN` | `*` | Allowed browser origin |
+| `RECOMMENDATION_TIMEOUT_MS` | `8000` | Gemini request timeout |
+| `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
+| `MUSICBRAINZ_RETRIES` | `2` | MusicBrainz retry attempts |
+| `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
+| `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
+| `LANGSMITH_PROJECT` | — | LangSmith project name |
+
+---
 
 ## API Reference
 
-### System
-
-- `GET /health`
-  - Purpose: simple liveness check (`{ "status": "ok" }`)
-
-- `GET /version`
-  - Purpose: returns the current app version from `package.json`
-
 ### Recommendations
 
-- `POST /recommendations`
-  - Purpose: returns band recommendations
-  - Body:
-    - `query` (string, required)
-    - `mode` (`fresh` or `preference-aware`, optional; default `fresh`)
-  - Response:
-    - `recommendations[]` with `artist`, `why`, `sourceSignals[]`
-    - `meta.modeUsed`
-    - `meta.usedPreferenceContext`
-  - Note: when no MusicBrainz artists are found, the API returns deterministic query-based fallback recommendations.
-
-Example:
-
+`POST /recommendations`
 ```json
-{
-  "query": "I like Alcest and Agalloch",
-  "mode": "preference-aware"
-}
+{ "query": "I like Alcest and Agalloch", "mode": "fresh" }
 ```
+`mode`: `fresh` (default) or `preference-aware` (uses your saved bands as context)
 
-### Preferences (Saved Bands)
+### Preferences
 
-- `POST /preferences`
-  - Purpose: stores a band preference
-  - Body:
-    - `musicbrainzArtistId` (string)
-    - `name` (string)
-    - `rating` (int 1-5)
-    - `categories` (string[])
-    - `note` (string)
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/preferences` | Save a band |
+| `GET` | `/preferences` | List saved bands |
+| `PATCH` | `/preferences/:id` | Update rating / note |
+| `DELETE` | `/preferences/:id` | Remove a band |
+| `GET` | `/preferences/context` | AI context string |
 
-- `GET /preferences`
-  - Purpose: lists all saved bands
+---
 
-- `PATCH /preferences/:id`
-  - Purpose: updates `rating`, `categories`, `note`
+## Monorepo Structure
 
-- `DELETE /preferences/:id`
-  - Purpose: deletes a saved entry
-
-- `GET /preferences/context`
-  - Purpose: returns condensed preference context for `preference-aware` search
-
-## Shared Contracts
-
-- Shared validation contracts live in `shared/schemas/src/contracts.js`.
-- Currently centralized:
-  - recommendation item validation
-  - saved band validation
-  - recommendation mode normalization (`fresh` / `preference-aware`)
-- The API and tests already use these contracts so backend and frontend can share the same data contract.
-
-## CI Quality Gates
-
-CI runs via `.github/workflows/ci.yml` and executes:
-- JavaScript linting (ESLint)
-- Python lint/format checks (Ruff + Black)
-- Type checks (`tsc --noEmit`)
-- Workspace tests (`node --test`)
+```
+apps/desktop/     — Tauri + React desktop client
+services/api/     — Express API
+shared/schemas/   — shared validation contracts
+docs/             — roadmap and design specs
+```
 
 ## License
 
-This project is licensed under Apache License 2.0. See `LICENSE`.
+Apache 2.0 — see [LICENSE](LICENSE).

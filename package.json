@@ -10,6 +10,10 @@
     "shared/*"
   ],
   "scripts": {
+    "start": "node services/api/src/server.js",
+    "dev": "node services/api/src/server.js",
+    "desktop": "npm run tauri:dev --workspace @bandsearch/desktop",
+    "migrate": "npm run migrate --workspace @bandsearch/api",
     "lint:js": "npm run lint --workspaces --if-present",
     "lint:py": "ruff check . && black --check .",
     "lint": "npm run lint:js && npm run lint:py",
