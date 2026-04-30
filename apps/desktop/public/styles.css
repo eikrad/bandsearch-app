@@ -1,0 +1,104 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0d0f14;
+  color: #f0f4f8;
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p {
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+input {
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+/* Mode pill toggle */
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  background: #111827;
+  border: 1px solid #1e2a3a;
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.mode-pill button {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  color: #6b7a90;
+}
+
+.mode-pill button.active-fresh {
+  background: #1c2d42;
+  color: #7aa7d9;
+}
+
+.mode-pill button.active-warm {
+  background: #2d2318;
+  color: #d7a870;
+}
+
+.mode-pill button:not(.active-fresh):not(.active-warm):hover {
+  color: #aeb8cc;
+}
+
+/* Query input focus */
+.query-input:focus {
+  border-color: #3a5070 !important;
+  box-shadow: 0 0 0 2px rgba(90, 150, 210, 0.12);
+}
+
+/* Action buttons */
+.action-btn {
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.action-btn:hover {
+  background: #2d374f !important;
+  border-color: #3a4a63 !important;
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: 2px;
+}
+
+/* Recommend button */
+.recommend-btn:hover {
+  filter: brightness(1.1);
+}
+
+.recommend-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0d0f14; }
+::-webkit-scrollbar-thumb { background: #2a3346; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4a63; }

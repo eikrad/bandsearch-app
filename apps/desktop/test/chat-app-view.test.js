@@ -55,7 +55,7 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Save"), true);
   assert.equal(html.includes("Rate"), true);
   assert.equal(html.includes("More"), true);
-  assert.equal(html.includes("Saved - Rating: 4/5"), true);
+  assert.equal(html.includes("saved · 4/5"), true);
   assert.equal(html.includes("Saved Fen."), true);
 });
 

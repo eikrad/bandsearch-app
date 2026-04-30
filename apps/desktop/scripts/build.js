@@ -12,6 +12,7 @@ async function run() {
   const watch = process.argv.includes("--watch");
   fs.mkdirSync("dist", { recursive: true });
   fs.copyFileSync("public/index.html", "dist/index.html");
+  fs.copyFileSync("public/styles.css", "dist/styles.css");
 
   if (watch) {
     const ctx = await esbuild.context({ ...config, sourcemap: true });
