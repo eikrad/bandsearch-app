@@ -45,6 +45,7 @@ Default port: `3001` (configurable via `PORT`).
     - `recommendations[]` with `artist`, `why`, `sourceSignals[]`
     - `meta.modeUsed`
     - `meta.usedPreferenceContext`
+  - Note: when no MusicBrainz artists are found, the API returns deterministic query-based fallback recommendations.
 
 Example:
 

@@ -29,7 +29,7 @@ test("POST /recommendations rejects empty query", async () => {
   assert.equal(result.data.error, "query is required");
 });
 
-test("POST /recommendations returns placeholder recommendations", async () => {
+test("POST /recommendations returns recommendation results", async () => {
   const app = createApp();
   const result = await makeRequest(app, "/recommendations", {
     query: "I like Alcest and Agalloch",
@@ -40,6 +40,7 @@ test("POST /recommendations returns placeholder recommendations", async () => {
   assert.equal(result.data.recommendations.length, 3);
   assert.equal(typeof result.data.recommendations[0].artist, "string");
   assert.equal(typeof result.data.recommendations[0].why, "string");
+  assert.equal(Array.isArray(result.data.recommendations[0].sourceSignals), true);
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });

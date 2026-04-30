@@ -9,24 +9,19 @@ function validateRecommendationRequest(body) {
   return { ok: true, query: body.query.trim() };
 }
 
-function buildPlaceholderRecommendations(query) {
-  return [
-    {
-      artist: "Les Discrets",
-      why: `Shared atmospheric and melancholic textures related to "${query}".`,
-      sourceSignals: ["placeholder_seed"],
-    },
-    {
-      artist: "Sylvaine",
-      why: `Strong overlap in dreamlike blackgaze influences connected to "${query}".`,
-      sourceSignals: ["placeholder_seed"],
-    },
-    {
-      artist: "Fen",
-      why: `Balances post-metal and black metal moods similar to "${query}".`,
-      sourceSignals: ["placeholder_seed"],
-    },
-  ];
+function buildDeterministicFallbackRecommendations(query) {
+  const normalized = query.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const tokens = normalized
+    .split(/\s+/)
+    .filter((token) => token.length > 2)
+    .slice(0, 3);
+  const seed = tokens.length > 0 ? tokens : ["niche", "atmospheric", "indie"];
+
+  return seed.map((token, index) => ({
+    artist: `Related Artist ${index + 1} (${token})`,
+    why: `Deterministic fallback based on your query focus: "${token}".`,
+    sourceSignals: ["deterministic_fallback"],
+  }));
 }
 
 /**
@@ -53,7 +48,7 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
       }
 
       if (artists.length === 0) {
-        return buildPlaceholderRecommendations(query);
+        return buildDeterministicFallbackRecommendations(query);
       }
 
       return artists.slice(0, 3).map((artist) => ({
@@ -67,6 +62,6 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
 
 module.exports = {
   validateRecommendationRequest,
-  buildPlaceholderRecommendations,
+  buildDeterministicFallbackRecommendations,
   createRecommendationService,
 };
