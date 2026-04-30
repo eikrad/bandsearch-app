@@ -36,7 +36,11 @@ function createDesktopReactMount({
       return renderCurrent();
     },
     onQuerySubmit: async (query) => {
-      await shell.submitQuery(query);
+      try {
+        await shell.submitQuery(query);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
       return renderCurrent();
     },
     onSave: (artistName) => {

@@ -36,7 +36,13 @@ function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTim
       return handlers.onModeChange(mode);
     },
     async submitQuery(query) {
-      return handlers.onQuerySubmit(query);
+      try {
+        return await handlers.onQuerySubmit(query);
+      } catch {
+        actionStatus = { type: "error", message: "Could not reach the API. Is the server running?" };
+        scheduleStatusClear();
+        throw new Error("query failed");
+      }
     },
     async saveBand(artistName) {
       try {

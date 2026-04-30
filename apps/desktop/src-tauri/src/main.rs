@@ -31,15 +31,17 @@ fn main() {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
 
-            // Resolve workspace root: src-tauri/ is inside apps/desktop/, so go up 3 levels.
+            // Resolve workspace root.
+            // dev exe: <workspace>/apps/desktop/src-tauri/target/debug/bandsearch
+            // ancestors: nth(0)=exe, nth(1)=debug/, nth(2)=target/, nth(3)=src-tauri/,
+            //            nth(4)=apps/desktop/, nth(5)=apps/, nth(6)=<workspace>/
             let exe = std::env::current_exe()?;
             let workspace_root = if cfg!(debug_assertions) {
-                // dev: <workspace>/apps/desktop/src-tauri/target/debug/bandsearch
-                exe.ancestors().nth(5).unwrap_or(&exe).to_path_buf()
+                exe.ancestors().nth(6).unwrap_or(&exe).to_path_buf()
             } else {
-                // release bundle: fall back to current dir
                 std::env::current_dir()?
             };
+            eprintln!("[bandsearch] workspace_root: {}", workspace_root.display());
 
             let (binary, args) = api_spawn_args(&workspace_root);
             match Command::new(&binary).args(&args).spawn() {
