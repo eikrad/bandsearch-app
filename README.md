@@ -1,52 +1,52 @@
 # Bandsearch
 
-Bandsearch ist eine KI-gestuetzte Musikempfehlungs-App mit Fokus auf Nischenbands und weniger bekannte Artists.
-Dieses Repository ist als Monorepo fuer den Tauri-Desktop-Client, die API und gemeinsame Schemas vorbereitet.
+Bandsearch is an AI-powered music recommendation app focused on niche bands and lesser-known artists.
+This repository is structured as a monorepo for the Tauri desktop client, the API, and shared schemas.
 
-## Aktueller Status
+## Current Status
 
-- Phase 0 Foundation abgeschlossen: Repo-Struktur, CI-Baseline, Apache-2.0 Lizenz.
-- Ziel fuer Phase 1: Recommendation-Core mit MusicBrainz + LangChain + Gemini.
+- Phase 0 foundation is complete: repository structure, CI baseline, Apache-2.0 license.
+- Phase 1 is in progress: recommendation core with MusicBrainz + LangChain + Gemini.
 
-## Monorepo-Struktur
+## Monorepo Structure
 
-- `apps/desktop` - Desktop App (Tauri + React, Platzhalter in Phase 0)
+- `apps/desktop` - desktop app (Tauri + React, placeholder in Phase 0)
 - `services/api` - Node.js/Express API
-- `shared/schemas` - geteilte API- und Domain-Schemas
-- `docs/ROADMAP.md` - Produkt- und Technik-Roadmap
+- `shared/schemas` - shared API and domain schemas
+- `docs/ROADMAP.md` - product and technical roadmap
 
-## Lokaler Start (API)
+## Local Start (API)
 
 ```bash
 npm install
 node services/api/src/server.js
 ```
 
-Standard-Port: `3001` (ueber `PORT` anpassbar).
+Default port: `3001` (configurable via `PORT`).
 
-## API Referenz (aktueller Stand)
+## API Reference (Current)
 
 ### System
 
 - `GET /health`
-  - Zweck: einfacher Liveness-Check (`{ "status": "ok" }`)
+  - Purpose: simple liveness check (`{ "status": "ok" }`)
 
 - `GET /version`
-  - Zweck: liefert die aktuelle App-Version aus `package.json`
+  - Purpose: returns the current app version from `package.json`
 
 ### Recommendations
 
 - `POST /recommendations`
-  - Zweck: liefert Band-Empfehlungen
+  - Purpose: returns band recommendations
   - Body:
     - `query` (string, required)
-    - `mode` (`fresh` oder `preference-aware`, optional; default `fresh`)
+    - `mode` (`fresh` or `preference-aware`, optional; default `fresh`)
   - Response:
-    - `recommendations[]` mit `artist`, `why`, `sourceSignals[]`
+    - `recommendations[]` with `artist`, `why`, `sourceSignals[]`
     - `meta.modeUsed`
     - `meta.usedPreferenceContext`
 
-Beispiel:
+Example:
 
 ```json
 {
@@ -58,7 +58,7 @@ Beispiel:
 ### Preferences (Saved Bands)
 
 - `POST /preferences`
-  - Zweck: speichert eine Band-Praeferenz
+  - Purpose: stores a band preference
   - Body:
     - `musicbrainzArtistId` (string)
     - `name` (string)
@@ -67,30 +67,30 @@ Beispiel:
     - `note` (string)
 
 - `GET /preferences`
-  - Zweck: listet alle gespeicherten Bands
+  - Purpose: lists all saved bands
 
 - `PATCH /preferences/:id`
-  - Zweck: aktualisiert `rating`, `categories`, `note`
+  - Purpose: updates `rating`, `categories`, `note`
 
 - `DELETE /preferences/:id`
-  - Zweck: loescht einen gespeicherten Eintrag
+  - Purpose: deletes a saved entry
 
 - `GET /preferences/context`
-  - Zweck: liefert verdichteten Preference-Kontext fuer `preference-aware` Suche
+  - Purpose: returns condensed preference context for `preference-aware` search
 
 ## Shared Contracts
 
-- Gemeinsame Validierungs-Contracts liegen in `shared/schemas/src/contracts.js`.
-- Aktuell zentralisiert:
-  - Recommendation-Item-Validierung
-  - Saved-Band-Validierung
-  - Recommendation-Mode-Normalisierung (`fresh` / `preference-aware`)
-- API und Tests nutzen diese Contracts bereits, damit Backend und spaeter Frontend denselben Datenvertrag teilen.
+- Shared validation contracts live in `shared/schemas/src/contracts.js`.
+- Currently centralized:
+  - recommendation item validation
+  - saved band validation
+  - recommendation mode normalization (`fresh` / `preference-aware`)
+- The API and tests already use these contracts so backend and frontend can share the same data contract.
 
 ## CI
 
-Die CI laeuft ueber `.github/workflows/ci.yml` und fuehrt aktuell Lint, Typecheck und Tests ueber alle Workspaces aus.
+CI runs via `.github/workflows/ci.yml` and currently executes lint, typecheck, and tests across all workspaces.
 
-## Lizenz
+## License
 
-Dieses Projekt steht unter der Apache License 2.0. Siehe `LICENSE`.
+This project is licensed under Apache License 2.0. See `LICENSE`.

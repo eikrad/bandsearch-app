@@ -29,6 +29,9 @@ function buildPlaceholderRecommendations(query) {
   ];
 }
 
+/**
+ * @param {{ musicBrainzClient?: any, recommendationAgent?: any }} [deps]
+ */
 function createRecommendationService({ musicBrainzClient, recommendationAgent } = {}) {
   return {
     async getRecommendations(query, options = {}) {
@@ -37,14 +40,14 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
       let artists = [];
       try {
         artists = await musicBrainzClient.searchArtists(query);
-      } catch (_error) {
+      } catch {
         artists = [];
       }
 
       if (recommendationAgent) {
         try {
           return await recommendationAgent.recommend({ query, artists, mode, preferenceContext });
-        } catch (_error) {
+        } catch {
           // Fallback to deterministic response when model output is unavailable/invalid.
         }
       }

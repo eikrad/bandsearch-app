@@ -9,6 +9,9 @@ const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
 const { createPreferenceMemory } = require("./preferences/preferenceMemory");
 
+/**
+ * @param {{ recommendationService?: any, preferenceMemory?: any }} [options]
+ */
 function createApp({ recommendationService, preferenceMemory } = {}) {
   const app = express();
   app.use(express.json());

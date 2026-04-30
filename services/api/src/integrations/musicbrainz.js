@@ -17,6 +17,7 @@ function createMusicBrainzClient({ fetchImpl = fetch, baseUrl = DEFAULT_BASE_URL
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
 
+      /** @type {{ artists?: Array<{ id: string, name: string, score: number, disambiguation?: string }> }} */
       const data = await response.json();
       const artists = Array.isArray(data.artists) ? data.artists : [];
       return artists.map((artist) => ({
