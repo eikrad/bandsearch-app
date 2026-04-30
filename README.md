@@ -11,9 +11,64 @@ Dieses Repository ist als Monorepo fuer den Tauri-Desktop-Client, die API und ge
 ## Monorepo-Struktur
 
 - `apps/desktop` - Desktop App (Tauri + React, Platzhalter in Phase 0)
-- `services/api` - Node.js/Express API (Platzhalter in Phase 0)
+- `services/api` - Node.js/Express API
 - `shared/schemas` - geteilte API- und Domain-Schemas
 - `docs/ROADMAP.md` - Produkt- und Technik-Roadmap
+
+## Lokaler Start (API)
+
+```bash
+npm install
+node services/api/src/server.js
+```
+
+Standard-Port: `3001` (ueber `PORT` anpassbar).
+
+## API Referenz (aktueller Stand)
+
+### Recommendations
+
+- `POST /recommendations`
+  - Zweck: liefert Band-Empfehlungen
+  - Body:
+    - `query` (string, required)
+    - `mode` (`fresh` oder `preference-aware`, optional; default `fresh`)
+  - Response:
+    - `recommendations[]` mit `artist`, `why`, `sourceSignals[]`
+    - `meta.modeUsed`
+    - `meta.usedPreferenceContext`
+
+Beispiel:
+
+```json
+{
+  "query": "I like Alcest and Agalloch",
+  "mode": "preference-aware"
+}
+```
+
+### Preferences (Saved Bands)
+
+- `POST /preferences`
+  - Zweck: speichert eine Band-Praeferenz
+  - Body:
+    - `musicbrainzArtistId` (string)
+    - `name` (string)
+    - `rating` (int 1-5)
+    - `categories` (string[])
+    - `note` (string)
+
+- `GET /preferences`
+  - Zweck: listet alle gespeicherten Bands
+
+- `PATCH /preferences/:id`
+  - Zweck: aktualisiert `rating`, `categories`, `note`
+
+- `DELETE /preferences/:id`
+  - Zweck: loescht einen gespeicherten Eintrag
+
+- `GET /preferences/context`
+  - Zweck: liefert verdichteten Preference-Kontext fuer `preference-aware` Suche
 
 ## CI
 
