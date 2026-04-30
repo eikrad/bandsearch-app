@@ -1,21 +1,18 @@
 # Bandsearch Roadmap
 
-## Completed (Phase 0-1)
+## Completed (Phase 0-2)
 
 - Monorepo foundation, CI baseline, Apache-2.0 licensing.
 - Recommendation core with MusicBrainz + LangChain + Gemini.
 - Explainable responses (`why`, `sourceTags`, `sourceSignals`).
 - API hardening: structured errors, rate limits, timeout/retry, request logging.
 - Desktop chat UI foundation: recommendation cards, mode switching, save/rate actions, feedback states.
-
-## In Progress (Phase 2-3)
-
 - Preference memory: save bands, ratings, categories, notes.
-- Search modes: `fresh` and `preference-aware`.
-- Persistence abstraction: `PreferenceRepository` interface to decouple storage from API routes.
-- Database-backed preferences (Postgres/Supabase) replacing in-memory repository.
-
-- Tauri UX hardening and E2E smoke coverage.
+- Search modes: `fresh` and `preference-aware` (preference context wired through to Gemini prompt).
+- Persistence abstraction: `PreferenceRepository` interface with in-memory and Postgres implementations.
+- Database-backed preferences (Postgres/Supabase) with migration script.
+- E2E smoke tests covering the full preference-aware recommendation chain.
+- Tauri desktop scaffold: native window, menu bar (About + Quit), API sidecar lifecycle (macOS + Linux).
 
 ## Next Up (Phase 3)
 
