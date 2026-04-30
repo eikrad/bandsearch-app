@@ -26,6 +26,8 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
     }),
     updateMode: async (mode) => calls.push({ type: "mode", mode }),
     submitQuery: async (query) => calls.push({ type: "query", query }),
+    saveBand: async (artistName) => calls.push({ type: "save", artistName }),
+    rateBand: async (artistName, rating) => calls.push({ type: "rate", artistName, rating }),
   };
 
   const mount = createDesktopReactMount({
@@ -39,7 +41,11 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
 
   await mount.handlers.onModeChange("preference-aware");
   await mount.handlers.onQuerySubmit("I like blackgaze");
+  await mount.handlers.onSave("Fen");
+  await mount.handlers.onRate("Fen");
 
   assert.equal(calls.some((item) => item.type === "mode"), true);
   assert.equal(calls.some((item) => item.type === "query"), true);
+  assert.equal(calls.some((item) => item.type === "save"), true);
+  assert.equal(calls.some((item) => item.type === "rate"), true);
 });

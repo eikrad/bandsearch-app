@@ -23,6 +23,8 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
           {
             title: "Fen",
             why: "Atmospheric overlap",
+            saved: true,
+            rating: 4,
             country: "UK",
             genres: ["post-black"],
             connection: "Related to Alcest",
@@ -34,6 +36,7 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
           },
         ],
         emptyText: "No recommendations yet.",
+        actionStatus: { type: "success", message: "Saved Fen." },
       },
       handlers: {
         onModeChange: () => {},
@@ -52,6 +55,8 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Save"), true);
   assert.equal(html.includes("Rate"), true);
   assert.equal(html.includes("More"), true);
+  assert.equal(html.includes("Saved - Rating: 4/5"), true);
+  assert.equal(html.includes("Saved Fen."), true);
 });
 
 test("ChatAppView uses compact mobile layout and action density", () => {

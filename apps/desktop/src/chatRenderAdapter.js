@@ -14,6 +14,8 @@ function toViewProps(renderState) {
       country: item.country || "",
       genres: item.genres || [],
       connection: item.connection || "",
+      saved: !!item.saved,
+      rating: item.rating || null,
       actions: item.actions || {},
     })),
     emptyText: renderState.recommendationList.emptyText,

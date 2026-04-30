@@ -52,6 +52,19 @@ function renderCardActions(card, handlers) {
 function ChatAppView({ viewProps, handlers }) {
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
+  const statusType = viewProps.actionStatus?.type || null;
+  const statusStyle =
+    statusType === "error"
+      ? {
+          backgroundColor: "#3d1f24",
+          color: "#f8c8cf",
+          border: "1px solid #a94a5b",
+        }
+      : {
+          backgroundColor: "#1f3524",
+          color: "#bfecc8",
+          border: "1px solid #4c9f62",
+        };
 
   return React.createElement(
     "main",
@@ -165,6 +178,21 @@ function ChatAppView({ viewProps, handlers }) {
         "Recommend",
       ),
     ),
+    viewProps.actionStatus
+      ? React.createElement(
+          "p",
+          {
+            style: {
+              margin: "0 0 14px 0",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              ...statusStyle,
+            },
+          },
+          viewProps.actionStatus.message,
+        )
+      : null,
     viewProps.cards.length === 0
       ? React.createElement("p", { style: { color: theme.textSecondary } }, viewProps.emptyText)
       : React.createElement(
@@ -183,6 +211,19 @@ function ChatAppView({ viewProps, handlers }) {
                 },
               },
               React.createElement("h2", { style: { margin: "0 0 8px 0" } }, card.title),
+              card.saved
+                ? React.createElement(
+                    "p",
+                    {
+                      style: {
+                        margin: "0 0 6px 0",
+                        color: "#bfecc8",
+                        fontSize: "12px",
+                      },
+                    },
+                    card.rating ? `Saved - Rating: ${card.rating}/5` : "Saved",
+                  )
+                : null,
               React.createElement("p", { style: { margin: "0 0 8px 0" } }, card.why),
               card.country
                 ? React.createElement(

@@ -30,13 +30,16 @@ function createChatViewModel({ app }) {
     },
 
     getRenderableRecommendations() {
-      const messages = app.getState().messages || [];
+      const appState = app.getState();
+      const messages = appState.messages || [];
+      const savedBands = appState.savedBands || [];
       const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
       const recommendations = latestAssistant?.recommendations || [];
       return recommendations.map((item) => ({
         title: item.artist,
         reason: item.why,
         signals: item.sourceSignals || [],
+        savedBand: savedBands.find((saved) => saved.name === item.artist) || null,
       }));
     },
   };

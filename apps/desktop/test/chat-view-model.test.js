@@ -37,6 +37,7 @@ test("view model formats recommendation list for rendering", () => {
     app: {
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({
+        savedBands: [{ id: "pref-1", name: "Fen", rating: 4 }],
         messages: [
           {
             role: "assistant",
@@ -54,4 +55,5 @@ test("view model formats recommendation list for rendering", () => {
   assert.equal(rendered.length, 1);
   assert.equal(rendered[0].title, "Fen");
   assert.equal(rendered[0].reason.includes("Post-metal"), true);
+  assert.equal(rendered[0].savedBand.rating, 4);
 });

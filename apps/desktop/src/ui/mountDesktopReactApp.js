@@ -40,10 +40,10 @@ function createDesktopReactMount({
       return renderCurrent();
     },
     onSave: (artistName) => {
-      void artistName;
+      return Promise.resolve(shell.saveBand?.(artistName)).then(() => renderCurrent());
     },
     onRate: (artistName) => {
-      void artistName;
+      return Promise.resolve(shell.rateBand?.(artistName, 5)).then(() => renderCurrent());
     },
     onMore: (artistName) => {
       void artistName;

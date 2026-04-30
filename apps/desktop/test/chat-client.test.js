@@ -1,7 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createChatClient, createInitialChatState, applyAssistantMessage } = require("../src/chatClient");
+const {
+  createChatClient,
+  createInitialChatState,
+  applyAssistantMessage,
+  normalizeArtistId,
+} = require("../src/chatClient");
 
 test("chat client sends recommendation request and returns response payload", async () => {
   const calls = [];
@@ -38,4 +43,38 @@ test("chat state appends assistant message from recommendation response", () => 
   assert.equal(next.messages.length, 1);
   assert.equal(next.messages[0].role, "assistant");
   assert.equal(next.messages[0].recommendations[0].artist, "Alcest");
+});
+
+test("chat client creates and updates preferences", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ savedBand: { id: "pref-1", name: "Fen", rating: 4 } }),
+      };
+    },
+  });
+
+  const created = await client.createPreference({
+    musicbrainzArtistId: "local-fen",
+    name: "Fen",
+    rating: 3,
+    categories: [],
+    note: "Saved.",
+  });
+  const updated = await client.updatePreference("pref-1", { rating: 4 });
+
+  assert.equal(calls[0].url, "http://localhost:3001/preferences");
+  assert.equal(calls[1].url, "http://localhost:3001/preferences/pref-1");
+  assert.equal(created.savedBand.id, "pref-1");
+  assert.equal(updated.savedBand.rating, 4);
+});
+
+test("normalizeArtistId creates stable local fallback id", () => {
+  assert.equal(normalizeArtistId("Alcest"), "local-alcest");
+  assert.equal(normalizeArtistId("Les Discrets"), "local-les-discrets");
 });

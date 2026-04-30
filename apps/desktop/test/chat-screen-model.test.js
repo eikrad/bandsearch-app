@@ -12,6 +12,7 @@ test("screen model composes desktop card actions as visible", () => {
           title: "Fen",
           reason: "Atmospheric overlap",
           signals: ["musicbrainz_search"],
+          savedBand: { id: "pref-1", name: "Fen", rating: 5 },
           country: "UK",
           genres: ["post-black", "atmospheric"],
           connection: "Similar to Alcest.",
@@ -24,6 +25,8 @@ test("screen model composes desktop card actions as visible", () => {
   assert.equal(screen.header.title, "Bandsearch");
   assert.equal(screen.mode, "fresh");
   assert.equal(screen.recommendationCards.length, 1);
+  assert.equal(screen.recommendationCards[0].saved, true);
+  assert.equal(screen.recommendationCards[0].rating, 5);
   assert.equal(screen.recommendationCards[0].actions.save.visible, true);
   assert.equal(screen.recommendationCards[0].actions.more.visible, true);
 });

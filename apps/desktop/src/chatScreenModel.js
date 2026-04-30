@@ -11,6 +11,8 @@ function mapCard(rec, viewport) {
     genres: rec.genres || [],
     connection: rec.connection || "",
     signals: rec.signals || [],
+    saved: !!rec.savedBand,
+    rating: rec.savedBand?.rating || null,
     actions: {
       save: { visible: isDesktop },
       rate: { visible: isDesktop },
