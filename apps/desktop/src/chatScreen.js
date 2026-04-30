@@ -9,6 +9,7 @@ function createChatScreen({ viewModel, screenModel }) {
       const state = screenModel.getScreenState({ viewport });
       return {
         ...state,
+        viewport,
         modeSelector: {
           value: state.mode,
           options: MODE_OPTIONS,

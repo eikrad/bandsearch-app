@@ -2,6 +2,9 @@ const { createChatClient, createInitialChatState, applyAssistantMessage } = requ
 const { createChatViewModel } = require("./chatViewModel");
 const { createChatScreenModel } = require("./chatScreenModel");
 const { createChatScreen } = require("./chatScreen");
+const { createChatRenderAdapter } = require("./chatRenderAdapter");
+const { createDesktopReactShell } = require("./ui/createDesktopReactShell");
+const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
 
 /**
  * @param {{ apiBaseUrl?: string, fetchImpl?: any }} [options]
@@ -42,4 +45,25 @@ function bootstrapDesktopUi({ app, viewport = "desktop" }) {
   };
 }
 
-module.exports = { bootstrapDesktopApp, bootstrapDesktopUi };
+function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }) {
+  const desktopUi = bootstrapDesktopUi({ app, viewport });
+  return createChatRenderAdapter({ desktopUi });
+}
+
+function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers = {} }) {
+  const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
+  return createDesktopReactShell({ renderAdapter, actionHandlers });
+}
+
+function bootstrapDesktopReactApp({ app, viewport = "desktop", actionHandlers = {} }) {
+  const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
+  return createDesktopReactMount({ shell });
+}
+
+module.exports = {
+  bootstrapDesktopApp,
+  bootstrapDesktopUi,
+  bootstrapDesktopRenderAdapter,
+  bootstrapDesktopReactShell,
+  bootstrapDesktopReactApp,
+};
