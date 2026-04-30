@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Node / monorepo
+node_modules/
+
+# Tauri / frontend placeholders
+.turbo/
+coverage/
+
+# Environment
+.env
+.env.*

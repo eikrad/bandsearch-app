@@ -1,0 +1,11 @@
+{
+  "name": "@bandsearch/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tauri + React desktop client placeholder",
+  "scripts": {
+    "lint": "echo \"desktop lint placeholder\"",
+    "typecheck": "echo \"desktop typecheck placeholder\"",
+    "test": "echo \"desktop test placeholder\""
+  }
+}

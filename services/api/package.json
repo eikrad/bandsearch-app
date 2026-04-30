@@ -1,0 +1,11 @@
+{
+  "name": "@bandsearch/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Express API placeholder",
+  "scripts": {
+    "lint": "echo \"api lint placeholder\"",
+    "typecheck": "echo \"api typecheck placeholder\"",
+    "test": "echo \"api test placeholder\""
+  }
+}

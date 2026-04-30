@@ -1,0 +1,11 @@
+{
+  "name": "@bandsearch/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared schema package placeholder",
+  "scripts": {
+    "lint": "echo \"schemas lint placeholder\"",
+    "typecheck": "echo \"schemas typecheck placeholder\"",
+    "test": "echo \"schemas test placeholder\""
+  }
+}
