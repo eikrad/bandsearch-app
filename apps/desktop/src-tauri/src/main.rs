@@ -44,7 +44,7 @@ fn main() {
             eprintln!("[bandsearch] workspace_root: {}", workspace_root.display());
 
             let (binary, args) = api_spawn_args(&workspace_root);
-            match Command::new(&binary).args(&args).spawn() {
+            match Command::new(&binary).args(&args).current_dir(&workspace_root).spawn() {
                 Ok(child) => {
                     app.manage(ApiProcess(Mutex::new(Some(child))));
                 }
