@@ -16,6 +16,7 @@
 
 ## Next Up (Phase 3)
 
+- Playwright browser smoke tests: verify the built app actually renders in a real browser (current unit tests run in Node.js and cannot catch browser-only failures like `require()` in browser context).
 - Multi-user support: auth/session layer and user-scoped preference ownership.
 - User-linked preference schema evolution (`user_id`) and repository updates.
 - API auth middleware and route protection for preference endpoints.
