@@ -10,6 +10,10 @@
   },
   "dependencies": {
     "@langchain/google-genai": "^0.2.13",
-    "express": "^4.21.2"
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0"
   }
 }

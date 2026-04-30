@@ -20,7 +20,16 @@ function createRecommendationAgent({ runModel }) {
   };
 }
 
-async function createLangChainRunner() {
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("recommendation model timeout")), timeoutMs);
+    }),
+  ]);
+}
+
+async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
   const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 
   if (!process.env.GEMINI_API_KEY) {
@@ -49,7 +58,7 @@ async function createLangChainRunner() {
       },
     ];
 
-    const response = await model.invoke(prompt);
+    const response = await withTimeout(model.invoke(prompt), timeoutMs);
     const text = typeof response.content === "string" ? response.content : "";
     const parsed = JSON.parse(text);
     return parsed;

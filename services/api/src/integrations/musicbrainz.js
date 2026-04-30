@@ -1,12 +1,47 @@
 const DEFAULT_BASE_URL = "https://musicbrainz.org/ws/2";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
 
-function createMusicBrainzClient({ fetchImpl = fetch, baseUrl = DEFAULT_BASE_URL } = {}) {
+async function fetchWithTimeoutAndRetry({
+  fetchImpl,
+  url,
+  timeoutMs,
+  retries,
+  headers,
+}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(url, {
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      return response;
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function createMusicBrainzClient({
+  fetchImpl = fetch,
+  baseUrl = DEFAULT_BASE_URL,
+  timeoutMs = 5000,
+  retries = 1,
+} = {}) {
   return {
     async searchArtists(query) {
       const encodedQuery = encodeURIComponent(query);
       const url = `${baseUrl}/artist?query=${encodedQuery}&fmt=json&limit=5`;
-      const response = await fetchImpl(url, {
+      const response = await fetchWithTimeoutAndRetry({
+        fetchImpl,
+        url,
+        timeoutMs,
+        retries,
         headers: {
           "user-agent": USER_AGENT,
           accept: "application/json",

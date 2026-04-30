@@ -1,8 +1,17 @@
+require("dotenv").config();
 const { createApp } = require("./app");
+const { validateRuntimeEnv } = require("./config/env");
 
-const port = Number(process.env.PORT || 3001);
-const app = createApp();
+const runtimeConfig = validateRuntimeEnv();
+const port = runtimeConfig.port;
+const app = createApp({ runtimeConfig });
 
 app.listen(port, () => {
-  console.log(`Bandsearch API listening on port ${port}`);
+  console.log(
+    JSON.stringify({
+      level: "info",
+      message: "Bandsearch API listening",
+      port,
+    }),
+  );
 });

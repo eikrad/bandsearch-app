@@ -26,7 +26,8 @@ test("POST /recommendations rejects empty query", async () => {
   const result = await makeRequest(app, "/recommendations", { query: "" });
 
   assert.equal(result.status, 400);
-  assert.equal(result.data.error, "query is required");
+  assert.equal(result.data.error.code, "validation_error");
+  assert.equal(result.data.error.message, "query is required");
 });
 
 test("POST /recommendations returns recommendation results", async () => {
@@ -95,7 +96,8 @@ test("POST /recommendations returns 502 on recommendation service error", async 
   });
 
   assert.equal(result.status, 502);
-  assert.equal(result.data.error, "recommendation service unavailable");
+  assert.equal(result.data.error.code, "recommendation_unavailable");
+  assert.equal(result.data.error.message, "recommendation service unavailable");
 });
 
 test("POST /recommendations defaults to fresh mode", async () => {

@@ -47,7 +47,8 @@ test("POST /preferences rejects invalid rating", async () => {
   });
 
   assert.equal(result.status, 400);
-  assert.equal(result.data.error, "rating must be an integer between 1 and 5");
+  assert.equal(result.data.error.code, "validation_error");
+  assert.equal(result.data.error.message, "rating must be an integer between 1 and 5");
 });
 
 test("GET /preferences/context returns condensed preference context", async () => {
@@ -119,7 +120,8 @@ test("PATCH /preferences/:id returns 404 for unknown id", async () => {
   });
 
   assert.equal(result.status, 404);
-  assert.equal(result.data.error, "saved band not found");
+  assert.equal(result.data.error.code, "preference_update_failed");
+  assert.equal(result.data.error.message, "saved band not found");
 });
 
 test("DELETE /preferences/:id removes a saved band", async () => {
@@ -150,5 +152,6 @@ test("DELETE /preferences/:id returns 404 for unknown id", async () => {
   const result = await makeRequest(app, "DELETE", "/preferences/does-not-exist");
 
   assert.equal(result.status, 404);
-  assert.equal(result.data.error, "saved band not found");
+  assert.equal(result.data.error.code, "preference_delete_failed");
+  assert.equal(result.data.error.message, "saved band not found");
 });

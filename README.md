@@ -19,10 +19,35 @@ This repository is structured as a monorepo for the Tauri desktop client, the AP
 
 ```bash
 npm install
+cp .env.example .env
 node services/api/src/server.js
 ```
 
 Default port: `3001` (configurable via `PORT`).
+
+### Environment Variables
+
+- `PORT`: API port (default `3001`)
+- `GEMINI_API_KEY`: required for LangChain + Gemini recommendations
+- `LANGSMITH_API_KEY`: optional but recommended for tracing
+- `LANGSMITH_TRACING`: set `true` to enable tracing
+- `LANGSMITH_PROJECT`: LangSmith project name
+- `CORS_ORIGIN`: allowed web origin for browser clients
+- `RECOMMENDATION_TIMEOUT_MS`: model request timeout in milliseconds
+- `MUSICBRAINZ_TIMEOUT_MS`: MusicBrainz request timeout in milliseconds
+- `MUSICBRAINZ_RETRIES`: retry attempts for MusicBrainz requests
+
+## API Hardening (Current)
+
+- Security middleware: `helmet`, `cors`, request body limit (`32kb`)
+- Abuse protection: rate limit on `POST /recommendations` (30 requests/minute per IP)
+- Reliability: outbound timeout/retry for MusicBrainz and timeout for model calls
+- Error contract: structured error payloads (`error.code`, `error.message`) across endpoints
+- Observability: JSON request logging with request IDs and response timings
+
+## Data Persistence (MVP)
+
+Saved preferences are currently stored in-memory. Data is reset on API restart and not yet persisted to a database.
 
 ## API Reference (Current)
 

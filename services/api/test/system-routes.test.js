@@ -33,3 +33,12 @@ test("GET /version returns app version", async () => {
   assert.equal(typeof result.data.version, "string");
   assert.equal(result.data.version.length > 0, true);
 });
+
+test("GET unknown route returns structured 404 error", async () => {
+  const app = createApp();
+  const result = await makeRequest(app, "/missing-route");
+
+  assert.equal(result.status, 404);
+  assert.equal(result.data.error.code, "not_found");
+  assert.equal(result.data.error.message.includes("/missing-route"), true);
+});
