@@ -45,32 +45,6 @@ function ModePill({ modeValue, modeOptions, onModeChange }) {
   );
 }
 
-function GenreChips({ genres, textTertiary, border }) {
-  if (!genres?.length) return null;
-  return React.createElement(
-    "div",
-    { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" } },
-    genres.map((g) =>
-      React.createElement(
-        "span",
-        {
-          key: g,
-          style: {
-            fontSize: "11px",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            color: textTertiary,
-            border: `1px solid ${border}`,
-            borderRadius: "4px",
-            padding: "2px 7px",
-          },
-        },
-        g,
-      ),
-    ),
-  );
-}
-
 function renderCardActions(card, theme, handlers) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
