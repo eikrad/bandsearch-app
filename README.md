@@ -139,6 +139,15 @@ shared/schemas/   — shared validation contracts
 docs/             — roadmap and design specs
 ```
 
+## Acknowledgements
+
+- [MusicBrainz](https://musicbrainz.org) — open music encyclopedia providing artist and release metadata. Data used under the [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) licence.
+- [Google Gemini](https://deepmind.google/technologies/gemini/) — large language model powering the recommendation and explanation layer.
+- [LangChain](https://www.langchain.com) — framework used to structure and invoke the Gemini model calls.
+- [Tauri](https://tauri.app) — framework for building the native desktop wrapper around the web UI.
+
+---
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
