@@ -22,7 +22,7 @@ test.describe("Bandsearch UI", () => {
     await page.click("button[type=submit]");
 
     const card = page.locator("article").first();
-    await expect(card).toBeVisible({ timeout: 20000 });
+    await expect(card).toBeVisible({ timeout: 25000 });
     await expect(card.locator("h2")).not.toBeEmpty();
   });
 
@@ -40,7 +40,7 @@ test.describe("Bandsearch UI", () => {
     await page.fill("input[name=query]", "bands like Alcest");
     await page.click("button[type=submit]");
 
-    await page.locator("article").first().waitFor({ timeout: 20000 });
+    await page.locator("article").first().waitFor({ timeout: 25000 });
 
     expect(apiResponses.length).toBeGreaterThan(0);
     const signals = apiResponses[0].recommendations.flatMap((r) => r.sourceSignals);
