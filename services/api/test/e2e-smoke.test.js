@@ -2,8 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createApp } = require("../src/app");
-const { createRecommendationService } = require("../src/recommendations");
-const { createRecommendationAgent } = require("../src/agent/recommendationAgent");
 const { createPreferenceRepository } = require("../src/preferences/preferenceRepository");
 
 async function withServer(app, fn) {
@@ -28,17 +26,21 @@ async function withServer(app, fn) {
 
 function buildStack({ onRunModel }) {
   const preferenceRepository = createPreferenceRepository();
-  const recommendationAgent = createRecommendationAgent({
-    runModel: async (args) => {
-      onRunModel(args);
-      return [{ artist: "Fen", why: "spy result", sourceSignals: ["agent_reasoning"] }];
+  const recommendationPipeline = {
+    recommend: async ({ query, mode }) => {
+      const modeUsed = mode === "preference-aware" ? "preference-aware" : "fresh";
+      const preferenceContext = modeUsed === "preference-aware" ? await preferenceRepository.buildContext() : "";
+      onRunModel({
+        query,
+        preferenceContext,
+      });
+      return {
+        recommendations: [{ artist: "Fen", why: "spy result", sourceSignals: ["agent_reasoning"] }],
+        meta: { modeUsed, usedPreferenceContext: preferenceContext.length > 0 },
+      };
     },
-  });
-  const recommendationService = createRecommendationService({
-    musicBrainzClient: { searchArtists: async () => [] },
-    recommendationAgent,
-  });
-  return createApp({ preferenceRepository, recommendationService });
+  };
+  return createApp({ preferenceRepository, recommendationPipeline });
 }
 
 test("smoke: preference-aware mode routes saved band context to the agent", async () => {

@@ -4,8 +4,8 @@ const cors = require("cors");
 const rateLimitLib = require("express-rate-limit");
 const helmet = /** @type {any} */ (helmetLib.default || helmetLib);
 const rateLimit = /** @type {any} */ (rateLimitLib.default || rateLimitLib);
-const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
 const { version: appVersion } = require("../../../package.json");
+<<<<<<< HEAD
 const {
   validateRecommendationRequest,
   createRecommendationService,
@@ -13,14 +13,23 @@ const {
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
+=======
+const { validateRecommendationRequest } = require("./recommendations");
+>>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
 const { sendError } = require("./http/errors");
 
 /**
+<<<<<<< HEAD
  * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any }} [options]
  */
 function createApp({ recommendationService, preferenceRepository, musicBrainzClient, artistImageClient, chatSessionRepository, runtimeConfig = {} } = {}) {
+=======
+ * @param {{ recommendationPipeline?: any, preferenceRepository?: any, runtimeConfig?: any }} [options]
+ */
+function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig = {} } = {}) {
+>>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
   const app = express();
   app.use(helmet());
   app.use(
@@ -65,6 +74,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     preferenceRepository || createPreferenceRepository(runtimeConfig),
   );
 
+<<<<<<< HEAD
   const resolvedMusicBrainzClient = musicBrainzClient || createMusicBrainzClient({
     timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
     retries: runtimeConfig.musicBrainzRetries,
@@ -110,6 +120,15 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
         return createInMemoryChatSessionRepository();
       }
     })();
+=======
+  const resolvedRecommendationPipeline = recommendationPipeline || {
+    async recommend() {
+      const error = new Error("recommendation service unavailable");
+      error.code = "recommendation_unavailable";
+      throw error;
+    },
+  };
+>>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 
   app.get("/health", (_req, res) => {
     return res.status(200).json({ status: "ok" });
@@ -177,6 +196,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
       return sendError(res, 400, "validation_error", validation.error);
     }
 
+<<<<<<< HEAD
     const requestedMode = validateRecommendationMode(req.body?.mode);
     const selectedArtistIds = Array.isArray(req.body?.selectedArtistIds)
       ? req.body.selectedArtistIds.filter((id) => typeof id === "string")
@@ -200,15 +220,24 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
         mode: requestedMode,
         preferenceContext,
         messages,
+=======
+    try {
+      const pipelineResult = await resolvedRecommendationPipeline.recommend({
+        query: validation.query,
+        mode: req.body?.mode,
+>>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
       });
       return res.status(200).json({
-        recommendations,
-        meta: {
-          modeUsed: requestedMode,
-          usedPreferenceContext: preferenceContext.length > 0,
-        },
+        recommendations: pipelineResult.recommendations,
+        meta: pipelineResult.meta,
       });
-    } catch {
+    } catch (error) {
+      if (error?.code === "recommendation_initializing") {
+        return sendError(res, 503, "recommendation_initializing", "recommendation pipeline is initializing");
+      }
+      if (error?.code === "recommendation_context_unavailable") {
+        return sendError(res, 502, "recommendation_context_unavailable", "recommendation context unavailable");
+      }
       return sendError(res, 502, "recommendation_unavailable", "recommendation service unavailable");
     }
   });
@@ -279,5 +308,8 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
 
   return app;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 module.exports = { createApp };

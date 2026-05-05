@@ -3,16 +3,25 @@ const assert = require("node:assert/strict");
 
 const { createRecommendationService } = require("../src/recommendations");
 
-test("recommendation service falls back deterministically when no artists found", async () => {
+test("recommendation service forwards musicbrainz artists to recommendation agent", async () => {
   const service = createRecommendationService({
     musicBrainzClient: {
-      searchArtists: async () => [],
+      searchArtists: async () => [{ name: "Alcest", score: 100 }],
+    },
+    recommendationAgent: {
+      recommend: async ({ artists }) => [
+        {
+          artist: artists[0].name,
+          why: "Agent generated recommendation.",
+          sourceSignals: ["agent_reasoning"],
+        },
+      ],
     },
   });
 
   const recommendations = await service.getRecommendations("I like atmospheric black metal");
 
-  assert.equal(recommendations.length, 3);
-  assert.equal(recommendations.every((item) => item.sourceSignals.includes("deterministic_fallback")), true);
-  assert.equal(recommendations.every((item) => item.artist.includes("Related Artist")), true);
+  assert.equal(recommendations.length, 1);
+  assert.equal(recommendations[0].artist, "Alcest");
+  assert.equal(recommendations[0].sourceSignals.includes("agent_reasoning"), true);
 });

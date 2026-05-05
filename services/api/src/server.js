@@ -3,31 +3,19 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../../../.e
 
 const { createApp } = require("./app");
 const { validateRuntimeEnv } = require("./config/env");
-const { createMusicBrainzClient } = require("./integrations/musicbrainz");
-const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
-const { createRecommendationService } = require("./recommendations");
+const { createPreferenceRepository } = require("./preferences/preferenceRepository");
+const { createRecommendationPipeline } = require("./recommendationPipeline");
 
 async function start() {
   const runtimeConfig = validateRuntimeEnv();
+  const preferenceRepository = createPreferenceRepository(runtimeConfig);
 
-  let recommendationService;
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const runModel = await createLangChainRunner({ timeoutMs: runtimeConfig.recommendationTimeoutMs });
-      const musicBrainzClient = createMusicBrainzClient({
-        timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-        retries: runtimeConfig.musicBrainzRetries,
-      });
-      recommendationService = createRecommendationService({
-        musicBrainzClient,
-        recommendationAgent: createRecommendationAgent({ runModel }),
-      });
-    } catch (e) {
-      console.error(JSON.stringify({ level: "warn", message: "Gemini init failed, using MusicBrainz fallback", error: e.message }));
-    }
-  }
+  const recommendationPipeline = createRecommendationPipeline({
+    runtimeConfig,
+    preferenceRepository,
+  });
 
-  const app = createApp({ runtimeConfig, recommendationService });
+  const app = createApp({ runtimeConfig, preferenceRepository, recommendationPipeline });
   app.listen(runtimeConfig.port, () => {
     console.log(JSON.stringify({ level: "info", message: "Bandsearch API listening", port: runtimeConfig.port }));
   });

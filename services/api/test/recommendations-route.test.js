@@ -41,7 +41,30 @@ test("POST /recommendations rejects empty query", async () => {
 });
 
 test("POST /recommendations returns recommendation results", async () => {
-  const app = createApp();
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [
+          {
+            artist: "Alcest",
+            why: "Matched from profile and query",
+            sourceSignals: ["agent_reasoning"],
+          },
+          {
+            artist: "Fen",
+            why: "Stylistic overlap",
+            sourceSignals: ["agent_reasoning"],
+          },
+          {
+            artist: "Les Discrets",
+            why: "Mood similarity",
+            sourceSignals: ["agent_reasoning"],
+          },
+        ],
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+  });
   const result = await makeRequest(app, "/recommendations", {
     query: "I like Alcest and Agalloch",
   });
@@ -56,19 +79,22 @@ test("POST /recommendations returns recommendation results", async () => {
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });
 
-test("POST /recommendations uses injected recommendation service", async () => {
+test("POST /recommendations uses injected recommendation pipeline", async () => {
   const calls = [];
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async (query, options) => {
-        calls.push({ query, options });
-        return [
-          {
-            artist: "Les Discrets",
-            why: `Matched from ${query}`,
-            sourceSignals: ["musicbrainz_search"],
-          },
-        ];
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
+        return {
+          recommendations: [
+            {
+              artist: "Les Discrets",
+              why: `Matched from ${input.query}`,
+              sourceSignals: ["musicbrainz_search"],
+            },
+          ],
+          meta: { modeUsed: "preference-aware", usedPreferenceContext: true },
+        };
       },
     },
     preferenceRepository: createPreferenceRepositoryStub(
@@ -87,15 +113,32 @@ test("POST /recommendations uses injected recommendation service", async () => {
   assert.equal(result.data.meta.modeUsed, "preference-aware");
   assert.equal(result.data.meta.usedPreferenceContext, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.mode, "preference-aware");
-  assert.equal(typeof calls[0].options.preferenceContext, "string");
-  assert.equal(calls[0].options.preferenceContext.includes("Alcest"), true);
+  assert.equal(calls[0].mode, "preference-aware");
+});
+
+test("POST /recommendations returns 503 when pipeline is initializing", async () => {
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => {
+        const error = new Error("booting");
+        error.code = "recommendation_initializing";
+        throw error;
+      },
+    },
+  });
+
+  const result = await makeRequest(app, "/recommendations", {
+    query: "I like blackgaze",
+  });
+
+  assert.equal(result.status, 503);
+  assert.equal(result.data.error.code, "recommendation_initializing");
 });
 
 test("POST /recommendations returns 502 on recommendation service error", async () => {
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async () => {
+    recommendationPipeline: {
+      recommend: async () => {
         throw new Error("upstream unavailable");
       },
     },
@@ -198,16 +241,19 @@ test("POST /recommendations prepends priorityContext to preference context", asy
 test("POST /recommendations defaults to fresh mode", async () => {
   const calls = [];
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async (query, options) => {
-        calls.push({ query, options });
-        return [
-          {
-            artist: "Fen",
-            why: "Fresh mode recommendation.",
-            sourceSignals: ["musicbrainz_search"],
-          },
-        ];
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
+        return {
+          recommendations: [
+            {
+              artist: "Fen",
+              why: "Fresh mode recommendation.",
+              sourceSignals: ["musicbrainz_search"],
+            },
+          ],
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        };
       },
     },
     preferenceRepository: createPreferenceRepositoryStub(
@@ -220,8 +266,7 @@ test("POST /recommendations defaults to fresh mode", async () => {
   });
 
   assert.equal(result.status, 200);
-  assert.equal(calls[0].options.mode, "fresh");
-  assert.equal(calls[0].options.preferenceContext, "");
+  assert.equal(calls[0].mode, undefined);
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });

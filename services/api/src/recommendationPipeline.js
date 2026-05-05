@@ -1,0 +1,101 @@
+const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
+const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
+const { createMusicBrainzClient } = require("./integrations/musicbrainz");
+const { createRecommendationError, createRecommendationService } = require("./recommendations");
+
+function createRecommendationPipeline({
+  runtimeConfig,
+  preferenceRepository,
+  retryDelayMs = 5000,
+  logger = console,
+} = {}) {
+  if (!preferenceRepository || typeof preferenceRepository.buildContext !== "function") {
+    throw createRecommendationError(
+      "recommendation_configuration_error",
+      "preferenceRepository.buildContext is required",
+    );
+  }
+
+  let activeService = null;
+  let activeError = createRecommendationError(
+    "recommendation_initializing",
+    "recommendation pipeline is initializing",
+  );
+  let retryTimer = null;
+
+  function log(level, message, details = {}) {
+    const payload = { level, message, ...details };
+    const emit = level === "error" ? logger.error : level === "warn" ? logger.warn : logger.log;
+    emit(JSON.stringify(payload));
+  }
+
+  async function initialize() {
+    try {
+      const runModel = await createLangChainRunner({
+        timeoutMs: runtimeConfig.recommendationTimeoutMs,
+      });
+      activeService = createRecommendationService({
+        musicBrainzClient: createMusicBrainzClient({
+          timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
+          retries: runtimeConfig.musicBrainzRetries,
+        }),
+        recommendationAgent: createRecommendationAgent({ runModel }),
+      });
+      activeError = null;
+      log("info", "recommendation pipeline ready");
+    } catch (error) {
+      activeService = null;
+      activeError = createRecommendationError(
+        "recommendation_unavailable",
+        "recommendation pipeline unavailable",
+        error,
+      );
+      log("warn", "recommendation pipeline init failed; scheduling retry", {
+        error: error?.message || "unknown error",
+        retryDelayMs,
+      });
+      scheduleRetry();
+    }
+  }
+
+  function scheduleRetry() {
+    if (retryTimer) {
+      return;
+    }
+    retryTimer = setTimeout(async () => {
+      retryTimer = null;
+      await initialize();
+    }, retryDelayMs);
+  }
+
+  void initialize();
+
+  return {
+    async recommend(request = {}) {
+      if (!activeService) {
+        throw activeError
+          || createRecommendationError("recommendation_unavailable", "recommendation pipeline unavailable");
+      }
+
+      const mode = validateRecommendationMode(request.mode);
+      const preferenceContext =
+        mode === "preference-aware" ? await preferenceRepository.buildContext() : "";
+      const recommendations = await activeService.getRecommendations(request.query, {
+        mode,
+        preferenceContext,
+      });
+
+      return {
+        recommendations,
+        meta: {
+          modeUsed: mode,
+          usedPreferenceContext: preferenceContext.length > 0,
+        },
+      };
+    },
+  };
+}
+
+module.exports = {
+  createRecommendationPipeline,
+};
