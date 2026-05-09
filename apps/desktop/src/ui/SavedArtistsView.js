@@ -142,6 +142,17 @@ function SearchResultItem({ result, handlers }) {
   );
 }
 
+function SearchResultsList({ results, handlers }) {
+  const listStyle = { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" };
+  return React.createElement(
+    "ul",
+    { style: listStyle },
+    results.map((result) =>
+      React.createElement(SearchResultItem, { key: result.id, result, handlers }),
+    ),
+  );
+}
+
 function SearchSection({ searchResults, isSearching, handlers }) {
   const styles = {
     section: { marginTop: "20px" },
@@ -167,7 +178,6 @@ function SearchSection({ searchResults, isSearching, handlers }) {
       cursor: "pointer",
     },
     hint: { fontSize: "12px", color: theme.textTertiary },
-    list: { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" },
   };
 
   return React.createElement(
@@ -200,13 +210,7 @@ function SearchSection({ searchResults, isSearching, handlers }) {
     isSearching
       ? React.createElement("p", { style: styles.hint }, "Searching…")
       : searchResults.length > 0
-        ? React.createElement(
-            "ul",
-            { style: styles.list },
-            searchResults.map((result) =>
-              React.createElement(SearchResultItem, { key: result.id, result, handlers }),
-            ),
-          )
+        ? React.createElement(SearchResultsList, { results: searchResults, handlers })
         : null,
   );
 }
