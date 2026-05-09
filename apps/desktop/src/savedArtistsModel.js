@@ -35,12 +35,22 @@ function createSavedArtistsModel({ app }) {
       };
     },
 
+    async deleteSavedArtist(id) {
+      await app.deleteSavedBand(id);
+      state.savedArtists = state.savedArtists.filter((b) => b.id !== id);
+      state.selectedIds.delete(id);
+    },
+
     toggleSelection(id) {
       if (state.selectedIds.has(id)) {
         state.selectedIds.delete(id);
       } else {
         state.selectedIds.add(id);
       }
+    },
+
+    clearSelection() {
+      state.selectedIds.clear();
     },
 
     getSelectedIds() {

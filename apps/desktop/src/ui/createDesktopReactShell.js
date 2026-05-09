@@ -11,6 +11,7 @@ function createDesktopReactShell({
   navigateImpl = () => {},
   searchArtistsImpl = async () => {},
   toggleSelectionImpl = () => {},
+  deleteSavedArtistImpl = async () => {},
   activateStyleRefImpl = async () => {},
   getSavedArtistsViewPropsImpl = () => ({
     header: { title: "Saved Artists", subtitle: "Your style references" },
@@ -97,6 +98,15 @@ function createDesktopReactShell({
     },
     toggleSelection(id) {
       toggleSelectionImpl(id);
+    },
+    async deleteSavedArtist(id) {
+      try {
+        await deleteSavedArtistImpl(id);
+      } catch (error) {
+        actionStatus = { type: "error", message: "Could not delete artist." };
+        scheduleStatusClear();
+        throw error;
+      }
     },
     async activateStyleRef() {
       await activateStyleRefImpl();

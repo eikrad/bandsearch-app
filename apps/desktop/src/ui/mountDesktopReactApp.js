@@ -55,6 +55,14 @@ function createDesktopReactMount({
     onMore: (artistName) => {
       void artistName;
     },
+    onDelete: async (id) => {
+      try {
+        await shell.deleteSavedArtist?.(id);
+      } catch {
+        // Error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
     onToggleSelection: (id) => {
       shell.toggleSelection?.(id);
       return renderCurrent();

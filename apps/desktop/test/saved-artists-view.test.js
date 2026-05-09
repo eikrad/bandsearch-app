@@ -127,7 +127,46 @@ test("SavedArtistsView renders tick button per artist", () => {
     }),
   );
 
-  assert.equal(html.includes("tick-btn") || html.includes("○"), true, "should render tick button");
+  assert.equal(html.includes("tick-btn"), true, "should render element with tick-btn class");
+  assert.equal(html.includes("○"), true, "unselected tick should show empty circle");
+});
+
+test("SavedArtistsView renders checkmark for selected artist", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: true }],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+        selectedCount: 1,
+      },
+      handlers: { ...baseHandlers, onToggleSelection: () => {}, onActivateStyleRef: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("✓"), true, "selected tick should show checkmark");
+  assert.equal(html.includes("○"), false, "selected artist should not show empty circle");
+});
+
+test("SavedArtistsView shows loading state when isLoading", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: true,
+        searchResults: [],
+        isSearching: false,
+        selectedCount: 0,
+      },
+      handlers: baseHandlers,
+    }),
+  );
+
+  assert.equal(html.includes("Loading"), true, "should show loading indicator");
+  assert.equal(html.includes("No saved artists"), false, "should not show empty state while loading");
 });
 
 test("SavedArtistsView shows selection bar when selectedCount > 0", () => {

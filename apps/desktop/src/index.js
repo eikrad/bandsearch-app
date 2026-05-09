@@ -89,6 +89,10 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       state = { ...state, savedBands: bands };
       return bands;
     },
+    async deleteSavedBand(id) {
+      await chatClient.deletePreference(id);
+      state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
+    },
     async searchArtists(query) {
       return chatClient.searchArtists ? chatClient.searchArtists(query) : [];
     },
@@ -141,10 +145,12 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
     },
     searchArtistsImpl: (query) => savedArtistsModel.searchArtists(query),
     toggleSelectionImpl: (id) => savedArtistsModel.toggleSelection(id),
+    deleteSavedArtistImpl: (id) => savedArtistsModel.deleteSavedArtist(id),
     activateStyleRefImpl: async () => {
       const ids = savedArtistsModel.getSelectedIds();
-      app.navigate?.("chat");
+      savedArtistsModel.clearSelection();
       app.setPendingStyleRef?.(ids);
+      app.navigate?.("chat");
     },
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
   });

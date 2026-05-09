@@ -68,7 +68,27 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     retries: runtimeConfig.musicBrainzRetries,
   });
 
-  const resolvedRecommendationService = recommendationService;
+  let defaultRecommendationService = null;
+
+  function resolveRecommendationService() {
+    if (recommendationService) return recommendationService;
+    if (!defaultRecommendationService) {
+      defaultRecommendationService = createRecommendationService({ musicBrainzClient: resolvedMusicBrainzClient });
+      if (process.env.GEMINI_API_KEY) {
+        createLangChainRunner({ timeoutMs: runtimeConfig.recommendationTimeoutMs })
+          .then((runModel) => {
+            defaultRecommendationService = createRecommendationService({
+              musicBrainzClient: resolvedMusicBrainzClient,
+              recommendationAgent: createRecommendationAgent({ runModel }),
+            });
+          })
+          .catch(() => {
+            // Keep deterministic fallback service if LangChain initialization fails.
+          });
+      }
+    }
+    return defaultRecommendationService;
+  }
 
   app.get("/health", (_req, res) => {
     return res.status(200).json({ status: "ok" });
@@ -90,7 +110,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
       : [];
     let preferenceContext = "";
     if (requestedMode === "preference-aware") {
-      if (selectedArtistIds.length > 0 && typeof resolvedPreferenceRepository.buildContextForIds === "function") {
+      if (selectedArtistIds.length > 0 && resolvedPreferenceRepository.buildContextForIds) {
         preferenceContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
       } else {
         preferenceContext = await resolvedPreferenceRepository.buildContext();
@@ -98,11 +118,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     }
 
     try {
-      const recommendations = await getRecommendationService(
-        resolvedRecommendationService,
-        runtimeConfig,
-        resolvedMusicBrainzClient,
-      ).getRecommendations(validation.query, {
+      const recommendations = await resolveRecommendationService().getRecommendations(validation.query, {
         mode: requestedMode,
         preferenceContext,
       });
@@ -183,35 +199,6 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
   });
 
   return app;
-}
-
-let cachedDefaultService;
-
-function getRecommendationService(overriddenService, runtimeConfig, musicBrainzClient) {
-  if (overriddenService) {
-    return overriddenService;
-  }
-  if (!cachedDefaultService) {
-    const client = musicBrainzClient || createMusicBrainzClient({
-      timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-      retries: runtimeConfig.musicBrainzRetries,
-    });
-    cachedDefaultService = createRecommendationService({ musicBrainzClient: client });
-
-    if (process.env.GEMINI_API_KEY) {
-      createLangChainRunner({ timeoutMs: runtimeConfig.recommendationTimeoutMs })
-        .then((runModel) => {
-          cachedDefaultService = createRecommendationService({
-            musicBrainzClient: client,
-            recommendationAgent: createRecommendationAgent({ runModel }),
-          });
-        })
-        .catch(() => {
-          // Keep deterministic fallback service if LangChain initialization fails.
-        });
-    }
-  }
-  return cachedDefaultService;
 }
 
 module.exports = { createApp };

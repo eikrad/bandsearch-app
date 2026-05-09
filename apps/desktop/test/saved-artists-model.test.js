@@ -4,8 +4,10 @@ const assert = require("node:assert/strict");
 const { createSavedArtistsModel } = require("../src/savedArtistsModel");
 
 function makeApp(savedBands = []) {
+  const bands = [...savedBands];
   return {
-    listSavedBands: async () => savedBands,
+    listSavedBands: async () => bands,
+    deleteSavedBand: async (id) => { const i = bands.findIndex((b) => b.id === id); if (i >= 0) bands.splice(i, 1); },
   };
 }
 
@@ -128,6 +130,50 @@ test("saved artists model getSelectedIds returns current selection as array", as
   assert.equal(ids.length, 2);
   assert.equal(ids.includes("b1"), true);
   assert.equal(ids.includes("b2"), true);
+});
+
+test("saved artists model deleteSavedArtist removes band from list", async () => {
+  const bands = [
+    { id: "b1", name: "Fen", rating: 4, categories: [], note: "" },
+    { id: "b2", name: "Alcest", rating: 5, categories: [], note: "" },
+  ];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+
+  await model.deleteSavedArtist("b1");
+
+  const state = model.getScreenState();
+  assert.equal(state.artists.length, 1);
+  assert.equal(state.artists[0].id, "b2");
+});
+
+test("saved artists model deleteSavedArtist also removes from selection", async () => {
+  const bands = [{ id: "b1", name: "Fen", rating: 4, categories: [], note: "" }];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+  model.toggleSelection("b1");
+  assert.equal(model.getScreenState().selectedCount, 1);
+
+  await model.deleteSavedArtist("b1");
+
+  assert.equal(model.getScreenState().selectedCount, 0);
+});
+
+test("saved artists model clearSelection empties the selection", async () => {
+  const bands = [
+    { id: "b1", name: "Fen", rating: 4, categories: [], note: "" },
+    { id: "b2", name: "Alcest", rating: 5, categories: [], note: "" },
+  ];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+  model.toggleSelection("b1");
+  model.toggleSelection("b2");
+  assert.equal(model.getScreenState().selectedCount, 2);
+
+  model.clearSelection();
+
+  assert.equal(model.getScreenState().selectedCount, 0);
+  assert.equal(model.getSelectedIds().length, 0);
 });
 
 test("saved artists model clears search results for empty query", async () => {
