@@ -59,6 +59,57 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Saved Fen."), true);
 });
 
+test("RecommendationCard has CSS class for card styling", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            why: "Atmospheric post-metal",
+            saved: false,
+            rating: null,
+            country: "UK",
+            genres: ["post-black"],
+            connection: "",
+            actions: {
+              save: { visible: true },
+              rate: { visible: true },
+              more: { visible: true },
+            },
+          },
+        ],
+        actionStatus: null,
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+      },
+    }),
+  );
+
+  assert.equal(
+    html.includes('class="recommendation-card"'),
+    true,
+    "card article should have CSS class recommendation-card",
+  );
+  assert.equal(
+    html.includes("padding:16px"),
+    false,
+    "compact card must not use old 16px padding",
+  );
+});
+
 test("ChatAppView uses compact mobile layout and action density", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
