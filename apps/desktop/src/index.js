@@ -11,12 +11,15 @@ const { createChatRenderAdapter } = require("./chatRenderAdapter");
 const { createDesktopReactShell } = require("./ui/createDesktopReactShell");
 const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
 
+const VALID_VIEWS = ["chat", "saved-artists"];
+
 /**
  * @param {{ apiBaseUrl?: string, fetchImpl?: any }} [options]
  */
 function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl } = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
   let state = { ...createInitialChatState(), savedBands: [] };
+  let currentView = "chat";
 
   function findLatestRecommendationByName(artistName) {
     const messages = state.messages || [];
@@ -39,6 +42,13 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
   return {
     getState() {
       return state;
+    },
+    getView() {
+      return currentView;
+    },
+    navigate(view) {
+      if (!VALID_VIEWS.includes(view)) return;
+      currentView = view;
     },
     async requestRecommendations(query, mode = "fresh") {
       const result = await chatClient.fetchRecommendations(query, mode);
