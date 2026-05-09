@@ -11,6 +11,12 @@ function defaultContainerResolver() {
   return root;
 }
 
+function resolveViewComponent(viewName) {
+  // SavedArtistsView will be plugged in here in Phase 3
+  void viewName;
+  return ChatAppView;
+}
+
 function createDesktopReactMount({
   shell,
   createRootImpl = createRoot,
@@ -21,12 +27,9 @@ function createDesktopReactMount({
 
   async function renderCurrent() {
     const viewProps = shell.getViewProps();
-    root.render(
-      React.createElement(ChatAppView, {
-        viewProps,
-        handlers,
-      }),
-    );
+    const currentView = shell.getView?.() ?? "chat";
+    const ViewComponent = resolveViewComponent(currentView);
+    root.render(React.createElement(ViewComponent, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -51,6 +54,10 @@ function createDesktopReactMount({
     },
     onMore: (artistName) => {
       void artistName;
+    },
+    onNavigate: (view) => {
+      shell.navigate?.(view);
+      return renderCurrent();
     },
   };
 

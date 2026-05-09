@@ -113,7 +113,12 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
     onRate: resolvedActionHandlers.onRate || ((artistName) => app.rateBand?.(artistName, 5)),
     onMore: resolvedActionHandlers.onMore || (() => {}),
   };
-  return createDesktopReactShell({ renderAdapter, actionHandlers: mergedActionHandlers });
+  return createDesktopReactShell({
+    renderAdapter,
+    actionHandlers: mergedActionHandlers,
+    getViewImpl: () => app.getView(),
+    navigateImpl: (view) => app.navigate(view),
+  });
 }
 
 function bootstrapDesktopReactApp({ app, viewport = "desktop", actionHandlers = {} }) {

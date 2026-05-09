@@ -2,7 +2,14 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { ChatAppView } = require("./ChatAppView");
 
-function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTimeoutMs = 3000, setTimeoutImpl = setTimeout }) {
+function createDesktopReactShell({
+  renderAdapter,
+  actionHandlers = {},
+  statusTimeoutMs = 3000,
+  setTimeoutImpl = setTimeout,
+  getViewImpl = () => "chat",
+  navigateImpl = () => {},
+}) {
   const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
   let actionStatus = null;
   let clearStatusTimer = null;
@@ -67,6 +74,12 @@ function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTim
         scheduleStatusClear();
         throw error;
       }
+    },
+    getView() {
+      return getViewImpl();
+    },
+    navigate(view) {
+      navigateImpl(view);
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();
