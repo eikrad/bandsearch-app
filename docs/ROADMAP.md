@@ -17,7 +17,7 @@
 ## Next Up (Phase 3)
 
 - Playwright browser smoke tests: verify the built app actually renders in a real browser. ✓ Done.
-- Compact card layout: reduce card height and visual weight so more results fit on screen without scrolling. Pure CSS/layout change, no data model impact.
+- Compact card layout: reduce card height and visual weight so more results fit on screen without scrolling. Pure CSS/layout change, no data model impact. ✓ Done.
 - Saved Artists page: dedicated view for managing saved artists, requiring in-app client-side routing (currently the app is single-view). Two sub-features:
   - MusicBrainz search to find and add artists by name directly, without going through the recommendation flow.
   - Directional selection (tick/checkbox) to mark which saved artists should act as style references for the next search — these get injected as a priority preference context alongside the normal query.
