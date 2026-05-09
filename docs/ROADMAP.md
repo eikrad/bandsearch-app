@@ -21,6 +21,7 @@
 - Client-side view router: `getView()`/`navigate()` on bootstrapDesktopApp, threaded through shell and mount layer; `resolveViewComponent` dispatch point ready for Phase 3 plug-in. ✓ Done.
 - Saved Artists page — Basic List: `SavedArtistsView` component with band list, header, back navigation; `savedArtistsModel` (combined ViewModel + ScreenModel); `listPreferences`/`deletePreference` on chatClient; shell wired to serve view-specific props and trigger data load on navigate. ✓ Done.
   - MusicBrainz search to find and add artists by name directly, without going through the recommendation flow. API: `GET /search/artists?q=` endpoint; client: `searchArtists()`; musicBrainzClient shared in app factory scope. ✓ Done.
+    UI: search form in SavedArtistsView with isSearching indicator, SearchResultsList sub-component, Add button wired through shell to saveBand. ✓ Done.
   - Directional selection (tick/checkbox) to mark which saved artists should act as style references for the next search — these get injected as a priority preference context alongside the normal query.
 
 ## Phase 4 — Richer Artist Data
