@@ -86,92 +86,64 @@ function renderCardActions(card, theme, handlers) {
 }
 
 function RecommendationCard({ card, theme, isMobile, handlers }) {
+  const cardStyles = {
+    article: {
+      backgroundColor: theme.cardBg,
+      border: `1px solid ${theme.border}`,
+      borderLeft: `3px solid ${theme.accentStripe}`,
+      borderRadius: "8px",
+      padding: "10px",
+    },
+    titleRow: { display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "4px" },
+    title: { fontSize: "15px", fontWeight: "600", color: theme.textPrimary, letterSpacing: "-0.01em" },
+    savedBadge: {
+      fontSize: "11px",
+      color: theme.accent,
+      border: `1px solid ${theme.accentDim}`,
+      borderRadius: "4px",
+      padding: "1px 6px",
+      letterSpacing: "0.03em",
+    },
+    why: { fontSize: "13px", color: theme.textPrimary, fontStyle: "italic", lineHeight: "1.5", marginBottom: "6px" },
+    meta: { fontSize: "13px", color: theme.textSecondary, marginBottom: "8px" },
+    connection: {
+      fontSize: "13px",
+      color: theme.textSecondary,
+      borderTop: `1px solid ${theme.border}`,
+      paddingTop: "8px",
+      marginBottom: "8px",
+      fontStyle: "italic",
+    },
+    actions: { display: "flex", gap: "8px", flexWrap: isMobile ? "wrap" : "nowrap" },
+  };
+
   return React.createElement(
     "article",
-    {
-      className: "recommendation-card",
-      style: {
-        backgroundColor: theme.cardBg,
-        border: `1px solid ${theme.border}`,
-        borderLeft: `3px solid ${theme.accentStripe}`,
-        borderRadius: "8px",
-        padding: "10px",
-      },
-    },
+    { className: "recommendation-card", style: cardStyles.article },
     React.createElement(
       "div",
-      { style: { display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "4px" } },
-      React.createElement(
-        "h2",
-        { style: { fontSize: "15px", fontWeight: "600", color: theme.textPrimary, letterSpacing: "-0.01em" } },
-        card.title,
-      ),
+      { style: cardStyles.titleRow },
+      React.createElement("h2", { style: cardStyles.title }, card.title),
       card.saved
         ? React.createElement(
             "span",
-            {
-              style: {
-                fontSize: "11px",
-                color: theme.accent,
-                border: `1px solid ${theme.accentDim}`,
-                borderRadius: "4px",
-                padding: "1px 6px",
-                letterSpacing: "0.03em",
-              },
-            },
+            { style: cardStyles.savedBadge },
             card.rating ? `saved · ${card.rating}/5` : "saved",
           )
         : null,
     ),
-    card.why
-      ? React.createElement(
-          "p",
-          {
-            style: {
-              fontSize: "13px",
-              color: theme.textPrimary,
-              fontStyle: "italic",
-              lineHeight: "1.5",
-              marginBottom: "6px",
-            },
-          },
-          card.why,
-        )
-      : null,
+    card.why ? React.createElement("p", { style: cardStyles.why }, card.why) : null,
     (card.country || card.genres?.length)
       ? React.createElement(
           "p",
-          {
-            style: {
-              fontSize: "13px",
-              color: theme.textSecondary,
-              marginBottom: "8px",
-            },
-          },
+          { style: cardStyles.meta },
           [card.country, card.genres?.join(", ")].filter(Boolean).join(" · "),
         )
       : null,
     card.connection
-      ? React.createElement(
-          "p",
-          {
-            style: {
-              fontSize: "13px",
-              color: theme.textSecondary,
-              borderTop: `1px solid ${theme.border}`,
-              paddingTop: "8px",
-              marginBottom: "8px",
-              fontStyle: "italic",
-            },
-          },
-          card.connection,
-        )
+      ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),
-    React.createElement(
-      "div",
-      { style: { display: "flex", gap: "8px", flexWrap: isMobile ? "wrap" : "nowrap" } },
-      renderCardActions(card, theme, handlers),
-    ),
+    React.createElement("div", { style: cardStyles.actions }, renderCardActions(card, theme, handlers)),
   );
 }
 
