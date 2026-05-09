@@ -55,6 +55,14 @@ function createDesktopReactMount({
     onMore: (artistName) => {
       void artistName;
     },
+    onToggleSelection: (id) => {
+      shell.toggleSelection?.(id);
+      return renderCurrent();
+    },
+    onActivateStyleRef: async () => {
+      await shell.activateStyleRef?.();
+      return renderCurrent();
+    },
     onSearch: async (query) => {
       await shell.searchArtists?.(query);
       return renderCurrent();

@@ -10,6 +10,8 @@ function createDesktopReactShell({
   getViewImpl = () => "chat",
   navigateImpl = () => {},
   searchArtistsImpl = async () => {},
+  toggleSelectionImpl = () => {},
+  activateStyleRefImpl = async () => {},
   getSavedArtistsViewPropsImpl = () => ({
     header: { title: "Saved Artists", subtitle: "Your style references" },
     artists: [],
@@ -92,6 +94,12 @@ function createDesktopReactShell({
     },
     async searchArtists(query) {
       await searchArtistsImpl(query);
+    },
+    toggleSelection(id) {
+      toggleSelectionImpl(id);
+    },
+    async activateStyleRef() {
+      await activateStyleRefImpl();
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

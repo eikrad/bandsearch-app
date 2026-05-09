@@ -215,6 +215,47 @@ function SearchSection({ searchResults, isSearching, handlers }) {
   );
 }
 
+function SelectionBar({ selectedCount, handlers }) {
+  const styles = {
+    bar: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "10px 14px",
+      backgroundColor: theme.accentDim,
+      border: `1px solid ${theme.accent}`,
+      borderRadius: "8px",
+      marginTop: "16px",
+    },
+    label: { fontSize: "13px", color: theme.accent },
+    btn: {
+      backgroundColor: theme.accent,
+      color: "#0d0f14",
+      border: "none",
+      borderRadius: "6px",
+      padding: "5px 12px",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+    },
+  };
+
+  return React.createElement(
+    "div",
+    { style: styles.bar },
+    React.createElement("span", { style: styles.label }, `${selectedCount} selected`),
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        style: styles.btn,
+        onClick: () => handlers.onActivateStyleRef?.(),
+      },
+      "Use as style reference",
+    ),
+  );
+}
+
 function SavedArtistsView({ viewProps, handlers }) {
   const styles = {
     page: {
@@ -253,7 +294,7 @@ function SavedArtistsView({ viewProps, handlers }) {
     },
   };
 
-  const { artists = [], header, isLoading, searchResults = [], isSearching = false } = viewProps;
+  const { artists = [], header, isLoading, searchResults = [], isSearching = false, selectedCount = 0 } = viewProps;
 
   return React.createElement(
     "main",
@@ -283,6 +324,9 @@ function SavedArtistsView({ viewProps, handlers }) {
       React.createElement("hr", { style: styles.divider }),
     ),
     React.createElement(SearchSection, { searchResults, isSearching, handlers }),
+    selectedCount > 0
+      ? React.createElement(SelectionBar, { selectedCount, handlers })
+      : null,
     isLoading
       ? React.createElement("p", { style: styles.empty }, "Loading…")
       : artists.length === 0

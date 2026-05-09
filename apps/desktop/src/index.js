@@ -21,6 +21,7 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
   let state = { ...createInitialChatState(), savedBands: [] };
   let currentView = "chat";
+  let pendingSelectedArtistIds = [];
 
   function findLatestRecommendationByName(artistName) {
     const messages = state.messages || [];
@@ -51,8 +52,13 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       if (!VALID_VIEWS.includes(view)) return;
       currentView = view;
     },
+    setPendingStyleRef(ids) {
+      pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
+    },
     async requestRecommendations(query, mode = "fresh") {
-      const result = await chatClient.fetchRecommendations(query, mode);
+      const selectedArtistIds = [...pendingSelectedArtistIds];
+      pendingSelectedArtistIds = [];
+      const result = await chatClient.fetchRecommendations(query, mode, { selectedArtistIds });
       state = applyAssistantMessage(state, result);
       return result;
     },
@@ -134,6 +140,12 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
       }
     },
     searchArtistsImpl: (query) => savedArtistsModel.searchArtists(query),
+    toggleSelectionImpl: (id) => savedArtistsModel.toggleSelection(id),
+    activateStyleRefImpl: async () => {
+      const ids = savedArtistsModel.getSelectedIds();
+      app.navigate?.("chat");
+      app.setPendingStyleRef?.(ids);
+    },
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
   });
 }

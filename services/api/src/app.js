@@ -85,8 +85,17 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     }
 
     const requestedMode = validateRecommendationMode(req.body?.mode);
-    const preferenceContext =
-      requestedMode === "preference-aware" ? await resolvedPreferenceRepository.buildContext() : "";
+    const selectedArtistIds = Array.isArray(req.body?.selectedArtistIds)
+      ? req.body.selectedArtistIds.filter((id) => typeof id === "string")
+      : [];
+    let preferenceContext = "";
+    if (requestedMode === "preference-aware") {
+      if (selectedArtistIds.length > 0 && typeof resolvedPreferenceRepository.buildContextForIds === "function") {
+        preferenceContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
+      } else {
+        preferenceContext = await resolvedPreferenceRepository.buildContext();
+      }
+    }
 
     try {
       const recommendations = await getRecommendationService(

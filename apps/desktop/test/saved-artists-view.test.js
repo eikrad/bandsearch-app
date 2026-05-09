@@ -112,6 +112,42 @@ test("SavedArtistsView renders search results with Add buttons", () => {
   assert.equal(html.includes("Add"), true, "should render Add button per result");
 });
 
+test("SavedArtistsView renders tick button per artist", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: false }],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+        selectedCount: 0,
+      },
+      handlers: { ...baseHandlers, onToggleSelection: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("tick-btn") || html.includes("○"), true, "should render tick button");
+});
+
+test("SavedArtistsView shows selection bar when selectedCount > 0", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: true }],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+        selectedCount: 1,
+      },
+      handlers: { ...baseHandlers, onToggleSelection: () => {}, onActivateStyleRef: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("1 selected"), true, "should show selected count in selection bar");
+});
+
 test("SavedArtistsView shows searching indicator when isSearching", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {

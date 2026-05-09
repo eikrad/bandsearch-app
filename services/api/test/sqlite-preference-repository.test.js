@@ -130,3 +130,21 @@ test("sqlite repository returns empty string context when no bands saved", async
   const context = await repo.buildContext();
   assert.equal(context, "");
 });
+
+test("sqlite repository buildContextForIds returns context for given ids", async () => {
+  const repo = createSqlitePreferenceRepository({ db: createTestDb() });
+
+  const r1 = await repo.addSavedBand({ musicbrainzArtistId: "mb-1", name: "Alcest", rating: 5, categories: ["blackgaze"], note: "dreamy" });
+  await repo.addSavedBand({ musicbrainzArtistId: "mb-2", name: "Fen", rating: 4, categories: ["post-black"], note: "atmospheric" });
+
+  const context = await repo.buildContextForIds([r1.savedBand.id]);
+
+  assert.equal(context.includes("Alcest"), true);
+  assert.equal(context.includes("Fen"), false, "should only include given ids");
+});
+
+test("sqlite repository buildContextForIds returns empty string for unknown ids", async () => {
+  const repo = createSqlitePreferenceRepository({ db: createTestDb() });
+  const context = await repo.buildContextForIds(["not-a-real-id"]);
+  assert.equal(context, "");
+});

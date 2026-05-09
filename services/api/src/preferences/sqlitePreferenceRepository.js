@@ -82,6 +82,17 @@ function createSqlitePreferenceRepository({ db }) {
         .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
         .join("\n");
     },
+
+    async buildContextForIds(ids) {
+      if (!ids || ids.length === 0) return "";
+      const placeholders = ids.map(() => "?").join(", ");
+      const rows = db.prepare(`SELECT * FROM saved_bands WHERE id IN (${placeholders})`).all(...ids);
+      if (rows.length === 0) return "";
+      return rows
+        .map(mapRowToSavedBand)
+        .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
+        .join("\n");
+    },
   };
 }
 

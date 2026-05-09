@@ -110,6 +110,42 @@ test("POST /recommendations returns 502 on recommendation service error", async 
   assert.equal(result.data.error.message, "recommendation service unavailable");
 });
 
+test("POST /recommendations with selectedArtistIds uses buildContextForIds", async () => {
+  const calls = [];
+  const app = createApp({
+    recommendationService: {
+      getRecommendations: async (query, options) => {
+        calls.push({ type: "getRecommendations", query, options });
+        return [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"] }];
+      },
+    },
+    preferenceRepository: {
+      addSavedBand: async () => ({ ok: true, savedBand: null }),
+      listSavedBands: async () => [],
+      updateSavedBand: async () => ({ ok: false, status: 404, error: "" }),
+      deleteSavedBand: async () => ({ ok: false, status: 404, error: "" }),
+      buildContext: async () => "fallback context",
+      buildContextForIds: async (ids) => {
+        calls.push({ type: "buildContextForIds", ids });
+        return `context for ${ids.join(",")}`;
+      },
+    },
+  });
+
+  const result = await makeRequest(app, "/recommendations", {
+    query: "I like blackgaze",
+    mode: "preference-aware",
+    selectedArtistIds: ["id-1", "id-2"],
+  });
+
+  assert.equal(result.status, 200);
+  const buildCall = calls.find((c) => c.type === "buildContextForIds");
+  assert.ok(buildCall, "should call buildContextForIds");
+  assert.deepEqual(buildCall.ids, ["id-1", "id-2"]);
+  const recCall = calls.find((c) => c.type === "getRecommendations");
+  assert.equal(recCall.options.preferenceContext.includes("context for"), true);
+});
+
 test("POST /recommendations defaults to fresh mode", async () => {
   const calls = [];
   const app = createApp({

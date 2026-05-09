@@ -88,6 +88,48 @@ test("saved artists model isSearching is true during search", async () => {
   assert.equal(model.getScreenState().isSearching, false);
 });
 
+test("saved artists model toggleSelection adds artist to selection", async () => {
+  const bands = [{ id: "b1", name: "Fen", rating: 4, categories: [], note: "" }];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+
+  model.toggleSelection("b1");
+
+  const state = model.getScreenState();
+  assert.equal(state.artists[0].isSelected, true);
+  assert.equal(state.selectedCount, 1);
+});
+
+test("saved artists model toggleSelection removes already-selected artist", async () => {
+  const bands = [{ id: "b1", name: "Fen", rating: 4, categories: [], note: "" }];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+
+  model.toggleSelection("b1");
+  model.toggleSelection("b1");
+
+  const state = model.getScreenState();
+  assert.equal(state.artists[0].isSelected, false);
+  assert.equal(state.selectedCount, 0);
+});
+
+test("saved artists model getSelectedIds returns current selection as array", async () => {
+  const bands = [
+    { id: "b1", name: "Fen", rating: 4, categories: [], note: "" },
+    { id: "b2", name: "Alcest", rating: 5, categories: [], note: "" },
+  ];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+
+  model.toggleSelection("b1");
+  model.toggleSelection("b2");
+  const ids = model.getSelectedIds();
+
+  assert.equal(ids.length, 2);
+  assert.equal(ids.includes("b1"), true);
+  assert.equal(ids.includes("b2"), true);
+});
+
 test("saved artists model clears search results for empty query", async () => {
   const model = createSavedArtistsModel({
     app: {
