@@ -115,3 +115,24 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
   assert.equal(calls[0].url, "http://localhost:3001/preferences/pref-123");
   assert.equal(calls[0].method, "DELETE");
 });
+
+test("chat client searches artists via GET /search/artists", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method });
+      return {
+        ok: true,
+        json: async () => ({ artists: [{ id: "abc", name: "Alcest", score: 100, disambiguation: "" }] }),
+      };
+    },
+  });
+
+  const results = await client.searchArtists("Alcest");
+
+  assert.equal(calls[0].url, "http://localhost:3001/search/artists?q=Alcest");
+  assert.equal(calls[0].method, undefined);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].name, "Alcest");
+});

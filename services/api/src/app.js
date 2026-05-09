@@ -16,9 +16,9 @@ const { assertPreferenceRepository, createPreferenceRepository } = require("./pr
 const { sendError } = require("./http/errors");
 
 /**
- * @param {{ recommendationService?: any, preferenceRepository?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, runtimeConfig?: any }} [options]
  */
-function createApp({ recommendationService, preferenceRepository, runtimeConfig = {} } = {}) {
+function createApp({ recommendationService, preferenceRepository, musicBrainzClient, runtimeConfig = {} } = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -139,6 +139,23 @@ function createApp({ recommendationService, preferenceRepository, runtimeConfig 
     return res.status(200).json({
       context,
     });
+  });
+
+  app.get("/search/artists", async (req, res) => {
+    const q = String(req.query.q || "").trim();
+    if (!q) {
+      return sendError(res, 400, "validation_error", "query parameter q is required");
+    }
+    try {
+      const client = musicBrainzClient || createMusicBrainzClient({
+        timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
+        retries: runtimeConfig.musicBrainzRetries,
+      });
+      const artists = await client.searchArtists(q);
+      return res.status(200).json({ artists });
+    } catch {
+      return sendError(res, 502, "search_unavailable", "artist search unavailable");
+    }
   });
 
   app.use((req, res) => sendError(res, 404, "not_found", `route not found: ${req.path}`));

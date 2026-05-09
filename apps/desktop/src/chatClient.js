@@ -54,6 +54,14 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       }
       return response.json();
     },
+    async searchArtists(query) {
+      const response = await fetchImpl(`${baseUrl}/search/artists?q=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        throw new Error(`artist search failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      return data.artists || [];
+    },
   };
 }
 
