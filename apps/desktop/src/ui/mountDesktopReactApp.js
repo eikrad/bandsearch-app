@@ -55,8 +55,8 @@ function createDesktopReactMount({
     onMore: (artistName) => {
       void artistName;
     },
-    onNavigate: (view) => {
-      shell.navigate?.(view);
+    onNavigate: async (view) => {
+      await shell.navigate?.(view);
       return renderCurrent();
     },
   };

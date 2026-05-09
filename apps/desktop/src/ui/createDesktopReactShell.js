@@ -9,6 +9,14 @@ function createDesktopReactShell({
   setTimeoutImpl = setTimeout,
   getViewImpl = () => "chat",
   navigateImpl = () => {},
+  getSavedArtistsViewPropsImpl = () => ({
+    header: { title: "Saved Artists", subtitle: "Your style references" },
+    artists: [],
+    isLoading: false,
+    selectedCount: 0,
+    searchResults: [],
+    isSearching: false,
+  }),
 }) {
   const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
   let actionStatus = null;
@@ -33,11 +41,11 @@ function createDesktopReactShell({
 
   return {
     getViewProps() {
+      if (getViewImpl() === "saved-artists") {
+        return getSavedArtistsViewPropsImpl();
+      }
       const base = renderAdapter.getViewProps();
-      return {
-        ...base,
-        actionStatus,
-      };
+      return { ...base, actionStatus };
     },
     async updateMode(mode) {
       return handlers.onModeChange(mode);
@@ -78,8 +86,8 @@ function createDesktopReactShell({
     getView() {
       return getViewImpl();
     },
-    navigate(view) {
-      navigateImpl(view);
+    async navigate(view) {
+      await navigateImpl(view);
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

@@ -116,6 +116,7 @@ function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }) {
 
 function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers = {} }) {
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
+  const savedArtistsModel = createSavedArtistsModel({ app });
   const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
   const mergedActionHandlers = {
     onSave: resolvedActionHandlers.onSave || ((artistName) => app.saveBand?.(artistName)),
@@ -125,8 +126,14 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
   return createDesktopReactShell({
     renderAdapter,
     actionHandlers: mergedActionHandlers,
-    getViewImpl: () => app.getView(),
-    navigateImpl: (view) => app.navigate(view),
+    getViewImpl: () => app.getView?.() ?? "chat",
+    navigateImpl: async (view) => {
+      app.navigate?.(view);
+      if (view === "saved-artists") {
+        await savedArtistsModel.loadSavedArtists();
+      }
+    },
+    getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
   });
 }
 
