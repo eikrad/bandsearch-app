@@ -63,6 +63,11 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     preferenceRepository || createPreferenceRepository(runtimeConfig),
   );
 
+  const resolvedMusicBrainzClient = musicBrainzClient || createMusicBrainzClient({
+    timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
+    retries: runtimeConfig.musicBrainzRetries,
+  });
+
   const resolvedRecommendationService = recommendationService;
 
   app.get("/health", (_req, res) => {
@@ -87,6 +92,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
       const recommendations = await getRecommendationService(
         resolvedRecommendationService,
         runtimeConfig,
+        resolvedMusicBrainzClient,
       ).getRecommendations(validation.query, {
         mode: requestedMode,
         preferenceContext,
@@ -147,11 +153,7 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
       return sendError(res, 400, "validation_error", "query parameter q is required");
     }
     try {
-      const client = musicBrainzClient || createMusicBrainzClient({
-        timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-        retries: runtimeConfig.musicBrainzRetries,
-      });
-      const artists = await client.searchArtists(q);
+      const artists = await resolvedMusicBrainzClient.searchArtists(q);
       return res.status(200).json({ artists });
     } catch {
       return sendError(res, 502, "search_unavailable", "artist search unavailable");
@@ -176,26 +178,22 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
 
 let cachedDefaultService;
 
-function getRecommendationService(overriddenService, runtimeConfig) {
+function getRecommendationService(overriddenService, runtimeConfig, musicBrainzClient) {
   if (overriddenService) {
     return overriddenService;
   }
   if (!cachedDefaultService) {
-    cachedDefaultService = createRecommendationService({
-      musicBrainzClient: createMusicBrainzClient({
-        timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-        retries: runtimeConfig.musicBrainzRetries,
-      }),
+    const client = musicBrainzClient || createMusicBrainzClient({
+      timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
+      retries: runtimeConfig.musicBrainzRetries,
     });
+    cachedDefaultService = createRecommendationService({ musicBrainzClient: client });
 
     if (process.env.GEMINI_API_KEY) {
       createLangChainRunner({ timeoutMs: runtimeConfig.recommendationTimeoutMs })
         .then((runModel) => {
           cachedDefaultService = createRecommendationService({
-            musicBrainzClient: createMusicBrainzClient({
-              timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-              retries: runtimeConfig.musicBrainzRetries,
-            }),
+            musicBrainzClient: client,
             recommendationAgent: createRecommendationAgent({ runModel }),
           });
         })
