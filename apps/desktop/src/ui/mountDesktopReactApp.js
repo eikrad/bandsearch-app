@@ -55,6 +55,18 @@ function createDesktopReactMount({
     onMore: (artistName) => {
       void artistName;
     },
+    onSearch: async (query) => {
+      await shell.searchArtists?.(query);
+      return renderCurrent();
+    },
+    onAddArtist: async ({ name }) => {
+      try {
+        await shell.saveBand?.(name);
+      } catch {
+        // Error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
     onNavigate: async (view) => {
       await shell.navigate?.(view);
       return renderCurrent();

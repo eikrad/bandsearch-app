@@ -133,6 +133,7 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
         await savedArtistsModel.loadSavedArtists();
       }
     },
+    searchArtistsImpl: (query) => savedArtistsModel.searchArtists(query),
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
   });
 }

@@ -86,11 +86,128 @@ function SavedArtistItem({ artist, handlers }) {
         {
           type: "button",
           style: itemStyles.deleteBtn,
-          onClick: () => handlers.onDelete(artist.id),
+          onClick: () => handlers.onDelete?.(artist.id),
         },
         "×",
       ),
     ),
+  );
+}
+
+function SearchResultItem({ result, handlers }) {
+  const styles = {
+    li: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "8px 12px",
+      backgroundColor: theme.cardBg,
+      border: `1px solid ${theme.border}`,
+      borderRadius: "8px",
+    },
+    name: { fontSize: "13px", fontWeight: "600", color: theme.textPrimary },
+    disambiguation: { fontSize: "12px", color: theme.textSecondary, marginTop: "2px" },
+    addBtn: {
+      backgroundColor: theme.accentDim,
+      color: theme.accent,
+      border: `1px solid ${theme.accent}`,
+      borderRadius: "6px",
+      padding: "4px 10px",
+      fontSize: "12px",
+      cursor: "pointer",
+      flexShrink: 0,
+    },
+  };
+
+  return React.createElement(
+    "li",
+    { style: styles.li },
+    React.createElement(
+      "div",
+      null,
+      React.createElement("p", { style: styles.name }, result.name),
+      result.disambiguation
+        ? React.createElement("p", { style: styles.disambiguation }, result.disambiguation)
+        : null,
+    ),
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        style: styles.addBtn,
+        onClick: () => handlers.onAddArtist?.({ id: result.id, name: result.name }),
+      },
+      "Add",
+    ),
+  );
+}
+
+function SearchSection({ searchResults, isSearching, handlers }) {
+  const styles = {
+    section: { marginTop: "20px" },
+    sectionTitle: { fontSize: "13px", fontWeight: "600", color: theme.textSecondary, marginBottom: "8px" },
+    row: { display: "flex", gap: "8px", marginBottom: "12px" },
+    input: {
+      flex: 1,
+      backgroundColor: theme.cardBg,
+      border: `1px solid ${theme.border}`,
+      borderRadius: "7px",
+      padding: "7px 12px",
+      fontSize: "13px",
+      color: theme.textPrimary,
+      outline: "none",
+    },
+    searchBtn: {
+      backgroundColor: theme.buttonBg,
+      color: theme.buttonText,
+      border: `1px solid ${theme.buttonBorder}`,
+      borderRadius: "7px",
+      padding: "7px 14px",
+      fontSize: "13px",
+      cursor: "pointer",
+    },
+    hint: { fontSize: "12px", color: theme.textTertiary },
+    list: { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" },
+  };
+
+  return React.createElement(
+    "section",
+    { style: styles.section },
+    React.createElement("p", { style: styles.sectionTitle }, "Add artist"),
+    React.createElement(
+      "form",
+      {
+        style: styles.row,
+        onSubmit: (e) => {
+          e.preventDefault();
+          const q = e.target.elements["artist-search"].value.trim();
+          if (q) handlers.onSearch?.(q);
+        },
+      },
+      React.createElement("input", {
+        type: "text",
+        name: "artist-search",
+        placeholder: "Search MusicBrainz…",
+        style: styles.input,
+        autoComplete: "off",
+      }),
+      React.createElement(
+        "button",
+        { type: "submit", style: styles.searchBtn },
+        "Search",
+      ),
+    ),
+    isSearching
+      ? React.createElement("p", { style: styles.hint }, "Searching…")
+      : searchResults.length > 0
+        ? React.createElement(
+            "ul",
+            { style: styles.list },
+            searchResults.map((result) =>
+              React.createElement(SearchResultItem, { key: result.id, result, handlers }),
+            ),
+          )
+        : null,
   );
 }
 
@@ -132,7 +249,7 @@ function SavedArtistsView({ viewProps, handlers }) {
     },
   };
 
-  const { artists = [], header, isLoading } = viewProps;
+  const { artists = [], header, isLoading, searchResults = [], isSearching = false } = viewProps;
 
   return React.createElement(
     "main",
@@ -154,13 +271,14 @@ function SavedArtistsView({ viewProps, handlers }) {
           {
             type: "button",
             style: styles.backBtn,
-            onClick: () => handlers.onNavigate("chat"),
+            onClick: () => handlers.onNavigate?.("chat"),
           },
           "← Recommendations",
         ),
       ),
       React.createElement("hr", { style: styles.divider }),
     ),
+    React.createElement(SearchSection, { searchResults, isSearching, handlers }),
     isLoading
       ? React.createElement("p", { style: styles.empty }, "Loading…")
       : artists.length === 0

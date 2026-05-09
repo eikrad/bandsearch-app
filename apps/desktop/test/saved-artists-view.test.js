@@ -74,3 +74,57 @@ test("SavedArtistsView renders Saved Artists heading", () => {
 
   assert.equal(html.includes("Saved Artists"), true);
 });
+
+test("SavedArtistsView renders search input and button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: baseHandlers,
+    }),
+  );
+
+  assert.equal(html.includes('name="artist-search"'), true, "should render search input");
+  assert.equal(html.includes("Search"), true, "should render Search button");
+});
+
+test("SavedArtistsView renders search results with Add buttons", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [{ id: "abc", name: "Alcest", disambiguation: "French blackgaze" }],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onAddArtist: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Alcest"), true, "should show search result name");
+  assert.equal(html.includes("French blackgaze"), true, "should show disambiguation");
+  assert.equal(html.includes("Add"), true, "should render Add button per result");
+});
+
+test("SavedArtistsView shows searching indicator when isSearching", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: true,
+      },
+      handlers: baseHandlers,
+    }),
+  );
+
+  assert.equal(html.includes("Searching"), true, "should show searching indicator");
+});

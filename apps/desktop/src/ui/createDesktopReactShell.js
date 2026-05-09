@@ -9,6 +9,7 @@ function createDesktopReactShell({
   setTimeoutImpl = setTimeout,
   getViewImpl = () => "chat",
   navigateImpl = () => {},
+  searchArtistsImpl = async () => {},
   getSavedArtistsViewPropsImpl = () => ({
     header: { title: "Saved Artists", subtitle: "Your style references" },
     artists: [],
@@ -88,6 +89,9 @@ function createDesktopReactShell({
     },
     async navigate(view) {
       await navigateImpl(view);
+    },
+    async searchArtists(query) {
+      await searchArtistsImpl(query);
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

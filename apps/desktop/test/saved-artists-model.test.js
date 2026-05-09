@@ -55,3 +55,49 @@ test("saved artists model includes header in screen state", () => {
   assert.equal(state.header.title, "Saved Artists");
   assert.ok(state.header.subtitle);
 });
+
+test("saved artists model tracks search results after searchArtists call", async () => {
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      searchArtists: async () => [{ id: "abc", name: "Alcest", score: 100, disambiguation: "French blackgaze" }],
+    },
+  });
+
+  await model.searchArtists("Alcest");
+  const state = model.getScreenState();
+
+  assert.equal(state.searchResults.length, 1);
+  assert.equal(state.searchResults[0].name, "Alcest");
+  assert.equal(state.searchResults[0].id, "abc");
+});
+
+test("saved artists model isSearching is true during search", async () => {
+  let resolveSearch;
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      searchArtists: () => new Promise((resolve) => { resolveSearch = resolve; }),
+    },
+  });
+
+  const searchPromise = model.searchArtists("Fen");
+  assert.equal(model.getScreenState().isSearching, true);
+  resolveSearch([]);
+  await searchPromise;
+  assert.equal(model.getScreenState().isSearching, false);
+});
+
+test("saved artists model clears search results for empty query", async () => {
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      searchArtists: async () => [{ id: "x", name: "Test", score: 80, disambiguation: "" }],
+    },
+  });
+
+  await model.searchArtists("Test");
+  assert.equal(model.getScreenState().searchResults.length, 1);
+  await model.searchArtists("");
+  assert.equal(model.getScreenState().searchResults.length, 0);
+});
