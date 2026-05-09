@@ -78,3 +78,61 @@ test("normalizeArtistId creates stable local fallback id", () => {
   assert.equal(normalizeArtistId("Alcest"), "local-alcest");
   assert.equal(normalizeArtistId("Les Discrets"), "local-les-discrets");
 });
+
+test("chat client fetches saved bands from GET /preferences", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method });
+      return {
+        ok: true,
+        json: async () => ({ savedBands: [{ id: "b1", name: "Fen", rating: 3 }] }),
+      };
+    },
+  });
+
+  const bands = await client.listPreferences();
+
+  assert.equal(calls[0].url, "http://localhost:3001/preferences");
+  assert.equal(calls[0].method, undefined);
+  assert.equal(bands.length, 1);
+  assert.equal(bands[0].name, "Fen");
+});
+
+test("chat client deletes a preference via DELETE /preferences/:id", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method });
+      return { ok: true, json: async () => ({ ok: true }) };
+    },
+  });
+
+  await client.deletePreference("pref-123");
+
+  assert.equal(calls[0].url, "http://localhost:3001/preferences/pref-123");
+  assert.equal(calls[0].method, "DELETE");
+});
+
+test("chat client searches artists via GET /search/artists", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method });
+      return {
+        ok: true,
+        json: async () => ({ artists: [{ id: "abc", name: "Alcest", score: 100, disambiguation: "" }] }),
+      };
+    },
+  });
+
+  const results = await client.searchArtists("Alcest");
+
+  assert.equal(calls[0].url, "http://localhost:3001/search/artists?q=Alcest");
+  assert.equal(calls[0].method, undefined);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].name, "Alcest");
+});

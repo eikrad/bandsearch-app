@@ -14,6 +14,10 @@ function mapRowToSavedBand(row) {
   };
 }
 
+function formatBandContext(b) {
+  return `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`;
+}
+
 function createSqlitePreferenceRepository({ db }) {
   return {
     async addSavedBand(input) {
@@ -78,9 +82,15 @@ function createSqlitePreferenceRepository({ db }) {
     async buildContext() {
       const savedBands = await this.listSavedBands();
       if (savedBands.length === 0) return "";
-      return savedBands
-        .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
-        .join("\n");
+      return savedBands.map(formatBandContext).join("\n");
+    },
+
+    async buildContextForIds(ids) {
+      if (!ids || ids.length === 0) return "";
+      const placeholders = ids.map(() => "?").join(", ");
+      const rows = db.prepare(`SELECT * FROM saved_bands WHERE id IN (${placeholders})`).all(...ids);
+      if (rows.length === 0) return "";
+      return rows.map(mapRowToSavedBand).map(formatBandContext).join("\n");
     },
   };
 }

@@ -2,7 +2,26 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { ChatAppView } = require("./ChatAppView");
 
-function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTimeoutMs = 3000, setTimeoutImpl = setTimeout }) {
+function createDesktopReactShell({
+  renderAdapter,
+  actionHandlers = {},
+  statusTimeoutMs = 3000,
+  setTimeoutImpl = setTimeout,
+  getViewImpl = () => "chat",
+  navigateImpl = () => {},
+  searchArtistsImpl = async () => {},
+  toggleSelectionImpl = () => {},
+  deleteSavedArtistImpl = async () => {},
+  activateStyleRefImpl = async () => {},
+  getSavedArtistsViewPropsImpl = () => ({
+    header: { title: "Saved Artists", subtitle: "Your style references" },
+    artists: [],
+    isLoading: false,
+    selectedCount: 0,
+    searchResults: [],
+    isSearching: false,
+  }),
+}) {
   const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
   let actionStatus = null;
   let clearStatusTimer = null;
@@ -26,11 +45,11 @@ function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTim
 
   return {
     getViewProps() {
+      if (getViewImpl() === "saved-artists") {
+        return getSavedArtistsViewPropsImpl();
+      }
       const base = renderAdapter.getViewProps();
-      return {
-        ...base,
-        actionStatus,
-      };
+      return { ...base, actionStatus };
     },
     async updateMode(mode) {
       return handlers.onModeChange(mode);
@@ -67,6 +86,30 @@ function createDesktopReactShell({ renderAdapter, actionHandlers = {}, statusTim
         scheduleStatusClear();
         throw error;
       }
+    },
+    getView() {
+      return getViewImpl();
+    },
+    async navigate(view) {
+      await navigateImpl(view);
+    },
+    async searchArtists(query) {
+      await searchArtistsImpl(query);
+    },
+    toggleSelection(id) {
+      toggleSelectionImpl(id);
+    },
+    async deleteSavedArtist(id) {
+      try {
+        await deleteSavedArtistImpl(id);
+      } catch (error) {
+        actionStatus = { type: "error", message: "Could not delete artist." };
+        scheduleStatusClear();
+        throw error;
+      }
+    },
+    async activateStyleRef() {
+      await activateStyleRefImpl();
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

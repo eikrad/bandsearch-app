@@ -18,9 +18,11 @@
 
 - Playwright browser smoke tests: verify the built app actually renders in a real browser. ✓ Done.
 - Compact card layout: reduce card height and visual weight so more results fit on screen without scrolling. Pure CSS/layout change, no data model impact. ✓ Done.
-- Saved Artists page: dedicated view for managing saved artists, requiring in-app client-side routing (currently the app is single-view). Two sub-features:
-  - MusicBrainz search to find and add artists by name directly, without going through the recommendation flow.
-  - Directional selection (tick/checkbox) to mark which saved artists should act as style references for the next search — these get injected as a priority preference context alongside the normal query.
+- Client-side view router: `getView()`/`navigate()` on bootstrapDesktopApp, threaded through shell and mount layer; `resolveViewComponent` dispatch point ready for Phase 3 plug-in. ✓ Done.
+- Saved Artists page — Basic List: `SavedArtistsView` component with band list, header, back navigation; `savedArtistsModel` (combined ViewModel + ScreenModel); `listPreferences`/`deletePreference` on chatClient; shell wired to serve view-specific props and trigger data load on navigate. ✓ Done.
+  - MusicBrainz search to find and add artists by name directly, without going through the recommendation flow. API: `GET /search/artists?q=` endpoint; client: `searchArtists()`; musicBrainzClient shared in app factory scope. ✓ Done.
+    UI: search form in SavedArtistsView with isSearching indicator, SearchResultsList sub-component, Add button wired through shell to saveBand. ✓ Done.
+  - Directional selection (tick/checkbox) to mark which saved artists should act as style references for the next search — SelectionBar with count + CTA, selectedArtistIds forwarded to API, buildContextForIds in SQLite repo, pendingSelectedArtistIds lifecycle in bootstrapDesktopApp. ✓ Done.
 
 ## Phase 4 — Richer Artist Data
 

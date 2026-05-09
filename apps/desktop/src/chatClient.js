@@ -2,11 +2,13 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
   return {
-    async fetchRecommendations(query, mode = "fresh") {
+    async fetchRecommendations(query, mode = "fresh", { selectedArtistIds = [] } = {}) {
+      const body = { query, mode };
+      if (selectedArtistIds.length > 0) body.selectedArtistIds = selectedArtistIds;
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query, mode }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -36,6 +38,31 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
         throw new Error(`preference update request failed with status ${response.status}`);
       }
       return response.json();
+    },
+    async listPreferences() {
+      const response = await fetchImpl(`${baseUrl}/preferences`);
+      if (!response.ok) {
+        throw new Error(`preferences fetch failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      return data.savedBands || [];
+    },
+    async deletePreference(id) {
+      const response = await fetchImpl(`${baseUrl}/preferences/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(`preference delete request failed with status ${response.status}`);
+      }
+      return response.json();
+    },
+    async searchArtists(query) {
+      const response = await fetchImpl(`${baseUrl}/search/artists?q=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        throw new Error(`artist search failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      return data.artists || [];
     },
   };
 }

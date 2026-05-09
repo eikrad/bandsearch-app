@@ -1,6 +1,7 @@
 const React = require("react");
 const { createRoot } = require("react-dom/client");
 const { ChatAppView } = require("./ChatAppView");
+const { SavedArtistsView } = require("./SavedArtistsView");
 
 function defaultContainerResolver() {
   /** @type {any} */ const browserDocument = globalThis.document;
@@ -9,6 +10,11 @@ function defaultContainerResolver() {
     throw new Error("missing root container");
   }
   return root;
+}
+
+function resolveViewComponent(viewName) {
+  if (viewName === "saved-artists") return SavedArtistsView;
+  return ChatAppView;
 }
 
 function createDesktopReactMount({
@@ -21,12 +27,9 @@ function createDesktopReactMount({
 
   async function renderCurrent() {
     const viewProps = shell.getViewProps();
-    root.render(
-      React.createElement(ChatAppView, {
-        viewProps,
-        handlers,
-      }),
-    );
+    const currentView = shell.getView?.() ?? "chat";
+    const ViewComponent = resolveViewComponent(currentView);
+    root.render(React.createElement(ViewComponent, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -51,6 +54,38 @@ function createDesktopReactMount({
     },
     onMore: (artistName) => {
       void artistName;
+    },
+    onDelete: async (id) => {
+      try {
+        await shell.deleteSavedArtist?.(id);
+      } catch {
+        // Error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
+    onToggleSelection: (id) => {
+      shell.toggleSelection?.(id);
+      return renderCurrent();
+    },
+    onActivateStyleRef: async () => {
+      await shell.activateStyleRef?.();
+      return renderCurrent();
+    },
+    onSearch: async (query) => {
+      await shell.searchArtists?.(query);
+      return renderCurrent();
+    },
+    onAddArtist: async ({ name }) => {
+      try {
+        await shell.saveBand?.(name);
+      } catch {
+        // Error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
+    onNavigate: async (view) => {
+      await shell.navigate?.(view);
+      return renderCurrent();
     },
   };
 

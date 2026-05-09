@@ -8,8 +8,11 @@ const { createChatViewModel } = require("./chatViewModel");
 const { createChatScreenModel } = require("./chatScreenModel");
 const { createChatScreen } = require("./chatScreen");
 const { createChatRenderAdapter } = require("./chatRenderAdapter");
+const { createSavedArtistsModel } = require("./savedArtistsModel");
 const { createDesktopReactShell } = require("./ui/createDesktopReactShell");
 const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
+
+const VALID_VIEWS = ["chat", "saved-artists"];
 
 /**
  * @param {{ apiBaseUrl?: string, fetchImpl?: any }} [options]
@@ -17,6 +20,8 @@ const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
 function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl } = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
   let state = { ...createInitialChatState(), savedBands: [] };
+  let currentView = "chat";
+  let pendingSelectedArtistIds = [];
 
   function findLatestRecommendationByName(artistName) {
     const messages = state.messages || [];
@@ -40,8 +45,20 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
     getState() {
       return state;
     },
+    getView() {
+      return currentView;
+    },
+    navigate(view) {
+      if (!VALID_VIEWS.includes(view)) return;
+      currentView = view;
+    },
+    setPendingStyleRef(ids) {
+      pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
+    },
     async requestRecommendations(query, mode = "fresh") {
-      const result = await chatClient.fetchRecommendations(query, mode);
+      const selectedArtistIds = [...pendingSelectedArtistIds];
+      pendingSelectedArtistIds = [];
+      const result = await chatClient.fetchRecommendations(query, mode, { selectedArtistIds });
       state = applyAssistantMessage(state, result);
       return result;
     },
@@ -66,6 +83,18 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       const result = /** @type {any} */ (await chatClient.updatePreference(savedBand.id, { rating }));
       upsertSavedBand(result.savedBand);
       return result.savedBand;
+    },
+    async listSavedBands() {
+      const bands = await chatClient.listPreferences();
+      state = { ...state, savedBands: bands };
+      return bands;
+    },
+    async deleteSavedBand(id) {
+      await chatClient.deletePreference(id);
+      state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
+    },
+    async searchArtists(query) {
+      return chatClient.searchArtists ? chatClient.searchArtists(query) : [];
     },
   };
 }
@@ -97,13 +126,34 @@ function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }) {
 
 function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers = {} }) {
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
+  const savedArtistsModel = createSavedArtistsModel({ app });
   const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
   const mergedActionHandlers = {
     onSave: resolvedActionHandlers.onSave || ((artistName) => app.saveBand?.(artistName)),
     onRate: resolvedActionHandlers.onRate || ((artistName) => app.rateBand?.(artistName, 5)),
     onMore: resolvedActionHandlers.onMore || (() => {}),
   };
-  return createDesktopReactShell({ renderAdapter, actionHandlers: mergedActionHandlers });
+  return createDesktopReactShell({
+    renderAdapter,
+    actionHandlers: mergedActionHandlers,
+    getViewImpl: () => app.getView?.() ?? "chat",
+    navigateImpl: async (view) => {
+      app.navigate?.(view);
+      if (view === "saved-artists") {
+        await savedArtistsModel.loadSavedArtists();
+      }
+    },
+    searchArtistsImpl: (query) => savedArtistsModel.searchArtists(query),
+    toggleSelectionImpl: (id) => savedArtistsModel.toggleSelection(id),
+    deleteSavedArtistImpl: (id) => savedArtistsModel.deleteSavedArtist(id),
+    activateStyleRefImpl: async () => {
+      const ids = savedArtistsModel.getSelectedIds();
+      savedArtistsModel.clearSelection();
+      app.setPendingStyleRef?.(ids);
+      app.navigate?.("chat");
+    },
+    getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
+  });
 }
 
 function bootstrapDesktopReactApp({ app, viewport = "desktop", actionHandlers = {} }) {
