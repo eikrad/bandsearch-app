@@ -89,17 +89,18 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
   return React.createElement(
     "article",
     {
+      className: "recommendation-card",
       style: {
         backgroundColor: theme.cardBg,
         border: `1px solid ${theme.border}`,
         borderLeft: `3px solid ${theme.accentStripe}`,
-        borderRadius: "10px",
-        padding: "16px",
+        borderRadius: "8px",
+        padding: "10px",
       },
     },
     React.createElement(
       "div",
-      { style: { display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "6px" } },
+      { style: { display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "4px" } },
       React.createElement(
         "h2",
         { style: { fontSize: "15px", fontWeight: "600", color: theme.textPrimary, letterSpacing: "-0.01em" } },
@@ -127,11 +128,11 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
           "p",
           {
             style: {
-              fontSize: "14px",
+              fontSize: "13px",
               color: theme.textPrimary,
               fontStyle: "italic",
-              lineHeight: "1.55",
-              marginBottom: "10px",
+              lineHeight: "1.5",
+              marginBottom: "6px",
             },
           },
           card.why,
@@ -158,14 +159,14 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
               fontSize: "13px",
               color: theme.textSecondary,
               borderTop: `1px solid ${theme.border}`,
-              paddingTop: "10px",
-              marginBottom: "12px",
+              paddingTop: "8px",
+              marginBottom: "8px",
               fontStyle: "italic",
             },
           },
           card.connection,
         )
-      : React.createElement("div", { style: { marginBottom: "12px" } }),
+      : React.createElement("div", { style: { marginBottom: "8px" } }),
     React.createElement(
       "div",
       { style: { display: "flex", gap: "8px", flexWrap: isMobile ? "wrap" : "nowrap" } },
@@ -320,7 +321,7 @@ function ChatAppView({ viewProps, handlers }) {
         })
       : React.createElement(
           "section",
-          { style: { display: "grid", gap: "12px" } },
+          { style: { display: "grid", gap: "8px" } },
           viewProps.cards.map((card) =>
             React.createElement(RecommendationCard, {
               key: card.title,
