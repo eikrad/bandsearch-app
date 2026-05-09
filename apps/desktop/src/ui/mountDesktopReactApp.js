@@ -1,6 +1,7 @@
 const React = require("react");
 const { createRoot } = require("react-dom/client");
 const { ChatAppView } = require("./ChatAppView");
+const { SavedArtistsView } = require("./SavedArtistsView");
 
 function defaultContainerResolver() {
   /** @type {any} */ const browserDocument = globalThis.document;
@@ -12,8 +13,7 @@ function defaultContainerResolver() {
 }
 
 function resolveViewComponent(viewName) {
-  // SavedArtistsView will be plugged in here in Phase 3
-  void viewName;
+  if (viewName === "saved-artists") return SavedArtistsView;
   return ChatAppView;
 }
 

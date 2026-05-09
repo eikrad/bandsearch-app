@@ -8,6 +8,7 @@ const { createChatViewModel } = require("./chatViewModel");
 const { createChatScreenModel } = require("./chatScreenModel");
 const { createChatScreen } = require("./chatScreen");
 const { createChatRenderAdapter } = require("./chatRenderAdapter");
+const { createSavedArtistsModel } = require("./savedArtistsModel");
 const { createDesktopReactShell } = require("./ui/createDesktopReactShell");
 const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
 
@@ -76,6 +77,14 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       const result = /** @type {any} */ (await chatClient.updatePreference(savedBand.id, { rating }));
       upsertSavedBand(result.savedBand);
       return result.savedBand;
+    },
+    async listSavedBands() {
+      const bands = await chatClient.listPreferences();
+      state = { ...state, savedBands: bands };
+      return bands;
+    },
+    async searchArtists(query) {
+      return chatClient.searchArtists ? chatClient.searchArtists(query) : [];
     },
   };
 }

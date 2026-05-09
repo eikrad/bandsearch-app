@@ -37,6 +37,23 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       }
       return response.json();
     },
+    async listPreferences() {
+      const response = await fetchImpl(`${baseUrl}/preferences`);
+      if (!response.ok) {
+        throw new Error(`preferences fetch failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      return data.savedBands || [];
+    },
+    async deletePreference(id) {
+      const response = await fetchImpl(`${baseUrl}/preferences/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(`preference delete request failed with status ${response.status}`);
+      }
+      return response.json();
+    },
   };
 }
 
