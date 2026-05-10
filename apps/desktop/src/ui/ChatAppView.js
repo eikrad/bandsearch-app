@@ -71,6 +71,36 @@ function GenreChips({ genres, textTertiary, border }) {
   );
 }
 
+function PlatformLinks({ links }) {
+  if (!links?.length) return null;
+  return React.createElement(
+    "div",
+    { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" } },
+    links.map((link) =>
+      React.createElement(
+        "a",
+        {
+          key: link.platform,
+          href: link.url,
+          target: "_blank",
+          rel: "noopener noreferrer",
+          title: link.label,
+          style: {
+            fontSize: "11px",
+            color: "#6b7a90",
+            border: "1px solid #1e2a3a",
+            borderRadius: "4px",
+            padding: "2px 8px",
+            textDecoration: "none",
+            letterSpacing: "0.03em",
+          },
+        },
+        link.label,
+      ),
+    ),
+  );
+}
+
 function renderCardActions(card, theme, handlers) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
@@ -146,6 +176,23 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
   return React.createElement(
     "article",
     { className: "recommendation-card", style: cardStyles.article },
+    card.imageUrl
+      ? React.createElement("img", {
+          src: card.imageUrl,
+          alt: card.title,
+          loading: "lazy",
+          style: {
+            width: "100%",
+            maxHeight: "160px",
+            objectFit: "cover",
+            borderRadius: "6px",
+            marginBottom: "10px",
+          },
+          onError: (e) => {
+            e.currentTarget.style.display = "none";
+          },
+        })
+      : null,
     React.createElement(
       "div",
       { style: cardStyles.titleRow },
@@ -174,6 +221,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
     card.connection
       ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),
+    React.createElement(PlatformLinks, { links: card.platformLinks }),
     React.createElement("div", { style: cardStyles.actions }, renderCardActions(card, theme, handlers)),
   );
 }

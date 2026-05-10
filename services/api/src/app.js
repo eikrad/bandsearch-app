@@ -11,14 +11,15 @@ const {
   createRecommendationService,
 } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
+const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { sendError } = require("./http/errors");
 
 /**
- * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, runtimeConfig?: any }} [options]
  */
-function createApp({ recommendationService, preferenceRepository, musicBrainzClient, runtimeConfig = {} } = {}) {
+function createApp({ recommendationService, preferenceRepository, musicBrainzClient, artistImageClient, runtimeConfig = {} } = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -90,6 +91,13 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     return defaultRecommendationService;
   }
 
+  const resolvedArtistImageClient =
+    artistImageClient ||
+    createWikidataImageClient({
+      timeoutMs: runtimeConfig.wikidataTimeoutMs || 8000,
+      lastFmApiKey: runtimeConfig.lastFmApiKey || process.env.LASTFM_API_KEY || "",
+    });
+
   app.get("/health", (_req, res) => {
     return res.status(200).json({ status: "ok" });
   });
@@ -105,6 +113,15 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     }
     const artists = await resolvedMusicBrainzClient.searchArtists(query);
     return res.status(200).json({ artists });
+  });
+
+  app.get("/artists/image", async (req, res) => {
+    const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+    if (!name) {
+      return sendError(res, 400, "validation_error", "name parameter is required");
+    }
+    const imageUrl = await resolvedArtistImageClient.getArtistImageUrl(name);
+    return res.status(200).json({ imageUrl: imageUrl || null });
   });
 
   app.post("/recommendations", recommendationsLimiter, async (req, res) => {

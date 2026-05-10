@@ -22,6 +22,9 @@ test("render adapter builds view props from UI render state", () => {
   assert.equal(props.viewport, "desktop");
   assert.equal(props.modeValue, "fresh");
   assert.equal(props.cards.length, 1);
+  assert.equal(Array.isArray(props.cards[0].platformLinks), true, "platformLinks array on card");
+  assert.equal(props.cards[0].platformLinks.length, 3, "bandcamp + soundcloud + spotify");
+  assert.equal(props.cards[0].platformLinks[0].platform, "bandcamp");
 });
 
 test("render adapter forwards interaction handlers and refreshes state", async () => {

@@ -102,6 +102,10 @@ function createDesktopReactMount({
       await shell.navigate?.(view);
       return renderCurrent();
     },
+    onNavigateSaved: async () => {
+      await shell.navigate?.("saved-artists");
+      return renderCurrent();
+    },
   };
 
   const savedHandlers = {

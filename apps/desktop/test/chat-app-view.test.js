@@ -95,6 +95,7 @@ test("RecommendationCard has CSS class for card styling", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSaved: () => {},
       },
     }),
   );
@@ -109,6 +110,78 @@ test("RecommendationCard has CSS class for card styling", () => {
     false,
     "compact card must not use old 16px padding",
   );
+});
+
+test("ChatAppView renders artist image when imageUrl is provided on card", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            genres: ["post-black"],
+            imageUrl: "https://commons.wikimedia.org/fen.jpg",
+            platformLinks: [],
+            actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("https://commons.wikimedia.org/fen.jpg"), true, "image src rendered");
+});
+
+test("ChatAppView renders platform links when provided on card", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            platformLinks: [
+              { platform: "bandcamp", url: "https://bandcamp.com/search?q=Fen", label: "Bandcamp" },
+              { platform: "spotify", url: "https://open.spotify.com/search/Fen", label: "Spotify" },
+            ],
+            actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("bandcamp.com"), true, "bandcamp link rendered");
+  assert.equal(html.includes("spotify.com"), true, "spotify link rendered");
 });
 
 test("ChatAppView renders a Saved Artists navigation button", () => {
@@ -130,7 +203,7 @@ test("ChatAppView renders a Saved Artists navigation button", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
-        onNavigate: () => {},
+        onNavigateSaved: () => {},
       },
     }),
   );
