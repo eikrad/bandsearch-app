@@ -33,7 +33,7 @@ test("desktop react shell renders HTML with recommendation card and actions", as
   assert.equal(html.includes("Fen"), true);
   assert.equal(html.includes("Save"), true);
   assert.equal(html.includes("Rate"), true);
-  assert.equal(html.includes("More"), true);
+  assert.equal(html.includes("···"), true);
 });
 
 test("desktop react shell save and rate actions call app handlers", async () => {

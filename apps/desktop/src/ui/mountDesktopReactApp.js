@@ -19,6 +19,8 @@ function resolveViewComponent(viewName) {
 
 function createDesktopReactMount({
   shell,
+  router = null,
+  savedArtistsShell = null,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }) {
@@ -26,6 +28,19 @@ function createDesktopReactMount({
   const root = createRootImpl(container);
 
   async function renderCurrent() {
+    const route = router ? router.getRoute() : "home";
+
+    if (route === "saved" && savedArtistsShell) {
+      const viewProps = savedArtistsShell.getViewProps();
+      root.render(
+        React.createElement(SavedArtistsView, {
+          viewProps,
+          handlers: savedHandlers,
+        }),
+      );
+      return viewProps;
+    }
+
     const viewProps = shell.getViewProps();
     const currentView = shell.getView?.() ?? "chat";
     const ViewComponent = resolveViewComponent(currentView);
@@ -87,7 +102,38 @@ function createDesktopReactMount({
       await shell.navigate?.(view);
       return renderCurrent();
     },
+    onNavigateSaved: async () => {
+      await shell.navigate?.("saved-artists");
+      return renderCurrent();
+    },
   };
+
+  const savedHandlers = {
+    onNavigate: (view) => {
+      if (view === "chat" && router) router.navigate("home");
+      renderCurrent();
+    },
+    onToggleSelection: (id) => {
+      savedArtistsShell?.toggleArtistSelection(id);
+      renderCurrent();
+    },
+    onSearch: async (query) => {
+      savedArtistsShell?.setSearchQuery(query);
+      await savedArtistsShell?.searchArtists();
+      renderCurrent();
+    },
+    onAddArtist: (artist) => {
+      Promise.resolve(savedArtistsShell?.addArtist(artist)).then(() => renderCurrent());
+    },
+    onDelete: async () => {
+      renderCurrent();
+    },
+    onActivateStyleRef: async () => {},
+  };
+
+  if (router) {
+    router.onRouteChange(() => renderCurrent());
+  }
 
   return {
     handlers,

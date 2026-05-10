@@ -54,7 +54,8 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Fen"), true);
   assert.equal(html.includes("Save"), true);
   assert.equal(html.includes("Rate"), true);
-  assert.equal(html.includes("More"), true);
+  assert.equal(html.includes("···"), true, "more button shows ··· ellipsis");
+  assert.equal(html.includes("More"), false, "more button does not say More");
   assert.equal(html.includes("saved · 4/5"), true);
   assert.equal(html.includes("Saved Fen."), true);
 });
@@ -94,6 +95,7 @@ test("RecommendationCard has CSS class for card styling", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSaved: () => {},
       },
     }),
   );
@@ -108,6 +110,172 @@ test("RecommendationCard has CSS class for card styling", () => {
     false,
     "compact card must not use old 16px padding",
   );
+});
+
+test("ChatAppView renders conversation thread when messages prop provided", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        messages: [
+          { id: "m1", role: "user", content: "I like atmospheric bands" },
+          { id: "m2", role: "assistant", cards: [
+            { title: "Fen", why: "Atmospheric overlap", genres: [], actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } } },
+          ]},
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("I like atmospheric bands"), true, "user message rendered");
+  assert.equal(html.includes("Fen"), true, "assistant recommendation rendered in thread");
+});
+
+test("ChatAppView renders artist image when imageUrl is provided on card", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            genres: ["post-black"],
+            imageUrl: "https://commons.wikimedia.org/fen.jpg",
+            platformLinks: [],
+            actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("https://commons.wikimedia.org/fen.jpg"), true, "image src rendered");
+});
+
+test("ChatAppView renders platform links when provided on card", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            platformLinks: [
+              { platform: "bandcamp", url: "https://bandcamp.com/search?q=Fen", label: "Bandcamp" },
+              { platform: "spotify", url: "https://open.spotify.com/search/Fen", label: "Spotify" },
+            ],
+            actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("bandcamp.com"), true, "bandcamp link rendered");
+  assert.equal(html.includes("spotify.com"), true, "spotify link rendered");
+});
+
+test("ChatAppView renders a Saved Artists navigation button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("Saved") || html.includes("saved"), true, "has saved artists nav link");
+});
+
+test("ChatAppView renders genre chips for cards with genres", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Wolves in the Throne Room",
+            genres: ["atmospheric-black", "cascadian"],
+            actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("atmospheric-black"), true, "first genre chip rendered");
+  assert.equal(html.includes("cascadian"), true, "second genre chip rendered");
 });
 
 test("ChatAppView uses compact mobile layout and action density", () => {
@@ -145,7 +313,9 @@ test("ChatAppView uses compact mobile layout and action density", () => {
   );
 
   assert.equal(html.includes("flex-direction:column"), true);
-  assert.equal(html.includes("More"), true);
-  assert.equal(html.includes("Save"), false);
+  assert.equal(html.includes("···"), true, "more button shows ···");
+  // Save/Rate action buttons should not appear when not visible on the card
+  // (Note: the header has a "Saved" nav button, so we check for the action button text only)
+  assert.equal(html.includes(">Save<"), false, "card Save action not rendered");
   assert.equal(html.includes("Rate"), false);
 });

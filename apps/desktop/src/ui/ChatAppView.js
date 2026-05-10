@@ -45,6 +45,62 @@ function ModePill({ modeValue, modeOptions, onModeChange }) {
   );
 }
 
+function GenreChips({ genres, textTertiary, border }) {
+  if (!genres?.length) return null;
+  return React.createElement(
+    "div",
+    { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "6px" } },
+    genres.map((g) =>
+      React.createElement(
+        "span",
+        {
+          key: g,
+          style: {
+            fontSize: "11px",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: textTertiary,
+            border: `1px solid ${border}`,
+            borderRadius: "4px",
+            padding: "2px 7px",
+          },
+        },
+        g,
+      ),
+    ),
+  );
+}
+
+function PlatformLinks({ links }) {
+  if (!links?.length) return null;
+  return React.createElement(
+    "div",
+    { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" } },
+    links.map((link) =>
+      React.createElement(
+        "a",
+        {
+          key: link.platform,
+          href: link.url,
+          target: "_blank",
+          rel: "noopener noreferrer",
+          title: link.label,
+          style: {
+            fontSize: "11px",
+            color: "#6b7a90",
+            border: "1px solid #1e2a3a",
+            borderRadius: "4px",
+            padding: "2px 8px",
+            textDecoration: "none",
+            letterSpacing: "0.03em",
+          },
+        },
+        link.label,
+      ),
+    ),
+  );
+}
+
 function renderCardActions(card, theme, handlers) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
@@ -78,7 +134,7 @@ function renderCardActions(card, theme, handlers) {
       React.createElement(
         "button",
         { key: "more", type: "button", className: "action-btn", style: btnStyle, onClick: () => handlers.onMore(card.title) },
-        "More",
+        "···",
       ),
     );
   }
@@ -105,7 +161,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
       letterSpacing: "0.03em",
     },
     why: { fontSize: "13px", color: theme.textPrimary, fontStyle: "italic", lineHeight: "1.5", marginBottom: "6px" },
-    meta: { fontSize: "13px", color: theme.textSecondary, marginBottom: "8px" },
+    meta: { fontSize: "13px", color: theme.textSecondary, marginBottom: "6px" },
     connection: {
       fontSize: "13px",
       color: theme.textSecondary,
@@ -120,6 +176,23 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
   return React.createElement(
     "article",
     { className: "recommendation-card", style: cardStyles.article },
+    card.imageUrl
+      ? React.createElement("img", {
+          src: card.imageUrl,
+          alt: card.title,
+          loading: "lazy",
+          style: {
+            width: "100%",
+            maxHeight: "160px",
+            objectFit: "cover",
+            borderRadius: "6px",
+            marginBottom: "10px",
+          },
+          onError: (e) => {
+            e.currentTarget.style.display = "none";
+          },
+        })
+      : null,
     React.createElement(
       "div",
       { style: cardStyles.titleRow },
@@ -140,9 +213,15 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
           [card.country, card.genres?.join(", ")].filter(Boolean).join(" · "),
         )
       : null,
+    React.createElement(GenreChips, {
+      genres: card.genres,
+      textTertiary: theme.textTertiary,
+      border: theme.border,
+    }),
     card.connection
       ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),
+    React.createElement(PlatformLinks, { links: card.platformLinks }),
     React.createElement("div", { style: cardStyles.actions }, renderCardActions(card, theme, handlers)),
   );
 }
@@ -187,6 +266,57 @@ function EmptyState({ modeValue, textSecondary, textTertiary }) {
   );
 }
 
+function MessageThread({ messages, theme, isMobile, handlers }) {
+  if (!messages?.length) return null;
+  return React.createElement(
+    "section",
+    { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "20px" } },
+    messages.map((msg) => {
+      if (msg.role === "user") {
+        return React.createElement(
+          "div",
+          {
+            key: msg.id || msg.content,
+            className: "message-user",
+            style: {
+              backgroundColor: theme.accentDim,
+              border: `1px solid ${theme.border}`,
+              borderRadius: "8px",
+              padding: "10px 14px",
+              fontSize: "14px",
+              color: theme.textPrimary,
+              alignSelf: "flex-end",
+              maxWidth: "80%",
+              marginLeft: "auto",
+            },
+          },
+          msg.content,
+        );
+      }
+      if (msg.role === "assistant" && msg.cards?.length) {
+        return React.createElement(
+          "div",
+          { key: msg.id || `assistant-${msg.cards[0]?.title}`, className: "message-assistant" },
+          React.createElement(
+            "div",
+            { style: { display: "grid", gap: "10px" } },
+            msg.cards.map((card) =>
+              React.createElement(RecommendationCard, {
+                key: card.title,
+                card,
+                theme,
+                isMobile,
+                handlers,
+              }),
+            ),
+          ),
+        );
+      }
+      return null;
+    }),
+  );
+}
+
 function ChatAppView({ viewProps, handlers }) {
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
@@ -223,11 +353,32 @@ function ChatAppView({ viewProps, handlers }) {
             viewProps.headerSubtitle,
           ),
         ),
-        React.createElement(ModePill, {
-          modeValue: viewProps.modeValue,
-          modeOptions: viewProps.modeOptions,
-          onModeChange: handlers.onModeChange,
-        }),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "8px" } },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "action-btn",
+              onClick: handlers.onNavigateSaved,
+              style: {
+                backgroundColor: theme.buttonBg,
+                color: theme.buttonText,
+                border: `1px solid ${theme.buttonBorder}`,
+                borderRadius: "7px",
+                padding: "5px 12px",
+                fontSize: "12px",
+              },
+            },
+            "Saved",
+          ),
+          React.createElement(ModePill, {
+            modeValue: viewProps.modeValue,
+            modeOptions: viewProps.modeOptions,
+            onModeChange: handlers.onModeChange,
+          }),
+        ),
       ),
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${theme.border}`, margin: "0" } }),
     ),
@@ -285,7 +436,15 @@ function ChatAppView({ viewProps, handlers }) {
       ),
     ),
     React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
-    viewProps.cards.length === 0
+    React.createElement(MessageThread, {
+      messages: viewProps.messages,
+      theme,
+      isMobile,
+      handlers,
+    }),
+    viewProps.messages
+      ? null
+      : viewProps.cards.length === 0
       ? React.createElement(EmptyState, {
           modeValue: viewProps.modeValue,
           textSecondary: theme.textSecondary,

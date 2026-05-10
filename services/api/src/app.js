@@ -11,14 +11,16 @@ const {
   createRecommendationService,
 } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
+const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
+const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
 const { sendError } = require("./http/errors");
 
 /**
- * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any }} [options]
  */
-function createApp({ recommendationService, preferenceRepository, musicBrainzClient, runtimeConfig = {} } = {}) {
+function createApp({ recommendationService, preferenceRepository, musicBrainzClient, artistImageClient, chatSessionRepository, runtimeConfig = {} } = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -90,12 +92,83 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     return defaultRecommendationService;
   }
 
+  const resolvedArtistImageClient =
+    artistImageClient ||
+    createWikidataImageClient({
+      timeoutMs: runtimeConfig.wikidataTimeoutMs || 8000,
+      lastFmApiKey: runtimeConfig.lastFmApiKey || process.env.LASTFM_API_KEY || "",
+    });
+
+  const resolvedChatSessionRepository =
+    chatSessionRepository ||
+    (() => {
+      try {
+        const Database = require("better-sqlite3");
+        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+        return createSqliteChatSessionRepository({ db });
+      } catch {
+        return createInMemoryChatSessionRepository();
+      }
+    })();
+
   app.get("/health", (_req, res) => {
     return res.status(200).json({ status: "ok" });
   });
 
   app.get("/version", (_req, res) => {
     return res.status(200).json({ version: appVersion });
+  });
+
+  app.get("/artists/search", async (req, res) => {
+    const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+    if (!query) {
+      return sendError(res, 400, "validation_error", "query parameter is required");
+    }
+    const artists = await resolvedMusicBrainzClient.searchArtists(query);
+    return res.status(200).json({ artists });
+  });
+
+  app.get("/artists/image", async (req, res) => {
+    const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+    if (!name) {
+      return sendError(res, 400, "validation_error", "name parameter is required");
+    }
+    const imageUrl = await resolvedArtistImageClient.getArtistImageUrl(name);
+    return res.status(200).json({ imageUrl: imageUrl || null });
+  });
+
+  app.post("/sessions", async (req, res) => {
+    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "Untitled";
+    const session = await resolvedChatSessionRepository.createSession({ title });
+    return res.status(201).json({ session: { id: session.id, title: session.title, createdAt: session.created_at || session.createdAt } });
+  });
+
+  app.get("/sessions", async (_req, res) => {
+    const sessions = await resolvedChatSessionRepository.listSessions();
+    return res.status(200).json({
+      sessions: sessions.map((s) => ({ id: s.id, title: s.title, updatedAt: s.updated_at || s.updatedAt })),
+    });
+  });
+
+  app.get("/sessions/:id", async (req, res) => {
+    const session = await resolvedChatSessionRepository.getSession(req.params.id);
+    if (!session) return sendError(res, 404, "not_found", "session not found");
+    const messages = await resolvedChatSessionRepository.getMessages(req.params.id);
+    return res.status(200).json({
+      session: { id: session.id, title: session.title, createdAt: session.created_at || session.createdAt },
+      messages: messages.map((m) => ({ id: m.id, role: m.role, content: m.content, createdAt: m.created_at || m.createdAt })),
+    });
+  });
+
+  app.post("/sessions/:id/messages", async (req, res) => {
+    const session = await resolvedChatSessionRepository.getSession(req.params.id);
+    if (!session) return sendError(res, 404, "not_found", "session not found");
+    const role = typeof req.body?.role === "string" ? req.body.role : "user";
+    const content = typeof req.body?.content === "string" ? req.body.content : "";
+    const message = await resolvedChatSessionRepository.addMessage(req.params.id, { role, content });
+    return res.status(201).json({
+      message: { id: message.id, role: message.role, content: message.content, createdAt: message.created_at || message.createdAt },
+    });
   });
 
   app.post("/recommendations", recommendationsLimiter, async (req, res) => {
@@ -108,19 +181,25 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     const selectedArtistIds = Array.isArray(req.body?.selectedArtistIds)
       ? req.body.selectedArtistIds.filter((id) => typeof id === "string")
       : [];
-    let preferenceContext = "";
+    const priorityContext = typeof req.body?.priorityContext === "string" ? req.body.priorityContext.trim() : "";
+
+    let preferenceContext = priorityContext;
     if (requestedMode === "preference-aware") {
+      let repoContext;
       if (selectedArtistIds.length > 0 && resolvedPreferenceRepository.buildContextForIds) {
-        preferenceContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
+        repoContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
       } else {
-        preferenceContext = await resolvedPreferenceRepository.buildContext();
+        repoContext = await resolvedPreferenceRepository.buildContext();
       }
+      preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
     }
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
 
     try {
       const recommendations = await resolveRecommendationService().getRecommendations(validation.query, {
         mode: requestedMode,
         preferenceContext,
+        messages,
       });
       return res.status(200).json({
         recommendations,

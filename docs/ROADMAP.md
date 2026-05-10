@@ -1,6 +1,6 @@
 # Bandsearch Roadmap
 
-## Completed (Phase 0-2)
+## Completed (Phase 0-5)
 
 - Monorepo foundation, CI baseline, Apache-2.0 licensing.
 - Recommendation core with MusicBrainz + LangChain + Gemini.
@@ -13,26 +13,13 @@
 - Database-backed preferences (Postgres/Supabase) with migration script.
 - E2E smoke tests covering the full preference-aware recommendation chain.
 - Tauri desktop scaffold: native window, menu bar (About + Quit), API sidecar lifecycle (macOS + Linux).
-
-## Next Up (Phase 3)
-
 - Playwright browser smoke tests: verify the built app actually renders in a real browser. ✓ Done.
-- Compact card layout: reduce card height and visual weight so more results fit on screen without scrolling. Pure CSS/layout change, no data model impact. ✓ Done.
-- Client-side view router: `getView()`/`navigate()` on bootstrapDesktopApp, threaded through shell and mount layer; `resolveViewComponent` dispatch point ready for Phase 3 plug-in. ✓ Done.
-- Saved Artists page — Basic List: `SavedArtistsView` component with band list, header, back navigation; `savedArtistsModel` (combined ViewModel + ScreenModel); `listPreferences`/`deletePreference` on chatClient; shell wired to serve view-specific props and trigger data load on navigate. ✓ Done.
-  - MusicBrainz search to find and add artists by name directly, without going through the recommendation flow. API: `GET /search/artists?q=` endpoint; client: `searchArtists()`; musicBrainzClient shared in app factory scope. ✓ Done.
-    UI: search form in SavedArtistsView with isSearching indicator, SearchResultsList sub-component, Add button wired through shell to saveBand. ✓ Done.
-  - Directional selection (tick/checkbox) to mark which saved artists should act as style references for the next search — SelectionBar with count + CTA, selectedArtistIds forwarded to API, buildContextForIds in SQLite repo, pendingSelectedArtistIds lifecycle in bootstrapDesktopApp. ✓ Done.
-
-## Phase 4 — Richer Artist Data
-
-- Artist pictures: display a photo on each artist card. MusicBrainz does not provide artist photos; recommended source is Wikimedia Commons via the Wikidata API (free, no API key, permissive licensing) with Last.fm as a fallback. Images should lazy-load and degrade gracefully to a placeholder when unavailable.
-- Music platform links: from any artist card, surface links to listen on Bandcamp (preferred — supports independent artists), SoundCloud, and Spotify as progressively available fallbacks. Implement as deep search links rather than embedded players to avoid OAuth and iframe complexity; surface platform icons only when a match is reasonably confident.
-
-## Phase 5 — Conversational Interface
-
-- Full chat interface: replace the single-query input with a scrollable message thread so users can refine or follow up on results in a back-and-forth dialogue. Requires passing conversation history to the Gemini prompt so it has context across turns; the API `POST /recommendations` needs a `messages` parameter alongside `query`.
-- Save and continue chats: persist chat sessions to SQLite (`chat_sessions`, `chat_messages` tables) and expose a session list so users can resume past conversations. Naturally builds on the routing layer introduced in Phase 3 and the chat interface above.
+- Compact card layout with `GenreChips`, `···` more button, and `PlatformLinks` action pills. ✓ Done.
+- Saved Artists page: hash-based client-side routing (`#/`, `#/saved`), MusicBrainz artist search, directional selection (selected artists injected as priority preference context). ✓ Done.
+- Artist pictures: Wikidata SPARQL with Last.fm fallback, lazy-loaded with graceful degradation. ✓ Done.
+- Music platform links: deep search links for Bandcamp, SoundCloud, Spotify on every artist card. ✓ Done.
+- Full chat interface: scrollable `MessageThread` with user bubbles and assistant recommendation cards; conversation history forwarded to Gemini via LangChain. ✓ Done.
+- Session persistence: SQLite `chat_sessions`/`chat_messages` tables with in-memory fallback; session CRUD routes; `POST /recommendations` accepts `messages` array. ✓ Done.
 
 ## Phase 6 — Auth and Multi-user
 

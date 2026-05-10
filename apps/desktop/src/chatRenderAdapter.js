@@ -1,3 +1,5 @@
+const { buildPlatformLinks } = require("./platformLinks");
+
 function toViewProps(renderState) {
   return {
     headerTitle: renderState.header.title,
@@ -17,6 +19,8 @@ function toViewProps(renderState) {
       saved: !!item.saved,
       rating: item.rating || null,
       actions: item.actions || {},
+      imageUrl: item.imageUrl || null,
+      platformLinks: buildPlatformLinks(item.title),
     })),
     emptyText: renderState.recommendationList.emptyText,
   };
