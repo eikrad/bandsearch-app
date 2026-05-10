@@ -64,12 +64,12 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
     async startSession(title = "Untitled") {
-      const result = await chatClient.createSession(title);
+      const result = /** @type {any} */ (await chatClient.createSession(title));
       state = { ...state, currentSessionId: result.session.id };
       return result.session;
     },
     async listSessions() {
-      const result = await chatClient.listSessions();
+      const result = /** @type {any} */ (await chatClient.listSessions());
       return result.sessions;
     },
     async requestRecommendations(query, mode = "fresh") {
@@ -129,7 +129,7 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
     },
     async searchArtists(query) {
-      const result = await chatClient.searchArtists(query);
+      const result = /** @type {any} */ (await chatClient.searchArtists(query));
       return result.artists || [];
     },
   };

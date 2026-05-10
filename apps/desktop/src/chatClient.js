@@ -45,7 +45,7 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       if (!response.ok) {
         throw new Error(`preferences fetch failed with status ${response.status}`);
       }
-      const data = await response.json();
+      const data = /** @type {any} */ (await response.json());
       return data.savedBands || [];
     },
     async deletePreference(id) {

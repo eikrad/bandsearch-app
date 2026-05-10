@@ -38,7 +38,7 @@ function createWikidataImageClient({
       headers: { accept: "application/sparql-results+json", "user-agent": "bandsearch-app/0.1" },
     });
     if (!response.ok) return null;
-    const data = await response.json();
+    const data = /** @type {any} */ (await response.json());
     const bindings = data?.results?.bindings ?? [];
     const imageBinding = bindings[0]?.image?.value;
     if (!imageBinding) return null;
@@ -55,7 +55,7 @@ function createWikidataImageClient({
     const url = `${LASTFM_API_URL}?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${lastFmApiKey}&format=json`;
     const response = await fetchWithTimeout(url);
     if (!response.ok) return null;
-    const data = await response.json();
+    const data = /** @type {any} */ (await response.json());
     const images = data?.artist?.image ?? [];
     const large = images.find((img) => img.size === "extralarge") || images[images.length - 1];
     const url2 = large?.["#text"];
