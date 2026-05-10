@@ -3,6 +3,7 @@ const Database = require("better-sqlite3");
 const { createInMemoryPreferenceRepository } = require("./preferenceMemory");
 const { createPostgresPreferenceRepository } = require("./postgresPreferenceRepository");
 const { createSqlitePreferenceRepository } = require("./sqlitePreferenceRepository");
+const { createTursoPreferenceRepository } = require("./tursoPreferenceRepository");
 
 /**
  * PreferenceRepository contract (storage abstraction):
@@ -37,6 +38,14 @@ function createPreferenceRepository(runtimeConfig = {}) {
       ssl: runtimeConfig.databaseSsl ? { rejectUnauthorized: false } : undefined,
     });
     return createPostgresPreferenceRepository({ pool });
+  }
+  if (runtimeConfig.preferenceStore === "turso") {
+    const { createClient } = require("@libsql/client");
+    const client = createClient({
+      url: runtimeConfig.tursoDatabaseUrl,
+      authToken: runtimeConfig.tursoAuthToken,
+    });
+    return createTursoPreferenceRepository({ client });
   }
   if (runtimeConfig.preferenceStore === "memory") {
     return createInMemoryPreferenceRepository();

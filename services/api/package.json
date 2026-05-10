@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@langchain/google-genai": "^2.1.29",
+    "@libsql/client": "^0.17.3",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

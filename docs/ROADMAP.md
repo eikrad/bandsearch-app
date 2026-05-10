@@ -21,6 +21,23 @@
 - Full chat interface: scrollable `MessageThread` with user bubbles and assistant recommendation cards; conversation history forwarded to Gemini via LangChain. ✓ Done.
 - Session persistence: SQLite `chat_sessions`/`chat_messages` tables with in-memory fallback; session CRUD routes; `POST /recommendations` accepts `messages` array. ✓ Done.
 
+## Phase 3.5 — UX Fundamentals
+
+- Settings screen with API key management: enter, validate, and save the Gemini API key through a UI page (via Tauri secure store or local config file). Clear error message on first launch when no key is set. Replaces the pure `.env` dependency for non-developers.
+- First-run onboarding: show a welcome screen on first launch that guides the user through API key entry.
+- Error UX: human-readable error messages when the API key is missing or invalid, when a rate limit is reached, or when Gemini is unreachable — instead of a silent failure.
+
+## Phase 4.5 — Data Portability & Sharing
+
+- Export / import saved artists as JSON for backup and device transfer.
+- Shareable recommendations: copy-to-clipboard for a formatted recommendation list (artist + why-text).
+
+## Phase 5.5 — Cross-device Sync (Turso)
+
+- Sync preference data via Turso/libSQL between desktop and phone. Turso is SQLite-compatible with a remote replica: the desktop writes locally (offline-capable) and syncs automatically to the cloud. A future mobile app or web client reads from the same remote database.
+- Minimal invasive: new `TursoPreferenceRepository` adapter for libSQL, activated via `PREFERENCE_STORE=turso`. Connection string and auth token configurable through the settings UI (Phase 3.5).
+- Foundation for Phase 6 multi-user: Turso supports per-user namespacing and row-level security.
+
 ## Phase 6 — Auth and Multi-user
 
 - Multi-user support: auth/session layer and user-scoped preference ownership.
