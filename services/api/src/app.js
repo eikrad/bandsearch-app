@@ -98,6 +98,15 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     return res.status(200).json({ version: appVersion });
   });
 
+  app.get("/artists/search", async (req, res) => {
+    const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+    if (!query) {
+      return sendError(res, 400, "validation_error", "query parameter is required");
+    }
+    const artists = await resolvedMusicBrainzClient.searchArtists(query);
+    return res.status(200).json({ artists });
+  });
+
   app.post("/recommendations", recommendationsLimiter, async (req, res) => {
     const validation = validateRecommendationRequest(req.body);
     if (!validation.ok) {
@@ -108,13 +117,17 @@ function createApp({ recommendationService, preferenceRepository, musicBrainzCli
     const selectedArtistIds = Array.isArray(req.body?.selectedArtistIds)
       ? req.body.selectedArtistIds.filter((id) => typeof id === "string")
       : [];
-    let preferenceContext = "";
+    const priorityContext = typeof req.body?.priorityContext === "string" ? req.body.priorityContext.trim() : "";
+
+    let preferenceContext = priorityContext;
     if (requestedMode === "preference-aware") {
+      let repoContext;
       if (selectedArtistIds.length > 0 && resolvedPreferenceRepository.buildContextForIds) {
-        preferenceContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
+        repoContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
       } else {
-        preferenceContext = await resolvedPreferenceRepository.buildContext();
+        repoContext = await resolvedPreferenceRepository.buildContext();
       }
+      preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
     }
 
     try {

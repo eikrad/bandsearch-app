@@ -14,12 +14,20 @@ const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
 
 const VALID_VIEWS = ["chat", "saved-artists"];
 
+function buildPriorityContext(savedBands, selectedArtistIds) {
+  if (!selectedArtistIds.length) return "";
+  const selected = savedBands.filter((b) => selectedArtistIds.includes(b.id));
+  if (!selected.length) return "";
+  const names = selected.map((b) => `${b.name} (rating ${b.rating}/5)`).join(", ");
+  return `Priority style references: ${names}`;
+}
+
 /**
  * @param {{ apiBaseUrl?: string, fetchImpl?: any }} [options]
  */
 function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl } = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
-  let state = { ...createInitialChatState(), savedBands: [] };
+  let state = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [] };
   let currentView = "chat";
   let pendingSelectedArtistIds = [];
 
@@ -56,11 +64,21 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
     async requestRecommendations(query, mode = "fresh") {
-      const selectedArtistIds = [...pendingSelectedArtistIds];
-      pendingSelectedArtistIds = [];
-      const result = await chatClient.fetchRecommendations(query, mode, { selectedArtistIds });
+      const effectiveIds =
+        pendingSelectedArtistIds.length > 0 ? [...pendingSelectedArtistIds] : state.selectedArtistIds;
+      if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
+      const priorityContext = buildPriorityContext(state.savedBands, effectiveIds);
+      const result = await chatClient.fetchRecommendations(query, mode, priorityContext);
       state = applyAssistantMessage(state, result);
       return result;
+    },
+    toggleArtistSelection(id) {
+      const ids = state.selectedArtistIds;
+      if (ids.includes(id)) {
+        state = { ...state, selectedArtistIds: ids.filter((x) => x !== id) };
+      } else {
+        state = { ...state, selectedArtistIds: [...ids, id] };
+      }
     },
     async saveBand(artistName, options = {}) {
       const recommendation = findLatestRecommendationByName(artistName);
@@ -94,7 +112,8 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
     },
     async searchArtists(query) {
-      return chatClient.searchArtists ? chatClient.searchArtists(query) : [];
+      const result = await chatClient.searchArtists(query);
+      return result.artists || [];
     },
   };
 }
@@ -156,9 +175,9 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
   });
 }
 
-function bootstrapDesktopReactApp({ app, viewport = "desktop", actionHandlers = {} }) {
+function bootstrapDesktopReactApp({ app, viewport = "desktop", actionHandlers = {}, router = null, savedArtistsShell = null }) {
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
-  return createDesktopReactMount({ shell });
+  return createDesktopReactMount({ shell, router, savedArtistsShell });
 }
 
 module.exports = {

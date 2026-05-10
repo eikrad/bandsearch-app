@@ -1,4 +1,6 @@
 const { bootstrapDesktopApp, bootstrapDesktopReactApp } = require("./index");
+const { createHashRouter } = require("./createHashRouter");
+const { createSavedArtistsShell } = require("./createSavedArtistsShell");
 
 /**
  * @param {{ apiBaseUrl?: string, fetchImpl?: any, viewport?: string, actionHandlers?: any }} [options]
@@ -10,7 +12,9 @@ function startDesktopBrowserApp({
   actionHandlers = {},
 } = {}) {
   const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl });
-  const reactApp = bootstrapDesktopReactApp({ app, viewport, actionHandlers });
+  const router = createHashRouter();
+  const savedArtistsShell = createSavedArtistsShell({ app });
+  const reactApp = bootstrapDesktopReactApp({ app, viewport, actionHandlers, router, savedArtistsShell });
   reactApp.mount();
   return reactApp;
 }

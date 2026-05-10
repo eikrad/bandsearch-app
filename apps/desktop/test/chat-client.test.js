@@ -74,6 +74,78 @@ test("chat client creates and updates preferences", async () => {
   assert.equal(updated.savedBand.rating, 4);
 });
 
+test("chat client fetches saved bands from preferences endpoint", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          savedBands: [{ id: "pref-1", name: "Fen", rating: 4 }],
+        }),
+      };
+    },
+  });
+
+  const result = await client.fetchSavedBands();
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3001/preferences");
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(result.savedBands.length, 1);
+  assert.equal(result.savedBands[0].name, "Fen");
+});
+
+test("chat client searches artists via artist search endpoint", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          artists: [{ id: "mb-1", name: "Fen", score: 100, disambiguation: "" }],
+        }),
+      };
+    },
+  });
+
+  const result = await client.searchArtists("fen");
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3001/artists/search?query=fen");
+  assert.equal(result.artists.length, 1);
+  assert.equal(result.artists[0].name, "Fen");
+});
+
+test("chat client sends priorityContext in recommendations when provided", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          recommendations: [],
+          meta: { modeUsed: "fresh", usedPreferenceContext: true },
+        }),
+      };
+    },
+  });
+
+  await client.fetchRecommendations("I like Alcest", "fresh", "Priority references: Fen");
+  const body = JSON.parse(calls[0].init.body);
+
+  assert.equal(body.priorityContext, "Priority references: Fen");
+});
+
 test("normalizeArtistId creates stable local fallback id", () => {
   assert.equal(normalizeArtistId("Alcest"), "local-alcest");
   assert.equal(normalizeArtistId("Les Discrets"), "local-les-discrets");
@@ -116,23 +188,3 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
   assert.equal(calls[0].method, "DELETE");
 });
 
-test("chat client searches artists via GET /search/artists", async () => {
-  const calls = [];
-  const client = createChatClient({
-    apiBaseUrl: "http://localhost:3001",
-    fetchImpl: async (url, init) => {
-      calls.push({ url, method: init?.method });
-      return {
-        ok: true,
-        json: async () => ({ artists: [{ id: "abc", name: "Alcest", score: 100, disambiguation: "" }] }),
-      };
-    },
-  });
-
-  const results = await client.searchArtists("Alcest");
-
-  assert.equal(calls[0].url, "http://localhost:3001/search/artists?q=Alcest");
-  assert.equal(calls[0].method, undefined);
-  assert.equal(results.length, 1);
-  assert.equal(results[0].name, "Alcest");
-});

@@ -111,6 +111,33 @@ test("RecommendationCard has CSS class for card styling", () => {
   );
 });
 
+test("ChatAppView renders a Saved Artists navigation button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigate: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("Saved") || html.includes("saved"), true, "has saved artists nav link");
+});
+
 test("ChatAppView renders genre chips for cards with genres", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
@@ -180,6 +207,8 @@ test("ChatAppView uses compact mobile layout and action density", () => {
 
   assert.equal(html.includes("flex-direction:column"), true);
   assert.equal(html.includes("···"), true, "more button shows ···");
-  assert.equal(html.includes("Save"), false);
+  // Save/Rate action buttons should not appear when not visible on the card
+  // (Note: the header has a "Saved" nav button, so we check for the action button text only)
+  assert.equal(html.includes(">Save<"), false, "card Save action not rendered");
   assert.equal(html.includes("Rate"), false);
 });

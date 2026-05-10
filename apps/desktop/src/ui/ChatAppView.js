@@ -254,11 +254,32 @@ function ChatAppView({ viewProps, handlers }) {
             viewProps.headerSubtitle,
           ),
         ),
-        React.createElement(ModePill, {
-          modeValue: viewProps.modeValue,
-          modeOptions: viewProps.modeOptions,
-          onModeChange: handlers.onModeChange,
-        }),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "8px" } },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "action-btn",
+              onClick: handlers.onNavigateSaved,
+              style: {
+                backgroundColor: theme.buttonBg,
+                color: theme.buttonText,
+                border: `1px solid ${theme.buttonBorder}`,
+                borderRadius: "7px",
+                padding: "5px 12px",
+                fontSize: "12px",
+              },
+            },
+            "Saved",
+          ),
+          React.createElement(ModePill, {
+            modeValue: viewProps.modeValue,
+            modeOptions: viewProps.modeOptions,
+            onModeChange: handlers.onModeChange,
+          }),
+        ),
       ),
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${theme.border}`, margin: "0" } }),
     ),

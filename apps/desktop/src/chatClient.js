@@ -2,9 +2,9 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
   return {
-    async fetchRecommendations(query, mode = "fresh", { selectedArtistIds = [] } = {}) {
+    async fetchRecommendations(query, mode = "fresh", priorityContext = "") {
       const body = { query, mode };
-      if (selectedArtistIds.length > 0) body.selectedArtistIds = selectedArtistIds;
+      if (priorityContext) body.priorityContext = priorityContext;
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -56,13 +56,21 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       }
       return response.json();
     },
+    async fetchSavedBands() {
+      const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`fetch saved bands failed with status ${response.status}`);
+      }
+      return response.json();
+    },
     async searchArtists(query) {
-      const response = await fetchImpl(`${baseUrl}/search/artists?q=${encodeURIComponent(query)}`);
+      const response = await fetchImpl(
+        `${baseUrl}/artists/search?query=${encodeURIComponent(query)}`,
+      );
       if (!response.ok) {
         throw new Error(`artist search failed with status ${response.status}`);
       }
-      const data = await response.json();
-      return data.artists || [];
+      return response.json();
     },
   };
 }
