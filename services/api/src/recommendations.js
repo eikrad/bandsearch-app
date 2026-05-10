@@ -41,7 +41,8 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
 
       if (recommendationAgent) {
         try {
-          return await recommendationAgent.recommend({ query, artists, mode, preferenceContext });
+          const messages = Array.isArray(options.messages) ? options.messages : [];
+          return await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
         } catch {
           // Fallback to deterministic response when model output is unavailable/invalid.
         }

@@ -2,9 +2,10 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
   return {
-    async fetchRecommendations(query, mode = "fresh", priorityContext = "") {
+    async fetchRecommendations(query, mode = "fresh", priorityContext = "", messages = []) {
       const body = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
+      if (messages.length > 0) body.messages = messages;
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -69,6 +70,38 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       );
       if (!response.ok) {
         throw new Error(`artist search failed with status ${response.status}`);
+      }
+      return response.json();
+    },
+    async createSession(title = "Untitled") {
+      const response = await fetchImpl(`${baseUrl}/sessions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        throw new Error(`create session failed with status ${response.status}`);
+      }
+      return response.json();
+    },
+    async listSessions() {
+      const response = await fetchImpl(`${baseUrl}/sessions`, { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`list sessions failed with status ${response.status}`);
+      }
+      return response.json();
+    },
+    async appendSessionMessage(sessionId, message) {
+      const response = await fetchImpl(
+        `${baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(message),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`append session message failed with status ${response.status}`);
       }
       return response.json();
     },

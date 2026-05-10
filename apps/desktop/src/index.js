@@ -27,7 +27,7 @@ function buildPriorityContext(savedBands, selectedArtistIds) {
  */
 function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl } = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
-  let state = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [] };
+  let state = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [], currentSessionId: null };
   let currentView = "chat";
   let pendingSelectedArtistIds = [];
 
@@ -63,12 +63,29 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
     setPendingStyleRef(ids) {
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
+    async startSession(title = "Untitled") {
+      const result = await chatClient.createSession(title);
+      state = { ...state, currentSessionId: result.session.id };
+      return result.session;
+    },
+    async listSessions() {
+      const result = await chatClient.listSessions();
+      return result.sessions;
+    },
     async requestRecommendations(query, mode = "fresh") {
       const effectiveIds =
         pendingSelectedArtistIds.length > 0 ? [...pendingSelectedArtistIds] : state.selectedArtistIds;
       if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
       const priorityContext = buildPriorityContext(state.savedBands, effectiveIds);
-      const result = await chatClient.fetchRecommendations(query, mode, priorityContext);
+      const conversationHistory = (state.messages || []).flatMap((m) => {
+        if (m.role === "user") return [{ role: "user", content: m.content }];
+        if (m.role === "assistant" && m.recommendations) {
+          return [{ role: "assistant", content: m.recommendations.map((r) => r.artist).join(", ") }];
+        }
+        return [];
+      });
+      state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
+      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory);
       state = applyAssistantMessage(state, result);
       return result;
     },

@@ -112,6 +112,40 @@ test("RecommendationCard has CSS class for card styling", () => {
   );
 });
 
+test("ChatAppView renders conversation thread when messages prop provided", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        messages: [
+          { id: "m1", role: "user", content: "I like atmospheric bands" },
+          { id: "m2", role: "assistant", cards: [
+            { title: "Fen", why: "Atmospheric overlap", genres: [], actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } } },
+          ]},
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("I like atmospheric bands"), true, "user message rendered");
+  assert.equal(html.includes("Fen"), true, "assistant recommendation rendered in thread");
+});
+
 test("ChatAppView renders artist image when imageUrl is provided on card", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {

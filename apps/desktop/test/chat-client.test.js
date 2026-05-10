@@ -123,6 +123,59 @@ test("chat client searches artists via artist search endpoint", async () => {
   assert.equal(result.artists[0].name, "Fen");
 });
 
+test("chat client creates a new session", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({
+          session: { id: "sess-1", title: "Post-black", createdAt: "2026-01-01T00:00:00Z" },
+        }),
+      };
+    },
+  });
+
+  const result = await client.createSession("Post-black");
+  assert.equal(calls[0].url, "http://localhost:3001/sessions");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(result.session.id, "sess-1");
+});
+
+test("chat client lists sessions", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ sessions: [{ id: "sess-1", title: "Test" }] }),
+    }),
+  });
+
+  const result = await client.listSessions();
+  assert.equal(result.sessions.length, 1);
+});
+
+test("chat client appends a message to a session", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        json: async () => ({ message: { id: "msg-1", role: "user", content: "I like Alcest" } }),
+      };
+    },
+  });
+
+  await client.appendSessionMessage("sess-1", { role: "user", content: "I like Alcest" });
+  assert.equal(calls[0].url, "http://localhost:3001/sessions/sess-1/messages");
+  assert.equal(calls[0].init.method, "POST");
+});
+
 test("chat client sends priorityContext in recommendations when provided", async () => {
   const calls = [];
   const client = createChatClient({
@@ -144,6 +197,31 @@ test("chat client sends priorityContext in recommendations when provided", async
   const body = JSON.parse(calls[0].init.body);
 
   assert.equal(body.priorityContext, "Priority references: Fen");
+});
+
+test("chat client sends conversation messages in recommendations request", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } }),
+      };
+    },
+  });
+
+  const history = [
+    { role: "user", content: "I like Alcest" },
+    { role: "assistant", content: "Recommended Fen" },
+  ];
+  await client.fetchRecommendations("More like that", "fresh", "", history);
+  const body = JSON.parse(calls[0].init.body);
+
+  assert.ok(Array.isArray(body.messages), "messages in request body");
+  assert.equal(body.messages.length, 2);
 });
 
 test("normalizeArtistId creates stable local fallback id", () => {

@@ -13,8 +13,8 @@ function validateRecommendationOutput(output) {
 
 function createRecommendationAgent({ runModel }) {
   return {
-    async recommend({ query, artists, preferenceContext = "" }) {
-      const output = await runModel({ query, artists, preferenceContext });
+    async recommend({ query, artists, preferenceContext = "", messages = [] }) {
+      const output = await runModel({ query, artists, preferenceContext, messages });
       return validateRecommendationOutput(output);
     },
   };
@@ -42,22 +42,31 @@ async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
     temperature: 0.4,
   });
 
-  return async function runModel({ query, artists, preferenceContext = "" }) {
+  return async function runModel({ query, artists, preferenceContext = "", messages = [] }) {
     const artistContext = artists
       .map((artist) => `${artist.name} (score: ${artist.score})`)
       .join(", ");
     const prefBlock = preferenceContext ? `\nuser_preferences: ${preferenceContext}` : "";
+
     const prompt = [
       {
         role: "system",
         content:
           "You recommend niche bands. Return only valid JSON array with objects: {artist, why, sourceSignals[]}.",
       },
-      {
-        role: "user",
-        content: `query: ${query}\nartist_context: ${artistContext}${prefBlock}\nlimit: 3`,
-      },
     ];
+
+    // Inject conversation history before the current query
+    for (const msg of messages) {
+      if (msg.role === "user" || msg.role === "assistant") {
+        prompt.push({ role: msg.role, content: String(msg.content || "") });
+      }
+    }
+
+    prompt.push({
+      role: "user",
+      content: `query: ${query}\nartist_context: ${artistContext}${prefBlock}\nlimit: 3`,
+    });
 
     const response = await withTimeout(model.invoke(prompt), timeoutMs);
     const raw = typeof response.content === "string" ? response.content : "";

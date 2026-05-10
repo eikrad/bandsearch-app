@@ -266,6 +266,57 @@ function EmptyState({ modeValue, textSecondary, textTertiary }) {
   );
 }
 
+function MessageThread({ messages, theme, isMobile, handlers }) {
+  if (!messages?.length) return null;
+  return React.createElement(
+    "section",
+    { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "20px" } },
+    messages.map((msg) => {
+      if (msg.role === "user") {
+        return React.createElement(
+          "div",
+          {
+            key: msg.id || msg.content,
+            className: "message-user",
+            style: {
+              backgroundColor: theme.accentDim,
+              border: `1px solid ${theme.border}`,
+              borderRadius: "8px",
+              padding: "10px 14px",
+              fontSize: "14px",
+              color: theme.textPrimary,
+              alignSelf: "flex-end",
+              maxWidth: "80%",
+              marginLeft: "auto",
+            },
+          },
+          msg.content,
+        );
+      }
+      if (msg.role === "assistant" && msg.cards?.length) {
+        return React.createElement(
+          "div",
+          { key: msg.id || `assistant-${msg.cards[0]?.title}`, className: "message-assistant" },
+          React.createElement(
+            "div",
+            { style: { display: "grid", gap: "10px" } },
+            msg.cards.map((card) =>
+              React.createElement(RecommendationCard, {
+                key: card.title,
+                card,
+                theme,
+                isMobile,
+                handlers,
+              }),
+            ),
+          ),
+        );
+      }
+      return null;
+    }),
+  );
+}
+
 function ChatAppView({ viewProps, handlers }) {
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
@@ -385,7 +436,15 @@ function ChatAppView({ viewProps, handlers }) {
       ),
     ),
     React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
-    viewProps.cards.length === 0
+    React.createElement(MessageThread, {
+      messages: viewProps.messages,
+      theme,
+      isMobile,
+      handlers,
+    }),
+    viewProps.messages
+      ? null
+      : viewProps.cards.length === 0
       ? React.createElement(EmptyState, {
           modeValue: viewProps.modeValue,
           textSecondary: theme.textSecondary,

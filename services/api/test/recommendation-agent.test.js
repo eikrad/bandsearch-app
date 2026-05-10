@@ -57,6 +57,28 @@ test("recommendation agent defaults preferenceContext to empty string when omitt
   assert.equal(capturedArgs.preferenceContext, "");
 });
 
+test("recommendation agent forwards messages to runModel", async () => {
+  let capturedArgs;
+  const fakeRunner = async (args) => {
+    capturedArgs = args;
+    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+  };
+
+  const agent = createRecommendationAgent({ runModel: fakeRunner });
+  await agent.recommend({
+    query: "more like that",
+    artists: [],
+    messages: [
+      { role: "user", content: "I like Alcest" },
+      { role: "assistant", content: "I recommended Fen, Deafheaven" },
+    ],
+  });
+
+  assert.ok(Array.isArray(capturedArgs.messages), "messages forwarded");
+  assert.equal(capturedArgs.messages.length, 2);
+  assert.equal(capturedArgs.messages[0].role, "user");
+});
+
 test("recommendation agent rejects invalid model output shape", async () => {
   const agent = createRecommendationAgent({
     runModel: async () => [{ name: "missing fields" }],

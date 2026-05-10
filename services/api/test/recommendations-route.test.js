@@ -146,6 +146,32 @@ test("POST /recommendations with selectedArtistIds uses buildContextForIds", asy
   assert.equal(recCall.options.preferenceContext.includes("context for"), true);
 });
 
+test("POST /recommendations forwards messages to recommendation service", async () => {
+  const calls = [];
+  const app = createApp({
+    recommendationService: {
+      getRecommendations: async (query, options) => {
+        calls.push({ query, options });
+        return [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }];
+      },
+    },
+    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+  });
+
+  await makeRequest(app, "/recommendations", {
+    query: "more like that",
+    mode: "fresh",
+    messages: [
+      { role: "user", content: "I like Alcest" },
+      { role: "assistant", content: "Recommended Fen and Deafheaven" },
+    ],
+  });
+
+  assert.equal(calls.length, 1);
+  assert.ok(Array.isArray(calls[0].options.messages), "messages forwarded to service");
+  assert.equal(calls[0].options.messages.length, 2);
+});
+
 test("POST /recommendations prepends priorityContext to preference context", async () => {
   const calls = [];
   const app = createApp({
