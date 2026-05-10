@@ -45,6 +45,32 @@ function ModePill({ modeValue, modeOptions, onModeChange }) {
   );
 }
 
+function GenreChips({ genres, textTertiary, border }) {
+  if (!genres?.length) return null;
+  return React.createElement(
+    "div",
+    { style: { display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "6px" } },
+    genres.map((g) =>
+      React.createElement(
+        "span",
+        {
+          key: g,
+          style: {
+            fontSize: "11px",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: textTertiary,
+            border: `1px solid ${border}`,
+            borderRadius: "4px",
+            padding: "2px 7px",
+          },
+        },
+        g,
+      ),
+    ),
+  );
+}
+
 function renderCardActions(card, theme, handlers) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
@@ -78,7 +104,7 @@ function renderCardActions(card, theme, handlers) {
       React.createElement(
         "button",
         { key: "more", type: "button", className: "action-btn", style: btnStyle, onClick: () => handlers.onMore(card.title) },
-        "More",
+        "···",
       ),
     );
   }
@@ -105,7 +131,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
       letterSpacing: "0.03em",
     },
     why: { fontSize: "13px", color: theme.textPrimary, fontStyle: "italic", lineHeight: "1.5", marginBottom: "6px" },
-    meta: { fontSize: "13px", color: theme.textSecondary, marginBottom: "8px" },
+    meta: { fontSize: "13px", color: theme.textSecondary, marginBottom: "6px" },
     connection: {
       fontSize: "13px",
       color: theme.textSecondary,
@@ -140,6 +166,11 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
           [card.country, card.genres?.join(", ")].filter(Boolean).join(" · "),
         )
       : null,
+    React.createElement(GenreChips, {
+      genres: card.genres,
+      textTertiary: theme.textTertiary,
+      border: theme.border,
+    }),
     card.connection
       ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),

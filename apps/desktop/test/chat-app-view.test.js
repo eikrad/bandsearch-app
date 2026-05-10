@@ -54,7 +54,8 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Fen"), true);
   assert.equal(html.includes("Save"), true);
   assert.equal(html.includes("Rate"), true);
-  assert.equal(html.includes("More"), true);
+  assert.equal(html.includes("···"), true, "more button shows ··· ellipsis");
+  assert.equal(html.includes("More"), false, "more button does not say More");
   assert.equal(html.includes("saved · 4/5"), true);
   assert.equal(html.includes("Saved Fen."), true);
 });
@@ -110,6 +111,39 @@ test("RecommendationCard has CSS class for card styling", () => {
   );
 });
 
+test("ChatAppView renders genre chips for cards with genres", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Wolves in the Throne Room",
+            genres: ["atmospheric-black", "cascadian"],
+            actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("atmospheric-black"), true, "first genre chip rendered");
+  assert.equal(html.includes("cascadian"), true, "second genre chip rendered");
+});
+
 test("ChatAppView uses compact mobile layout and action density", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
@@ -145,7 +179,7 @@ test("ChatAppView uses compact mobile layout and action density", () => {
   );
 
   assert.equal(html.includes("flex-direction:column"), true);
-  assert.equal(html.includes("More"), true);
+  assert.equal(html.includes("···"), true, "more button shows ···");
   assert.equal(html.includes("Save"), false);
   assert.equal(html.includes("Rate"), false);
 });
