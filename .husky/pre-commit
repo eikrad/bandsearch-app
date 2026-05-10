@@ -1,1 +1,9 @@
+npm run lint
+npm run typecheck
 npm test
+
+if ! command -v ruff &> /dev/null; then
+  echo "ruff not found — install with: pip install ruff"
+  exit 1
+fi
+ruff check .
