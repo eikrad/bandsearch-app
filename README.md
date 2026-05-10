@@ -62,6 +62,7 @@ Preferences are persisted by default in a local SQLite file (`bandsearch.db`) �
 | `sqlite` (default) | Local file, zero-config, data survives restarts |
 | `memory` | In-process only, data lost on restart |
 | `postgres` | Postgres/Supabase, requires `DATABASE_URL` |
+| `turso` | Turso/libSQL cloud SQLite, requires `TURSO_DATABASE_URL` |
 
 **Postgres setup:**
 
@@ -69,6 +70,23 @@ Preferences are persisted by default in a local SQLite file (`bandsearch.db`) �
 # in .env:
 PREFERENCE_STORE=postgres
 DATABASE_URL=postgres://user:pass@host/dbname
+
+npm run migrate
+npm run dev
+```
+
+**Turso setup:**
+
+```bash
+# Install the Turso CLI and create a database:
+#   turso db create bandsearch
+#   turso db show bandsearch --url
+#   turso db tokens create bandsearch
+
+# in .env:
+PREFERENCE_STORE=turso
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your_turso_auth_token_here
 
 npm run migrate
 npm run dev
@@ -82,10 +100,12 @@ npm run dev
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
 | `GEMINI_API_KEY` | — | Required for AI recommendations |
-| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, or `postgres` |
+| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `DATABASE_PATH` | `bandsearch.db` | SQLite file path |
 | `DATABASE_URL` | — | Required when `PREFERENCE_STORE=postgres` |
 | `DATABASE_SSL` | `true` | TLS for Postgres connection |
+| `TURSO_DATABASE_URL` | — | Required when `PREFERENCE_STORE=turso` |
+| `TURSO_AUTH_TOKEN` | — | Turso auth token (omit for local libSQL) |
 | `CORS_ORIGIN` | `*` | Allowed browser origin |
 | `RECOMMENDATION_TIMEOUT_MS` | `8000` | Gemini request timeout |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
