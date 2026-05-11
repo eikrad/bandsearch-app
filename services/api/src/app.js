@@ -5,31 +5,26 @@ const rateLimitLib = require("express-rate-limit");
 const helmet = /** @type {any} */ (helmetLib.default || helmetLib);
 const rateLimit = /** @type {any} */ (rateLimitLib.default || rateLimitLib);
 const { version: appVersion } = require("../../../package.json");
-<<<<<<< HEAD
-const {
-  validateRecommendationRequest,
-  createRecommendationService,
-} = require("./recommendations");
+const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
+const { validateRecommendationRequest } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
-const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
-=======
-const { validateRecommendationRequest } = require("./recommendations");
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
 const { sendError } = require("./http/errors");
 
 /**
-<<<<<<< HEAD
- * @param {{ recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationPipeline?: any, recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any }} [options]
  */
-function createApp({ recommendationService, preferenceRepository, musicBrainzClient, artistImageClient, chatSessionRepository, runtimeConfig = {} } = {}) {
-=======
- * @param {{ recommendationPipeline?: any, preferenceRepository?: any, runtimeConfig?: any }} [options]
- */
-function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig = {} } = {}) {
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
+function createApp({
+  recommendationPipeline,
+  recommendationService,
+  preferenceRepository,
+  musicBrainzClient,
+  artistImageClient,
+  chatSessionRepository,
+  runtimeConfig = {},
+} = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -74,33 +69,10 @@ function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig
     preferenceRepository || createPreferenceRepository(runtimeConfig),
   );
 
-<<<<<<< HEAD
   const resolvedMusicBrainzClient = musicBrainzClient || createMusicBrainzClient({
     timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
     retries: runtimeConfig.musicBrainzRetries,
   });
-
-  let defaultRecommendationService = null;
-
-  function resolveRecommendationService() {
-    if (recommendationService) return recommendationService;
-    if (!defaultRecommendationService) {
-      defaultRecommendationService = createRecommendationService({ musicBrainzClient: resolvedMusicBrainzClient });
-      if (process.env.GEMINI_API_KEY) {
-        createLangChainRunner({ timeoutMs: runtimeConfig.recommendationTimeoutMs })
-          .then((runModel) => {
-            defaultRecommendationService = createRecommendationService({
-              musicBrainzClient: resolvedMusicBrainzClient,
-              recommendationAgent: createRecommendationAgent({ runModel }),
-            });
-          })
-          .catch(() => {
-            // Keep deterministic fallback service if LangChain initialization fails.
-          });
-      }
-    }
-    return defaultRecommendationService;
-  }
 
   const resolvedArtistImageClient =
     artistImageClient ||
@@ -120,15 +92,47 @@ function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig
         return createInMemoryChatSessionRepository();
       }
     })();
-=======
+
   const resolvedRecommendationPipeline = recommendationPipeline || {
-    async recommend() {
-      const error = new Error("recommendation service unavailable");
-      error.code = "recommendation_unavailable";
-      throw error;
+    async recommend(request = {}) {
+      if (!recommendationService) {
+        const error = /** @type {any} */ (new Error("recommendation service unavailable"));
+        error.code = "recommendation_unavailable";
+        throw error;
+      }
+
+      const mode = validateRecommendationMode(request.mode);
+      const selectedArtistIds = Array.isArray(request.selectedArtistIds)
+        ? request.selectedArtistIds.filter((id) => typeof id === "string")
+        : [];
+      const priorityContext = typeof request.priorityContext === "string" ? request.priorityContext.trim() : "";
+
+      let preferenceContext = priorityContext;
+      if (mode === "preference-aware") {
+        let repoContext;
+        if (selectedArtistIds.length > 0 && typeof resolvedPreferenceRepository.buildContextForIds === "function") {
+          repoContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
+        } else {
+          repoContext = await resolvedPreferenceRepository.buildContext();
+        }
+        preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
+      }
+
+      const messages = Array.isArray(request.messages) ? request.messages : [];
+      const recommendations = await recommendationService.getRecommendations(request.query, {
+        mode,
+        preferenceContext,
+        messages,
+      });
+      return {
+        recommendations,
+        meta: {
+          modeUsed: mode,
+          usedPreferenceContext: preferenceContext.length > 0,
+        },
+      };
     },
   };
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 
   app.get("/health", (_req, res) => {
     return res.status(200).json({ status: "ok" });
@@ -196,36 +200,13 @@ function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig
       return sendError(res, 400, "validation_error", validation.error);
     }
 
-<<<<<<< HEAD
-    const requestedMode = validateRecommendationMode(req.body?.mode);
-    const selectedArtistIds = Array.isArray(req.body?.selectedArtistIds)
-      ? req.body.selectedArtistIds.filter((id) => typeof id === "string")
-      : [];
-    const priorityContext = typeof req.body?.priorityContext === "string" ? req.body.priorityContext.trim() : "";
-
-    let preferenceContext = priorityContext;
-    if (requestedMode === "preference-aware") {
-      let repoContext;
-      if (selectedArtistIds.length > 0 && resolvedPreferenceRepository.buildContextForIds) {
-        repoContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
-      } else {
-        repoContext = await resolvedPreferenceRepository.buildContext();
-      }
-      preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
-    }
-    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
-
-    try {
-      const recommendations = await resolveRecommendationService().getRecommendations(validation.query, {
-        mode: requestedMode,
-        preferenceContext,
-        messages,
-=======
     try {
       const pipelineResult = await resolvedRecommendationPipeline.recommend({
         query: validation.query,
         mode: req.body?.mode,
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
+        selectedArtistIds: req.body?.selectedArtistIds,
+        priorityContext: req.body?.priorityContext,
+        messages: req.body?.messages,
       });
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
@@ -308,8 +289,4 @@ function createApp({ recommendationPipeline, preferenceRepository, runtimeConfig
 
   return app;
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
 module.exports = { createApp };

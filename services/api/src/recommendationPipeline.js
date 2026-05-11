@@ -3,6 +3,9 @@ const { createRecommendationAgent, createLangChainRunner } = require("./agent/re
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createRecommendationError, createRecommendationService } = require("./recommendations");
 
+/**
+ * @param {{ runtimeConfig?: any, preferenceRepository?: any, retryDelayMs?: number, logger?: any }} [options]
+ */
 function createRecommendationPipeline({
   runtimeConfig,
   preferenceRepository,
@@ -78,11 +81,28 @@ function createRecommendationPipeline({
       }
 
       const mode = validateRecommendationMode(request.mode);
-      const preferenceContext =
-        mode === "preference-aware" ? await preferenceRepository.buildContext() : "";
+      const selectedArtistIds = Array.isArray(request.selectedArtistIds)
+        ? request.selectedArtistIds.filter((id) => typeof id === "string")
+        : [];
+      const priorityContext = typeof request.priorityContext === "string"
+        ? request.priorityContext.trim()
+        : "";
+
+      let preferenceContext = priorityContext;
+      if (mode === "preference-aware") {
+        let repoContext;
+        if (selectedArtistIds.length > 0 && typeof preferenceRepository.buildContextForIds === "function") {
+          repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
+        } else {
+          repoContext = await preferenceRepository.buildContext();
+        }
+        preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
+      }
+
       const recommendations = await activeService.getRecommendations(request.query, {
         mode,
         preferenceContext,
+        messages: Array.isArray(request.messages) ? request.messages : [],
       });
 
       return {

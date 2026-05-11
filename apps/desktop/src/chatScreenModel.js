@@ -37,6 +37,10 @@ function createChatScreenModel({ viewModel }) {
         isLoading: uiState.isLoading,
         lastMeta: uiState.lastMeta,
         recommendationCards: recommendations.map((rec) => mapCard(rec, resolvedViewport)),
+        conversationMessages:
+          typeof viewModel.getConversationMessages === "function"
+            ? viewModel.getConversationMessages()
+            : null,
       };
     },
   };

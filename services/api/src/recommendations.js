@@ -10,7 +10,7 @@ function validateRecommendationRequest(body) {
 }
 
 function createRecommendationError(code, message, cause) {
-  const error = new Error(message);
+  const error = /** @type {any} */ (new Error(message));
   error.code = code;
   if (cause) {
     error.cause = cause;
@@ -51,20 +51,11 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
         );
       }
 
-<<<<<<< HEAD
-      if (recommendationAgent) {
-        try {
-          const messages = Array.isArray(options.messages) ? options.messages : [];
-          return await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
-        } catch {
-          // Fallback to deterministic response when model output is unavailable/invalid.
-        }
-=======
       try {
-        return await recommendationAgent.recommend({ query, artists, mode, preferenceContext });
+        const messages = Array.isArray(options.messages) ? options.messages : [];
+        return await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
       } catch (error) {
         throw createRecommendationError("recommendation_unavailable", "recommendation unavailable", error);
->>>>>>> b581991 (refactor: centralize recommendation pipeline and scaffold agent skill docs)
       }
     },
   };

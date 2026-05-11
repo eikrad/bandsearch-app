@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
-![Version: 0.2.0--alpha.1](https://img.shields.io/badge/version-0.2.0--alpha.1-blue)
+![Version: 0.3.0--alpha.1](https://img.shields.io/badge/version-0.3.0--alpha.1-blue)
 
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
@@ -11,7 +11,7 @@ Combines conversational AI with MusicBrainz metadata and preference memory.
 
 ## Quick Start
 
-**Prerequisites:** Node.js 20+, a [Gemini API key](https://aistudio.google.com/app/apikey)
+**Prerequisites:** Node.js 20+
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
@@ -22,6 +22,7 @@ npm run dev                 # API starts on http://localhost:3001
 ```
 
 Preferences are saved automatically to `bandsearch.db` — no database setup needed.
+`GEMINI_API_KEY` is optional for local development, but required for live AI-backed recommendations.
 
 Test it:
 
@@ -55,6 +56,11 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchel
 
 ## Storage
 
+Bandsearch currently uses two persistence domains:
+
+- **Preferences store** (`saved_bands`) — configurable via `PREFERENCE_STORE`.
+- **Session store** (`chat_sessions`, `chat_messages`) — currently local SQLite in `DATABASE_PATH` (default `bandsearch.db`), with in-memory fallback if SQLite is unavailable.
+
 Preferences are persisted by default in a local SQLite file (`bandsearch.db`) — no server or configuration required.
 
 | `PREFERENCE_STORE` | Description |
@@ -63,6 +69,15 @@ Preferences are persisted by default in a local SQLite file (`bandsearch.db`) �
 | `memory` | In-process only, data lost on restart |
 | `postgres` | Postgres/Supabase, requires `DATABASE_URL` |
 | `turso` | Turso/libSQL cloud SQLite, requires `TURSO_DATABASE_URL` |
+
+### Session persistence
+
+Session and chat message history is stored in local SQLite tables created automatically by the API:
+
+- `chat_sessions`
+- `chat_messages`
+
+No separate migration step is required for these session tables; they are created on startup if missing.
 
 **Postgres setup:**
 
@@ -99,7 +114,7 @@ npm run dev
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
-| `GEMINI_API_KEY` | — | Required for AI recommendations |
+| `GEMINI_API_KEY` | — | Required for live AI recommendations |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `DATABASE_PATH` | `bandsearch.db` | SQLite file path |
 | `DATABASE_URL` | — | Required when `PREFERENCE_STORE=postgres` |
@@ -118,14 +133,35 @@ npm run dev
 
 ## API Reference
 
+### Core
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Service health probe |
+| `GET` | `/version` | Returns app version |
+
 ### Recommendations
 
-`POST /recommendations`
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/recommendations` | Generate recommendations with `fresh` (default) or `preference-aware` mode |
+
+Request body example:
+
 ```json
-{ "query": "I like Alcest and Agalloch", "mode": "fresh" }
+{
+  "query": "I like Alcest and Agalloch",
+  "mode": "preference-aware",
+  "selectedArtistIds": ["mbid-1", "mbid-2"],
+  "priorityContext": "Prefer dreamy blackgaze and long tracks",
+  "messages": [
+    { "role": "user", "content": "I like Alcest" },
+    { "role": "assistant", "content": "Try Fen and Les Discrets" }
+  ]
+}
 ```
 
-`mode`: `fresh` (default) or `preference-aware` — passes your saved bands as context to the AI model.
+Response includes `recommendations` and `meta` (`modeUsed`, `usedPreferenceContext`).
 
 ### Preferences
 
@@ -135,14 +171,31 @@ npm run dev
 | `GET` | `/preferences` | List saved bands |
 | `PATCH` | `/preferences/:id` | Update rating / categories / note |
 | `DELETE` | `/preferences/:id` | Remove a band |
-| `GET` | `/preferences/context` | AI context string |
+| `GET` | `/preferences/context` | Render AI context string from saved bands |
+
+### Sessions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions` | Create chat session |
+| `GET` | `/sessions` | List chat sessions |
+| `GET` | `/sessions/:id` | Get one session with messages |
+| `POST` | `/sessions/:id/messages` | Add message to session |
+
+### Artist Discovery
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/artists/search?query=...` | Search artists for desktop flows |
+| `GET` | `/search/artists?q=...` | Legacy/compact search endpoint |
+| `GET` | `/artists/image?name=...` | Resolve artist image URL |
 
 ---
 
 ## Development
 
 ```bash
-npm test          # run all workspace tests (67 tests)
+npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
 ```
 

@@ -50,6 +50,14 @@
 - Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI.
 - Android: use Tauri's Android target (`tauri android init`). Voice input as the primary chat input method via the Web Speech API (`SpeechRecognition`), which works natively in Chromium-based Android webviews — no native plugin needed. Requires responsive layout review and touch-friendly tap targets throughout the UI.
 
+## Parallel Track — Incremental TypeScript Migration (Non-blocking)
+
+- Goal: improve refactor safety and reduce runtime contract drift while continuing feature delivery.
+- Rule: no big-bang rewrite; convert touched files/modules incrementally during normal work.
+- Start with high-risk boundaries first: recommendation pipeline, API route contracts, desktop chat/render adapters.
+- Enable gradual typing with mixed JS/TS support (`allowJs` + `checkJs`) and migrate modules to `.ts` as they stabilize.
+- Keep this track side-by-side with product phases; do not block UX/features on migration tasks.
+
 ## Deferred / Under Review
 
 - PWA client on shared API.
