@@ -95,10 +95,45 @@ fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
     )
 }
 
+/// Walk up from `start` until we find the repo root that contains `services/api/src/server.js`.
+fn resolve_workspace_root_from(start: &Path) -> Option<PathBuf> {
+    for ancestor in start.ancestors() {
+        let server_js = ancestor
+            .join("services")
+            .join("api")
+            .join("src")
+            .join("server.js");
+        if server_js.is_file() {
+            return Some(ancestor.to_path_buf());
+        }
+    }
+    None
+}
+
+/// Prefer stable discovery from the executable path so release GUI launches do not rely on
+/// `current_dir()` (which varies and causes SQLite to open different `bandsearch.db` files).
+fn resolve_workspace_root() -> PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(root) = resolve_workspace_root_from(&exe) {
+            return root;
+        }
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+fn absolute_bandsearch_db_path(workspace_root: &Path) -> String {
+    let normalized_root = workspace_root.canonicalize().unwrap_or_else(|_| workspace_root.to_path_buf());
+    normalized_root
+        .join("bandsearch.db")
+        .to_string_lossy()
+        .into_owned()
+}
+
 fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>) -> Result<Child, std::io::Error> {
     let (binary, args) = api_spawn_args(workspace_root);
     let mut cmd = Command::new(&binary);
     cmd.args(&args).current_dir(workspace_root);
+    cmd.env("DATABASE_PATH", absolute_bandsearch_db_path(workspace_root));
     if let Some(k) = gemini_key {
         let t = k.trim();
         if !t.is_empty() {
@@ -179,13 +214,12 @@ fn main() {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
 
-            let exe = std::env::current_exe()?;
-            let workspace_root = if cfg!(debug_assertions) {
-                exe.ancestors().nth(6).unwrap_or(&exe).to_path_buf()
-            } else {
-                std::env::current_dir()?
-            };
+            let workspace_root = resolve_workspace_root();
             eprintln!("[bandsearch] workspace_root: {}", workspace_root.display());
+            eprintln!(
+                "[bandsearch] DATABASE_PATH: {}",
+                absolute_bandsearch_db_path(&workspace_root)
+            );
 
             let api = ApiProcess(Mutex::new(None));
             let gemini = gemini_key_for_spawn();
@@ -255,5 +289,16 @@ mod tests {
         let root = PathBuf::from("/any/root");
         let (binary, _) = api_spawn_args(&root);
         assert_eq!(binary, "node");
+    }
+
+    #[test]
+    fn resolve_workspace_root_from_finds_repo_from_cargo_manifest_dir() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = resolve_workspace_root_from(&manifest_dir).expect("repo root next to this crate");
+        assert!(
+            root.join("services").join("api").join("src").join("server.js").is_file(),
+            "expected services/api/src/server.js under {:?}",
+            root
+        );
     }
 }
