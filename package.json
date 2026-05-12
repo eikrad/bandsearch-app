@@ -15,7 +15,7 @@
     "desktop": "npm run tauri:dev --workspace @bandsearch/desktop",
     "migrate": "npm run migrate --workspace @bandsearch/api",
     "lint:js": "npm run lint --workspaces --if-present",
-    "lint:py": "ruff check . && black --check .",
+    "lint:py": "sh scripts/lint-py.sh",
     "lint": "npm run lint:js && npm run lint:py",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

@@ -1,9 +1,9 @@
+#!/usr/bin/env sh
+# Prefer project venv so ruff/black work when global tools are not on PATH (e.g. Cursor sandboxes).
+if [ -d "$(dirname "$0")/../.venv" ]; then
+  export PATH="$(cd "$(dirname "$0")/.." && pwd)/.venv/bin:$PATH"
+fi
+
 npm run lint
 npm run typecheck
 npm test
-
-if ! command -v ruff &> /dev/null; then
-  echo "ruff not found — install with: pip install ruff"
-  exit 1
-fi
-ruff check .

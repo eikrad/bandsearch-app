@@ -30,6 +30,18 @@ export type MusicBrainzSearchClient = {
   searchArtists: (query: string) => Promise<MusicBrainzArtistHit[]>;
 };
 
+export type MusicBrainzQueryPlannerFn = (input: {
+  userQuery: string;
+  preferenceContext: string;
+  messages: ChatMessage[];
+}) => Promise<string>;
+
+export type MusicBrainzQueryResolutionLog = {
+  userQuery: string;
+  resolvedMbQuery: string;
+  plannerEnabled: boolean;
+};
+
 /**
  * Match MusicBrainz search hits to recommendation card titles (case-insensitive).
  */
@@ -97,9 +109,13 @@ export function createRecommendationError(code: string, message: string, cause?:
 export function createRecommendationService({
   musicBrainzClient,
   recommendationAgent,
+  planMusicBrainzSearch,
+  onMusicBrainzQueryResolved,
 }: {
   musicBrainzClient?: MusicBrainzSearchClient;
   recommendationAgent?: RecommendationAgent;
+  planMusicBrainzSearch?: MusicBrainzQueryPlannerFn;
+  onMusicBrainzQueryResolved?: (info: MusicBrainzQueryResolutionLog) => void;
 } = {}) {
   if (!musicBrainzClient || typeof musicBrainzClient.searchArtists !== "function") {
     throw createRecommendationError(
@@ -126,9 +142,32 @@ export function createRecommendationService({
       const mode = validateRecommendationMode(options.mode);
       const preferenceContext = mode === "preference-aware" ? options.preferenceContext || "" : "";
 
+      const messages = Array.isArray(options.messages) ? options.messages : [];
+      let resolvedMbQuery = String(query || "").trim();
+      const plannerEnabled = Boolean(planMusicBrainzSearch);
+      if (planMusicBrainzSearch) {
+        try {
+          const planned = await planMusicBrainzSearch({
+            userQuery: query,
+            preferenceContext,
+            messages,
+          });
+          const trimmed = typeof planned === "string" ? planned.trim() : "";
+          if (trimmed) resolvedMbQuery = trimmed;
+        } catch {
+          resolvedMbQuery = String(query || "").trim();
+        }
+      }
+
+      onMusicBrainzQueryResolved?.({
+        userQuery: query,
+        resolvedMbQuery,
+        plannerEnabled,
+      });
+
       let artists: MusicBrainzArtistHit[];
       try {
-        artists = await musicBrainzClient.searchArtists(query);
+        artists = await musicBrainzClient.searchArtists(resolvedMbQuery);
       } catch (error) {
         throw createRecommendationError(
           "recommendation_context_unavailable",
@@ -138,7 +177,6 @@ export function createRecommendationService({
       }
 
       try {
-        const messages = Array.isArray(options.messages) ? options.messages : [];
         const { recommendations: rawItems, assistantReply } = await recommendationAgent.recommend({
           query,
           artists,

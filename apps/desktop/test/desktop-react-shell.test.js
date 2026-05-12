@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const { BandsearchHttpError } = require("../src/chatClient");
 const { bootstrapDesktopReactShell } = require("../src");
 const { createDesktopReactShell } = require("../src/ui/createDesktopReactShell");
 
@@ -62,6 +63,36 @@ test("desktop react shell save and rate actions call app handlers", async () => 
   assert.equal(calls[1].rating, 5);
   assert.equal(afterSave.actionStatus.message, "Saved Fen.");
   assert.equal(afterRate.actionStatus.message, "Rated Fen: 5/5.");
+});
+
+test("desktop react shell maps BandsearchHttpError to a human recommendation error banner", async () => {
+  const shell = createDesktopReactShell({
+    renderAdapter: {
+      getViewProps: () => ({
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        emptyText: "No recommendations yet.",
+      }),
+      onModeChange: () => ({}),
+      onSubmitQuery: async () => {
+        throw new BandsearchHttpError("recommendation service unavailable", {
+          status: 502,
+          code: "recommendation_unavailable",
+        });
+      },
+    },
+  });
+
+  await assert.rejects(() => shell.submitQuery("metal"), /query failed/);
+  const props = shell.getViewProps();
+  assert.equal(props.actionStatus.type, "error");
+  assert.match(props.actionStatus.message, /Settings|API key|Gemini/i);
 });
 
 test("desktop react shell clears action status after timeout", async () => {

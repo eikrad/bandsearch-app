@@ -18,12 +18,15 @@ struct WorkspaceRoot(PathBuf);
 struct BandsearchConfig {
     #[serde(default)]
     gemini_api_key: String,
+    #[serde(default)]
+    onboarding_completed: bool,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GeminiConfigStatus {
     has_stored_key: bool,
+    onboarding_complete: bool,
 }
 
 #[derive(Deserialize)]
@@ -47,14 +50,12 @@ fn load_config() -> BandsearchConfig {
     serde_json::from_str(&data).unwrap_or_default()
 }
 
-fn persist_gemini_key(key: &str) -> Result<(), String> {
+fn persist_config(cfg: &BandsearchConfig) -> Result<(), String> {
     let path = config_file_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let mut cfg = load_config();
-    cfg.gemini_api_key = key.to_string();
-    let data = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    let data = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     std::fs::write(path, data).map_err(|e| e.to_string())
 }
 
@@ -193,6 +194,7 @@ fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
     let cfg = load_config();
     Ok(GeminiConfigStatus {
         has_stored_key: !cfg.gemini_api_key.trim().is_empty(),
+        onboarding_complete: cfg.onboarding_completed,
     })
 }
 
@@ -206,15 +208,25 @@ fn save_gemini_api_key(
     if trimmed.is_empty() {
         return Err("API key is empty".into());
     }
-    persist_gemini_key(trimmed)?;
+    let mut cfg = load_config();
+    cfg.gemini_api_key = trimmed.to_string();
+    cfg.onboarding_completed = true;
+    persist_config(&cfg)?;
     restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed));
     Ok(())
+}
+
+#[tauri::command]
+fn complete_onboarding() -> Result<(), String> {
+    let mut cfg = load_config();
+    cfg.onboarding_completed = true;
+    persist_config(&cfg)
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;

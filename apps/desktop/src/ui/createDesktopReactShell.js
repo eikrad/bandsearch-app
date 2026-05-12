@@ -1,11 +1,13 @@
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { ChatAppView } = require("./ChatAppView");
+const { formatRecommendationQueryError } = require("../apiErrorMessages.js");
 
 function createDesktopReactShell({
   renderAdapter,
   actionHandlers = {},
   statusTimeoutMs = 3000,
+  errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
   getViewImpl = () => "chat",
   navigateImpl = /** @type {Function} */ (() => {}),
@@ -26,14 +28,15 @@ function createDesktopReactShell({
   let actionStatus = null;
   let clearStatusTimer = null;
 
-  function scheduleStatusClear() {
+  function scheduleStatusClear(customDelayMs) {
+    const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
     if (clearStatusTimer) {
       clearTimeout(clearStatusTimer);
     }
     clearStatusTimer = setTimeoutImpl(() => {
       actionStatus = null;
       clearStatusTimer = null;
-    }, statusTimeoutMs);
+    }, delayMs);
   }
   const handlers = {
     onModeChange: (mode) => renderAdapter.onModeChange(mode),
@@ -57,9 +60,9 @@ function createDesktopReactShell({
     async submitQuery(query) {
       try {
         return await handlers.onQuerySubmit(query);
-      } catch {
-        actionStatus = { type: "error", message: "Could not reach the API. Is the server running?" };
-        scheduleStatusClear();
+      } catch (error) {
+        actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
+        scheduleStatusClear(errorStatusTimeoutMs);
         throw new Error("query failed");
       }
     },

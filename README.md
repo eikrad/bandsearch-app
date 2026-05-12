@@ -6,6 +6,7 @@
 
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
+Before each MusicBrainz lookup, a **Gemini planner** turns the user’s message (plus recent chat context) into a short search string suited to MusicBrainz’s artist index; the same user text still feeds the main recommendation step. Curated notes live in `services/api/src/agent/prompts/musicbrainz-artist-search.md` for editing; the same text is **embedded in TypeScript** (`musicBrainzArtistSearchReference.embedded.ts`) so the API works even if the markdown file is not deployed—when the file is present locally, it overrides the embed.
 
 ---
 
@@ -52,7 +53,7 @@ sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
 sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 ```
 
-**Gemini API key (desktop):** Use **Settings** in the app header (or open `#/settings`) to save your key. It is written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes `GEMINI_API_KEY` to the bundled Node API process and restarts that process after you save. It also sets **`DATABASE_PATH`** to an absolute `bandsearch.db` next to the repo root (resolved from the app binary), so preference SQLite storage does not depend on the OS current working directory. Developers can still use a workspace `.env` file; when present, the usual API startup behavior applies (dotenv does not override variables already set when the process starts).
+**Gemini API key (desktop):** On first launch, a **welcome** screen (`#/welcome`) explains that a Gemini key is needed and links to Settings. You can skip and open chat later; completion is stored in `config.json` as `onboarding_completed` (Tauri) or in browser dev storage. Use **Settings** in the app header (or `#/settings`) to save your key. It is written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes `GEMINI_API_KEY` to the bundled Node API process and restarts that process after you save. It also sets **`DATABASE_PATH`** to an absolute `bandsearch.db` next to the repo root (resolved from the app binary), so preference SQLite storage does not depend on the OS current working directory. Developers can still use a workspace `.env` file; when present, the usual API startup behavior applies (dotenv does not override variables already set when the process starts). If a recommendation call fails (rate limit, unreachable API, or Gemini errors), the chat view shows a **banner** with a short, human-readable hint instead of failing silently.
 
 ---
 
@@ -203,9 +204,9 @@ npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
 ```
 
-The API and shared schema workspaces run tests with **tsx** so `.ts` sources execute next to existing `.js` modules (`npm run dev` / `npm start` use tsx for the API entrypoint as well).
+The API, shared schema, and **desktop** workspaces run tests with **tsx** so `.ts` sources execute next to existing `.js` modules (`npm run dev` / `npm start` use tsx for the API entrypoint as well).
 
-`npm run ci` runs **ruff** and **black** on Python sources (same as GitHub Actions). If those commands are missing locally, create a venv and install them: `python3 -m venv .venv && .venv/bin/pip install ruff black`, then run `npm run ci` with `.venv/bin` on your `PATH` (the `.venv/` directory is gitignored).
+`npm run ci` runs **ruff** and **black** on Python sources (same as GitHub Actions). `npm run lint:py` uses `scripts/lint-py.sh`, which prefers a repo-local **`.venv`** (`python3 -m venv .venv && .venv/bin/pip install ruff black`) and falls back to tools on your `PATH`. The `.venv/` directory is gitignored.
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`).
 
