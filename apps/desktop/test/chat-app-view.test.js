@@ -95,6 +95,7 @@ test("RecommendationCard has CSS class for card styling", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSettings: () => {},
         onNavigateSaved: () => {},
       },
     }),
@@ -137,6 +138,7 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSettings: () => {},
         onNavigateSaved: () => {},
       },
     }),
@@ -173,6 +175,7 @@ test("ChatAppView renders artist image when imageUrl is provided on card", () =>
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSettings: () => {},
         onNavigateSaved: () => {},
       },
     }),
@@ -209,6 +212,7 @@ test("ChatAppView renders platform links when provided on card", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSettings: () => {},
         onNavigateSaved: () => {},
       },
     }),
@@ -237,12 +241,41 @@ test("ChatAppView renders a Saved Artists navigation button", () => {
         onSave: () => {},
         onRate: () => {},
         onMore: () => {},
+        onNavigateSettings: () => {},
         onNavigateSaved: () => {},
       },
     }),
   );
 
   assert.equal(html.includes("Saved") || html.includes("saved"), true, "has saved artists nav link");
+});
+
+test("ChatAppView renders a Settings navigation button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSettings: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("Settings"), true);
 });
 
 test("ChatAppView renders genre chips for cards with genres", () => {

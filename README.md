@@ -52,6 +52,8 @@ sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
 sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 ```
 
+**Gemini API key (desktop):** Use **Settings** in the app header (or open `#/settings`) to save your key. It is written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes `GEMINI_API_KEY` to the bundled Node API process and restarts that process after you save. Developers can still use a workspace `.env` file; when present, the usual API startup behavior applies.
+
 ---
 
 ## Storage

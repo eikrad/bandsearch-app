@@ -2,6 +2,7 @@ const React = require("react");
 const { createRoot } = require("react-dom/client");
 const { ChatAppView } = require("./ChatAppView");
 const { SavedArtistsView } = require("./SavedArtistsView");
+const { SettingsView } = require("./SettingsView");
 
 function defaultContainerResolver() {
   /** @type {any} */ const browserDocument = globalThis.document;
@@ -21,6 +22,13 @@ function createDesktopReactMount({
   shell,
   router = null,
   savedArtistsShell = null,
+  getSettingsViewProps = () => ({
+    headerTitle: "Settings",
+    headerSubtitle: "",
+    hasStoredKey: false,
+    statusMessage: null,
+  }),
+  saveGeminiApiKey = async () => {},
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }) {
@@ -36,6 +44,17 @@ function createDesktopReactMount({
         React.createElement(SavedArtistsView, {
           viewProps,
           handlers: savedHandlers,
+        }),
+      );
+      return viewProps;
+    }
+
+    if (route === "settings") {
+      const viewProps = await Promise.resolve(getSettingsViewProps());
+      root.render(
+        React.createElement(SettingsView, {
+          viewProps,
+          handlers: settingsHandlers,
         }),
       );
       return viewProps;
@@ -104,6 +123,21 @@ function createDesktopReactMount({
     },
     onNavigateSaved: async () => {
       await shell.navigate?.("saved-artists");
+      return renderCurrent();
+    },
+    onNavigateSettings: async () => {
+      if (router) router.navigate("settings");
+      return renderCurrent();
+    },
+  };
+
+  const settingsHandlers = {
+    onNavigateChat: async () => {
+      if (router) router.navigate("home");
+      return renderCurrent();
+    },
+    onSaveApiKey: async (apiKey) => {
+      await saveGeminiApiKey(apiKey);
       return renderCurrent();
     },
   };

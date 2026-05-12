@@ -50,6 +50,17 @@ test("createHashRouter navigate changes route back to home", () => {
   assert.equal(router.getRoute(), "home");
 });
 
+test("createHashRouter returns settings route for hash /settings", () => {
+  const { router } = createTestRouter("#/settings");
+  assert.equal(router.getRoute(), "settings");
+});
+
+test("createHashRouter navigate changes route to settings", () => {
+  const { router } = createTestRouter("");
+  router.navigate("settings");
+  assert.equal(router.getRoute(), "settings");
+});
+
 test("createHashRouter fires onRouteChange callback when navigating", () => {
   const { router } = createTestRouter("");
   const changes = [];

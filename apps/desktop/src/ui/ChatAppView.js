@@ -361,6 +361,23 @@ function ChatAppView({ viewProps, handlers }) {
             {
               type: "button",
               className: "action-btn",
+              onClick: handlers.onNavigateSettings,
+              style: {
+                backgroundColor: theme.buttonBg,
+                color: theme.buttonText,
+                border: `1px solid ${theme.buttonBorder}`,
+                borderRadius: "7px",
+                padding: "5px 12px",
+                fontSize: "12px",
+              },
+            },
+            "Settings",
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "action-btn",
               onClick: handlers.onNavigateSaved,
               style: {
                 backgroundColor: theme.buttonBg,

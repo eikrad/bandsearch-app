@@ -102,3 +102,30 @@ test("routed mount calls render with ChatAppView when route is home", async () =
   assert.equal(renders.length, 1);
   assert.equal(renders[0].type?.name, "ChatAppView");
 });
+
+test("routed mount calls render with SettingsView when route is settings", async () => {
+  const renders = [];
+  const shell = makeShell();
+  const router = makeRouter("settings");
+  const savedShell = makeSavedArtistsShell();
+
+  const fakeRoot = { render: (el) => renders.push(el) };
+
+  const mount = createDesktopReactMount({
+    shell,
+    router,
+    savedArtistsShell: savedShell,
+    getSettingsViewProps: () => ({
+      headerTitle: "Settings",
+      hasStoredKey: false,
+      statusMessage: null,
+    }),
+    createRootImpl: () => fakeRoot,
+    resolveContainer: () => ({}),
+  });
+
+  await mount.mount();
+
+  assert.equal(renders.length, 1);
+  assert.equal(renders[0].type?.name, "SettingsView");
+});

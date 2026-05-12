@@ -2,6 +2,7 @@ const ROUTE_MAP = {
   "": "home",
   "#/": "home",
   "#/saved": "saved",
+  "#/settings": "settings",
 };
 
 function hashToRoute(hash) {
@@ -9,7 +10,9 @@ function hashToRoute(hash) {
 }
 
 function routeToHash(route) {
-  return route === "saved" ? "#/saved" : "#/";
+  if (route === "saved") return "#/saved";
+  if (route === "settings") return "#/settings";
+  return "#/";
 }
 
 function createHashRouter({

@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Primary window: chat UI and Gemini settings IPC",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "allow-gemini_config_status",
+    "allow-save_gemini_api_key"
+  ]
+}

@@ -23,9 +23,9 @@
 
 ## Phase 3.5 — UX Fundamentals
 
-- Settings screen with API key management: enter, validate, and save the Gemini API key through a UI page (via Tauri secure store or local config file). Clear error message on first launch when no key is set. Replaces the pure `.env` dependency for non-developers.
+- Settings screen with API key management: enter, validate, and save the Gemini API key through the desktop UI (`#/settings`), persisted under the OS config directory as `bandsearch/config.json`, with the API sidecar restarted after save; in-browser dev falls back to localStorage. ✓ Done
 - First-run onboarding: show a welcome screen on first launch that guides the user through API key entry.
-- Error UX: human-readable error messages when the API key is missing or invalid, when a rate limit is reached, or when Gemini is unreachable — instead of a silent failure.
+- Error UX: human-readable error messages when the API key is missing or invalid, when a rate limit is reached, or when Gemini is unreachable — instead of a silent failure (settings screen shows a banner when no key is stored).
 
 ## Phase 4.5 — Data Portability & Sharing
 
