@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage } from "../../../../shared/schemas/src/contracts.js";
@@ -6,7 +9,32 @@ import { parseModelJsonResponse, withTimeout } from "./recommendationAgent.js";
 export const MUSICBRAINZ_PLANNED_QUERY_MAX_LENGTH = 200;
 export const MUSICBRAINZ_PLANNER_HISTORY_MAX_CHARS = 3500;
 
-const PLANNER_SYSTEM = [
+let cachedArtistSearchReference: string | null = null;
+
+function resolveMusicBrainzPromptPath(): string {
+  const fileName = "musicbrainz-artist-search.md";
+  const fromRepoRoot = join(process.cwd(), "services", "api", "src", "agent", "prompts", fileName);
+  const fromApiPackage = join(process.cwd(), "src", "agent", "prompts", fileName);
+  if (existsSync(fromRepoRoot)) return fromRepoRoot;
+  if (existsSync(fromApiPackage)) return fromApiPackage;
+  return fromRepoRoot;
+}
+
+/**
+ * Loads `prompts/musicbrainz-artist-search.md` once. Used by the planner system prompt; exported for tests.
+ */
+export function getMusicBrainzArtistSearchReference(): string {
+  if (cachedArtistSearchReference !== null) return cachedArtistSearchReference;
+  try {
+    cachedArtistSearchReference = readFileSync(resolveMusicBrainzPromptPath(), "utf8").trim();
+  } catch {
+    cachedArtistSearchReference =
+      "MusicBrainz artist search only: GET /ws/2/artist?query=… Lucene syntax. Default fields: alias, artist, sortname. Doc: https://musicbrainz.org/doc/MusicBrainz_API/Search#Artist";
+  }
+  return cachedArtistSearchReference;
+}
+
+const PLANNER_ROLE = [
   "You help build a short MusicBrainz artist search string (Lucene query syntax on artist names and aliases).",
   "The user may describe moods, genres, or comparisons — distill them into search tokens that MusicBrainz can match (artist names, bands they mentioned, disambiguation keywords).",
   "Output a single JSON object only, no markdown fences: {\"musicBrainzQuery\":\"...\"}.",
@@ -17,6 +45,11 @@ const PLANNER_SYSTEM = [
 const RETRY_SYSTEM_ADDENDUM =
   "Your previous JSON was missing or invalid. Reply with ONLY one JSON object: {\"musicBrainzQuery\":\"...\"}. " +
   "The value must be a single-line non-empty string, at most 200 characters, suitable for MusicBrainz /ws/2/artist search.";
+
+function buildPlannerSystemPrompt(): string {
+  const reference = getMusicBrainzArtistSearchReference();
+  return `${PLANNER_ROLE}\n\n---\n${reference}`;
+}
 
 export type MusicBrainzQueryPlannerInput = {
   userQuery: string;
@@ -118,6 +151,8 @@ export async function createMusicBrainzQueryPlanner({
     temperature: 0.15,
   });
 
+  const plannerSystemPrompt = buildPlannerSystemPrompt();
+
   async function invokeOnce(systemText: string, userContent: string): Promise<string | null> {
     const prompt = [
       { role: "system" as const, content: systemText },
@@ -138,10 +173,10 @@ export async function createMusicBrainzQueryPlanner({
     if (!fallback) return "";
 
     const userContent = buildPlannerUserContent(input);
-    const first = await invokeOnce(PLANNER_SYSTEM, userContent);
+    const first = await invokeOnce(plannerSystemPrompt, userContent);
     if (first) return first;
 
-    const second = await invokeOnce(`${PLANNER_SYSTEM} ${RETRY_SYSTEM_ADDENDUM}`, userContent);
+    const second = await invokeOnce(`${plannerSystemPrompt} ${RETRY_SYSTEM_ADDENDUM}`, userContent);
     if (second) return second;
 
     return fallback;

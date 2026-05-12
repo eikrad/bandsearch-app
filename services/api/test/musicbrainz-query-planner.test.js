@@ -6,7 +6,14 @@ const {
   tryParseMusicBrainzQueryFromModelText,
   MUSICBRAINZ_PLANNED_QUERY_MAX_LENGTH,
   createMusicBrainzQueryPlanner,
+  getMusicBrainzArtistSearchReference,
 } = require("../src/agent/musicBrainzQueryPlanner");
+
+test("getMusicBrainzArtistSearchReference loads curated MusicBrainz artist prompt", () => {
+  const ref = getMusicBrainzArtistSearchReference();
+  assert.match(ref, /\/ws\/2\/artist/i);
+  assert.match(ref, /Lucene/i);
+});
 
 test("sanitizeMusicBrainzQueryCandidate accepts short single-line string", () => {
   assert.equal(sanitizeMusicBrainzQueryCandidate("  Alcest  "), "Alcest");
