@@ -87,7 +87,9 @@ function createDesktopReactMount({
     },
     onQuerySubmit: async (query) => {
       try {
-        await shell.submitQuery(query);
+        const pending = shell.submitQuery(query);
+        await renderCurrent();
+        await pending;
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }

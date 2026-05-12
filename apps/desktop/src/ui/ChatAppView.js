@@ -226,6 +226,38 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
   );
 }
 
+function SearchInProgress({ visible, theme }) {
+  if (!visible) return null;
+  return React.createElement(
+    "div",
+    {
+      role: "status",
+      "aria-live": "polite",
+      "aria-busy": true,
+      className: "search-in-progress",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        marginBottom: "16px",
+        padding: "11px 14px",
+        backgroundColor: theme.cardBg,
+        border: `1px solid ${theme.border}`,
+        borderRadius: "8px",
+        fontSize: "13px",
+        color: theme.textSecondary,
+        lineHeight: "1.4",
+      },
+    },
+    React.createElement("span", {
+      className: "bandsearch-spinner",
+      style: { ["--spinner-accent"]: theme.accent },
+      "aria-hidden": true,
+    }),
+    React.createElement("span", null, "Finding niche recommendations…"),
+  );
+}
+
 function StatusBanner({ actionStatus }) {
   if (!actionStatus) return null;
   const isError = actionStatus.type === "error";
@@ -348,6 +380,7 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
 function ChatAppView({ viewProps, handlers }) {
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
+  const searchInFlight = viewProps.isLoading === true;
 
   return React.createElement(
     "main",
@@ -430,6 +463,7 @@ function ChatAppView({ viewProps, handlers }) {
     React.createElement(
       "form",
       {
+        "aria-busy": searchInFlight,
         onSubmit: (event) => {
           event.preventDefault();
           const form = /** @type {any} */ (event.currentTarget);
@@ -477,9 +511,10 @@ function ChatAppView({ viewProps, handlers }) {
             whiteSpace: "nowrap",
           },
         },
-        "Recommend",
+        searchInFlight ? "Searching…" : "Recommend",
       ),
     ),
+    React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
     React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
     React.createElement(MessageThread, {
       messages: viewProps.messages,

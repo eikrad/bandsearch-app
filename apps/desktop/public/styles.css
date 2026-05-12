@@ -103,6 +103,23 @@ input {
   cursor: not-allowed;
 }
 
+/* Recommendation request in flight */
+@keyframes bandsearch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bandsearch-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(110, 122, 144, 0.35);
+  border-top-color: var(--spinner-accent, #7aa7d9);
+  border-radius: 50%;
+  animation: bandsearch-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0d0f14; }

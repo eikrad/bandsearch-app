@@ -113,6 +113,39 @@ test("RecommendationCard has CSS class for card styling", () => {
   );
 });
 
+test("ChatAppView shows loading indicator while recommendations are in flight", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: true,
+        isLoading: true,
+        cards: [],
+        emptyText: "No recommendations yet.",
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSettings: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("Searching"), true, "submit button shows in-flight label");
+  assert.equal(html.includes("Finding niche recommendations"), true, "status text visible");
+  assert.equal(html.includes("bandsearch-spinner"), true, "spinner CSS hook present");
+  assert.equal(html.includes("search-in-progress"), true, "loading region present");
+});
+
 test("ChatAppView renders conversation thread when messages prop provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
