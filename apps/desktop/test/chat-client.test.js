@@ -49,6 +49,22 @@ test("chat state appends assistant message from recommendation response", () => 
   assert.equal(next.messages[0].recommendations[0].artist, "Alcest");
 });
 
+test("chat state synthesizes dialogue when API omits assistantReply", () => {
+  const afterUser = {
+    ...createInitialChatState(),
+    messages: [{ role: "user", content: "I like grunge" }],
+  };
+  const next = applyAssistantMessage(afterUser, {
+    recommendations: [{ artist: "Mudhoney", why: "Proto-grunge", sourceSignals: ["agent_reasoning"] }],
+    meta: { modeUsed: "fresh", usedPreferenceContext: false },
+  });
+
+  assert.equal(next.messages.length, 2);
+  assert.equal(next.messages[1].role, "assistant");
+  assert.ok(next.messages[1].content.includes("Mudhoney"));
+  assert.ok(next.messages[1].content.includes("grunge"));
+});
+
 test("chat client creates and updates preferences", async () => {
   const calls = [];
   const client = createChatClient({

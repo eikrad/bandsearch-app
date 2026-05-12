@@ -25,7 +25,8 @@ test("recommendation agent maps structured model output", async () => {
   assert.equal(result.recommendations.length, 1);
   assert.equal(result.recommendations[0].artist, "Les Discrets");
   assert.equal(result.recommendations[0].sourceSignals[0], "musicbrainz_search");
-  assert.equal(result.assistantReply, "");
+  assert.ok(result.assistantReply.length > 40, "bare array responses get a fallback dialogue line");
+  assert.ok(result.assistantReply.includes("Les Discrets"), "fallback mentions recommended artists");
 });
 
 test("recommendation agent maps structured model output with reply", async () => {

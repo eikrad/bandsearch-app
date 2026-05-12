@@ -136,11 +136,30 @@ function createInitialChatState() {
   };
 }
 
+function buildLocalAssistantFallback(recommendations, queryHint = "") {
+  const names = Array.isArray(recommendations)
+    ? recommendations.map((r) => r && r.artist).filter((n) => typeof n === "string" && n.trim())
+    : [];
+  const tail = names.length
+    ? `: ${names.slice(0, 3).join(", ")}. Want to go heavier or softer, or narrow the era or region next?`
+    : ". Want to refine the direction — heavier, softer, or a specific scene?";
+  const q = typeof queryHint === "string" ? queryHint.trim().slice(0, 160) : "";
+  const head = q ? `Here are some picks tied to "${q}"` : "Here are some picks to explore";
+  return `${head}${tail}`;
+}
+
 function applyAssistantMessage(state, recommendationResponse) {
-  const assistantReply =
+  let assistantReply =
     typeof recommendationResponse.assistantReply === "string"
       ? recommendationResponse.assistantReply.trim()
       : "";
+  if (!assistantReply && Array.isArray(recommendationResponse.recommendations)) {
+    const lastUser = [...state.messages].reverse().find((m) => m.role === "user");
+    assistantReply = buildLocalAssistantFallback(
+      recommendationResponse.recommendations,
+      lastUser && typeof lastUser.content === "string" ? lastUser.content : "",
+    );
+  }
   const nextMessage = {
     role: "assistant",
     content: assistantReply,
