@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
+const { formatSavedBandContextLine } = require("./savedBandContextFormat");
 
 function createPreferenceMemory() {
   const savedBands = [];
@@ -83,12 +84,7 @@ function createPreferenceMemory() {
         return "";
       }
 
-      return savedBands
-        .map(
-          (band) =>
-            `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`,
-        )
-        .join("\n");
+      return savedBands.map(formatSavedBandContextLine).join("\n");
     },
 
     async buildContextForIds(ids) {
@@ -96,12 +92,7 @@ function createPreferenceMemory() {
       const want = new Set(ids);
       const filtered = savedBands.filter((b) => want.has(b.id));
       if (filtered.length === 0) return "";
-      return filtered
-        .map(
-          (band) =>
-            `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`,
-        )
-        .join("\n");
+      return filtered.map(formatSavedBandContextLine).join("\n");
     },
   };
 }

@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createRecommendationService, resolveRecommendationFacadeInput } = require("../src/recommendations");
+const {
+  createRecommendationService,
+  resolveRecommendationFacadeInput,
+  enrichRecommendationsWithMbIds,
+} = require("../src/recommendations");
 
 test("recommendation service forwards musicbrainz artists to recommendation agent", async () => {
   const service = createRecommendationService({
@@ -24,6 +28,13 @@ test("recommendation service forwards musicbrainz artists to recommendation agen
   assert.equal(recommendations.length, 1);
   assert.equal(recommendations[0].artist, "Alcest");
   assert.equal(recommendations[0].sourceSignals.includes("agent_reasoning"), true);
+});
+
+test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
+  const items = [{ artist: "Fen", why: "x", sourceSignals: ["a"] }];
+  const artists = [{ id: "mbid-fen", name: "Fen", score: 99, disambiguation: "" }];
+  const out = enrichRecommendationsWithMbIds(items, artists);
+  assert.equal(out[0].musicbrainzArtistId, "mbid-fen");
 });
 
 test("getRecommendations uses validateRecommendationMode for options.mode", async () => {

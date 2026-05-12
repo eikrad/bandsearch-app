@@ -53,6 +53,7 @@ function validateRuntimeEnv(env = process.env) {
 
   return {
     geminiApiKey,
+    lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
     port,
     recommendationTimeoutMs,
     musicBrainzTimeoutMs,

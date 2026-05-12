@@ -12,6 +12,7 @@ const { handleArtistSearch } = require("../http/artistSearchHandler");
  *   resolvedArtistImageClient: any,
  *   resolvedChatSessionRepository: any,
  *   resolvedRecommendationPipeline: any,
+ *   getRecommendationReadiness?: (() => Record<string, unknown>) | null,
  * }} ctx
  */
 function registerBandsearchRoutes(app, ctx) {
@@ -23,10 +24,15 @@ function registerBandsearchRoutes(app, ctx) {
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
     resolvedRecommendationPipeline,
+    getRecommendationReadiness,
   } = ctx;
 
   app.get("/health", (_req, res) => {
-    return res.status(200).json({ status: "ok" });
+    const body = /** @type {Record<string, unknown>} */ ({ status: "ok" });
+    if (typeof getRecommendationReadiness === "function") {
+      body.recommendations = getRecommendationReadiness();
+    }
+    return res.status(200).json(body);
   });
 
   app.get("/version", (_req, res) => {
@@ -94,10 +100,10 @@ function registerBandsearchRoutes(app, ctx) {
     try {
       const pipelineResult = await resolvedRecommendationPipeline.recommend({
         query: validation.query,
-        mode: req.body?.mode,
-        selectedArtistIds: req.body?.selectedArtistIds,
-        priorityContext: req.body?.priorityContext,
-        messages: req.body?.messages,
+        mode: validation.mode,
+        selectedArtistIds: validation.selectedArtistIds,
+        priorityContext: validation.priorityContext,
+        messages: validation.messages,
       });
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,

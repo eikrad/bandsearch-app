@@ -5,6 +5,7 @@ const {
   createRecommendationService,
   resolveRecommendationFacadeInput,
 } = require("./recommendations");
+const { writeStructuredLog } = require("./http/structuredLog");
 
 /**
  * @param {{ runtimeConfig?: any, preferenceRepository?: any, retryDelayMs?: number, logger?: any }} [options]
@@ -38,10 +39,9 @@ function createRecommendationPipeline({
   );
   let retryTimer = null;
 
-  function log(level, message, details = {}) {
-    const payload = { level, message, ...details };
-    const emit = level === "error" ? logger.error : level === "warn" ? logger.warn : logger.log;
-    emit(JSON.stringify(payload));
+  function pipelineLog(level, message, details = {}) {
+    void logger;
+    writeStructuredLog(level, { component: "recommendation_pipeline", message, ...details });
   }
 
   async function initialize() {
@@ -62,7 +62,7 @@ function createRecommendationPipeline({
         resolveFirstReady();
         resolveFirstReady = undefined;
       }
-      log("info", "recommendation pipeline ready");
+      pipelineLog("info", "recommendation pipeline ready");
     } catch (error) {
       activeService = null;
       activeError = createRecommendationError(
@@ -70,7 +70,7 @@ function createRecommendationPipeline({
         "recommendation pipeline unavailable",
         error,
       );
-      log("warn", "recommendation pipeline init failed; scheduling retry", {
+      pipelineLog("warn", "recommendation pipeline init failed; scheduling retry", {
         error: error?.message || "unknown error",
         retryDelayMs,
       });
@@ -90,8 +90,17 @@ function createRecommendationPipeline({
 
   void initialize();
 
+  function getReadinessSnapshot() {
+    return {
+      ready: activeService !== null,
+      initializing: activeError?.code === "recommendation_initializing",
+      errorCode: activeService ? null : activeError?.code ?? null,
+    };
+  }
+
   return {
     whenReady: () => whenReadyPromise,
+    getReadinessSnapshot,
     async recommend(request = {}) {
       if (!activeService) {
         throw activeError

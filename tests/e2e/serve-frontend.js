@@ -1,9 +1,10 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const { E2E_FRONTEND_PORT } = require("./constants");
 
 const DIST = path.resolve(__dirname, "../../apps/desktop/dist");
-const PORT = 4000;
+const PORT = E2E_FRONTEND_PORT;
 
 const MIME = {
   ".html": "text/html",

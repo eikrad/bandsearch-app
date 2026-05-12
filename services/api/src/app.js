@@ -11,6 +11,7 @@ const { createWikidataImageClient } = require("./integrations/wikidataImageClien
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
 const { sendError } = require("./http/errors");
+const { writeStructuredLog } = require("./http/structuredLog");
 const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
 
 /**
@@ -38,16 +39,14 @@ function createApp({
     _res.locals.requestId = requestId;
     const startMs = Date.now();
     _res.on("finish", () => {
-      console.log(
-        JSON.stringify({
-          level: "info",
-          requestId,
-          method: req.method,
-          path: req.path,
-          status: _res.statusCode,
-          durationMs: Date.now() - startMs,
-        }),
-      );
+      writeStructuredLog("info", {
+        component: "http_request",
+        requestId,
+        method: req.method,
+        path: req.path,
+        status: _res.statusCode,
+        durationMs: Date.now() - startMs,
+      });
     });
     next();
   });
@@ -78,7 +77,7 @@ function createApp({
     artistImageClient ||
     createWikidataImageClient({
       timeoutMs: runtimeConfig.wikidataTimeoutMs || 8000,
-      lastFmApiKey: runtimeConfig.lastFmApiKey || process.env.LASTFM_API_KEY || "",
+      lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
   const resolvedChatSessionRepository =
@@ -127,18 +126,20 @@ function createApp({
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
     resolvedRecommendationPipeline,
+    getRecommendationReadiness:
+      recommendationPipeline && typeof recommendationPipeline.getReadinessSnapshot === "function"
+        ? () => recommendationPipeline.getReadinessSnapshot()
+        : null,
   });
 
   app.use((req, res) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
   app.use((error, req, res, next) => {
     void next;
-    console.error(
-      JSON.stringify({
-        level: "error",
-        requestId: res.locals.requestId,
-        message: error?.message || "unexpected error",
-      }),
-    );
+    writeStructuredLog("error", {
+      component: "http_error",
+      requestId: res.locals.requestId,
+      message: error?.message || "unexpected error",
+    });
     return sendError(res, 500, "internal_error", "unexpected server error");
   });
 

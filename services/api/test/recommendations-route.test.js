@@ -267,7 +267,7 @@ test("POST /recommendations defaults to fresh mode", async () => {
   });
 
   assert.equal(result.status, 200);
-  assert.equal(calls[0].mode, undefined);
+  assert.equal(calls[0].mode, "fresh");
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });

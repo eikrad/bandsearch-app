@@ -12,6 +12,7 @@ test("validateRuntimeEnv requires GEMINI_API_KEY", () => {
 test("validateRuntimeEnv returns defaults for minimal env", () => {
   const config = validateRuntimeEnv({ ...WITH_GEMINI });
   assert.equal(config.geminiApiKey, "test-gemini-key");
+  assert.equal(config.lastFmApiKey, "");
   assert.equal(config.port, 3001);
   assert.equal(config.recommendationTimeoutMs, 8000);
   assert.equal(config.musicBrainzTimeoutMs, 5000);

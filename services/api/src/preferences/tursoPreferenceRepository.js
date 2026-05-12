@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
+const { formatSavedBandContextLine } = require("./savedBandContextFormat");
 
 function mapRowToSavedBand(row) {
   return {
@@ -94,9 +95,7 @@ function createTursoPreferenceRepository({ client }) {
     async buildContext() {
       const savedBands = await this.listSavedBands();
       if (savedBands.length === 0) return "";
-      return savedBands
-        .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
-        .join("\n");
+      return savedBands.map(formatSavedBandContextLine).join("\n");
     },
 
     async buildContextForIds(ids) {
@@ -105,9 +104,7 @@ function createTursoPreferenceRepository({ client }) {
       const want = new Set(ids);
       const filtered = savedBands.filter((b) => want.has(b.id));
       if (filtered.length === 0) return "";
-      return filtered
-        .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
-        .join("\n");
+      return filtered.map(formatSavedBandContextLine).join("\n");
     },
   };
 }

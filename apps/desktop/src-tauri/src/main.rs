@@ -1,12 +1,29 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
 use tauri::{Manager, WindowEvent};
 
 struct ApiProcess(Mutex<Option<Child>>);
+
+fn wait_for_api_tcp(port: u16) {
+    let addr: SocketAddr = format!("127.0.0.1:{port}")
+        .parse()
+        .expect("valid listen addr");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        if TcpStream::connect(addr).is_ok() {
+            eprintln!("[bandsearch] API TCP ready on port {port}");
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    eprintln!("[bandsearch] warning: API port {port} did not accept TCP within 30s");
+}
 
 fn api_spawn_args(workspace_root: &PathBuf) -> (String, Vec<String>) {
     let server_path = workspace_root
@@ -47,6 +64,11 @@ fn main() {
             match Command::new(&binary).args(&args).current_dir(&workspace_root).spawn() {
                 Ok(child) => {
                     app.manage(ApiProcess(Mutex::new(Some(child))));
+                    let port: u16 = std::env::var("PORT")
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(3001);
+                    wait_for_api_tcp(port);
                 }
                 Err(e) => {
                     eprintln!("failed to start API process: {e}");

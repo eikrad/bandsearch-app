@@ -1,3 +1,39 @@
+class BandsearchHttpError extends Error {
+  constructor(message, { status, code, details } = {}) {
+    super(message);
+    this.name = "BandsearchHttpError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+/**
+ * @param {Response} response
+ */
+async function ensureOk(response) {
+  if (response.ok) return;
+  const text = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* ignore */
+  }
+  const apiErr = parsed?.error;
+  if (apiErr && typeof apiErr.code === "string") {
+    throw new BandsearchHttpError(apiErr.message || `request failed with status ${response.status}`, {
+      status: response.status,
+      code: apiErr.code,
+      details: apiErr.details,
+    });
+  }
+  throw new BandsearchHttpError(`request failed with status ${response.status}`, {
+    status: response.status,
+    code: "http_error",
+  });
+}
+
 function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
@@ -15,10 +51,7 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
         body: JSON.stringify(body),
       });
 
-      if (!response.ok) {
-        throw new Error(`recommendations request failed with status ${response.status}`);
-      }
-
+      await ensureOk(response);
       return response.json();
     },
     async createPreference(savedBand) {
@@ -27,9 +60,7 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(savedBand),
       });
-      if (!response.ok) {
-        throw new Error(`preference create request failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async updatePreference(id, updates) {
@@ -38,16 +69,12 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) {
-        throw new Error(`preference update request failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async listPreferences() {
       const response = await fetchImpl(`${baseUrl}/preferences`);
-      if (!response.ok) {
-        throw new Error(`preferences fetch failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       const data = /** @type {any} */ (await response.json());
       return data.savedBands || [];
     },
@@ -55,25 +82,19 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
       const response = await fetchImpl(`${baseUrl}/preferences/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
-      if (!response.ok) {
-        throw new Error(`preference delete request failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async fetchSavedBands() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET" });
-      if (!response.ok) {
-        throw new Error(`fetch saved bands failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async searchArtists(query) {
       const response = await fetchImpl(
         `${baseUrl}/artists/search?query=${encodeURIComponent(query)}`,
       );
-      if (!response.ok) {
-        throw new Error(`artist search failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async createSession(title = "Untitled") {
@@ -82,16 +103,12 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title }),
       });
-      if (!response.ok) {
-        throw new Error(`create session failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async listSessions() {
       const response = await fetchImpl(`${baseUrl}/sessions`, { method: "GET" });
-      if (!response.ok) {
-        throw new Error(`list sessions failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
     async appendSessionMessage(sessionId, message) {
@@ -103,9 +120,7 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
           body: JSON.stringify(message),
         },
       );
-      if (!response.ok) {
-        throw new Error(`append session message failed with status ${response.status}`);
-      }
+      await ensureOk(response);
       return response.json();
     },
   };
@@ -138,6 +153,7 @@ function normalizeArtistId(artistName) {
 }
 
 module.exports = {
+  BandsearchHttpError,
   createChatClient,
   createInitialChatState,
   applyAssistantMessage,

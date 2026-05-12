@@ -126,6 +126,7 @@ npm run dev
 | `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the recommendation pipeline initializes (non-blocking cap) |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
+| `LASTFM_API_KEY` | — | Optional — Last.fm helper for artist images (via validated runtime config) |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
 | `LANGSMITH_PROJECT` | — | LangSmith project name |

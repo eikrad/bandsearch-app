@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
+const { formatSavedBandContextLine } = require("./savedBandContextFormat");
 
 function mapRowToSavedBand(row) {
   return {
@@ -12,10 +13,6 @@ function mapRowToSavedBand(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function formatBandContext(b) {
-  return `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`;
 }
 
 function createSqlitePreferenceRepository({ db }) {
@@ -82,7 +79,7 @@ function createSqlitePreferenceRepository({ db }) {
     async buildContext() {
       const savedBands = await this.listSavedBands();
       if (savedBands.length === 0) return "";
-      return savedBands.map(formatBandContext).join("\n");
+      return savedBands.map(formatSavedBandContextLine).join("\n");
     },
 
     async buildContextForIds(ids) {
@@ -90,7 +87,7 @@ function createSqlitePreferenceRepository({ db }) {
       const placeholders = ids.map(() => "?").join(", ");
       const rows = db.prepare(`SELECT * FROM saved_bands WHERE id IN (${placeholders})`).all(...ids);
       if (rows.length === 0) return "";
-      return rows.map(mapRowToSavedBand).map(formatBandContext).join("\n");
+      return rows.map(mapRowToSavedBand).map(formatSavedBandContextLine).join("\n");
     },
   };
 }

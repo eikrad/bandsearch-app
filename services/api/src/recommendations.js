@@ -1,7 +1,25 @@
-const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
+const {
+  validateRecommendationMode,
+  validateRecommendationHttpBody,
+} = require("../../../shared/schemas/src/contracts");
 
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
+/**
+ * Match MusicBrainz search hits to recommendation card titles (case-insensitive).
+ *
+ * @param {unknown[]} items
+ * @param {{ id: string, name: string }[]} artists
+ */
+function enrichRecommendationsWithMbIds(items, artists) {
+  if (!Array.isArray(items) || !Array.isArray(artists)) return items;
+  return items.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const artistName = String(/** @type {any} */ (item).artist || "").trim().toLowerCase();
+    const match = artists.find((a) => String(a.name || "").trim().toLowerCase() === artistName);
+    if (match?.id) {
+      return { ...item, musicbrainzArtistId: match.id };
+    }
+    return item;
+  });
 }
 
 /**
@@ -35,10 +53,7 @@ async function resolveRecommendationFacadeInput(request = {}, preferenceReposito
 }
 
 function validateRecommendationRequest(body) {
-  if (!body || !isNonEmptyString(body.query)) {
-    return { ok: false, error: "query is required" };
-  }
-  return { ok: true, query: body.query.trim() };
+  return validateRecommendationHttpBody(body);
 }
 
 function createRecommendationError(code, message, cause) {
@@ -85,7 +100,8 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
 
       try {
         const messages = Array.isArray(options.messages) ? options.messages : [];
-        return await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
+        const items = await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
+        return enrichRecommendationsWithMbIds(items, artists);
       } catch (error) {
         throw createRecommendationError("recommendation_unavailable", "recommendation unavailable", error);
       }
@@ -98,4 +114,5 @@ module.exports = {
   createRecommendationError,
   createRecommendationService,
   resolveRecommendationFacadeInput,
+  enrichRecommendationsWithMbIds,
 };

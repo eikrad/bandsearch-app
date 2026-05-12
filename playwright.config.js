@@ -1,10 +1,11 @@
 const { defineConfig } = require("@playwright/test");
+const { E2E_FRONTEND_PORT } = require("./tests/e2e/constants");
 
 module.exports = defineConfig({
   testDir: "./tests/e2e",
   timeout: 40000,
   use: {
-    baseURL: "http://localhost:4000",
+    baseURL: `http://localhost:${E2E_FRONTEND_PORT}`,
     headless: true,
   },
   webServer: [
@@ -17,7 +18,7 @@ module.exports = defineConfig({
     },
     {
       command: "node tests/e2e/serve-frontend.js",
-      port: 4000,
+      port: E2E_FRONTEND_PORT,
       reuseExistingServer: false,
       timeout: 5000,
     },
