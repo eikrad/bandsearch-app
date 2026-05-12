@@ -6,6 +6,7 @@
 
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
+Before each MusicBrainz lookup, a **Gemini planner** turns the user’s message (plus recent chat context) into a short search string suited to MusicBrainz’s artist index; the same user text still feeds the main recommendation step.
 
 ---
 

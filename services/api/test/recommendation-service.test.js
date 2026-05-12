@@ -41,6 +41,39 @@ test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", 
   assert.equal(out[0].musicbrainzArtistId, "mbid-fen");
 });
 
+test("getRecommendations uses planMusicBrainzSearch for MusicBrainz when provided", async () => {
+  const mbCalls = [];
+  const service = createRecommendationService({
+    musicBrainzClient: {
+      searchArtists: async (q) => {
+        mbCalls.push(q);
+        return [{ name: "PlannedHit", score: 90 }];
+      },
+    },
+    planMusicBrainzSearch: async ({ userQuery }) => `planned-from:${userQuery}`,
+    recommendationAgent: {
+      recommend: async ({ query, artists }) => {
+        assert.equal(query, "I want something dreamy like Alcest but rawer");
+        return {
+          recommendations: [
+            {
+              artist: artists[0].name,
+              why: "ok",
+              sourceSignals: ["agent_reasoning"],
+            },
+          ],
+          assistantReply: "",
+        };
+      },
+    },
+  });
+
+  await service.getRecommendations("I want something dreamy like Alcest but rawer");
+
+  assert.equal(mbCalls.length, 1);
+  assert.equal(mbCalls[0], "planned-from:I want something dreamy like Alcest but rawer");
+});
+
 test("getRecommendations uses validateRecommendationMode for options.mode", async () => {
   const calls = [];
   const service = createRecommendationService({

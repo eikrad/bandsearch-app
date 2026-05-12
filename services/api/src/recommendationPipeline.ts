@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
+import { createMusicBrainzQueryPlanner } from "./agent/musicBrainzQueryPlanner.js";
 import { createRecommendationAgent, createLangChainRunner } from "./agent/recommendationAgent.js";
 import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
 import type { RecommendationError } from "./recommendations.js";
@@ -66,16 +67,34 @@ export function createRecommendationPipeline({
 
   async function initialize() {
     try {
-      const runModel = await createLangChainRunner({
-        timeoutMs: cfg.recommendationTimeoutMs,
-        apiKey: cfg.geminiApiKey,
-      });
+      const apiKey = String(cfg.geminiApiKey ?? "").trim();
+      const recommendTimeoutMs = cfg.recommendationTimeoutMs ?? 8000;
+      const [runModel, planMusicBrainzSearch] = await Promise.all([
+        createLangChainRunner({
+          timeoutMs: recommendTimeoutMs,
+          apiKey,
+        }),
+        createMusicBrainzQueryPlanner({
+          apiKey,
+          timeoutMs: Math.min(4000, recommendTimeoutMs),
+        }),
+      ]);
       activeService = createRecommendationService({
         musicBrainzClient: createMusicBrainzClient({
           timeoutMs: cfg.musicBrainzTimeoutMs,
           retries: cfg.musicBrainzRetries,
         }),
         recommendationAgent: createRecommendationAgent({ runModel }),
+        planMusicBrainzSearch,
+        onMusicBrainzQueryResolved: (info) => {
+          pipelineLog("info", "musicbrainz_search_query_resolved", {
+            userQuery:
+              info.userQuery.length > 240 ? `${info.userQuery.slice(0, 240)}…` : info.userQuery,
+            resolvedMbQuery: info.resolvedMbQuery,
+            plannerEnabled: info.plannerEnabled,
+            differsFromUser: info.resolvedMbQuery.trim() !== info.userQuery.trim(),
+          });
+        },
       });
       activeError = null;
       if (resolveFirstReady) {
