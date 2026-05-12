@@ -239,7 +239,7 @@ function SearchInProgress({ visible, theme }) {
         display: "flex",
         alignItems: "center",
         gap: "12px",
-        marginBottom: "16px",
+        marginBottom: "10px",
         padding: "11px 14px",
         backgroundColor: theme.cardBg,
         border: `1px solid ${theme.border}`,
@@ -302,7 +302,7 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
   if (!messages?.length) return null;
   return React.createElement(
     "section",
-    { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "20px" } },
+    { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "12px", paddingBottom: "4px" } },
     messages.map((msg, idx) => {
       if (msg.role === "user") {
         return React.createElement(
@@ -385,18 +385,19 @@ function ChatAppView({ viewProps, handlers }) {
   return React.createElement(
     "main",
     {
+      className: "bandsearch-chat-shell",
       style: {
         backgroundColor: theme.pageBg,
         color: theme.textPrimary,
-        minHeight: "100vh",
-        padding: isMobile ? "20px 16px" : "32px 24px",
+        padding: isMobile ? "20px 16px 0" : "32px 24px 0",
+        paddingBottom: isMobile ? "16px" : "20px",
         maxWidth: "760px",
         margin: "0 auto",
       },
     },
     React.createElement(
       "header",
-      { style: { marginBottom: "24px" } },
+      { style: { marginBottom: "24px", flexShrink: 0 } },
       React.createElement(
         "div",
         { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" } },
@@ -461,88 +462,113 @@ function ChatAppView({ viewProps, handlers }) {
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${theme.border}`, margin: "0" } }),
     ),
     React.createElement(
-      "form",
+      "div",
       {
-        "aria-busy": searchInFlight,
-        onSubmit: (event) => {
-          event.preventDefault();
-          const form = /** @type {any} */ (event.currentTarget);
-          const queryInput = form.querySelector('input[name="query"]');
-          handlers.onQuerySubmit(String(queryInput?.value || ""));
-        },
+        className: "bandsearch-chat-scroll",
+        style: { paddingBottom: "8px" },
+      },
+      React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+      React.createElement(MessageThread, {
+        messages: viewProps.messages,
+        theme,
+        isMobile,
+        handlers,
+      }),
+      viewProps.messages
+        ? null
+        : viewProps.cards.length === 0
+        ? searchInFlight
+          ? null
+          : React.createElement(EmptyState, {
+              modeValue: viewProps.modeValue,
+              textSecondary: theme.textSecondary,
+              textTertiary: theme.textTertiary,
+            })
+        : React.createElement(
+            "section",
+            { style: { display: "grid", gap: "8px" } },
+            viewProps.cards.map((card) =>
+              React.createElement(RecommendationCard, {
+                key: card.title,
+                card,
+                theme,
+                isMobile,
+                handlers,
+              }),
+            ),
+          ),
+    ),
+    React.createElement(
+      "div",
+      {
+        className: "bandsearch-chat-composer",
         style: {
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          gap: "8px",
-          marginBottom: "20px",
+          marginTop: "12px",
+          paddingTop: "16px",
+          borderTop: `1px solid ${theme.border}`,
+          backgroundColor: theme.pageBg,
         },
       },
-      React.createElement("input", {
-        name: "query",
-        type: "text",
-        placeholder: viewProps.queryPlaceholder,
-        disabled: viewProps.queryDisabled,
-        className: "query-input",
-        style: {
-          flex: "1",
-          backgroundColor: theme.inputBg,
-          color: theme.textPrimary,
-          border: `1px solid ${theme.inputBorder}`,
-          borderRadius: "8px",
-          padding: "10px 14px",
-          fontSize: "14px",
-        },
-      }),
+      React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
       React.createElement(
-        "button",
+        "form",
         {
-          type: "submit",
-          disabled: viewProps.queryDisabled,
-          className: "recommend-btn",
+          "aria-busy": searchInFlight,
+          onSubmit: (event) => {
+            event.preventDefault();
+            const form = /** @type {any} */ (event.currentTarget);
+            const queryInput = form.querySelector('input[name="query"]');
+            const query = String(queryInput?.value || "").trim();
+            if (!query || viewProps.queryDisabled) return;
+            queryInput.value = "";
+            handlers.onQuerySubmit(query);
+          },
           style: {
-            backgroundColor: theme.accent,
-            color: "#0a0d14",
-            border: "none",
-            borderRadius: "8px",
-            padding: "10px 18px",
-            fontWeight: "600",
-            fontSize: "13px",
-            letterSpacing: "0.01em",
-            whiteSpace: "nowrap",
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            gap: "8px",
+            margin: 0,
           },
         },
-        searchInFlight ? "Searching…" : "Recommend",
+        React.createElement("input", {
+          name: "query",
+          type: "text",
+          placeholder: viewProps.queryPlaceholder,
+          disabled: viewProps.queryDisabled,
+          className: "query-input",
+          autoComplete: "off",
+          style: {
+            flex: "1",
+            backgroundColor: theme.inputBg,
+            color: theme.textPrimary,
+            border: `1px solid ${theme.inputBorder}`,
+            borderRadius: "8px",
+            padding: "10px 14px",
+            fontSize: "14px",
+          },
+        }),
+        React.createElement(
+          "button",
+          {
+            type: "submit",
+            disabled: viewProps.queryDisabled,
+            className: "recommend-btn",
+            style: {
+              backgroundColor: theme.accent,
+              color: "#0a0d14",
+              border: "none",
+              borderRadius: "8px",
+              padding: "10px 18px",
+              fontWeight: "600",
+              fontSize: "13px",
+              letterSpacing: "0.01em",
+              whiteSpace: "nowrap",
+            },
+          },
+          searchInFlight ? "Searching…" : "Recommend",
+        ),
       ),
     ),
-    React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
-    React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
-    React.createElement(MessageThread, {
-      messages: viewProps.messages,
-      theme,
-      isMobile,
-      handlers,
-    }),
-    viewProps.messages
-      ? null
-      : viewProps.cards.length === 0
-      ? React.createElement(EmptyState, {
-          modeValue: viewProps.modeValue,
-          textSecondary: theme.textSecondary,
-          textTertiary: theme.textTertiary,
-        })
-      : React.createElement(
-          "section",
-          { style: { display: "grid", gap: "8px" } },
-          viewProps.cards.map((card) =>
-            React.createElement(RecommendationCard, {
-              key: card.title,
-              card,
-              theme,
-              isMobile,
-              handlers,
-            }),
-          ),
-        ),
   );
 }
 
