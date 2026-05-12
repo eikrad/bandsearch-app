@@ -3,6 +3,40 @@ const { createHashRouter } = require("./createHashRouter");
 const { createSavedArtistsShell } = require("./createSavedArtistsShell");
 const { createGeminiSettingsController } = require("./geminiDesktopSettings");
 
+/** Matches CSS layout switch: narrow window → mobile chat layout (split rail hides). */
+const VIEWPORT_BREAKPOINT_MAX_PX = 767;
+
+function browserWindow() {
+  return typeof globalThis !== "undefined" ? globalThis.window : undefined;
+}
+
+function resolveInitialViewport(fallbackViewport) {
+  const w = browserWindow();
+  if (!w || typeof w.matchMedia !== "function") {
+    return fallbackViewport;
+  }
+  return w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`).matches
+    ? "mobile"
+    : "desktop";
+}
+
+function subscribeViewportChanges(desktopUi, rerender) {
+  const w = browserWindow();
+  if (!w || typeof w.matchMedia !== "function") {
+    return;
+  }
+  const mql = w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`);
+  const onViewportChange = () => {
+    desktopUi.setViewport(mql.matches ? "mobile" : "desktop");
+    rerender();
+  };
+  if (typeof mql.addEventListener === "function") {
+    mql.addEventListener("change", onViewportChange);
+  } else {
+    mql.addListener(onViewportChange);
+  }
+}
+
 function createDefaultTauriInvoke() {
   try {
     const { invoke } = require("@tauri-apps/api/core");
@@ -36,9 +70,10 @@ function startDesktopBrowserApp({
   const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl });
   const router = createHashRouter();
   const savedArtistsShell = createSavedArtistsShell({ app });
+  const initialViewport = resolveInitialViewport(viewport);
   const reactApp = bootstrapDesktopReactApp({
     app,
-    viewport,
+    viewport: initialViewport,
     actionHandlers,
     router,
     savedArtistsShell,
@@ -46,6 +81,9 @@ function startDesktopBrowserApp({
     saveGeminiApiKey: (key) => gemini.saveGeminiApiKey(key),
   });
   reactApp.mount();
+  if (reactApp.desktopUi) {
+    subscribeViewportChanges(reactApp.desktopUi, () => reactApp.mount());
+  }
   return reactApp;
 }
 

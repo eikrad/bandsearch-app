@@ -36,3 +36,39 @@ test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
   assert.equal(calls[1].viewport, "mobile");
   assert.equal(calls[2].type, "mount");
 });
+
+test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narrow width", async () => {
+  const modulePath = require.resolve("../src/index");
+  const original = require(modulePath);
+  const calls = [];
+
+  require.cache[modulePath].exports = {
+    ...original,
+    bootstrapDesktopApp: () => ({ mocked: true }),
+    bootstrapDesktopReactApp: ({ viewport }) => {
+      calls.push({ type: "bootstrapReact", viewport });
+      return {
+        mount: () => calls.push({ type: "mount" }),
+        desktopUi: { setViewport: () => {} },
+      };
+    },
+  };
+
+  const prevWindow = globalThis.window;
+  globalThis.window = {
+    matchMedia: (query) => ({
+      matches: query.includes("max-width"),
+      addEventListener: () => {},
+    }),
+  };
+
+  delete require.cache[require.resolve("../src/startDesktopBrowserApp")];
+  const { startDesktopBrowserApp } = require("../src/startDesktopBrowserApp");
+  startDesktopBrowserApp({ viewport: "desktop" });
+
+  require.cache[modulePath].exports = original;
+  globalThis.window = prevWindow;
+
+  assert.equal(calls[0].type, "bootstrapReact");
+  assert.equal(calls[0].viewport, "mobile");
+});

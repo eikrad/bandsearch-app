@@ -15,3 +15,16 @@ test("desktop render adapter bootstrap exposes initial view props", () => {
   assert.equal(props.headerTitle, "Bandsearch");
   assert.equal(Array.isArray(props.modeOptions), true);
 });
+
+test("desktopUi.setViewport updates view props viewport", () => {
+  const adapter = bootstrapDesktopRenderAdapter({
+    app: {
+      requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
+      getState: () => ({ messages: [] }),
+    },
+  });
+
+  assert.equal(adapter.getViewProps().viewport, "desktop");
+  adapter.desktopUi.setViewport("mobile");
+  assert.equal(adapter.getViewProps().viewport, "mobile");
+});

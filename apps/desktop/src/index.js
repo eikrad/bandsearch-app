@@ -11,7 +11,9 @@ function bootstrapDesktopUi(options) {
 
 function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }) {
   const desktopUi = bootstrapDesktopUi({ app, viewport });
-  return createChatRenderAdapter({ desktopUi });
+  const adapter = createChatRenderAdapter({ desktopUi });
+  adapter.desktopUi = desktopUi;
+  return adapter;
 }
 
 function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers = {} }) {
@@ -23,7 +25,7 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
     onRate: resolvedActionHandlers.onRate || ((artistName) => app.rateBand?.(artistName, 5)),
     onMore: resolvedActionHandlers.onMore || (() => {}),
   };
-  return createDesktopReactShell({
+  const shell = createDesktopReactShell({
     renderAdapter,
     actionHandlers: mergedActionHandlers,
     getViewImpl: () => app.getView?.() ?? "chat",
@@ -44,6 +46,8 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
     },
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
   });
+  shell.desktopUi = renderAdapter.desktopUi;
+  return shell;
 }
 
 /**
@@ -68,13 +72,20 @@ function bootstrapDesktopReactApp(options = {}) {
     saveGeminiApiKey,
   } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
-  return createDesktopReactMount({
+  const mountApi = createDesktopReactMount({
     shell,
     router,
     savedArtistsShell,
     getSettingsViewProps,
     saveGeminiApiKey,
   });
+  return {
+    ...mountApi,
+    desktopUi: shell.desktopUi,
+    refreshView() {
+      return mountApi.mount();
+    },
+  };
 }
 
 module.exports = {

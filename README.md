@@ -216,6 +216,8 @@ shared/schemas/   — shared validation contracts
 docs/             — roadmap and design specs
 ```
 
+In development (browser or embedded webview), the chat UI chooses **mobile vs desktop layout** from window width (`matchMedia`, max-width **767px**), so you do not need to pass a `viewport` option manually when resizing the window.
+
 ## Acknowledgements
 
 - [MusicBrainz](https://musicbrainz.org) — open music encyclopedia providing artist and release metadata. Data used under the [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) licence.
