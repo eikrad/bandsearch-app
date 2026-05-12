@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "allow-gemini_config_status",
-    "allow-save_gemini_api_key"
+    "allow-gemini-config-status",
+    "allow-save-gemini-api-key"
   ]
 }

@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-gemini-config-status"
+description = "Allows reading whether a Gemini API key is stored in local config."
+commands.allow = ["gemini_config_status"]
+
+[[permission]]
+identifier = "allow-save-gemini-api-key"
+description = "Allows saving the Gemini API key and restarting the API sidecar."
+commands.allow = ["save_gemini_api_key"]
