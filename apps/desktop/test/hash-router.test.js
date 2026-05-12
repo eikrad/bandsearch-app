@@ -61,6 +61,25 @@ test("createHashRouter navigate changes route to settings", () => {
   assert.equal(router.getRoute(), "settings");
 });
 
+test("createHashRouter returns welcome route for hash /welcome", () => {
+  const { router } = createTestRouter("#/welcome");
+  assert.equal(router.getRoute(), "welcome");
+});
+
+test("createHashRouter navigate changes route to welcome", () => {
+  const { router } = createTestRouter("");
+  router.navigate("welcome");
+  assert.equal(router.getRoute(), "welcome");
+});
+
+test("createHashRouter fires onRouteChange when navigating to welcome", () => {
+  const { router } = createTestRouter("");
+  const changes = [];
+  router.onRouteChange((route) => changes.push(route));
+  router.navigate("welcome");
+  assert.deepEqual(changes, ["welcome"]);
+});
+
 test("createHashRouter fires onRouteChange callback when navigating", () => {
   const { router } = createTestRouter("");
   const changes = [];

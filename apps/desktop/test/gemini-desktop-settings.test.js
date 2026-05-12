@@ -28,6 +28,26 @@ test("createGeminiSettingsController rejects empty save with error status", asyn
   assert.equal(props.statusMessage?.type, "error");
 });
 
+test("createGeminiSettingsController getBootstrapGate reads onboarding flag from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: false, onboardingComplete: true }),
+  });
+  const gate = await ctrl.getBootstrapGate();
+  assert.deepEqual(gate, { hasStoredKey: false, onboardingComplete: true });
+});
+
+test("createGeminiSettingsController completeOnboarding invokes Tauri command", async () => {
+  const calls = [];
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => {
+      calls.push(cmd);
+      return {};
+    },
+  });
+  await ctrl.completeOnboarding();
+  assert.deepEqual(calls, ["complete_onboarding"]);
+});
+
 test("createGeminiSettingsController records error when invoke fails on save", async () => {
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => {

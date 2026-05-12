@@ -2,6 +2,7 @@ const { bootstrapDesktopApp, bootstrapDesktopReactApp } = require("./index");
 const { createHashRouter } = require("./createHashRouter");
 const { createSavedArtistsShell } = require("./createSavedArtistsShell");
 const { createGeminiSettingsController } = require("./geminiDesktopSettings");
+const { shouldOfferWelcomeScreen } = require("./firstRunOnboarding.js");
 
 /** Matches CSS layout switch: narrow window → mobile chat layout (split rail hides). */
 const VIEWPORT_BREAKPOINT_MAX_PX = 767;
@@ -55,7 +56,7 @@ function createDefaultTauriInvoke() {
  *   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>,
  * }} [options]
  */
-function startDesktopBrowserApp({
+async function startDesktopBrowserApp({
   apiBaseUrl = "http://localhost:3001",
   fetchImpl,
   viewport = "desktop",
@@ -71,6 +72,20 @@ function startDesktopBrowserApp({
   const router = createHashRouter();
   const savedArtistsShell = createSavedArtistsShell({ app });
   const initialViewport = resolveInitialViewport(viewport);
+
+  const w = browserWindow();
+  const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
+  const gate = await gemini.getBootstrapGate();
+  if (
+    shouldOfferWelcomeScreen({
+      hasStoredKey: gate.hasStoredKey,
+      onboardingComplete: gate.onboardingComplete,
+      locationHash: initialHash,
+    })
+  ) {
+    router.navigate("welcome");
+  }
+
   const reactApp = bootstrapDesktopReactApp({
     app,
     viewport: initialViewport,
@@ -79,10 +94,11 @@ function startDesktopBrowserApp({
     savedArtistsShell,
     getSettingsViewProps: () => gemini.getSettingsViewProps(),
     saveGeminiApiKey: (key) => gemini.saveGeminiApiKey(key),
+    completeOnboarding: () => gemini.completeOnboarding(),
   });
-  reactApp.mount();
+  await reactApp.mount();
   if (reactApp.desktopUi) {
-    subscribeViewportChanges(reactApp.desktopUi, () => reactApp.mount());
+    subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
   }
   return reactApp;
 }

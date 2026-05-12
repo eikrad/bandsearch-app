@@ -3,6 +3,7 @@ const { createRoot } = require("react-dom/client");
 const { ChatAppView } = require("./ChatAppView");
 const { SavedArtistsView } = require("./SavedArtistsView");
 const { SettingsView } = require("./SettingsView");
+const { WelcomeView } = require("./WelcomeView");
 
 function defaultContainerResolver() {
   /** @type {any} */ const browserDocument = globalThis.document;
@@ -25,6 +26,7 @@ function resolveViewComponent(viewName) {
  *   savedArtistsShell?: object | null,
  *   getSettingsViewProps?: () => any,
  *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
+ *   completeOnboarding?: () => Promise<void>,
  *   createRootImpl?: typeof import("react-dom/client").createRoot,
  *   resolveContainer?: () => HTMLElement,
  * }} options
@@ -42,6 +44,7 @@ function createDesktopReactMount({
   saveGeminiApiKey = async (apiKey) => {
     void apiKey;
   },
+  completeOnboarding = async () => {},
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }) {
@@ -50,6 +53,16 @@ function createDesktopReactMount({
 
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
+
+    if (route === "welcome") {
+      root.render(
+        React.createElement(WelcomeView, {
+          viewProps: {},
+          handlers: welcomeHandlers,
+        }),
+      );
+      return {};
+    }
 
     if (route === "saved" && savedArtistsShell) {
       const viewProps = savedArtistsShell.getViewProps();
@@ -153,6 +166,18 @@ function createDesktopReactMount({
     },
     onSaveApiKey: async (apiKey) => {
       await saveGeminiApiKey(apiKey);
+      return renderCurrent();
+    },
+  };
+
+  const welcomeHandlers = {
+    onGoToSettings: async () => {
+      if (router) router.navigate("settings");
+      return renderCurrent();
+    },
+    onSkip: async () => {
+      await completeOnboarding();
+      if (router) router.navigate("home");
       return renderCurrent();
     },
   };

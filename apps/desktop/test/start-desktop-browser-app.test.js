@@ -15,14 +15,16 @@ test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
     bootstrapDesktopReactApp: ({ app, viewport, actionHandlers }) => {
       calls.push({ type: "bootstrapReact", app, viewport, actionHandlers });
       return {
-        mount: () => calls.push({ type: "mount" }),
+        mount: async () => {
+          calls.push({ type: "mount" });
+        },
       };
     },
   };
 
   delete require.cache[require.resolve("../src/startDesktopBrowserApp")];
   const { startDesktopBrowserApp } = require("../src/startDesktopBrowserApp");
-  startDesktopBrowserApp({
+  await startDesktopBrowserApp({
     apiBaseUrl: "http://localhost:3333",
     viewport: "mobile",
     actionHandlers: { onSave: () => {} },
@@ -48,7 +50,9 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
     bootstrapDesktopReactApp: ({ viewport }) => {
       calls.push({ type: "bootstrapReact", viewport });
       return {
-        mount: () => calls.push({ type: "mount" }),
+        mount: async () => {
+          calls.push({ type: "mount" });
+        },
         desktopUi: { setViewport: () => {} },
       };
     },
@@ -64,7 +68,7 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
 
   delete require.cache[require.resolve("../src/startDesktopBrowserApp")];
   const { startDesktopBrowserApp } = require("../src/startDesktopBrowserApp");
-  startDesktopBrowserApp({ viewport: "desktop" });
+  await startDesktopBrowserApp({ viewport: "desktop" });
 
   require.cache[modulePath].exports = original;
   globalThis.window = prevWindow;

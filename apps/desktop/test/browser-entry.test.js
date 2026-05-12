@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-test("bootBrowserDesktopApp forwards options to browser starter", () => {
+test("bootBrowserDesktopApp forwards options to browser starter", async () => {
   const starterPath = require.resolve("../src/startDesktopBrowserApp");
   const entryPath = require.resolve("../src/browserEntry");
   const originalStarter = require(starterPath);
@@ -11,13 +11,13 @@ test("bootBrowserDesktopApp forwards options to browser starter", () => {
     ...originalStarter,
     startDesktopBrowserApp: (options) => {
       calls.push(options);
-      return { ok: true };
+      return Promise.resolve({ ok: true });
     },
   };
 
   delete require.cache[entryPath];
   const { bootBrowserDesktopApp } = require("../src/browserEntry");
-  const result = bootBrowserDesktopApp({ apiBaseUrl: "http://localhost:3001" });
+  const result = await bootBrowserDesktopApp({ apiBaseUrl: "http://localhost:3001" });
 
   require.cache[starterPath].exports = originalStarter;
 
