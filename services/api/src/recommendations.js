@@ -69,7 +69,7 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
 
   return {
     async getRecommendations(query, options = {}) {
-      const mode = options.mode === "preference-aware" ? "preference-aware" : "fresh";
+      const mode = validateRecommendationMode(options.mode);
       const preferenceContext = mode === "preference-aware" ? options.preferenceContext || "" : "";
 
       let artists;

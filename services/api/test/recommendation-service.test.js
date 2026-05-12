@@ -26,6 +26,28 @@ test("recommendation service forwards musicbrainz artists to recommendation agen
   assert.equal(recommendations[0].sourceSignals.includes("agent_reasoning"), true);
 });
 
+test("getRecommendations uses validateRecommendationMode for options.mode", async () => {
+  const calls = [];
+  const service = createRecommendationService({
+    musicBrainzClient: {
+      searchArtists: async () => [],
+    },
+    recommendationAgent: {
+      recommend: async (args) => {
+        calls.push(args);
+        return [{ artist: "X", why: "y", sourceSignals: ["agent_reasoning"] }];
+      },
+    },
+  });
+
+  await service.getRecommendations("q", { mode: "not-a-real-mode" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].mode, "fresh");
+
+  await service.getRecommendations("q", { mode: "preference-aware" });
+  assert.equal(calls[1].mode, "preference-aware");
+});
+
 test("resolveRecommendationFacadeInput fresh mode does not call repository", async () => {
   let buildCalled = false;
   const preferenceRepository = {
