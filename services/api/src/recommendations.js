@@ -1,5 +1,37 @@
+const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
+
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
+ * Shared façade step: normalize mode, merge priority text with repository preference context when
+ * preference-aware, and collect messages. Used by the lazy-init pipeline and the app fallback stack.
+ *
+ * @param {Record<string, unknown>} [request]
+ * @param {{ buildContext: () => Promise<string>, buildContextForIds?: (ids: string[]) => Promise<string> }} preferenceRepository
+ */
+async function resolveRecommendationFacadeInput(request = {}, preferenceRepository) {
+  const mode = validateRecommendationMode(request.mode);
+  const selectedArtistIds = Array.isArray(request.selectedArtistIds)
+    ? request.selectedArtistIds.filter((id) => typeof id === "string")
+    : [];
+  const priorityContext = typeof request.priorityContext === "string" ? request.priorityContext.trim() : "";
+
+  let preferenceContext = priorityContext;
+  if (mode === "preference-aware") {
+    let repoContext;
+    if (selectedArtistIds.length > 0 && typeof preferenceRepository.buildContextForIds === "function") {
+      repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
+    } else {
+      repoContext = await preferenceRepository.buildContext();
+    }
+    preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
+  }
+
+  const messages = Array.isArray(request.messages) ? request.messages : [];
+
+  return { mode, preferenceContext, messages };
 }
 
 function validateRecommendationRequest(body) {
@@ -65,4 +97,5 @@ module.exports = {
   validateRecommendationRequest,
   createRecommendationError,
   createRecommendationService,
+  resolveRecommendationFacadeInput,
 };

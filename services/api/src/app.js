@@ -5,8 +5,7 @@ const rateLimitLib = require("express-rate-limit");
 const helmet = /** @type {any} */ (helmetLib.default || helmetLib);
 const rateLimit = /** @type {any} */ (rateLimitLib.default || rateLimitLib);
 const { version: appVersion } = require("../../../package.json");
-const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
-const { validateRecommendationRequest } = require("./recommendations");
+const { validateRecommendationRequest, createRecommendationError, resolveRecommendationFacadeInput } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
@@ -96,29 +95,14 @@ function createApp({
   const resolvedRecommendationPipeline = recommendationPipeline || {
     async recommend(request = {}) {
       if (!recommendationService) {
-        const error = /** @type {any} */ (new Error("recommendation service unavailable"));
-        error.code = "recommendation_unavailable";
-        throw error;
+        throw createRecommendationError("recommendation_unavailable", "recommendation service unavailable");
       }
 
-      const mode = validateRecommendationMode(request.mode);
-      const selectedArtistIds = Array.isArray(request.selectedArtistIds)
-        ? request.selectedArtistIds.filter((id) => typeof id === "string")
-        : [];
-      const priorityContext = typeof request.priorityContext === "string" ? request.priorityContext.trim() : "";
+      const { mode, preferenceContext, messages } = await resolveRecommendationFacadeInput(
+        request,
+        resolvedPreferenceRepository,
+      );
 
-      let preferenceContext = priorityContext;
-      if (mode === "preference-aware") {
-        let repoContext;
-        if (selectedArtistIds.length > 0 && typeof resolvedPreferenceRepository.buildContextForIds === "function") {
-          repoContext = await resolvedPreferenceRepository.buildContextForIds(selectedArtistIds);
-        } else {
-          repoContext = await resolvedPreferenceRepository.buildContext();
-        }
-        preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
-      }
-
-      const messages = Array.isArray(request.messages) ? request.messages : [];
       const recommendations = await recommendationService.getRecommendations(request.query, {
         mode,
         preferenceContext,

@@ -1,7 +1,10 @@
-const { validateRecommendationMode } = require("../../../shared/schemas/src/contracts");
 const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
-const { createRecommendationError, createRecommendationService } = require("./recommendations");
+const {
+  createRecommendationError,
+  createRecommendationService,
+  resolveRecommendationFacadeInput,
+} = require("./recommendations");
 
 /**
  * @param {{ runtimeConfig?: any, preferenceRepository?: any, retryDelayMs?: number, logger?: any }} [options]
@@ -81,29 +84,15 @@ function createRecommendationPipeline({
           || createRecommendationError("recommendation_unavailable", "recommendation pipeline unavailable");
       }
 
-      const mode = validateRecommendationMode(request.mode);
-      const selectedArtistIds = Array.isArray(request.selectedArtistIds)
-        ? request.selectedArtistIds.filter((id) => typeof id === "string")
-        : [];
-      const priorityContext = typeof request.priorityContext === "string"
-        ? request.priorityContext.trim()
-        : "";
-
-      let preferenceContext = priorityContext;
-      if (mode === "preference-aware") {
-        let repoContext;
-        if (selectedArtistIds.length > 0 && typeof preferenceRepository.buildContextForIds === "function") {
-          repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
-        } else {
-          repoContext = await preferenceRepository.buildContext();
-        }
-        preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
-      }
+      const { mode, preferenceContext, messages } = await resolveRecommendationFacadeInput(
+        request,
+        preferenceRepository,
+      );
 
       const recommendations = await activeService.getRecommendations(request.query, {
         mode,
         preferenceContext,
-        messages: Array.isArray(request.messages) ? request.messages : [],
+        messages,
       });
 
       return {
