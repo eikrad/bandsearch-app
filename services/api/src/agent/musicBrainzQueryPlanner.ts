@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage } from "../../../../shared/schemas/src/contracts.js";
+import { EMBEDDED_MUSICBRAINZ_ARTIST_SEARCH_REFERENCE } from "./prompts/musicBrainzArtistSearchReference.embedded.js";
 import { parseModelJsonResponse, withTimeout } from "./recommendationAgent.js";
 
 export const MUSICBRAINZ_PLANNED_QUERY_MAX_LENGTH = 200;
@@ -21,16 +22,21 @@ function resolveMusicBrainzPromptPath(): string {
 }
 
 /**
- * Loads `prompts/musicbrainz-artist-search.md` once. Used by the planner system prompt; exported for tests.
+ * Prefer `musicbrainz-artist-search.md` on disk when present (local edits); otherwise use the
+ * embedded copy so deploys never depend on shipping loose markdown.
  */
 export function getMusicBrainzArtistSearchReference(): string {
   if (cachedArtistSearchReference !== null) return cachedArtistSearchReference;
-  try {
-    cachedArtistSearchReference = readFileSync(resolveMusicBrainzPromptPath(), "utf8").trim();
-  } catch {
-    cachedArtistSearchReference =
-      "MusicBrainz artist search only: GET /ws/2/artist?query=… Lucene syntax. Default fields: alias, artist, sortname. Doc: https://musicbrainz.org/doc/MusicBrainz_API/Search#Artist";
+  const path = resolveMusicBrainzPromptPath();
+  if (existsSync(path)) {
+    try {
+      cachedArtistSearchReference = readFileSync(path, "utf8").trim();
+      return cachedArtistSearchReference;
+    } catch {
+      /* use embedded */
+    }
   }
+  cachedArtistSearchReference = EMBEDDED_MUSICBRAINZ_ARTIST_SEARCH_REFERENCE;
   return cachedArtistSearchReference;
 }
 

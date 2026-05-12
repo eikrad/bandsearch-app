@@ -15,7 +15,7 @@ Improve MusicBrainz recall for conversational or abstract user prompts by adding
 
 ## Architecture
 
-1. **`createMusicBrainzQueryPlanner`** (`services/api/src/agent/musicBrainzQueryPlanner.ts`): Gemini `gemini-2.5-flash`, low temperature, returns only `{"musicBrainzQuery":"..."}`. Two attempts: normal system prompt, then one retry with a stricter correction addendum. The system prompt appends a **curated reference** from `services/api/src/agent/prompts/musicbrainz-artist-search.md` (loaded once from disk, cached in memory) so MB field behaviour stays maintainable without pasting the full upstream doc.
+1. **`createMusicBrainzQueryPlanner`** (`services/api/src/agent/musicBrainzQueryPlanner.ts`): Gemini `gemini-2.5-flash`, low temperature, returns only `{"musicBrainzQuery":"..."}`. Two attempts: normal system prompt, then one retry with a stricter correction addendum. The system prompt appends a **curated reference**: prefer `prompts/musicbrainz-artist-search.md` on disk when present; otherwise use the **embedded** copy in `prompts/musicBrainzArtistSearchReference.embedded.ts` so minimal deploys never depend on loose assets. A test keeps `.md` and embed in sync.
 2. **`sanitizeMusicBrainzQueryCandidate`:** Non-empty after trim, max 200 chars, no newlines / ASCII control characters.
 3. **`createRecommendationService`** (`recommendations.ts`): Optional `planMusicBrainzSearch`; resolves `resolvedMbQuery` then calls `musicBrainzClient.searchArtists(resolvedMbQuery)`. Recommender still called with original `query`. Optional `onMusicBrainzQueryResolved` for structured logs.
 4. **`createRecommendationPipeline`:** `Promise.all` to build `runModel` and `planMusicBrainzSearch`; wires logging via `pipelineLog` (`musicbrainz_search_query_resolved`).

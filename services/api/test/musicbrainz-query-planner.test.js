@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const { readFileSync, existsSync } = require("node:fs");
+const { join } = require("node:path");
+
 const {
   sanitizeMusicBrainzQueryCandidate,
   tryParseMusicBrainzQueryFromModelText,
@@ -8,6 +11,20 @@ const {
   createMusicBrainzQueryPlanner,
   getMusicBrainzArtistSearchReference,
 } = require("../src/agent/musicBrainzQueryPlanner");
+const {
+  EMBEDDED_MUSICBRAINZ_ARTIST_SEARCH_REFERENCE,
+} = require("../src/agent/prompts/musicBrainzArtistSearchReference.embedded");
+
+test("embedded MB artist prompt matches musicbrainz-artist-search.md (edit both or update embedded)", () => {
+  const candidates = [
+    join(process.cwd(), "src", "agent", "prompts", "musicbrainz-artist-search.md"),
+    join(process.cwd(), "services", "api", "src", "agent", "prompts", "musicbrainz-artist-search.md"),
+  ];
+  const path = candidates.find((p) => existsSync(p));
+  assert.ok(path, "musicbrainz-artist-search.md should exist in repo");
+  const file = readFileSync(path, "utf8").trim();
+  assert.equal(EMBEDDED_MUSICBRAINZ_ARTIST_SEARCH_REFERENCE, file);
+});
 
 test("getMusicBrainzArtistSearchReference loads curated MusicBrainz artist prompt", () => {
   const ref = getMusicBrainzArtistSearchReference();
