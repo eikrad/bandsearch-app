@@ -1,4 +1,8 @@
 class BandsearchHttpError extends Error {
+  /**
+   * @param {string} message
+   * @param {{ status?: number, code?: string, details?: unknown }} [opts]
+   */
   constructor(message, { status, code, details } = {}) {
     super(message);
     this.name = "BandsearchHttpError";

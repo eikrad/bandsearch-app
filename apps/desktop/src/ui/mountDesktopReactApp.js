@@ -18,6 +18,17 @@ function resolveViewComponent(viewName) {
   return ChatAppView;
 }
 
+/**
+ * @param {{
+ *   shell: object,
+ *   router?: object | null,
+ *   savedArtistsShell?: object | null,
+ *   getSettingsViewProps?: () => any,
+ *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
+ *   createRootImpl?: typeof import("react-dom/client").createRoot,
+ *   resolveContainer?: () => HTMLElement,
+ * }} options
+ */
 function createDesktopReactMount({
   shell,
   router = null,
@@ -28,7 +39,9 @@ function createDesktopReactMount({
     hasStoredKey: false,
     statusMessage: null,
   }),
-  saveGeminiApiKey = async () => {},
+  saveGeminiApiKey = async (apiKey) => {
+    void apiKey;
+  },
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }) {

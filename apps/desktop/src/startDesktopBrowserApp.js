@@ -13,7 +13,13 @@ function createDefaultTauriInvoke() {
 }
 
 /**
- * @param {{ apiBaseUrl?: string, fetchImpl?: any, viewport?: string, actionHandlers?: any, invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown> }} [options]
+ * @param {{
+ *   apiBaseUrl?: string,
+ *   fetchImpl?: any,
+ *   viewport?: string,
+ *   actionHandlers?: any,
+ *   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>,
+ * }} [options]
  */
 function startDesktopBrowserApp({
   apiBaseUrl = "http://localhost:3001",

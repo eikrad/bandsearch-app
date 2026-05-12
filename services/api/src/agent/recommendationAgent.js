@@ -29,6 +29,9 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
+/**
+ * @param {{ timeoutMs?: number, apiKey?: string }} [options]
+ */
 async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
     throw new Error("apiKey is required for LangChain runner");

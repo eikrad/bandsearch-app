@@ -26,15 +26,16 @@ function enrichRecommendationsWithMbIds(items, artists) {
  * Shared façade step: normalize mode, merge priority text with repository preference context when
  * preference-aware, and collect messages. Used by the lazy-init pipeline and the app fallback stack.
  *
- * @param {Record<string, unknown>} [request]
+ * @param {Record<string, unknown>|undefined} request
  * @param {{ buildContext: () => Promise<string>, buildContextForIds: (ids: string[]) => Promise<string> }} preferenceRepository
  */
-async function resolveRecommendationFacadeInput(request = {}, preferenceRepository) {
-  const mode = validateRecommendationMode(request.mode);
-  const selectedArtistIds = Array.isArray(request.selectedArtistIds)
-    ? request.selectedArtistIds.filter((id) => typeof id === "string")
+async function resolveRecommendationFacadeInput(request, preferenceRepository) {
+  const req = request ?? {};
+  const mode = validateRecommendationMode(req.mode);
+  const selectedArtistIds = Array.isArray(req.selectedArtistIds)
+    ? req.selectedArtistIds.filter((id) => typeof id === "string")
     : [];
-  const priorityContext = typeof request.priorityContext === "string" ? request.priorityContext.trim() : "";
+  const priorityContext = typeof req.priorityContext === "string" ? req.priorityContext.trim() : "";
 
   let preferenceContext = priorityContext;
   if (mode === "preference-aware") {
@@ -47,7 +48,7 @@ async function resolveRecommendationFacadeInput(request = {}, preferenceReposito
     preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
   }
 
-  const messages = Array.isArray(request.messages) ? request.messages : [];
+  const messages = Array.isArray(req.messages) ? req.messages : [];
 
   return { mode, preferenceContext, messages };
 }

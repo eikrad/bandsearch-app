@@ -46,15 +46,27 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
   });
 }
 
-function bootstrapDesktopReactApp({
-  app,
-  viewport = "desktop",
-  actionHandlers = {},
-  router = null,
-  savedArtistsShell = null,
-  getSettingsViewProps,
-  saveGeminiApiKey,
-} = {}) {
+/**
+ * @param {{
+ *   app?: object,
+ *   viewport?: string,
+ *   actionHandlers?: Record<string, unknown>,
+ *   router?: unknown,
+ *   savedArtistsShell?: unknown,
+ *   getSettingsViewProps?: () => Promise<any>,
+ *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
+ * }} [options]
+ */
+function bootstrapDesktopReactApp(options = {}) {
+  const {
+    app,
+    viewport = "desktop",
+    actionHandlers = {},
+    router = null,
+    savedArtistsShell = null,
+    getSettingsViewProps,
+    saveGeminiApiKey,
+  } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
   return createDesktopReactMount({
     shell,
