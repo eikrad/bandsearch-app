@@ -1,22 +1,30 @@
-const { validateRecommendationItem } = require("../../../../shared/schemas/src/contracts");
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
-function isValidRecommendation(item) {
+import { validateRecommendationItem } from "../../../../shared/schemas/src/contracts.js";
+
+export type RunModelInput = {
+  query: string;
+  artists: Array<{ name: string; score?: number }>;
+  preferenceContext?: string;
+  messages: Array<{ role: string; content: string }>;
+};
+
+export type RunModel = (input: RunModelInput) => Promise<unknown>;
+
+function isValidRecommendation(item: unknown) {
   return validateRecommendationItem(item).ok;
 }
 
-function validateRecommendationOutput(output) {
+function validateRecommendationOutput(output: unknown[]): unknown[] {
   if (!Array.isArray(output) || output.some((item) => !isValidRecommendation(item))) {
     throw new Error("invalid recommendation output");
   }
   return output;
 }
 
-/**
- * @param {unknown} parsed
- */
-function pickReplyFromParsed(parsed) {
+function pickReplyFromParsed(parsed: unknown): string {
   if (!parsed || typeof parsed !== "object") return "";
-  const p = /** @type {Record<string, unknown>} */ (parsed);
+  const p = parsed as Record<string, unknown>;
   const candidates = [p.reply, p.assistant_reply, p.message, p.summary, p.narrative];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) return c.trim();
@@ -26,14 +34,11 @@ function pickReplyFromParsed(parsed) {
 
 /**
  * When the model omits prose (common when it returns a bare JSON array), still give the UI a short dialogue turn.
- *
- * @param {string} query
- * @param {unknown[]} recommendations
  */
-function buildFallbackAssistantReply(query, recommendations) {
+function buildFallbackAssistantReply(query: string, recommendations: unknown[]): string {
   const names = recommendations
-    .map((r) => (r && typeof r === "object" ? /** @type {any} */ (r).artist : null))
-    .filter((n) => typeof n === "string" && n.trim());
+    .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>).artist : null))
+    .filter((n): n is string => typeof n === "string" && Boolean(n.trim()));
   const q = typeof query === "string" ? query.trim() : "";
   const shortQuery = q.length > 160 ? `${q.slice(0, 157)}...` : q;
   const head = shortQuery
@@ -47,29 +52,40 @@ function buildFallbackAssistantReply(query, recommendations) {
 
 /**
  * Accepts legacy JSON array output or structured { reply, recommendations }.
- *
- * @param {unknown} parsed
- * @returns {{ assistantReply: string, recommendations: unknown[] }}
  */
-function normalizeModelPayload(parsed) {
+function normalizeModelPayload(parsed: unknown): { assistantReply: string; recommendations: unknown[] } {
   if (Array.isArray(parsed)) {
     return { assistantReply: "", recommendations: validateRecommendationOutput(parsed) };
   }
-  if (parsed && typeof parsed === "object" && Array.isArray(/** @type {any} */ (parsed).recommendations)) {
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).recommendations)) {
     const assistantReply = pickReplyFromParsed(parsed);
     return {
       assistantReply,
-      recommendations: validateRecommendationOutput(/** @type {any} */ (parsed).recommendations),
+      recommendations: validateRecommendationOutput(
+        (parsed as Record<string, unknown>).recommendations as unknown[],
+      ),
     };
   }
   throw new Error("invalid recommendation output");
 }
 
-function createRecommendationAgent({ runModel }) {
+export function createRecommendationAgent({ runModel }: { runModel: RunModel }) {
   return {
-    async recommend({ query, artists, preferenceContext = "", messages = [] }) {
+    async recommend({
+      query,
+      artists,
+      preferenceContext = "",
+      messages = [],
+    }: {
+      query: string;
+      artists: Array<{ name: string; score?: number }>;
+      preferenceContext?: string;
+      messages?: Array<{ role: string; content: string }>;
+    }) {
       const parsed = await runModel({ query, artists, preferenceContext, messages });
-      let { assistantReply, recommendations } = normalizeModelPayload(parsed);
+      const normalized = normalizeModelPayload(parsed);
+      let { assistantReply } = normalized;
+      const { recommendations } = normalized;
       if (!assistantReply) {
         assistantReply = buildFallbackAssistantReply(query, recommendations);
       }
@@ -80,13 +96,11 @@ function createRecommendationAgent({ runModel }) {
 
 /**
  * Extract one balanced JSON object or array from text that may include model preamble or trailing prose.
- *
- * @param {string} raw
  */
-function parseModelJsonResponse(raw) {
+function parseModelJsonResponse(raw: string): unknown {
   const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as unknown;
   } catch {
     const objStart = text.indexOf("{");
     const arrStart = text.indexOf("[");
@@ -94,7 +108,7 @@ function parseModelJsonResponse(raw) {
       const slice = extractBalancedSegment(text, objStart, "{", "}");
       if (slice) {
         try {
-          return JSON.parse(slice);
+          return JSON.parse(slice) as unknown;
         } catch {
           /* try array path */
         }
@@ -103,20 +117,14 @@ function parseModelJsonResponse(raw) {
     if (arrStart !== -1) {
       const slice = extractBalancedSegment(text, arrStart, "[", "]");
       if (slice) {
-        return JSON.parse(slice);
+        return JSON.parse(slice) as unknown;
       }
     }
     throw new Error("invalid recommendation output");
   }
 }
 
-/**
- * @param {string} s
- * @param {number} startIdx
- * @param {string} open
- * @param {string} close
- */
-function extractBalancedSegment(s, startIdx, open, close) {
+function extractBalancedSegment(s: string, startIdx: number, open: string, close: string): string | null {
   let depth = 0;
   let inString = false;
   let escape = false;
@@ -148,24 +156,19 @@ function extractBalancedSegment(s, startIdx, open, close) {
   return null;
 }
 
-function withTimeout(promise, timeoutMs) {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise((_, reject) => {
+    new Promise<T>((_, reject) => {
       setTimeout(() => reject(new Error("recommendation model timeout")), timeoutMs);
     }),
   ]);
 }
 
-/**
- * @param {{ timeoutMs?: number, apiKey?: string }} [options]
- */
-async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
+export async function createLangChainRunner({ timeoutMs = 8000, apiKey }: { timeoutMs?: number; apiKey?: string } = {}) {
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
     throw new Error("apiKey is required for LangChain runner");
   }
-
-  const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 
   const model = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
@@ -173,13 +176,11 @@ async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
     temperature: 0.4,
   });
 
-  return async function runModel({ query, artists, preferenceContext = "", messages = [] }) {
-    const artistContext = artists
-      .map((artist) => `${artist.name} (score: ${artist.score})`)
-      .join(", ");
+  return async function runModel({ query, artists, preferenceContext = "", messages = [] }: RunModelInput) {
+    const artistContext = artists.map((artist) => `${artist.name} (score: ${artist.score})`).join(", ");
     const prefBlock = preferenceContext ? `\nuser_preferences: ${preferenceContext}` : "";
 
-    const prompt = [
+    const prompt: Array<{ role: string; content: string }> = [
       {
         role: "system",
         content:
@@ -189,7 +190,6 @@ async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
       },
     ];
 
-    // Inject conversation history before the current query
     for (const msg of messages) {
       if (msg.role === "user" || msg.role === "assistant") {
         prompt.push({ role: msg.role, content: String(msg.content || "") });
@@ -206,8 +206,3 @@ async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
     return parseModelJsonResponse(raw);
   };
 }
-
-module.exports = {
-  createRecommendationAgent,
-  createLangChainRunner,
-};

@@ -62,6 +62,7 @@
 - Rule: no big-bang rewrite; convert touched files/modules incrementally during normal work.
 - Start with high-risk boundaries first: recommendation pipeline, API route contracts, desktop chat/render adapters.
 - Enable gradual typing with mixed JS/TS support (`allowJs` + `checkJs`) and migrate modules to `.ts` as they stabilize.
+- ✓ Done: `shared/schemas/src/contracts.ts`; API recommendation stack (`recommendations.ts`, `recommendationPipeline.ts`, `recommendationAgent.ts`); HTTP helpers (`http/errors.ts`, `http/artistSearchHandler.ts`) and `registerBandsearchRoutes.ts`. `npm run dev` / `@bandsearch/api` tests run via **tsx** so TypeScript loads next to remaining JavaScript.
 - Keep this track side-by-side with product phases; do not block UX/features on migration tasks.
 
 ## Deferred / Under Review

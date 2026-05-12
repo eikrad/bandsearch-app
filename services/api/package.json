@@ -4,9 +4,9 @@
   "private": true,
   "description": "Bandsearch Express API",
   "scripts": {
-    "lint": "eslint \"src/**/*.js\" \"test/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
+    "lint": "eslint \"src/**/*.{js,ts}\" \"test/**/*.{js,ts}\" --max-warnings=0 --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test",
+    "test": "tsx --test",
     "migrate": "node scripts/migrate.js"
   },
   "dependencies": {

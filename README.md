@@ -203,6 +203,8 @@ npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
 ```
 
+The API and shared schema workspaces run tests with **tsx** so `.ts` sources execute next to existing `.js` modules (`npm run dev` / `npm start` use tsx for the API entrypoint as well).
+
 `npm run ci` runs **ruff** and **black** on Python sources (same as GitHub Actions). If those commands are missing locally, create a venv and install them: `python3 -m venv .venv && .venv/bin/pip install ruff black`, then run `npm run ci` with `.venv/bin` on your `PATH` (the `.venv/` directory is gitignored).
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`).
@@ -214,7 +216,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 ```
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
-shared/schemas/   — shared validation contracts
+shared/schemas/   — shared validation contracts (TypeScript `contracts.ts` + tests)
 docs/             — roadmap and design specs
 ```
 

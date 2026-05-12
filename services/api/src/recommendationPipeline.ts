@@ -1,20 +1,38 @@
-const { createRecommendationAgent, createLangChainRunner } = require("./agent/recommendationAgent");
-const { createMusicBrainzClient } = require("./integrations/musicbrainz");
-const {
+import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
+import { createRecommendationAgent, createLangChainRunner } from "./agent/recommendationAgent.js";
+import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
+import type { RecommendationError } from "./recommendations.js";
+import {
   createRecommendationError,
   createRecommendationService,
   resolveRecommendationFacadeInput,
-} = require("./recommendations");
-const { writeStructuredLog } = require("./http/structuredLog");
+} from "./recommendations.js";
+import { writeStructuredLog } from "./http/structuredLog.js";
 
-/**
- * @param {{ runtimeConfig?: any, preferenceRepository?: any, retryDelayMs?: number, logger?: any }} [options]
- */
-function createRecommendationPipeline({
+export type RecommendationRuntimeConfig = {
+  musicBrainzTimeoutMs?: number;
+  musicBrainzRetries?: number;
+  recommendationTimeoutMs?: number;
+  geminiApiKey?: string;
+};
+
+export type PreferenceRepositoryPipeline = {
+  buildContext: () => Promise<string>;
+  buildContextForIds: (ids: string[]) => Promise<string>;
+};
+
+export type PipelineLogger = Pick<typeof console, "log" | "warn" | "error" | "info" | "debug">;
+
+export function createRecommendationPipeline({
   runtimeConfig,
   preferenceRepository,
   retryDelayMs = 5000,
   logger = console,
+}: {
+  runtimeConfig?: RecommendationRuntimeConfig;
+  preferenceRepository?: PreferenceRepositoryPipeline;
+  retryDelayMs?: number;
+  logger?: PipelineLogger;
 } = {}) {
   if (
     !preferenceRepository
@@ -27,19 +45,21 @@ function createRecommendationPipeline({
     );
   }
 
-  let resolveFirstReady;
-  const whenReadyPromise = new Promise((resolve) => {
+  const cfg = runtimeConfig ?? {};
+
+  let resolveFirstReady: (() => void) | undefined;
+  const whenReadyPromise = new Promise<void>((resolve) => {
     resolveFirstReady = resolve;
   });
 
-  let activeService = null;
-  let activeError = createRecommendationError(
+  let activeService: ReturnType<typeof createRecommendationService> | null = null;
+  let activeError: RecommendationError | null = createRecommendationError(
     "recommendation_initializing",
     "recommendation pipeline is initializing",
   );
-  let retryTimer = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function pipelineLog(level, message, details = {}) {
+  function pipelineLog(level: "info" | "warn" | "error", message: string, details: Record<string, unknown> = {}) {
     void logger;
     writeStructuredLog(level, { component: "recommendation_pipeline", message, ...details });
   }
@@ -47,13 +67,13 @@ function createRecommendationPipeline({
   async function initialize() {
     try {
       const runModel = await createLangChainRunner({
-        timeoutMs: runtimeConfig.recommendationTimeoutMs,
-        apiKey: runtimeConfig.geminiApiKey,
+        timeoutMs: cfg.recommendationTimeoutMs,
+        apiKey: cfg.geminiApiKey,
       });
       activeService = createRecommendationService({
         musicBrainzClient: createMusicBrainzClient({
-          timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
-          retries: runtimeConfig.musicBrainzRetries,
+          timeoutMs: cfg.musicBrainzTimeoutMs,
+          retries: cfg.musicBrainzRetries,
         }),
         recommendationAgent: createRecommendationAgent({ runModel }),
       });
@@ -71,7 +91,7 @@ function createRecommendationPipeline({
         error,
       );
       pipelineLog("warn", "recommendation pipeline init failed; scheduling retry", {
-        error: error?.message || "unknown error",
+        error: error instanceof Error ? error.message : "unknown error",
         retryDelayMs,
       });
       scheduleRetry();
@@ -101,7 +121,7 @@ function createRecommendationPipeline({
   return {
     whenReady: () => whenReadyPromise,
     getReadinessSnapshot,
-    async recommend(request = {}) {
+    async recommend(request: Record<string, unknown> = {}) {
       if (!activeService) {
         throw activeError
           || createRecommendationError("recommendation_unavailable", "recommendation pipeline unavailable");
@@ -112,11 +132,14 @@ function createRecommendationPipeline({
         preferenceRepository,
       );
 
-      const { recommendations, assistantReply = "" } = await activeService.getRecommendations(request.query, {
-        mode,
-        preferenceContext,
-        messages,
-      });
+      const { recommendations, assistantReply = "" } = await activeService.getRecommendations(
+        String(request.query ?? ""),
+        {
+          mode,
+          preferenceContext,
+          messages: messages as ChatMessage[],
+        },
+      );
 
       return {
         recommendations,
@@ -129,7 +152,3 @@ function createRecommendationPipeline({
     },
   };
 }
-
-module.exports = {
-  createRecommendationPipeline,
-};

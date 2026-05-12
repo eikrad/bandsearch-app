@@ -91,7 +91,11 @@ fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
         .join("server.js");
     (
         "node".to_string(),
-        vec![server_path.to_string_lossy().into_owned()],
+        vec![
+            "--import".to_string(),
+            "tsx".to_string(),
+            server_path.to_string_lossy().into_owned(),
+        ],
     )
 }
 
@@ -277,11 +281,13 @@ mod tests {
         let root = PathBuf::from("/workspace");
         let (binary, args) = api_spawn_args(&root);
         assert_eq!(binary, "node");
-        assert_eq!(args.len(), 1);
+        assert_eq!(args.len(), 3);
+        assert_eq!(args[0], "--import");
+        assert_eq!(args[1], "tsx");
         assert!(
-            args[0].ends_with("services/api/src/server.js"),
+            args[2].ends_with("services/api/src/server.js"),
             "expected server.js path, got: {}",
-            args[0]
+            args[2]
         );
     }
 

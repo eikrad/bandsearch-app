@@ -10,8 +10,8 @@
     "shared/*"
   ],
   "scripts": {
-    "start": "node services/api/src/server.js",
-    "dev": "node services/api/src/server.js",
+    "start": "tsx services/api/src/server.js",
+    "dev": "tsx services/api/src/server.js",
     "desktop": "npm run tauri:dev --workspace @bandsearch/desktop",
     "migrate": "npm run migrate --workspace @bandsearch/api",
     "lint:js": "npm run lint --workspaces --if-present",
@@ -31,6 +31,8 @@
     "eslint": "^9.26.0",
     "globals": "^16.0.0",
     "husky": "^9.1.7",
-    "typescript": "^5.8.3"
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.59.3"
   }
 }

@@ -20,7 +20,7 @@ function createPostgresPreferenceRepository({ pool }) {
   return {
     async addSavedBand(input) {
       const validation = validateSavedBandInput(input);
-      if (!validation.ok) {
+      if (validation.ok === false) {
         return validation;
       }
 
@@ -68,7 +68,7 @@ function createPostgresPreferenceRepository({ pool }) {
         categories: next.categories,
         note: next.note,
       });
-      if (!validation.ok) {
+      if (validation.ok === false) {
         return { ok: false, status: 400, error: validation.error };
       }
 

@@ -1,12 +1,20 @@
-const { sendError } = require("./errors");
+import type { Response } from "express";
+
+import { sendError } from "./errors.js";
+
+export type ArtistSearchClient = {
+  searchArtists: (q: string) => Promise<unknown[]>;
+};
 
 /**
  * Canonical artist search: non-empty trimmed query string → MusicBrainz JSON `{ artists }`.
  * Used by GET /artists/search?query= and legacy GET /search/artists?q=
- *
- * @param {{ searchArtists: (q: string) => Promise<unknown[]> }} musicBrainzClient
  */
-async function handleArtistSearch(res, rawQuery, musicBrainzClient) {
+export async function handleArtistSearch(
+  res: Response,
+  rawQuery: unknown,
+  musicBrainzClient: ArtistSearchClient,
+) {
   const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
   if (!query) {
     return sendError(res, 400, "validation_error", "search query is required");
@@ -18,7 +26,3 @@ async function handleArtistSearch(res, rawQuery, musicBrainzClient) {
     return sendError(res, 502, "search_unavailable", "artist search unavailable");
   }
 }
-
-module.exports = {
-  handleArtistSearch,
-};

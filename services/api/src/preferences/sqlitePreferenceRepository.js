@@ -19,7 +19,7 @@ function createSqlitePreferenceRepository({ db }) {
   return {
     async addSavedBand(input) {
       const validation = validateSavedBandInput(input);
-      if (!validation.ok) return validation;
+      if (validation.ok === false) return validation;
 
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -59,7 +59,7 @@ function createSqlitePreferenceRepository({ db }) {
         name: current.name,
         ...next,
       });
-      if (!validation.ok) return { ok: false, status: 400, error: validation.error };
+      if (validation.ok === false) return { ok: false, status: 400, error: validation.error };
 
       const updatedAt = new Date().toISOString();
       db.prepare(

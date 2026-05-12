@@ -1,22 +1,50 @@
-const {
-  validateRecommendationMode,
+import type { ChatMessage, RecommendationMode } from "../../../shared/schemas/src/contracts.js";
+import {
   validateRecommendationHttpBody,
-} = require("../../../shared/schemas/src/contracts");
+  validateRecommendationMode,
+} from "../../../shared/schemas/src/contracts.js";
+
+export type MusicBrainzArtistHit = { id?: string; name: string; score?: number; disambiguation?: string };
+
+export interface RecommendationError extends Error {
+  code: string;
+  cause?: unknown;
+}
+
+export type PreferenceRepositoryFacade = {
+  buildContext: () => Promise<string>;
+  buildContextForIds: (ids: string[]) => Promise<string>;
+};
+
+export type RecommendationAgent = {
+  recommend: (input: {
+    query: string;
+    artists: MusicBrainzArtistHit[];
+    mode: RecommendationMode;
+    preferenceContext: string;
+    messages: ChatMessage[];
+  }) => Promise<{ recommendations: unknown[]; assistantReply?: string }>;
+};
+
+export type MusicBrainzSearchClient = {
+  searchArtists: (query: string) => Promise<MusicBrainzArtistHit[]>;
+};
 
 /**
  * Match MusicBrainz search hits to recommendation card titles (case-insensitive).
- *
- * @param {unknown[]} items
- * @param {{ id: string, name: string }[]} artists
  */
-function enrichRecommendationsWithMbIds(items, artists) {
+export function enrichRecommendationsWithMbIds(
+  items: unknown[],
+  artists: MusicBrainzArtistHit[],
+): unknown[] {
   if (!Array.isArray(items) || !Array.isArray(artists)) return items;
   return items.map((item) => {
     if (!item || typeof item !== "object") return item;
-    const artistName = String(/** @type {any} */ (item).artist || "").trim().toLowerCase();
-    const match = artists.find((a) => String(a.name || "").trim().toLowerCase() === artistName);
+    const row = item as Record<string, unknown>;
+    const artistName = String(row.artist ?? "").trim().toLowerCase();
+    const match = artists.find((a) => String(a.name ?? "").trim().toLowerCase() === artistName);
     if (match?.id) {
-      return { ...item, musicbrainzArtistId: match.id };
+      return { ...row, musicbrainzArtistId: match.id };
     }
     return item;
   });
@@ -25,21 +53,21 @@ function enrichRecommendationsWithMbIds(items, artists) {
 /**
  * Shared façade step: normalize mode, merge priority text with repository preference context when
  * preference-aware, and collect messages. Used by the lazy-init pipeline and the app fallback stack.
- *
- * @param {Record<string, unknown>|undefined} request
- * @param {{ buildContext: () => Promise<string>, buildContextForIds: (ids: string[]) => Promise<string> }} preferenceRepository
  */
-async function resolveRecommendationFacadeInput(request, preferenceRepository) {
+export async function resolveRecommendationFacadeInput(
+  request: Record<string, unknown> | undefined,
+  preferenceRepository: PreferenceRepositoryFacade,
+): Promise<{ mode: RecommendationMode; preferenceContext: string; messages: unknown[] }> {
   const req = request ?? {};
   const mode = validateRecommendationMode(req.mode);
   const selectedArtistIds = Array.isArray(req.selectedArtistIds)
-    ? req.selectedArtistIds.filter((id) => typeof id === "string")
+    ? req.selectedArtistIds.filter((id): id is string => typeof id === "string")
     : [];
   const priorityContext = typeof req.priorityContext === "string" ? req.priorityContext.trim() : "";
 
   let preferenceContext = priorityContext;
   if (mode === "preference-aware") {
-    let repoContext;
+    let repoContext: string;
     if (selectedArtistIds.length > 0) {
       repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
     } else {
@@ -53,23 +81,26 @@ async function resolveRecommendationFacadeInput(request, preferenceRepository) {
   return { mode, preferenceContext, messages };
 }
 
-function validateRecommendationRequest(body) {
+export function validateRecommendationRequest(body: unknown) {
   return validateRecommendationHttpBody(body);
 }
 
-function createRecommendationError(code, message, cause) {
-  const error = /** @type {any} */ (new Error(message));
+export function createRecommendationError(code: string, message: string, cause?: unknown): RecommendationError {
+  const error = new Error(message) as RecommendationError;
   error.code = code;
-  if (cause) {
+  if (cause !== undefined) {
     error.cause = cause;
   }
   return error;
 }
 
-/**
- * @param {{ musicBrainzClient?: any, recommendationAgent?: any }} [deps]
- */
-function createRecommendationService({ musicBrainzClient, recommendationAgent } = {}) {
+export function createRecommendationService({
+  musicBrainzClient,
+  recommendationAgent,
+}: {
+  musicBrainzClient?: MusicBrainzSearchClient;
+  recommendationAgent?: RecommendationAgent;
+} = {}) {
   if (!musicBrainzClient || typeof musicBrainzClient.searchArtists !== "function") {
     throw createRecommendationError(
       "recommendation_configuration_error",
@@ -84,11 +115,18 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
   }
 
   return {
-    async getRecommendations(query, options = {}) {
+    async getRecommendations(
+      query: string,
+      options: {
+        mode?: unknown;
+        preferenceContext?: string;
+        messages?: ChatMessage[];
+      } = {},
+    ) {
       const mode = validateRecommendationMode(options.mode);
       const preferenceContext = mode === "preference-aware" ? options.preferenceContext || "" : "";
 
-      let artists;
+      let artists: MusicBrainzArtistHit[];
       try {
         artists = await musicBrainzClient.searchArtists(query);
       } catch (error) {
@@ -108,7 +146,7 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
           preferenceContext,
           messages,
         });
-        const recommendations = enrichRecommendationsWithMbIds(rawItems, artists);
+        const recommendations = enrichRecommendationsWithMbIds(rawItems as unknown[], artists);
         return { recommendations, assistantReply: typeof assistantReply === "string" ? assistantReply : "" };
       } catch (error) {
         throw createRecommendationError("recommendation_unavailable", "recommendation unavailable", error);
@@ -116,11 +154,3 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
     },
   };
 }
-
-module.exports = {
-  validateRecommendationRequest,
-  createRecommendationError,
-  createRecommendationService,
-  resolveRecommendationFacadeInput,
-  enrichRecommendationsWithMbIds,
-};
