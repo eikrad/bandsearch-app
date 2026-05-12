@@ -22,7 +22,7 @@ npm run dev                 # API starts on http://localhost:3001
 ```
 
 Preferences are saved automatically to `bandsearch.db` — no database setup needed.
-`GEMINI_API_KEY` is optional for local development, but required for live AI-backed recommendations.
+`GEMINI_API_KEY` is required to start the API (including local development).
 
 Test it:
 
@@ -114,7 +114,7 @@ npm run dev
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
-| `GEMINI_API_KEY` | — | Required for live AI recommendations |
+| `GEMINI_API_KEY` | — | Required — API will not start without it |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `DATABASE_PATH` | `bandsearch.db` | SQLite file path |
 | `DATABASE_URL` | — | Required when `PREFERENCE_STORE=postgres` |

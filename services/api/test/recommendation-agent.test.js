@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createRecommendationAgent } = require("../src/agent/recommendationAgent");
+const { createRecommendationAgent, createLangChainRunner } = require("../src/agent/recommendationAgent");
 
 test("recommendation agent maps structured model output", async () => {
   const fakeRunner = async ({ query, artists }) => {
@@ -77,6 +77,10 @@ test("recommendation agent forwards messages to runModel", async () => {
   assert.ok(Array.isArray(capturedArgs.messages), "messages forwarded");
   assert.equal(capturedArgs.messages.length, 2);
   assert.equal(capturedArgs.messages[0].role, "user");
+});
+
+test("createLangChainRunner rejects missing apiKey", async () => {
+  await assert.rejects(() => createLangChainRunner({ timeoutMs: 100 }), /apiKey is required/);
 });
 
 test("recommendation agent rejects invalid model output shape", async () => {

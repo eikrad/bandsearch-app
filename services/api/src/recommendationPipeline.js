@@ -36,6 +36,7 @@ function createRecommendationPipeline({
     try {
       const runModel = await createLangChainRunner({
         timeoutMs: runtimeConfig.recommendationTimeoutMs,
+        apiKey: runtimeConfig.geminiApiKey,
       });
       activeService = createRecommendationService({
         musicBrainzClient: createMusicBrainzClient({

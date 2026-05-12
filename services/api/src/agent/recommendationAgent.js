@@ -29,16 +29,16 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
-async function createLangChainRunner({ timeoutMs = 8000 } = {}) {
-  const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
-
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is required for LangChain runner");
+async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
+  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+    throw new Error("apiKey is required for LangChain runner");
   }
+
+  const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 
   const model = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey: apiKey.trim(),
     temperature: 0.4,
   });
 

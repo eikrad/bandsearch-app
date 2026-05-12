@@ -14,6 +14,11 @@ function normalizeBoolean(value, fallback = false) {
 }
 
 function validateRuntimeEnv(env = process.env) {
+  const geminiApiKey = String(env.GEMINI_API_KEY ?? "").trim();
+  if (!geminiApiKey) {
+    throw new Error("GEMINI_API_KEY is required");
+  }
+
   const port = parseNumber(env.PORT, 3001);
   const recommendationTimeoutMs = parseNumber(env.RECOMMENDATION_TIMEOUT_MS, 8000);
   const musicBrainzTimeoutMs = parseNumber(env.MUSICBRAINZ_TIMEOUT_MS, 5000);
@@ -47,6 +52,7 @@ function validateRuntimeEnv(env = process.env) {
   }
 
   return {
+    geminiApiKey,
     port,
     recommendationTimeoutMs,
     musicBrainzTimeoutMs,
