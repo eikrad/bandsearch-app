@@ -62,6 +62,7 @@ test("POST /recommendations returns recommendation results", async () => {
             sourceSignals: ["agent_reasoning"],
           },
         ],
+        assistantReply: "Here are three niche picks that fit your taste. Want something heavier next?",
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
     },
@@ -78,6 +79,8 @@ test("POST /recommendations returns recommendation results", async () => {
   assert.equal(Array.isArray(result.data.recommendations[0].sourceSignals), true);
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
+  assert.equal(typeof result.data.assistantReply, "string");
+  assert.equal(result.data.assistantReply.includes("heavier"), true);
 });
 
 test("POST /recommendations uses injected recommendation pipeline", async () => {
@@ -160,7 +163,10 @@ test("POST /recommendations with selectedArtistIds uses buildContextForIds", asy
     recommendationService: {
       getRecommendations: async (query, options) => {
         calls.push({ type: "getRecommendations", query, options });
-        return [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"] }];
+        return {
+          recommendations: [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"] }],
+          assistantReply: "",
+        };
       },
     },
     preferenceRepository: {
@@ -196,7 +202,10 @@ test("POST /recommendations forwards messages to recommendation service", async 
     recommendationService: {
       getRecommendations: async (query, options) => {
         calls.push({ query, options });
-        return [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }];
+        return {
+          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
+          assistantReply: "",
+        };
       },
     },
     preferenceRepository: createPreferenceRepositoryStub(() => ""),
@@ -222,7 +231,10 @@ test("POST /recommendations prepends priorityContext to preference context", asy
     recommendationService: {
       getRecommendations: async (query, options) => {
         calls.push({ query, options });
-        return [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }];
+        return {
+          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
+          assistantReply: "",
+        };
       },
     },
     preferenceRepository: createPreferenceRepositoryStub(() => ""),

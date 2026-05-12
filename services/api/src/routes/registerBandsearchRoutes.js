@@ -107,6 +107,7 @@ function registerBandsearchRoutes(app, ctx) {
       });
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
+        assistantReply: pipelineResult.assistantReply ?? "",
         meta: pipelineResult.meta,
       });
     } catch (error) {

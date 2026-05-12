@@ -103,13 +103,14 @@ function createApp({
         resolvedPreferenceRepository,
       );
 
-      const recommendations = await recommendationService.getRecommendations(request.query, {
+      const { recommendations, assistantReply = "" } = await recommendationService.getRecommendations(request.query, {
         mode,
         preferenceContext,
         messages,
       });
       return {
         recommendations,
+        assistantReply: typeof assistantReply === "string" ? assistantReply : "",
         meta: {
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,

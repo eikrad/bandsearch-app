@@ -137,8 +137,13 @@ function createInitialChatState() {
 }
 
 function applyAssistantMessage(state, recommendationResponse) {
+  const assistantReply =
+    typeof recommendationResponse.assistantReply === "string"
+      ? recommendationResponse.assistantReply.trim()
+      : "";
   const nextMessage = {
     role: "assistant",
+    content: assistantReply,
     recommendations: recommendationResponse.recommendations,
     meta: recommendationResponse.meta,
   };

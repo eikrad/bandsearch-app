@@ -271,12 +271,12 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
   return React.createElement(
     "section",
     { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "20px" } },
-    messages.map((msg) => {
+    messages.map((msg, idx) => {
       if (msg.role === "user") {
         return React.createElement(
           "div",
           {
-            key: msg.id || msg.content,
+            key: msg.id || `user-${idx}`,
             className: "message-user",
             style: {
               backgroundColor: theme.accentDim,
@@ -293,23 +293,51 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
           msg.content,
         );
       }
-      if (msg.role === "assistant" && msg.cards?.length) {
+      if (msg.role === "assistant") {
+        const assistantText = typeof msg.content === "string" ? msg.content.trim() : "";
+        const hasCards = msg.cards?.length > 0;
+        if (!assistantText && !hasCards) return null;
         return React.createElement(
           "div",
-          { key: msg.id || `assistant-${msg.cards[0]?.title}`, className: "message-assistant" },
-          React.createElement(
-            "div",
-            { style: { display: "grid", gap: "10px" } },
-            msg.cards.map((card) =>
-              React.createElement(RecommendationCard, {
-                key: card.title,
-                card,
-                theme,
-                isMobile,
-                handlers,
-              }),
-            ),
-          ),
+          {
+            key: msg.id || `assistant-${idx}`,
+            className: "message-assistant",
+            style: { display: "grid", gap: "12px" },
+          },
+          assistantText
+            ? React.createElement(
+                "div",
+                {
+                  className: "assistant-reply",
+                  style: {
+                    backgroundColor: theme.cardBg,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "8px",
+                    padding: "10px 14px",
+                    fontSize: "14px",
+                    color: theme.textPrimary,
+                    lineHeight: "1.45",
+                    maxWidth: "92%",
+                  },
+                },
+                assistantText,
+              )
+            : null,
+          hasCards
+            ? React.createElement(
+                "div",
+                { style: { display: "grid", gap: "10px" } },
+                msg.cards.map((card) =>
+                  React.createElement(RecommendationCard, {
+                    key: card.title,
+                    card,
+                    theme,
+                    isMobile,
+                    handlers,
+                  }),
+                ),
+              )
+            : null,
         );
       }
       return null;

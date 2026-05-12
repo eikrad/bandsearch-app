@@ -67,9 +67,11 @@ function createChatViewModel({ app }) {
 
           if (msg.role === "assistant") {
             const cards = (msg.recommendations || []).map((item) => toRenderableRecommendation(item, savedBands));
+            const content = typeof msg.content === "string" ? msg.content : "";
             return {
               id: `assistant-${index}`,
               role: "assistant",
+              content,
               cards,
             };
           }

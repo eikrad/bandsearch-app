@@ -101,8 +101,15 @@ function createRecommendationService({ musicBrainzClient, recommendationAgent } 
 
       try {
         const messages = Array.isArray(options.messages) ? options.messages : [];
-        const items = await recommendationAgent.recommend({ query, artists, mode, preferenceContext, messages });
-        return enrichRecommendationsWithMbIds(items, artists);
+        const { recommendations: rawItems, assistantReply } = await recommendationAgent.recommend({
+          query,
+          artists,
+          mode,
+          preferenceContext,
+          messages,
+        });
+        const recommendations = enrichRecommendationsWithMbIds(rawItems, artists);
+        return { recommendations, assistantReply: typeof assistantReply === "string" ? assistantReply : "" };
       } catch (error) {
         throw createRecommendationError("recommendation_unavailable", "recommendation unavailable", error);
       }

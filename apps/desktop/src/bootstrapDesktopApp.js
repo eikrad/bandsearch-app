@@ -77,8 +77,14 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       }
       const conversationHistory = (state.messages || []).flatMap((m) => {
         if (m.role === "user") return [{ role: "user", content: m.content }];
-        if (m.role === "assistant" && m.recommendations) {
-          return [{ role: "assistant", content: m.recommendations.map((r) => r.artist).join(", ") }];
+        if (m.role === "assistant") {
+          const text =
+            typeof m.content === "string" && m.content.trim()
+              ? m.content
+              : m.recommendations
+                ? m.recommendations.map((r) => r.artist).join(", ")
+                : "";
+          return [{ role: "assistant", content: text }];
         }
         return [];
       });

@@ -57,3 +57,29 @@ test("view model formats recommendation list for rendering", () => {
   assert.equal(rendered[0].reason.includes("Post-metal"), true);
   assert.equal(rendered[0].savedBand.rating, 4);
 });
+
+test("view model includes assistant prose in conversation thread", () => {
+  const vm = createChatViewModel({
+    app: {
+      requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
+      getState: () => ({
+        savedBands: [],
+        messages: [
+          { role: "user", content: "I like grunge" },
+          {
+            role: "assistant",
+            content: "Try these — prefer more punk edge or slower sludge?",
+            recommendations: [{ artist: "Mudhoney", why: "Proto-grunge fuzz", sourceSignals: ["agent_reasoning"] }],
+            meta: { modeUsed: "fresh", usedPreferenceContext: false },
+          },
+        ],
+      }),
+    },
+  });
+
+  const thread = vm.getConversationMessages();
+  assert.ok(thread);
+  assert.equal(thread[1].role, "assistant");
+  assert.equal(thread[1].content.includes("punk edge"), true);
+  assert.equal(thread[1].cards[0].title, "Mudhoney");
+});

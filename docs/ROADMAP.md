@@ -18,7 +18,7 @@
 - Saved Artists page: hash-based client-side routing (`#/`, `#/saved`), MusicBrainz artist search, directional selection (selected artists injected as priority preference context). ✓ Done.
 - Artist pictures: Wikidata SPARQL with Last.fm fallback, lazy-loaded with graceful degradation. ✓ Done.
 - Music platform links: deep search links for Bandcamp, SoundCloud, Spotify on every artist card. ✓ Done.
-- Full chat interface: scrollable `MessageThread` with user bubbles and assistant recommendation cards; conversation history forwarded to Gemini via LangChain. ✓ Done.
+- Full chat interface: scrollable `MessageThread` with user bubbles, **assistant prose** (`assistantReply`), and recommendation cards; conversation history forwarded to Gemini via LangChain. ✓ Done.
 - Session persistence: SQLite `chat_sessions`/`chat_messages` tables with in-memory fallback; session CRUD routes; `POST /recommendations` accepts `messages` array. ✓ Done.
 
 ## Phase 3.5 — UX Fundamentals
@@ -26,6 +26,12 @@
 - Settings screen with API key management: enter, validate, and save the Gemini API key through the desktop UI (`#/settings`), persisted under the OS config directory as `bandsearch/config.json`, with the API sidecar restarted after save; in-browser dev falls back to localStorage. ✓ Done
 - First-run onboarding: show a welcome screen on first launch that guides the user through API key entry.
 - Error UX: human-readable error messages when the API key is missing or invalid, when a rate limit is reached, or when Gemini is unreachable — instead of a silent failure (settings screen shows a banner when no key is stored).
+
+## Phase 4 — Prompt safety & injection guardrails
+
+- Harden the recommendation pipeline against **prompt injection** and misuse of the model via crafted user or chat history: keep trusted system/developer instructions structurally separate from untrusted text; normalize and cap length of queries and forwarded messages before they reach Gemini.
+- Layered defenses where practical: delimiter or envelope patterns for conversation history, server-side checks or sanitization before `runModel`, clear refuse/strip policies for known jailbreak patterns, and structured logging (and optional metrics) when requests are blocked or trimmed.
+- Regression coverage and docs: automated tests with representative injection probes; short threat model and residual-risk notes in domain docs (`CONTEXT.md` / `docs/adr/`) so future prompt changes stay reviewable.
 
 ## Phase 4.5 — Data Portability & Sharing
 

@@ -13,21 +13,25 @@ test("recommendation service forwards musicbrainz artists to recommendation agen
       searchArtists: async () => [{ name: "Alcest", score: 100 }],
     },
     recommendationAgent: {
-      recommend: async ({ artists }) => [
-        {
-          artist: artists[0].name,
-          why: "Agent generated recommendation.",
-          sourceSignals: ["agent_reasoning"],
-        },
-      ],
+      recommend: async ({ artists }) => ({
+        recommendations: [
+          {
+            artist: artists[0].name,
+            why: "Agent generated recommendation.",
+            sourceSignals: ["agent_reasoning"],
+          },
+        ],
+        assistantReply: "Here are some niche picks based on your taste.",
+      }),
     },
   });
 
-  const recommendations = await service.getRecommendations("I like atmospheric black metal");
+  const result = await service.getRecommendations("I like atmospheric black metal");
 
-  assert.equal(recommendations.length, 1);
-  assert.equal(recommendations[0].artist, "Alcest");
-  assert.equal(recommendations[0].sourceSignals.includes("agent_reasoning"), true);
+  assert.equal(result.recommendations.length, 1);
+  assert.equal(result.recommendations[0].artist, "Alcest");
+  assert.equal(result.recommendations[0].sourceSignals.includes("agent_reasoning"), true);
+  assert.equal(result.assistantReply.includes("niche picks"), true);
 });
 
 test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
@@ -46,7 +50,7 @@ test("getRecommendations uses validateRecommendationMode for options.mode", asyn
     recommendationAgent: {
       recommend: async (args) => {
         calls.push(args);
-        return [{ artist: "X", why: "y", sourceSignals: ["agent_reasoning"] }];
+        return { recommendations: [{ artist: "X", why: "y", sourceSignals: ["agent_reasoning"] }], assistantReply: "" };
       },
     },
   });

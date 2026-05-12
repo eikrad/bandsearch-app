@@ -31,6 +31,7 @@ function toViewProps(renderState) {
           return {
             id: msg.id,
             role: "assistant",
+            content: msg.content || "",
             cards: (msg.cards || []).map((card) => toCardViewProps({
               ...card,
               actions: card.actions || { save: { visible: true }, rate: { visible: true }, more: { visible: true } },

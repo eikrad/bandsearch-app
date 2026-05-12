@@ -165,7 +165,7 @@ Request body example:
 }
 ```
 
-Response includes `recommendations` and `meta` (`modeUsed`, `usedPreferenceContext`).
+Response includes `recommendations`, optional **`assistantReply`** (short conversational text from the model: acknowledgement + suggested next step), and `meta` (`modeUsed`, `usedPreferenceContext`).
 
 ### Preferences
 

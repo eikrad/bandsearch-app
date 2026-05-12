@@ -112,7 +112,7 @@ function createRecommendationPipeline({
         preferenceRepository,
       );
 
-      const recommendations = await activeService.getRecommendations(request.query, {
+      const { recommendations, assistantReply = "" } = await activeService.getRecommendations(request.query, {
         mode,
         preferenceContext,
         messages,
@@ -120,6 +120,7 @@ function createRecommendationPipeline({
 
       return {
         recommendations,
+        assistantReply: typeof assistantReply === "string" ? assistantReply : "",
         meta: {
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,

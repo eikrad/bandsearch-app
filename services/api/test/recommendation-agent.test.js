@@ -17,21 +17,44 @@ test("recommendation agent maps structured model output", async () => {
   };
 
   const agent = createRecommendationAgent({ runModel: fakeRunner });
-  const recommendations = await agent.recommend({
+  const result = await agent.recommend({
     query: "I like Alcest",
     artists: [{ id: "a1", name: "Alcest", score: 99, disambiguation: "" }],
   });
 
-  assert.equal(recommendations.length, 1);
-  assert.equal(recommendations[0].artist, "Les Discrets");
-  assert.equal(recommendations[0].sourceSignals[0], "musicbrainz_search");
+  assert.equal(result.recommendations.length, 1);
+  assert.equal(result.recommendations[0].artist, "Les Discrets");
+  assert.equal(result.recommendations[0].sourceSignals[0], "musicbrainz_search");
+  assert.equal(result.assistantReply, "");
+});
+
+test("recommendation agent maps structured model output with reply", async () => {
+  const fakeRunner = async () => ({
+    reply: "Want something heavier next, or more melodic?",
+    recommendations: [
+      {
+        artist: "Les Discrets",
+        why: "Similar dreamy blackgaze textures.",
+        sourceSignals: ["musicbrainz_search", "agent_reasoning"],
+      },
+    ],
+  });
+
+  const agent = createRecommendationAgent({ runModel: fakeRunner });
+  const result = await agent.recommend({
+    query: "I like Alcest",
+    artists: [{ id: "a1", name: "Alcest", score: 99, disambiguation: "" }],
+  });
+
+  assert.equal(result.assistantReply.includes("heavier"), true);
+  assert.equal(result.recommendations[0].artist, "Les Discrets");
 });
 
 test("recommendation agent forwards preferenceContext to runModel", async () => {
   let capturedArgs;
   const fakeRunner = async (args) => {
     capturedArgs = args;
-    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+    return { recommendations: [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }], reply: "" };
   };
 
   const agent = createRecommendationAgent({ runModel: fakeRunner });
@@ -48,7 +71,7 @@ test("recommendation agent defaults preferenceContext to empty string when omitt
   let capturedArgs;
   const fakeRunner = async (args) => {
     capturedArgs = args;
-    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+    return { recommendations: [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }], reply: "" };
   };
 
   const agent = createRecommendationAgent({ runModel: fakeRunner });
@@ -61,7 +84,7 @@ test("recommendation agent forwards messages to runModel", async () => {
   let capturedArgs;
   const fakeRunner = async (args) => {
     capturedArgs = args;
-    return [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }];
+    return { recommendations: [{ artist: "X", why: "test", sourceSignals: ["musicbrainz_search"] }], reply: "" };
   };
 
   const agent = createRecommendationAgent({ runModel: fakeRunner });

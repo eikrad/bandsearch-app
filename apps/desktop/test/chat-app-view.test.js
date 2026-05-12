@@ -127,9 +127,19 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
         cards: [],
         messages: [
           { id: "m1", role: "user", content: "I like atmospheric bands" },
-          { id: "m2", role: "assistant", cards: [
-            { title: "Fen", why: "Atmospheric overlap", genres: [], actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } } },
-          ]},
+          {
+            id: "m2",
+            role: "assistant",
+            content: "Here are picks in that vein — want something heavier or more shoegaze?",
+            cards: [
+              {
+                title: "Fen",
+                why: "Atmospheric overlap",
+                genres: [],
+                actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+              },
+            ],
+          },
         ],
       },
       handlers: {
@@ -145,6 +155,7 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
   );
 
   assert.equal(html.includes("I like atmospheric bands"), true, "user message rendered");
+  assert.equal(html.includes("heavier or more shoegaze"), true, "assistant prose rendered before cards");
   assert.equal(html.includes("Fen"), true, "assistant recommendation rendered in thread");
 });
 

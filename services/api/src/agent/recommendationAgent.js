@@ -11,11 +11,32 @@ function validateRecommendationOutput(output) {
   return output;
 }
 
+/**
+ * Accepts legacy JSON array output or structured { reply, recommendations }.
+ *
+ * @param {unknown} parsed
+ * @returns {{ assistantReply: string, recommendations: unknown[] }}
+ */
+function normalizeModelPayload(parsed) {
+  if (Array.isArray(parsed)) {
+    return { assistantReply: "", recommendations: validateRecommendationOutput(parsed) };
+  }
+  if (parsed && typeof parsed === "object" && Array.isArray(/** @type {any} */ (parsed).recommendations)) {
+    const replyRaw = /** @type {any} */ (parsed).reply;
+    const assistantReply = typeof replyRaw === "string" ? replyRaw.trim() : "";
+    return {
+      assistantReply,
+      recommendations: validateRecommendationOutput(/** @type {any} */ (parsed).recommendations),
+    };
+  }
+  throw new Error("invalid recommendation output");
+}
+
 function createRecommendationAgent({ runModel }) {
   return {
     async recommend({ query, artists, preferenceContext = "", messages = [] }) {
-      const output = await runModel({ query, artists, preferenceContext, messages });
-      return validateRecommendationOutput(output);
+      const parsed = await runModel({ query, artists, preferenceContext, messages });
+      return normalizeModelPayload(parsed);
     },
   };
 }
@@ -55,7 +76,9 @@ async function createLangChainRunner({ timeoutMs = 8000, apiKey } = {}) {
       {
         role: "system",
         content:
-          "You recommend niche bands. Return only valid JSON array with objects: {artist, why, sourceSignals[]}.",
+          'You recommend niche bands. Return only valid JSON (no markdown fences) with shape: {"reply":"<string>","recommendations":[{"artist":"<string>","why":"<string>","sourceSignals":["<string>",...]}]}. ' +
+          "The reply must be 2–4 sentences: acknowledge the user's taste, briefly tie the picks to their query, and ask one concrete follow-up (e.g. heavier or softer, more melodic, regional scene, era). " +
+          "Recommendations: at most 3 items; sourceSignals must include agent_reasoning plus any of musicbrainz_search, user_preferences when relevant.",
       },
     ];
 
