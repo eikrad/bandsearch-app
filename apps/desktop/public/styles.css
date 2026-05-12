@@ -139,6 +139,61 @@ input {
   flex-shrink: 0;
 }
 
+/* Desktop: conversation (A-style scroll) + results rail (B) */
+.bandsearch-desktop-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.bandsearch-chat-scroll--main {
+  min-width: 0;
+}
+
+.bandsearch-results-rail {
+  min-width: 0;
+  border-left: 1px solid #1e2a3a;
+  padding-left: 16px;
+}
+
+.bandsearch-results-rail-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7a90;
+  margin: 0 0 10px 0;
+}
+
+.bandsearch-earlier-picks {
+  margin-top: 8px;
+}
+
+.bandsearch-earlier-picks summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #8896a8;
+  list-style: none;
+  padding: 6px 0;
+}
+
+.bandsearch-earlier-picks summary::-webkit-details-marker {
+  display: none;
+}
+
+.bandsearch-earlier-picks summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.bandsearch-earlier-picks[open] summary::before {
+  transform: rotate(90deg);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0d0f14; }

@@ -187,9 +187,104 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
     }),
   );
 
+  assert.equal(html.includes("bandsearch-desktop-split"), true, "desktop uses chat + results rail (B)");
+  assert.equal(html.includes("Latest picks"), true, "latest cards live in right rail");
   assert.equal(html.includes("I like atmospheric bands"), true, "user message rendered");
-  assert.equal(html.includes("heavier or more shoegaze"), true, "assistant prose rendered before cards");
-  assert.equal(html.includes("Fen"), true, "assistant recommendation rendered in thread");
+  assert.equal(html.includes("heavier or more shoegaze"), true, "assistant prose rendered in chat column");
+  assert.equal(html.includes("Fen"), true, "assistant picks appear in rail");
+});
+
+test("ChatAppView mobile keeps cards in the scroll thread (layout A)", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "mobile",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        messages: [
+          { id: "m1", role: "user", content: "I like atmospheric bands" },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "Here are picks.",
+            cards: [
+              {
+                title: "Fen",
+                why: "Atmospheric overlap",
+                genres: [],
+                actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+              },
+            ],
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSettings: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("bandsearch-desktop-split"), false, "no split rail on mobile");
+  assert.ok(html.includes("Fen"), "card stays inline in thread");
+});
+
+test("ChatAppView desktop collapses earlier recommendation turns (C)", () => {
+  const cardProps = { genres: [], actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } } };
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        messages: [
+          { id: "u1", role: "user", content: "Round one" },
+          {
+            id: "a1",
+            role: "assistant",
+            content: "First suggestions.",
+            cards: [{ title: "EarlierArtist", why: "Because", ...cardProps }],
+          },
+          { id: "u2", role: "user", content: "Round two" },
+          {
+            id: "a2",
+            role: "assistant",
+            content: "Latest suggestions.",
+            cards: [{ title: "LatestArtist", why: "Fit", ...cardProps }],
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onNavigateSettings: () => {},
+        onNavigateSaved: () => {},
+      },
+    }),
+  );
+
+  assert.ok(html.includes("bandsearch-earlier-picks"), "earlier picks use collapsible details");
+  assert.ok(html.includes("Earlier picks (1)"), "summary labels earlier card stack");
+  assert.ok(html.includes("LatestArtist"), "latest turn cards appear in rail");
+  assert.ok(html.includes("EarlierArtist"), "older cards stay in collapsed section");
 });
 
 test("ChatAppView renders artist image when imageUrl is provided on card", () => {

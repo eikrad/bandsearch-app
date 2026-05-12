@@ -278,6 +278,66 @@ function StatusBanner({ actionStatus }) {
   );
 }
 
+/**
+ * Index of the most recent assistant message that includes recommendation cards.
+ *
+ * @param {{ role: string, cards?: unknown[] }[]|null|undefined} messages
+ */
+function findLastAssistantWithCardsIndex(messages) {
+  if (!messages?.length) return -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === "assistant" && Array.isArray(m.cards) && m.cards.length > 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * @param {{ role: string, cards?: unknown[] }[]|null|undefined} messages
+ */
+function getLatestAssistantCards(messages) {
+  const idx = findLastAssistantWithCardsIndex(messages);
+  if (idx === -1) return [];
+  const m = messages[idx];
+  return Array.isArray(m.cards) ? m.cards : [];
+}
+
+function DesktopResultsRail({ cards, theme, isMobile, handlers }) {
+  if (!cards?.length) return null;
+  return React.createElement(
+    "aside",
+    {
+      className: "bandsearch-results-rail",
+      style: {
+        borderLeft: `1px solid ${theme.border}`,
+        overflowY: "auto",
+        minHeight: 0,
+      },
+    },
+    React.createElement(
+      "p",
+      {
+        className: "bandsearch-results-rail-title",
+        style: { color: theme.textTertiary },
+      },
+      "Latest picks",
+    ),
+    React.createElement(
+      "div",
+      { style: { display: "grid", gap: "10px" } },
+      cards.map((card) =>
+        React.createElement(RecommendationCard, {
+          key: card.title,
+          card,
+          theme,
+          isMobile,
+          handlers,
+        }),
+      ),
+    ),
+  );
+}
+
 function EmptyState({ modeValue, textSecondary, textTertiary }) {
   const isWarm = modeValue === "preference-aware";
   return React.createElement(
@@ -298,8 +358,11 @@ function EmptyState({ modeValue, textSecondary, textTertiary }) {
   );
 }
 
-function MessageThread({ messages, theme, isMobile, handlers }) {
+function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread" }) {
   if (!messages?.length) return null;
+  const railLatest = assistantCardsMode === "rail-latest";
+  const lastAssistantCardsIdx = railLatest ? findLastAssistantWithCardsIndex(messages) : -1;
+
   return React.createElement(
     "section",
     { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "12px", paddingBottom: "4px" } },
@@ -328,7 +391,86 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
       if (msg.role === "assistant") {
         const assistantText = typeof msg.content === "string" ? msg.content.trim() : "";
         const hasCards = msg.cards?.length > 0;
+        const isLatestCardTurn = railLatest && hasCards && idx === lastAssistantCardsIdx;
+        const isEarlierCardTurn = railLatest && hasCards && idx < lastAssistantCardsIdx;
+
         if (!assistantText && !hasCards) return null;
+
+        const cardGrid = (cards) =>
+          React.createElement(
+            "div",
+            { style: { display: "grid", gap: "10px" } },
+            cards.map((card) =>
+              React.createElement(RecommendationCard, {
+                key: card.title,
+                card,
+                theme,
+                isMobile,
+                handlers,
+              }),
+            ),
+          );
+
+        const proseBlock = assistantText
+          ? React.createElement(
+              "div",
+              {
+                className: "assistant-reply",
+                style: {
+                  backgroundColor: theme.cardBg,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  fontSize: "14px",
+                  color: theme.textPrimary,
+                  lineHeight: "1.45",
+                  maxWidth: "92%",
+                },
+              },
+              assistantText,
+            )
+          : null;
+
+        let cardsBlock = null;
+        if (hasCards) {
+          if (!railLatest) {
+            cardsBlock = cardGrid(msg.cards);
+          } else if (isLatestCardTurn) {
+            cardsBlock = null;
+          } else if (isEarlierCardTurn) {
+            cardsBlock = React.createElement(
+              "details",
+              { className: "bandsearch-earlier-picks", style: { maxWidth: "100%" } },
+              React.createElement(
+                "summary",
+                { style: { userSelect: "none" } },
+                `Earlier picks (${msg.cards.length})`,
+              ),
+              cardGrid(msg.cards),
+            );
+          } else {
+            cardsBlock = cardGrid(msg.cards);
+          }
+        }
+
+        const railHint =
+          railLatest && isLatestCardTurn && hasCards && !assistantText
+            ? React.createElement(
+                "p",
+                {
+                  style: {
+                    fontSize: "13px",
+                    color: theme.textSecondary,
+                    margin: 0,
+                    maxWidth: "92%",
+                  },
+                },
+                "Recommendations are in the panel on the right.",
+              )
+            : null;
+
+        if (!proseBlock && !cardsBlock && !railHint) return null;
+
         return React.createElement(
           "div",
           {
@@ -336,40 +478,9 @@ function MessageThread({ messages, theme, isMobile, handlers }) {
             className: "message-assistant",
             style: { display: "grid", gap: "12px" },
           },
-          assistantText
-            ? React.createElement(
-                "div",
-                {
-                  className: "assistant-reply",
-                  style: {
-                    backgroundColor: theme.cardBg,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: "8px",
-                    padding: "10px 14px",
-                    fontSize: "14px",
-                    color: theme.textPrimary,
-                    lineHeight: "1.45",
-                    maxWidth: "92%",
-                  },
-                },
-                assistantText,
-              )
-            : null,
-          hasCards
-            ? React.createElement(
-                "div",
-                { style: { display: "grid", gap: "10px" } },
-                msg.cards.map((card) =>
-                  React.createElement(RecommendationCard, {
-                    key: card.title,
-                    card,
-                    theme,
-                    isMobile,
-                    handlers,
-                  }),
-                ),
-              )
-            : null,
+          proseBlock,
+          railHint,
+          cardsBlock,
         );
       }
       return null;
@@ -382,6 +493,12 @@ function ChatAppView({ viewProps, handlers }) {
   const isMobile = viewProps.viewport === "mobile";
   const searchInFlight = viewProps.isLoading === true;
 
+  const latestFromThread = getLatestAssistantCards(viewProps.messages);
+  const legacyCards =
+    !viewProps.messages && Array.isArray(viewProps.cards) && viewProps.cards.length > 0 ? viewProps.cards : [];
+  const railCards = latestFromThread.length > 0 ? latestFromThread : legacyCards;
+  const showRail = !isMobile && railCards.length > 0;
+
   return React.createElement(
     "main",
     {
@@ -391,7 +508,7 @@ function ChatAppView({ viewProps, handlers }) {
         color: theme.textPrimary,
         padding: isMobile ? "20px 16px 0" : "32px 24px 0",
         paddingBottom: isMobile ? "16px" : "20px",
-        maxWidth: "760px",
+        maxWidth: showRail ? "min(1120px, 100%)" : "760px",
         margin: "0 auto",
       },
     },
@@ -463,39 +580,92 @@ function ChatAppView({ viewProps, handlers }) {
     ),
     React.createElement(
       "div",
-      {
-        className: "bandsearch-chat-scroll",
-        style: { paddingBottom: "8px" },
-      },
-      React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
-      React.createElement(MessageThread, {
-        messages: viewProps.messages,
-        theme,
-        isMobile,
-        handlers,
-      }),
-      viewProps.messages
-        ? null
-        : viewProps.cards.length === 0
-        ? searchInFlight
-          ? null
-          : React.createElement(EmptyState, {
-              modeValue: viewProps.modeValue,
-              textSecondary: theme.textSecondary,
-              textTertiary: theme.textTertiary,
-            })
-        : React.createElement(
-            "section",
-            { style: { display: "grid", gap: "8px" } },
-            viewProps.cards.map((card) =>
-              React.createElement(RecommendationCard, {
-                key: card.title,
-                card,
+      { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } },
+      showRail
+        ? React.createElement(
+            "div",
+            { className: "bandsearch-desktop-split" },
+            React.createElement(
+              "div",
+              {
+                className: "bandsearch-chat-scroll bandsearch-chat-scroll--main",
+                style: { overflowY: "auto", paddingBottom: "8px" },
+              },
+              React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+              React.createElement(MessageThread, {
+                messages: viewProps.messages,
                 theme,
                 isMobile,
                 handlers,
+                assistantCardsMode: "rail-latest",
               }),
+              !viewProps.messages && viewProps.cards.length > 0
+                ? React.createElement(
+                    "p",
+                    {
+                      style: {
+                        fontSize: "13px",
+                        color: theme.textSecondary,
+                        margin: "12px 0 0",
+                      },
+                    },
+                    "Recommendations are in the panel on the right.",
+                  )
+                : null,
+              !viewProps.messages && viewProps.cards.length === 0
+                ? searchInFlight
+                  ? null
+                  : React.createElement(EmptyState, {
+                      modeValue: viewProps.modeValue,
+                      textSecondary: theme.textSecondary,
+                      textTertiary: theme.textTertiary,
+                    })
+                : null,
             ),
+            React.createElement(DesktopResultsRail, {
+              cards: railCards,
+              theme,
+              isMobile,
+              handlers,
+            }),
+          )
+        : React.createElement(
+            "div",
+            {
+              className: "bandsearch-chat-scroll",
+              style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" },
+            },
+            React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+            React.createElement(MessageThread, {
+              messages: viewProps.messages,
+              theme,
+              isMobile,
+              handlers,
+              assistantCardsMode: "thread",
+            }),
+            viewProps.messages
+              ? null
+              : viewProps.cards.length === 0
+              ? searchInFlight
+                ? null
+                : React.createElement(EmptyState, {
+                    modeValue: viewProps.modeValue,
+                    textSecondary: theme.textSecondary,
+                    textTertiary: theme.textTertiary,
+                  })
+              : React.createElement(
+                  "section",
+                  { style: { display: "grid", gap: "8px" } },
+                  viewProps.cards.map((card) =>
+                    React.createElement(RecommendationCard, {
+                      key: card.title,
+                      card,
+                      theme,
+                      isMobile,
+                      handlers,
+                    }),
+                  ),
+                ),
           ),
     ),
     React.createElement(
