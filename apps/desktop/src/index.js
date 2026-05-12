@@ -4,13 +4,11 @@ const {
   applyAssistantMessage,
   normalizeArtistId,
 } = require("./chatClient");
-const { createChatViewModel } = require("./chatViewModel");
-const { createChatScreenModel } = require("./chatScreenModel");
-const { createChatScreen } = require("./chatScreen");
 const { createChatRenderAdapter } = require("./chatRenderAdapter");
 const { createSavedArtistsModel } = require("./savedArtistsModel");
 const { createDesktopReactShell } = require("./ui/createDesktopReactShell");
 const { createDesktopReactMount } = require("./ui/mountDesktopReactApp");
+const { createDesktopChatUiStack } = require("./desktopChatUiStack");
 
 const VALID_VIEWS = ["chat", "saved-artists"];
 
@@ -85,7 +83,13 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
         return [];
       });
       state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
-      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory);
+      const result = await chatClient.fetchRecommendations(
+        query,
+        mode,
+        priorityContext,
+        conversationHistory,
+        effectiveIds,
+      );
       state = applyAssistantMessage(state, result);
       return result;
     },
@@ -135,24 +139,8 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
   };
 }
 
-function bootstrapDesktopUi({ app, viewport = "desktop" }) {
-  const viewModel = createChatViewModel({ app });
-  const screenModel = createChatScreenModel({ viewModel });
-  const screen = createChatScreen({ viewModel, screenModel });
-
-  return {
-    getRenderState() {
-      return screen.getRenderState({ viewport });
-    },
-    handleModeChange(mode) {
-      screen.handleModeChange(mode);
-      return screen.getRenderState({ viewport });
-    },
-    async handleQuerySubmit(query) {
-      await screen.handleQuerySubmit(query);
-      return screen.getRenderState({ viewport });
-    },
-  };
+function bootstrapDesktopUi(options) {
+  return createDesktopChatUiStack(options);
 }
 
 function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }) {

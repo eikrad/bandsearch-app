@@ -15,12 +15,21 @@ function createRecommendationPipeline({
   retryDelayMs = 5000,
   logger = console,
 } = {}) {
-  if (!preferenceRepository || typeof preferenceRepository.buildContext !== "function") {
+  if (
+    !preferenceRepository
+    || typeof preferenceRepository.buildContext !== "function"
+    || typeof preferenceRepository.buildContextForIds !== "function"
+  ) {
     throw createRecommendationError(
       "recommendation_configuration_error",
-      "preferenceRepository.buildContext is required",
+      "preferenceRepository.buildContext and buildContextForIds are required",
     );
   }
+
+  let resolveFirstReady;
+  const whenReadyPromise = new Promise((resolve) => {
+    resolveFirstReady = resolve;
+  });
 
   let activeService = null;
   let activeError = createRecommendationError(
@@ -49,6 +58,10 @@ function createRecommendationPipeline({
         recommendationAgent: createRecommendationAgent({ runModel }),
       });
       activeError = null;
+      if (resolveFirstReady) {
+        resolveFirstReady();
+        resolveFirstReady = undefined;
+      }
       log("info", "recommendation pipeline ready");
     } catch (error) {
       activeService = null;
@@ -78,6 +91,7 @@ function createRecommendationPipeline({
   void initialize();
 
   return {
+    whenReady: () => whenReadyPromise,
     async recommend(request = {}) {
       if (!activeService) {
         throw activeError

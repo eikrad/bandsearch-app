@@ -51,6 +51,7 @@ test("GET /artists/search requires non-empty query parameter", async () => {
   const noQuery = await makeGetRequest(app, "/artists/search");
   assert.equal(noQuery.status, 400);
   assert.equal(noQuery.data.error.code, "validation_error");
+  assert.equal(noQuery.data.error.message, "search query is required");
 
   const emptyQuery = await makeGetRequest(app, "/artists/search?query=");
   assert.equal(emptyQuery.status, 400);

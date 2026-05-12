@@ -123,6 +123,7 @@ npm run dev
 | `TURSO_AUTH_TOKEN` | — | Turso auth token (omit for local libSQL) |
 | `CORS_ORIGIN` | `*` | Allowed browser origin |
 | `RECOMMENDATION_TIMEOUT_MS` | `8000` | Gemini request timeout |
+| `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the recommendation pipeline initializes (non-blocking cap) |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
@@ -186,8 +187,8 @@ Response includes `recommendations` and `meta` (`modeUsed`, `usedPreferenceConte
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/artists/search?query=...` | Search artists for desktop flows |
-| `GET` | `/search/artists?q=...` | Legacy/compact search endpoint |
+| `GET` | `/artists/search?query=...` | Search artists (canonical) |
+| `GET` | `/search/artists?q=...` | Same behavior as `/artists/search` (legacy query param `q`) |
 | `GET` | `/artists/image?name=...` | Resolve artist image URL |
 
 ---

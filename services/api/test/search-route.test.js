@@ -48,6 +48,7 @@ test("GET /search/artists returns 400 when query is empty", async () => {
 
   assert.equal(result.status, 400);
   assert.equal(result.data.error.code, "validation_error");
+  assert.equal(result.data.error.message, "search query is required");
 });
 
 test("GET /search/artists returns 502 when MusicBrainz fails", async () => {

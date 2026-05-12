@@ -1,6 +1,10 @@
 const { randomUUID } = require("node:crypto");
 const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
 
+function formatBandLine(band) {
+  return `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`;
+}
+
 function mapRowToSavedBand(row) {
   return {
     id: row.id,
@@ -98,12 +102,16 @@ function createPostgresPreferenceRepository({ pool }) {
       if (savedBands.length === 0) {
         return "";
       }
-      return savedBands
-        .map(
-          (band) =>
-            `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`,
-        )
-        .join("\n");
+      return savedBands.map(formatBandLine).join("\n");
+    },
+
+    async buildContextForIds(ids) {
+      if (!ids || ids.length === 0) return "";
+      const savedBands = await this.listSavedBands();
+      const want = new Set(ids);
+      const filtered = savedBands.filter((b) => want.has(b.id));
+      if (filtered.length === 0) return "";
+      return filtered.map(formatBandLine).join("\n");
     },
   };
 }

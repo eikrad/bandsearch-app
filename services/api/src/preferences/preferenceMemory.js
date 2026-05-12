@@ -90,6 +90,19 @@ function createPreferenceMemory() {
         )
         .join("\n");
     },
+
+    async buildContextForIds(ids) {
+      if (!ids || ids.length === 0) return "";
+      const want = new Set(ids);
+      const filtered = savedBands.filter((b) => want.has(b.id));
+      if (filtered.length === 0) return "";
+      return filtered
+        .map(
+          (band) =>
+            `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`,
+        )
+        .join("\n");
+    },
   };
 }
 

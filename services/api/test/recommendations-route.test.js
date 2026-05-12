@@ -10,6 +10,7 @@ function createPreferenceRepositoryStub(buildContext) {
     updateSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
     deleteSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
     buildContext: async () => buildContext(),
+    buildContextForIds: async () => "",
   };
 }
 

@@ -12,6 +12,7 @@ const { createTursoPreferenceRepository } = require("./tursoPreferenceRepository
  * - updateSavedBand(id, updates)
  * - deleteSavedBand(id)
  * - buildContext()
+ * - buildContextForIds(ids) — subset context for priority artist ids (recommendation pipeline)
  */
 function assertPreferenceRepository(repository) {
   const requiredMethods = [
@@ -20,6 +21,7 @@ function assertPreferenceRepository(repository) {
     "updateSavedBand",
     "deleteSavedBand",
     "buildContext",
+    "buildContextForIds",
   ];
 
   for (const methodName of requiredMethods) {

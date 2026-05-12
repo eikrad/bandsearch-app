@@ -98,6 +98,17 @@ function createTursoPreferenceRepository({ client }) {
         .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
         .join("\n");
     },
+
+    async buildContextForIds(ids) {
+      if (!ids || ids.length === 0) return "";
+      const savedBands = await this.listSavedBands();
+      const want = new Set(ids);
+      const filtered = savedBands.filter((b) => want.has(b.id));
+      if (filtered.length === 0) return "";
+      return filtered
+        .map((b) => `${b.name} (rating ${b.rating}/5) tags: ${b.categories.join(", ")} note: ${b.note}`)
+        .join("\n");
+    },
   };
 }
 

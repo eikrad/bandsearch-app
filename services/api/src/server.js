@@ -15,6 +15,12 @@ async function start() {
     preferenceRepository,
   });
 
+  const readyTimeoutMs = Number(process.env.RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS || 45000);
+  await Promise.race([
+    recommendationPipeline.whenReady(),
+    new Promise((resolve) => setTimeout(resolve, readyTimeoutMs)),
+  ]);
+
   const app = createApp({ runtimeConfig, preferenceRepository, recommendationPipeline });
   app.listen(runtimeConfig.port, () => {
     console.log(JSON.stringify({ level: "info", message: "Bandsearch API listening", port: runtimeConfig.port }));

@@ -176,6 +176,25 @@ test("chat client appends a message to a session", async () => {
   assert.equal(calls[0].init.method, "POST");
 });
 
+test("chat client sends selectedArtistIds when provided", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ recommendations: [], meta: { modeUsed: "preference-aware", usedPreferenceContext: true } }),
+      };
+    },
+  });
+
+  await client.fetchRecommendations("q", "preference-aware", "", [], ["pref-a", "pref-b"]);
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.selectedArtistIds, ["pref-a", "pref-b"]);
+});
+
 test("chat client sends priorityContext in recommendations when provided", async () => {
   const calls = [];
   const client = createChatClient({

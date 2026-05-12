@@ -55,6 +55,9 @@ test("resolveRecommendationFacadeInput fresh mode does not call repository", asy
       buildCalled = true;
       return "repo";
     },
+    async buildContextForIds() {
+      return "";
+    },
   };
 
   const result = await resolveRecommendationFacadeInput({ mode: "fresh", priorityContext: "  prio  " }, preferenceRepository);
@@ -69,6 +72,9 @@ test("resolveRecommendationFacadeInput preference-aware merges priority and buil
   const preferenceRepository = {
     async buildContext() {
       return "saved context";
+    },
+    async buildContextForIds() {
+      return "";
     },
   };
 

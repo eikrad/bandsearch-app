@@ -16,3 +16,17 @@ test("assertPreferenceRepository rejects missing methods", () => {
     /missing method addSavedBand/,
   );
 });
+
+test("assertPreferenceRepository requires buildContextForIds", () => {
+  assert.throws(
+    () =>
+      assertPreferenceRepository({
+        addSavedBand: async () => {},
+        listSavedBands: async () => [],
+        updateSavedBand: async () => {},
+        deleteSavedBand: async () => {},
+        buildContext: async () => "",
+      }),
+    /missing method buildContextForIds/,
+  );
+});

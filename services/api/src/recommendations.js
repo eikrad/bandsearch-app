@@ -9,7 +9,7 @@ function isNonEmptyString(value) {
  * preference-aware, and collect messages. Used by the lazy-init pipeline and the app fallback stack.
  *
  * @param {Record<string, unknown>} [request]
- * @param {{ buildContext: () => Promise<string>, buildContextForIds?: (ids: string[]) => Promise<string> }} preferenceRepository
+ * @param {{ buildContext: () => Promise<string>, buildContextForIds: (ids: string[]) => Promise<string> }} preferenceRepository
  */
 async function resolveRecommendationFacadeInput(request = {}, preferenceRepository) {
   const mode = validateRecommendationMode(request.mode);
@@ -21,7 +21,7 @@ async function resolveRecommendationFacadeInput(request = {}, preferenceReposito
   let preferenceContext = priorityContext;
   if (mode === "preference-aware") {
     let repoContext;
-    if (selectedArtistIds.length > 0 && typeof preferenceRepository.buildContextForIds === "function") {
+    if (selectedArtistIds.length > 0) {
       repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
     } else {
       repoContext = await preferenceRepository.buildContext();

@@ -2,10 +2,13 @@ function createChatClient({ apiBaseUrl, fetchImpl = fetch }) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
   return {
-    async fetchRecommendations(query, mode = "fresh", priorityContext = "", messages = []) {
+    async fetchRecommendations(query, mode = "fresh", priorityContext = "", messages = [], selectedArtistIds = []) {
       const body = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
       if (messages.length > 0) body.messages = messages;
+      if (Array.isArray(selectedArtistIds) && selectedArtistIds.length > 0) {
+        body.selectedArtistIds = selectedArtistIds.filter((id) => typeof id === "string");
+      }
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: { "content-type": "application/json" },
