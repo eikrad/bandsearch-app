@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Primary window: chat UI and Gemini settings IPC","local":true,"windows":["main"],"permissions":["core:default","allow-gemini-config-status","allow-save-gemini-api-key","opener:allow-default-urls"]}}

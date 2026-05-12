@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "allow-gemini-config-status",
-    "allow-save-gemini-api-key"
+    "allow-save-gemini-api-key",
+    "opener:allow-default-urls"
   ]
 }

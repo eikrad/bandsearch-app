@@ -209,6 +209,7 @@ fn save_gemini_api_key(
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;

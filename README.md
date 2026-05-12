@@ -203,6 +203,8 @@ npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
 ```
 
+`npm run ci` runs **ruff** and **black** on Python sources (same as GitHub Actions). If those commands are missing locally, create a venv and install them: `python3 -m venv .venv && .venv/bin/pip install ruff black`, then run `npm run ci` with `.venv/bin` on your `PATH` (the `.venv/` directory is gitignored).
+
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`).
 
 ---
