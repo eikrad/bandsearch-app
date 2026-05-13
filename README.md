@@ -6,7 +6,10 @@
 
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
-Before each MusicBrainz lookup, a **Gemini planner** turns the user’s message (plus recent chat context) into a short search string suited to MusicBrainz’s artist index; the same user text still feeds the main recommendation step. Curated notes live in `services/api/src/agent/prompts/musicbrainz-artist-search.md` for editing; the same text is **embedded in TypeScript** (`musicBrainzArtistSearchReference.embedded.ts`) so the API works even if the markdown file is not deployed—when the file is present locally, it overrides the embed.
+
+**Classic pipeline (default):** Before each MusicBrainz lookup, a **Gemini planner** turns the user’s message (plus recent chat context) into a short search string suited to MusicBrainz’s artist index; the same user text still feeds the main recommendation step. Curated notes live in `services/api/src/agent/prompts/musicbrainz-artist-search.md` for editing; the same text is **embedded in TypeScript** (`musicBrainzArtistSearchReference.embedded.ts`) so the API works even if the markdown file is not deployed—when the file is present locally, it overrides the embed.
+
+**Research pipeline (optional):** Set `RECOMMENDATION_PIPELINE=research` and provide **`BRAVE_API_KEY`**. Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs **one** reflection round with extra searches within a fixed Brave budget, then ranks picks with **evidence-grounded** `why` text (URLs enforced). Without `BRAVE_API_KEY`, the API stays on the classic pipeline and logs a warning.
 
 ---
 
@@ -133,6 +136,13 @@ npm run dev
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
 | `LANGSMITH_PROJECT` | — | LangSmith project name |
+| `RECOMMENDATION_PIPELINE` | `classic` | `classic` or `research` (research requires `BRAVE_API_KEY`) |
+| `BRAVE_API_KEY` | — | Brave Search API token (`X-Subscription-Token`) when using research pipeline |
+| `RESEARCH_MAX_INITIAL_SEARCHES` | `6` | Max Brave queries on first pass |
+| `RESEARCH_MAX_REFLECTION_SEARCHES` | `4` | Cap on extra queries after reflection |
+| `RESEARCH_TOTAL_SEARCH_BUDGET` | `10` | Max Brave calls per recommendation request |
+| `RESEARCH_TIMEOUT_MS` | `25000` | Upper bound for multi-step research workflow timing |
+| `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified MB hits before skipping reflection (when budget allows) |
 
 ---
 

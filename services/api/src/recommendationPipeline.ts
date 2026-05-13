@@ -1,6 +1,7 @@
 import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
 import { createMusicBrainzQueryPlanner } from "./agent/musicBrainzQueryPlanner.js";
 import { createRecommendationAgent, createLangChainRunner } from "./agent/recommendationAgent.js";
+import { createResearchRecommendationService } from "./agent/research/researchService.js";
 import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
 import type { RecommendationError } from "./recommendations.js";
 import {
@@ -10,11 +11,21 @@ import {
 } from "./recommendations.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
 
+export type RecommendationPipelineMode = "classic" | "research";
+
 export type RecommendationRuntimeConfig = {
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   recommendationTimeoutMs?: number;
   geminiApiKey?: string;
+  braveApiKey?: string;
+  /** Typically `classic` or `research` from RECOMMENDATION_PIPELINE env */
+  recommendationPipeline?: string;
+  researchMaxInitialSearches?: number;
+  researchMaxReflectionSearches?: number;
+  researchTotalSearchBudget?: number;
+  researchTimeoutMs?: number;
+  researchTargetVerifiedCandidates?: number;
 };
 
 export type PreferenceRepositoryPipeline = {
@@ -53,7 +64,10 @@ export function createRecommendationPipeline({
     resolveFirstReady = resolve;
   });
 
-  let activeService: ReturnType<typeof createRecommendationService> | null = null;
+  let activeService:
+    | ReturnType<typeof createRecommendationService>
+    | ReturnType<typeof createResearchRecommendationService>
+    | null = null;
   let activeError: RecommendationError | null = createRecommendationError(
     "recommendation_initializing",
     "recommendation pipeline is initializing",
@@ -69,33 +83,62 @@ export function createRecommendationPipeline({
     try {
       const apiKey = String(cfg.geminiApiKey ?? "").trim();
       const recommendTimeoutMs = cfg.recommendationTimeoutMs ?? 8000;
-      const [runModel, planMusicBrainzSearch] = await Promise.all([
-        createLangChainRunner({
-          timeoutMs: recommendTimeoutMs,
-          apiKey,
-        }),
-        createMusicBrainzQueryPlanner({
-          apiKey,
-          timeoutMs: Math.min(4000, recommendTimeoutMs),
-        }),
-      ]);
-      activeService = createRecommendationService({
-        musicBrainzClient: createMusicBrainzClient({
-          timeoutMs: cfg.musicBrainzTimeoutMs,
-          retries: cfg.musicBrainzRetries,
-        }),
-        recommendationAgent: createRecommendationAgent({ runModel }),
-        planMusicBrainzSearch,
-        onMusicBrainzQueryResolved: (info) => {
-          pipelineLog("info", "musicbrainz_search_query_resolved", {
-            userQuery:
-              info.userQuery.length > 240 ? `${info.userQuery.slice(0, 240)}…` : info.userQuery,
-            resolvedMbQuery: info.resolvedMbQuery,
-            plannerEnabled: info.plannerEnabled,
-            differsFromUser: info.resolvedMbQuery.trim() !== info.userQuery.trim(),
+      const pipelineMode = (cfg.recommendationPipeline ?? "classic").trim().toLowerCase();
+      const braveKey = String(cfg.braveApiKey ?? "").trim();
+
+      if (pipelineMode === "research" && braveKey) {
+        activeService = createResearchRecommendationService({
+          graphDeps: {
+            geminiApiKey: apiKey,
+            braveApiKey: braveKey,
+            maxInitialSearches: cfg.researchMaxInitialSearches ?? 6,
+            maxReflectionSearches: cfg.researchMaxReflectionSearches ?? 4,
+            totalSearchBudget: cfg.researchTotalSearchBudget ?? 10,
+            targetVerifiedCount: cfg.researchTargetVerifiedCandidates ?? 8,
+            researchTimeoutMs: cfg.researchTimeoutMs ?? 25000,
+            musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
+            musicBrainzRetries: cfg.musicBrainzRetries,
+            onLog: (level, event, details) => {
+              pipelineLog(level, event, details);
+            },
+          },
+        });
+        pipelineLog("info", "recommendation_pipeline_mode", { mode: "research" });
+      } else {
+        if (pipelineMode === "research" && !braveKey) {
+          pipelineLog("warn", "research_pipeline_fallback_no_brave_key", {
+            message: "RECOMMENDATION_PIPELINE=research requires BRAVE_API_KEY; using classic pipeline",
           });
-        },
-      });
+        }
+        const [runModel, planMusicBrainzSearch] = await Promise.all([
+          createLangChainRunner({
+            timeoutMs: recommendTimeoutMs,
+            apiKey,
+          }),
+          createMusicBrainzQueryPlanner({
+            apiKey,
+            timeoutMs: Math.min(4000, recommendTimeoutMs),
+          }),
+        ]);
+        activeService = createRecommendationService({
+          musicBrainzClient: createMusicBrainzClient({
+            timeoutMs: cfg.musicBrainzTimeoutMs,
+            retries: cfg.musicBrainzRetries,
+          }),
+          recommendationAgent: createRecommendationAgent({ runModel }),
+          planMusicBrainzSearch,
+          onMusicBrainzQueryResolved: (info) => {
+            pipelineLog("info", "musicbrainz_search_query_resolved", {
+              userQuery:
+                info.userQuery.length > 240 ? `${info.userQuery.slice(0, 240)}…` : info.userQuery,
+              resolvedMbQuery: info.resolvedMbQuery,
+              plannerEnabled: info.plannerEnabled,
+              differsFromUser: info.resolvedMbQuery.trim() !== info.userQuery.trim(),
+            });
+          },
+        });
+        pipelineLog("info", "recommendation_pipeline_mode", { mode: "classic" });
+      }
       activeError = null;
       if (resolveFirstReady) {
         resolveFirstReady();

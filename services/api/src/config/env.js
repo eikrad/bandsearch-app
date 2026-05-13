@@ -51,9 +51,27 @@ function validateRuntimeEnv(env = process.env) {
     throw new Error("TURSO_DATABASE_URL is required when PREFERENCE_STORE=turso");
   }
 
+  const braveApiKey = String(env.BRAVE_API_KEY ?? "").trim();
+  const recommendationPipelineRaw = String(env.RECOMMENDATION_PIPELINE ?? "classic").trim().toLowerCase();
+  const recommendationPipeline =
+    recommendationPipelineRaw === "research" ? "research" : "classic";
+
+  const researchMaxInitialSearches = parseNumber(env.RESEARCH_MAX_INITIAL_SEARCHES, 6);
+  const researchMaxReflectionSearches = parseNumber(env.RESEARCH_MAX_REFLECTION_SEARCHES, 4);
+  const researchTotalSearchBudget = parseNumber(env.RESEARCH_TOTAL_SEARCH_BUDGET, 10);
+  const researchTimeoutMs = parseNumber(env.RESEARCH_TIMEOUT_MS, 25000);
+  const researchTargetVerifiedCandidates = parseNumber(env.RESEARCH_TARGET_VERIFIED_CANDIDATES, 8);
+
   return {
     geminiApiKey,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
+    braveApiKey,
+    recommendationPipeline,
+    researchMaxInitialSearches,
+    researchMaxReflectionSearches,
+    researchTotalSearchBudget,
+    researchTimeoutMs,
+    researchTargetVerifiedCandidates,
     port,
     recommendationTimeoutMs,
     musicBrainzTimeoutMs,
