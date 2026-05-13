@@ -62,6 +62,75 @@ function createMusicBrainzClient({
         disambiguation: artist.disambiguation || "",
       }));
     },
+
+    /**
+     * Artist lookup with tags, genres, and URL relations for grounding / verification.
+     * @param {string} mbid MusicBrainz artist id (UUID)
+     */
+    async lookupArtist(mbid) {
+      const id = String(mbid ?? "").trim();
+      if (!id) {
+        throw new Error("mbid is required for lookupArtist");
+      }
+      const encoded = encodeURIComponent(id);
+      const url = `${baseUrl}/artist/${encoded}?fmt=json&inc=tags+genres+url-rels`;
+      const response = await fetchWithTimeoutAndRetry({
+        fetchImpl,
+        url,
+        timeoutMs,
+        retries,
+        headers: {
+          "user-agent": USER_AGENT,
+          accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`musicbrainz request failed with status ${response.status}`);
+      }
+
+      /** @type {Record<string, unknown>} */
+      const data = await response.json();
+
+      const tags = Array.isArray(data.tags)
+        ? data.tags.map((t) => (t && typeof t.name === "string" ? t.name : "")).filter(Boolean)
+        : [];
+      const genres = Array.isArray(data.genres)
+        ? data.genres.map((g) => (g && typeof g.name === "string" ? g.name : "")).filter(Boolean)
+        : [];
+
+      const urls = [];
+      const relations = Array.isArray(data.relations) ? data.relations : [];
+      for (const rel of relations) {
+        if (!rel || typeof rel !== "object") continue;
+        const type = typeof rel.type === "string" ? rel.type : "";
+        const urlObj = rel.url && typeof rel.url === "object" ? rel.url : null;
+        const resource = urlObj && typeof urlObj.resource === "string" ? urlObj.resource : "";
+        if (resource) {
+          urls.push({ type: type || "url", url: resource });
+        }
+      }
+
+      const lifeSpanRaw = data["life-span"];
+      let lifeSpan = { begin: undefined, end: undefined, ended: false };
+      if (lifeSpanRaw && typeof lifeSpanRaw === "object" && !Array.isArray(lifeSpanRaw)) {
+        const ls = /** @type {{ begin?: string, end?: string, ended?: boolean }} */ (lifeSpanRaw);
+        lifeSpan = {
+          begin: typeof ls.begin === "string" ? ls.begin : undefined,
+          end: typeof ls.end === "string" ? ls.end : undefined,
+          ended: Boolean(ls.ended),
+        };
+      }
+
+      return {
+        id: typeof data.id === "string" ? data.id : id,
+        name: typeof data.name === "string" ? data.name : "",
+        tags,
+        genres,
+        urls,
+        lifeSpan,
+      };
+    },
   };
 }
 
