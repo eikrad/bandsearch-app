@@ -34,10 +34,11 @@
 - Layered defenses where practical: delimiter or envelope patterns for conversation history, server-side checks or sanitization before `runModel`, clear refuse/strip policies for known jailbreak patterns, and structured logging (and optional metrics) when requests are blocked or trimmed.
 - Regression coverage and docs: automated tests with representative injection probes; short threat model and residual-risk notes in domain docs (`CONTEXT.md` / `docs/adr/`) so future prompt changes stay reviewable.
 
-## Phase 4.5 — Data Portability & Sharing
+## Phase 4.5 — Data Portability, Sharing & Saved Artists Organisation
 
 - Export / import saved artists as JSON for backup and device transfer.
 - Shareable recommendations: copy-to-clipboard for a formatted recommendation list (artist + why-text).
+- **Artist grouping**: group saved artists by genre (fetched from MusicBrainz) or by user-defined custom tags/criteria, with the ability to create, rename, and delete groups and drag artists between them.
 
 ## Phase 5.5 — Cross-device Sync (Turso)
 
