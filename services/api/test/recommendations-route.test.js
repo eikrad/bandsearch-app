@@ -203,29 +203,20 @@ test("POST /recommendations does not log truncate when priorityContext is within
   assert.equal(truncateEvent, undefined, "should not log truncate for normal context");
 });
 
-test("POST /recommendations with selectedArtistIds uses buildContextForIds", async () => {
+test("POST /recommendations forwards selectedArtistIds to the pipeline", async () => {
   const calls = [];
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async (query, options) => {
-        calls.push({ type: "getRecommendations", query, options });
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
         return {
           recommendations: [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"] }],
           assistantReply: "",
+          meta: { modeUsed: "preference-aware", usedPreferenceContext: true },
         };
       },
     },
-    preferenceRepository: {
-      addSavedBand: async () => ({ ok: true, savedBand: null }),
-      listSavedBands: async () => [],
-      updateSavedBand: async () => ({ ok: false, status: 404, error: "" }),
-      deleteSavedBand: async () => ({ ok: false, status: 404, error: "" }),
-      buildContext: async () => "fallback context",
-      buildContextForIds: async (ids) => {
-        calls.push({ type: "buildContextForIds", ids });
-        return `context for ${ids.join(",")}`;
-      },
-    },
+    preferenceRepository: createPreferenceRepositoryStub(() => ""),
   });
 
   const result = await makeRequest(app, "/recommendations", {
@@ -235,22 +226,20 @@ test("POST /recommendations with selectedArtistIds uses buildContextForIds", asy
   });
 
   assert.equal(result.status, 200);
-  const buildCall = calls.find((c) => c.type === "buildContextForIds");
-  assert.ok(buildCall, "should call buildContextForIds");
-  assert.deepEqual(buildCall.ids, ["id-1", "id-2"]);
-  const recCall = calls.find((c) => c.type === "getRecommendations");
-  assert.equal(recCall.options.preferenceContext.includes("context for"), true);
+  assert.deepEqual(calls[0].selectedArtistIds, ["id-1", "id-2"]);
+  assert.equal(calls[0].mode, "preference-aware");
 });
 
-test("POST /recommendations forwards messages to recommendation service", async () => {
+test("POST /recommendations forwards messages to the pipeline", async () => {
   const calls = [];
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async (query, options) => {
-        calls.push({ query, options });
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
         return {
           recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
           assistantReply: "",
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
         };
       },
     },
@@ -267,19 +256,20 @@ test("POST /recommendations forwards messages to recommendation service", async 
   });
 
   assert.equal(calls.length, 1);
-  assert.ok(Array.isArray(calls[0].options.messages), "messages forwarded to service");
-  assert.equal(calls[0].options.messages.length, 2);
+  assert.ok(Array.isArray(calls[0].messages), "messages forwarded to pipeline");
+  assert.equal(calls[0].messages.length, 2);
 });
 
-test("POST /recommendations prepends priorityContext to preference context", async () => {
+test("POST /recommendations forwards priorityContext to the pipeline", async () => {
   const calls = [];
   const app = createApp({
-    recommendationService: {
-      getRecommendations: async (query, options) => {
-        calls.push({ query, options });
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
         return {
           recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
           assistantReply: "",
+          meta: { modeUsed: "fresh", usedPreferenceContext: true },
         };
       },
     },
@@ -293,8 +283,8 @@ test("POST /recommendations prepends priorityContext to preference context", asy
   });
 
   assert.equal(result.status, 200);
+  assert.equal(calls[0].priorityContext, "Priority references: Alcest, Agalloch");
   assert.equal(result.data.meta.usedPreferenceContext, true);
-  assert.equal(calls[0].options.preferenceContext.includes("Priority references: Alcest, Agalloch"), true);
 });
 
 test("POST /recommendations defaults to fresh mode", async () => {
