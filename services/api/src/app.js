@@ -15,7 +15,7 @@ const { writeStructuredLog } = require("./http/structuredLog");
 const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
 
 /**
- * @param {{ recommendationPipeline?: any, recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any }} [options]
+ * @param {{ recommendationPipeline?: any, recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void } }} [options]
  */
 function createApp({
   recommendationPipeline,
@@ -25,6 +25,7 @@ function createApp({
   artistImageClient,
   chatSessionRepository,
   runtimeConfig = {},
+  logger,
 } = {}) {
   const app = express();
   app.use(helmet());
@@ -127,6 +128,7 @@ function createApp({
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
     resolvedRecommendationPipeline,
+    logger,
     getRecommendationReadiness:
       recommendationPipeline && typeof recommendationPipeline.getReadinessSnapshot === "function"
         ? () => recommendationPipeline.getReadinessSnapshot()

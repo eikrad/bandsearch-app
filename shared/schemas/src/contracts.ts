@@ -26,6 +26,7 @@ export type ValidatedRecommendationHttpBody =
       readonly messages: ChatMessage[];
       readonly selectedArtistIds: string[];
       readonly priorityContext: string;
+      readonly truncated: string[];
     };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -145,9 +146,12 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
   }
 
   const rawPriority = typeof b.priorityContext === "string" ? b.priorityContext.trim() : "";
-  const priorityContext = rawPriority.length > PRIORITY_CONTEXT_MAX_LEN
-    ? rawPriority.slice(0, PRIORITY_CONTEXT_MAX_LEN)
-    : rawPriority;
+  const truncated: string[] = [];
+  let priorityContext = rawPriority;
+  if (rawPriority.length > PRIORITY_CONTEXT_MAX_LEN) {
+    priorityContext = rawPriority.slice(0, PRIORITY_CONTEXT_MAX_LEN);
+    truncated.push("priorityContext");
+  }
 
   return {
     ok: true,
@@ -156,5 +160,6 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     messages,
     selectedArtistIds,
     priorityContext,
+    truncated,
   };
 }
