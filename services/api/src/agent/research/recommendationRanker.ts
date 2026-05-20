@@ -2,6 +2,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
+import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
 
 import type { VerifiedCandidate } from "./candidateVerifier.js";
@@ -172,22 +173,26 @@ export async function createRecommendationRanker({
 
   return async function rank(input) {
     const evidence = formatEvidenceForPrompt(input.candidates);
-    const prefBlock = input.preferenceContext ? `\nuser_preferences: ${input.preferenceContext}` : "";
+    const wrappedQuery = wrapUserContent(input.query);
+    const prefBlock = wrapPreferenceContext(input.preferenceContext);
 
     const prompt: Array<{ role: string; content: string }> = [
       { role: "system", content: RANK_SYSTEM },
     ];
 
+    let historyChars = 0;
     for (const msg of input.messages) {
-      if (msg.role === "user" || msg.role === "assistant") {
-        prompt.push({ role: msg.role, content: String(msg.content || "") });
-      }
+      if (msg.role !== "user" && msg.role !== "assistant") continue;
+      const content = capAndTrim(escapeEnvelopeChars(String(msg.content ?? "")), 4000);
+      if (!content || historyChars + content.length > 7000) break;
+      prompt.push({ role: msg.role, content });
+      historyChars += content.length;
     }
 
-    prompt.push({
-      role: "user",
-      content: `query: ${input.query}\nmode: ${input.mode}${prefBlock}\nevidence_candidates:\n${evidence}\nlimit: 3`,
-    });
+    const parts = [`query: ${wrappedQuery}`, `mode: ${input.mode}`];
+    if (prefBlock) parts.push(prefBlock);
+    parts.push(`evidence_candidates:\n${evidence}`, "limit: 3");
+    prompt.push({ role: "user", content: parts.join("\n") });
 
     const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "recommendation ranker timeout");
     const raw = typeof response.content === "string" ? response.content : "";

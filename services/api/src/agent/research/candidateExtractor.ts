@@ -1,5 +1,6 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
+import { wrapSearchHitBlock } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
 
 export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 12000;
@@ -114,21 +115,15 @@ export function tryParseExtractedCandidatesFromModelText(
 }
 
 function formatHitsForPrompt(hits: SearchHitInput[]): string {
-  const lines: string[] = [];
+  const blocks: string[] = [];
   let total = 0;
-  for (let i = 0; i < hits.length; i += 1) {
-    const h = hits[i];
-    const block = [
-      `hit_${i + 1}_query: ${h.sourceQuery}`,
-      `title: ${h.title}`,
-      `url: ${h.url}`,
-      `description: ${h.description}`,
-    ].join("\n");
+  for (const h of hits) {
+    const block = wrapSearchHitBlock(h);
     if (total + block.length + 2 > CANDIDATE_EXTRACTOR_MAX_HITS_CHARS) break;
-    lines.push(block);
+    blocks.push(block);
     total += block.length + 2;
   }
-  return lines.join("\n\n---\n\n");
+  return blocks.join("\n\n");
 }
 
 export type CreateCandidateExtractorOptions = {

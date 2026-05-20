@@ -3,6 +3,7 @@ import type { Express, RequestHandler } from "express";
 import { validateRecommendationRequest } from "../recommendations.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
+import { writeStructuredLog } from "../http/structuredLog.js";
 
 export type BandsearchRouteContext = {
   appVersion: string;
@@ -34,6 +35,7 @@ export type BandsearchRouteContext = {
     }>;
   };
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
+  logger?: { warn: (obj: Record<string, unknown>) => void };
 };
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
@@ -46,6 +48,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     resolvedChatSessionRepository,
     resolvedRecommendationPipeline,
     getRecommendationReadiness,
+    logger,
   } = ctx;
 
   app.get("/health", (_req, res) => {
@@ -132,6 +135,11 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     const validation = validateRecommendationRequest(req.body);
     if (validation.ok === false) {
       return sendError(res, 400, "validation_error", validation.error);
+    }
+
+    if (validation.truncated.length > 0) {
+      const logFn = logger?.warn ?? ((obj) => writeStructuredLog("warn", obj));
+      logFn({ component: "prompt_safety", event: "prompt_safety_truncate", fields: validation.truncated });
     }
 
     try {

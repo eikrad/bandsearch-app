@@ -157,6 +157,52 @@ test("POST /recommendations returns 502 on recommendation service error", async 
   assert.equal(result.data.error.message, "recommendation service unavailable");
 });
 
+test("POST /recommendations logs prompt_safety_truncate when priorityContext is over limit", async () => {
+  const PRIORITY_CONTEXT_MAX_LEN = 2000;
+  const logEvents = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [],
+        assistantReply: "ok",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+    logger: { warn: (obj) => logEvents.push(obj) },
+  });
+
+  await makeRequest(app, "/recommendations", {
+    query: "dark ambient",
+    priorityContext: "b".repeat(PRIORITY_CONTEXT_MAX_LEN + 100),
+  });
+
+  const truncateEvent = logEvents.find((e) => e.event === "prompt_safety_truncate");
+  assert.ok(truncateEvent, "should log a prompt_safety_truncate event");
+  assert.ok(Array.isArray(truncateEvent.fields) && truncateEvent.fields.includes("priorityContext"));
+});
+
+test("POST /recommendations does not log truncate when priorityContext is within limit", async () => {
+  const logEvents = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [],
+        assistantReply: "ok",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+    logger: { warn: (obj) => logEvents.push(obj) },
+  });
+
+  await makeRequest(app, "/recommendations", {
+    query: "dark ambient",
+    priorityContext: "short context",
+  });
+
+  const truncateEvent = logEvents.find((e) => e.event === "prompt_safety_truncate");
+  assert.equal(truncateEvent, undefined, "should not log truncate for normal context");
+});
+
 test("POST /recommendations with selectedArtistIds uses buildContextForIds", async () => {
   const calls = [];
   const app = createApp({

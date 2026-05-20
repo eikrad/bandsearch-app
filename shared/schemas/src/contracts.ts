@@ -1,3 +1,8 @@
+export const QUERY_MAX_LENGTH = 2000;
+export const MESSAGE_CONTENT_MAX_LEN = 4000;
+export const MESSAGES_MAX_COUNT = 50;
+export const PRIORITY_CONTEXT_MAX_LEN = 2000;
+
 export type RecommendationMode = "fresh" | "preference-aware";
 
 export type ChatTurnRole = "user" | "assistant";
@@ -21,6 +26,7 @@ export type ValidatedRecommendationHttpBody =
       readonly messages: ChatMessage[];
       readonly selectedArtistIds: string[];
       readonly priorityContext: string;
+      readonly truncated: string[];
     };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -92,6 +98,9 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
   if (!isNonEmptyString(q)) {
     return { ok: false, error: "query is required" };
   }
+  if (q.trim().length > QUERY_MAX_LENGTH) {
+    return { ok: false, error: "query too long" };
+  }
 
   const mode = validateRecommendationMode(b.mode);
 
@@ -100,6 +109,9 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     const raw = b.messages;
     if (!Array.isArray(raw)) {
       return { ok: false, error: "messages must be an array" };
+    }
+    if (raw.length > MESSAGES_MAX_COUNT) {
+      return { ok: false, error: "too many messages" };
     }
     for (const m of raw) {
       if (!m || typeof m !== "object") {
@@ -113,6 +125,9 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
       }
       if (typeof content !== "string") {
         return { ok: false, error: "message content must be a string" };
+      }
+      if (content.length > MESSAGE_CONTENT_MAX_LEN) {
+        return { ok: false, error: "message content too long" };
       }
       messages.push({ role, content });
     }
@@ -130,7 +145,13 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     selectedArtistIds = raw as string[];
   }
 
-  const priorityContext = typeof b.priorityContext === "string" ? b.priorityContext.trim() : "";
+  const rawPriority = typeof b.priorityContext === "string" ? b.priorityContext.trim() : "";
+  const truncated: string[] = [];
+  let priorityContext = rawPriority;
+  if (rawPriority.length > PRIORITY_CONTEXT_MAX_LEN) {
+    priorityContext = rawPriority.slice(0, PRIORITY_CONTEXT_MAX_LEN);
+    truncated.push("priorityContext");
+  }
 
   return {
     ok: true,
@@ -139,5 +160,6 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     messages,
     selectedArtistIds,
     priorityContext,
+    truncated,
   };
 }
