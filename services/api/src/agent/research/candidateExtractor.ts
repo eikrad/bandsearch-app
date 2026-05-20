@@ -1,7 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { wrapSearchHitBlock } from "../promptGuards.js";
-import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
+import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 12000;
 
