@@ -58,6 +58,12 @@ test("GET /artists/search requires non-empty query parameter", async () => {
   assert.equal(emptyQuery.data.error.code, "validation_error");
 });
 
+test("GET /search/artists is removed (404)", async () => {
+  const app = createApp({ musicBrainzClient: createMusicBrainzStub([]) });
+  const result = await makeGetRequest(app, "/search/artists?q=fen");
+  assert.equal(result.status, 404);
+});
+
 test("GET /artists/search passes query to MusicBrainz client", async () => {
   const queries = [];
   const app = createApp({

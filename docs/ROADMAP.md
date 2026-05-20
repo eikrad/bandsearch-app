@@ -28,11 +28,12 @@
 - Error UX: human-readable error messages when the API key is missing or invalid, when a rate limit is reached, or when Gemini is unreachable — instead of a silent failure (settings screen shows a banner when no key is stored). ✓ Done
 - **Brave web research pipeline** (optional): `RECOMMENDATION_PIPELINE=research` + `BRAVE_API_KEY` — Gemini plans Brave searches, extracts niche candidates from web snippets, verifies with MusicBrainz `lookupArtist`, one reflection round within a Brave call budget, LangGraph orchestration, evidence URLs in ranked `why`; falls back to classic pipeline when Brave key is missing. ✓ Done
 
-## Phase 4 — Prompt safety & injection guardrails
+## Phase 4 — Prompt safety & injection guardrails ✓ Done
 
-- Harden the recommendation pipeline against **prompt injection** and misuse of the model via crafted user or chat history: keep trusted system/developer instructions structurally separate from untrusted text; normalize and cap length of queries and forwarded messages before they reach Gemini.
-- Layered defenses where practical: delimiter or envelope patterns for conversation history, server-side checks or sanitization before `runModel`, clear refuse/strip policies for known jailbreak patterns, and structured logging (and optional metrics) when requests are blocked or trimmed.
-- Regression coverage and docs: automated tests with representative injection probes; short threat model and residual-risk notes in domain docs (`CONTEXT.md` / `docs/adr/`) so future prompt changes stay reviewable.
+- Bracket-marker envelope pattern wraps all untrusted text (query, chat history, preference context, Brave search fields) before Gemini calls. ✓ Done
+- Length caps enforced at the HTTP boundary (`validateRecommendationHttpBody`): 2 000-char query, 4 000-char per message, 50 messages, 2 000-char priorityContext (silently truncated + logged). ✓ Done
+- ADR 0001 documents the three-layer defence, residual risks, and what was intentionally not built. ✓ Done
+- **Classic pipeline removed**; research pipeline (Brave + LangGraph + MusicBrainz) is the only recommendation path. `BRAVE_API_KEY` is now required at boot — no silent fallback. Deprecated `GET /search/artists` route removed. ✓ Done
 
 ## Phase 4.5 — Data Portability, Sharing & Saved Artists Organisation
 
