@@ -1,5 +1,6 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
+import { capAndTrim, wrapUserContent } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
@@ -117,7 +118,7 @@ export async function createRecommendationReflector({
     const defaultSufficient = verifiedCount >= input.targetVerifiedCount || input.searchBudgetRemaining <= 0;
 
     const userContent = [
-      `current_user_query: ${String(input.userQuery || "").trim()}`,
+      `current_user_query: ${wrapUserContent(capAndTrim(String(input.userQuery || ""), 2000))}`,
       `anchors: ${input.plan.anchorArtists.join(", ")}`,
       `style_signals: ${input.plan.styleSignals.join(", ")}`,
       `verified_candidate_count: ${verifiedCount}`,

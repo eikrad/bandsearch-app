@@ -1,6 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
+import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
@@ -78,29 +79,6 @@ export function tryParseSearchPlanFromModelText(raw: string): SearchPlan | null 
   }
 }
 
-function formatHistoryForPlanner(messages: ChatMessage[] | undefined): string {
-  if (!Array.isArray(messages) || messages.length === 0) return "";
-  const lines: string[] = [];
-  let total = 0;
-  let omitted = false;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const m = messages[i];
-    if (m.role !== "user" && m.role !== "assistant") continue;
-    const role = m.role === "user" ? "user" : "assistant";
-    const content = String(m.content || "").trim();
-    if (!content) continue;
-    const line = `${role}: ${content}`;
-    if (total + line.length + 1 > WEB_SEARCH_PLAN_HISTORY_MAX_CHARS) {
-      omitted = true;
-      break;
-    }
-    lines.push(line);
-    total += line.length + 1;
-  }
-  if (omitted) lines.push("… (earlier messages omitted)");
-  return lines.reverse().join("\n");
-}
-
 export type WebSearchPlannerInput = {
   userQuery: string;
   preferenceContext?: string;
@@ -108,10 +86,11 @@ export type WebSearchPlannerInput = {
 };
 
 function buildPlannerUserContent(input: WebSearchPlannerInput): string {
-  const pref = typeof input.preferenceContext === "string" ? input.preferenceContext.trim() : "";
-  const history = formatHistoryForPlanner(input.messages);
-  const parts = [`current_user_query: ${String(input.userQuery || "").trim()}`];
-  if (pref) parts.push(`preference_context: ${pref}`);
+  const wrappedQuery = wrapUserContent(String(input.userQuery || "").trim());
+  const prefBlock = wrapPreferenceContext(typeof input.preferenceContext === "string" ? input.preferenceContext : "");
+  const history = formatHistoryBlock(input.messages ?? [], WEB_SEARCH_PLAN_HISTORY_MAX_CHARS);
+  const parts = [`current_user_query: ${wrappedQuery}`];
+  if (prefBlock) parts.push(prefBlock);
   if (history) parts.push(`conversation_excerpt:\n${history}`);
   return parts.join("\n\n");
 }
