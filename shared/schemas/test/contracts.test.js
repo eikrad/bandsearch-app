@@ -79,3 +79,41 @@ test("validateRecommendationHttpBody rejects invalid messages", () => {
   });
   assert.equal(v.ok, false);
 });
+
+test("validateRecommendationHttpBody rejects query longer than QUERY_MAX_LENGTH", () => {
+  const { QUERY_MAX_LENGTH } = require("../src/contracts");
+  const v = validateRecommendationHttpBody({ query: "a".repeat(QUERY_MAX_LENGTH + 1) });
+  assert.equal(v.ok, false);
+  assert.equal(v.error, "query too long");
+});
+
+test("validateRecommendationHttpBody rejects message content longer than MESSAGE_CONTENT_MAX_LEN", () => {
+  const { MESSAGE_CONTENT_MAX_LEN } = require("../src/contracts");
+  const v = validateRecommendationHttpBody({
+    query: "dark ambient",
+    messages: [{ role: "user", content: "x".repeat(MESSAGE_CONTENT_MAX_LEN + 1) }],
+  });
+  assert.equal(v.ok, false);
+  assert.equal(v.error, "message content too long");
+});
+
+test("validateRecommendationHttpBody rejects messages array over MESSAGES_MAX_COUNT", () => {
+  const { MESSAGES_MAX_COUNT } = require("../src/contracts");
+  const msgs = Array.from({ length: MESSAGES_MAX_COUNT + 1 }, (_, i) => ({
+    role: i % 2 === 0 ? "user" : "assistant",
+    content: "hi",
+  }));
+  const v = validateRecommendationHttpBody({ query: "dark ambient", messages: msgs });
+  assert.equal(v.ok, false);
+  assert.equal(v.error, "too many messages");
+});
+
+test("validateRecommendationHttpBody silently truncates priorityContext over PRIORITY_CONTEXT_MAX_LEN", () => {
+  const { PRIORITY_CONTEXT_MAX_LEN } = require("../src/contracts");
+  const v = validateRecommendationHttpBody({
+    query: "dark ambient",
+    priorityContext: "b".repeat(PRIORITY_CONTEXT_MAX_LEN + 100),
+  });
+  assert.equal(v.ok, true);
+  assert.equal(v.priorityContext.length, PRIORITY_CONTEXT_MAX_LEN);
+});
