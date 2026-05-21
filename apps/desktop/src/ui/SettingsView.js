@@ -16,13 +16,95 @@ const palette = {
   warnBorder: "#5c3d28",
 };
 
+function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }) {
+  const [draft, setDraft] = React.useState("");
+  return React.createElement(
+    "section",
+    {
+      style: {
+        marginTop: "12px",
+        padding: "16px",
+        borderRadius: "10px",
+        border: `1px solid ${palette.border}`,
+        backgroundColor: palette.cardBg,
+      },
+    },
+    React.createElement(
+      "label",
+      {
+        htmlFor: id,
+        style: { display: "block", fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "8px" },
+      },
+      label,
+    ),
+    React.createElement("input", {
+      id,
+      name: id,
+      type: "password",
+      autoComplete: "off",
+      value: draft,
+      onChange: (e) => setDraft(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      placeholder,
+      className: "settings-api-key-input",
+      style: {
+        width: "100%",
+        boxSizing: "border-box",
+        backgroundColor: palette.inputBg,
+        color: palette.textPrimary,
+        border: `1px solid ${palette.border}`,
+        borderRadius: "8px",
+        padding: "10px 12px",
+        fontSize: "14px",
+        marginBottom: "12px",
+      },
+    }),
+    statusMessage
+      ? React.createElement(
+          "p",
+          {
+            role: "status",
+            style: {
+              fontSize: "13px",
+              color: statusMessage.type === "error" ? "#e57373" : palette.accent,
+              marginBottom: "12px",
+            },
+          },
+          statusMessage.text,
+        )
+      : null,
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        className: "settings-save-key-btn",
+        onClick: () => onSave?.(draft.trim()),
+        style: {
+          backgroundColor: palette.accent,
+          color: "#0a0d14",
+          border: "none",
+          borderRadius: "8px",
+          padding: "10px 18px",
+          fontWeight: "600",
+          fontSize: "13px",
+          cursor: "pointer",
+        },
+      },
+      "Save key",
+    ),
+  );
+}
+
 function SettingsView({ viewProps, handlers }) {
-  const [keyDraft, setKeyDraft] = React.useState("");
   const subtitle =
     viewProps.headerSubtitle ||
-    "Your key is stored locally on this device and passed to the Bandsearch API process.";
+    "Your keys are stored locally on this device and passed to the Bandsearch API process.";
+
+  const missingKeys = [];
+  if (viewProps.hasStoredKey === false) missingKeys.push("Gemini");
+  if (viewProps.hasBraveKey === false) missingKeys.push("Brave Search");
+
   const banner =
-    viewProps.hasStoredKey === false
+    missingKeys.length > 0
       ? React.createElement(
           "div",
           {
@@ -38,7 +120,7 @@ function SettingsView({ viewProps, handlers }) {
               lineHeight: 1.45,
             },
           },
-          "No Gemini API key is configured yet. Add a key below so recommendations can run — or set GEMINI_API_KEY in a .env file for development.",
+          `${missingKeys.join(" and ")} API ${missingKeys.length === 1 ? "key is" : "keys are"} not configured yet. Add ${missingKeys.length === 1 ? "it" : "them"} below so recommendations can run.`,
         )
       : null;
 
@@ -100,80 +182,20 @@ function SettingsView({ viewProps, handlers }) {
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${palette.border}`, margin: "0" } }),
     ),
     banner,
-    React.createElement(
-      "section",
-      {
-        style: {
-          marginTop: "8px",
-          padding: "16px",
-          borderRadius: "10px",
-          border: `1px solid ${palette.border}`,
-          backgroundColor: palette.cardBg,
-        },
-      },
-      React.createElement(
-        "label",
-        {
-          htmlFor: "gemini-api-key",
-          style: { display: "block", fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "8px" },
-        },
-        "Gemini API key",
-      ),
-      React.createElement("input", {
-        id: "gemini-api-key",
-        name: "geminiApiKey",
-        type: "password",
-        autoComplete: "off",
-        value: keyDraft,
-        onChange: (e) => setKeyDraft(String(/** @type {HTMLInputElement} */ (e.target).value)),
-        placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your API key",
-        className: "settings-api-key-input",
-        style: {
-          width: "100%",
-          boxSizing: "border-box",
-          backgroundColor: palette.inputBg,
-          color: palette.textPrimary,
-          border: `1px solid ${palette.border}`,
-          borderRadius: "8px",
-          padding: "10px 12px",
-          fontSize: "14px",
-          marginBottom: "12px",
-        },
-      }),
-      viewProps.statusMessage
-        ? React.createElement(
-            "p",
-            {
-              role: "status",
-              style: {
-                fontSize: "13px",
-                color: viewProps.statusMessage.type === "error" ? "#e57373" : palette.accent,
-                marginBottom: "12px",
-              },
-            },
-            viewProps.statusMessage.text,
-          )
-        : null,
-      React.createElement(
-        "button",
-        {
-          type: "button",
-          className: "settings-save-key-btn",
-          onClick: () => handlers.onSaveApiKey?.(keyDraft.trim()),
-          style: {
-            backgroundColor: palette.accent,
-            color: "#0a0d14",
-            border: "none",
-            borderRadius: "8px",
-            padding: "10px 18px",
-            fontWeight: "600",
-            fontSize: "13px",
-            cursor: "pointer",
-          },
-        },
-        "Save key",
-      ),
-    ),
+    React.createElement(ApiKeyCard, {
+      id: "gemini-api-key",
+      label: "Gemini API key",
+      placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your Gemini API key",
+      onSave: (key) => handlers.onSaveApiKey?.(key),
+      statusMessage: viewProps.geminiStatusMessage ?? null,
+    }),
+    React.createElement(ApiKeyCard, {
+      id: "brave-api-key",
+      label: "Brave Search API key",
+      placeholder: viewProps.hasBraveKey ? "Enter a new key to replace the saved key" : "Paste your Brave Search API key",
+      onSave: (key) => handlers.onSaveBraveApiKey?.(key),
+      statusMessage: viewProps.braveStatusMessage ?? null,
+    }),
   );
 }
 
