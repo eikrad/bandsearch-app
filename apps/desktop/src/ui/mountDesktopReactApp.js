@@ -26,6 +26,7 @@ function resolveViewComponent(viewName) {
  *   savedArtistsShell?: object | null,
  *   getSettingsViewProps?: () => any,
  *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
+ *   saveBraveApiKey?: (apiKey: string) => Promise<void>,
  *   completeOnboarding?: () => Promise<void>,
  *   createRootImpl?: typeof import("react-dom/client").createRoot,
  *   resolveContainer?: () => HTMLElement,
@@ -39,9 +40,13 @@ function createDesktopReactMount({
     headerTitle: "Settings",
     headerSubtitle: "",
     hasStoredKey: false,
+    hasBraveKey: false,
     statusMessage: null,
   }),
   saveGeminiApiKey = async (apiKey) => {
+    void apiKey;
+  },
+  saveBraveApiKey = async (apiKey) => {
     void apiKey;
   },
   completeOnboarding = async () => {},
@@ -166,6 +171,10 @@ function createDesktopReactMount({
     },
     onSaveApiKey: async (apiKey) => {
       await saveGeminiApiKey(apiKey);
+      return renderCurrent();
+    },
+    onSaveBraveApiKey: async (apiKey) => {
+      await saveBraveApiKey(apiKey);
       return renderCurrent();
     },
   };

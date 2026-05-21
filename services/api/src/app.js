@@ -5,7 +5,6 @@ const rateLimitLib = require("express-rate-limit");
 const helmet = /** @type {any} */ (helmetLib.default || helmetLib);
 const rateLimit = /** @type {any} */ (rateLimitLib.default || rateLimitLib);
 const { version: appVersion } = require("../../../package.json");
-const { createRecommendationError, resolveRecommendationFacadeInput } = require("./recommendations");
 const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
@@ -15,11 +14,10 @@ const { writeStructuredLog } = require("./http/structuredLog");
 const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
 
 /**
- * @param {{ recommendationPipeline?: any, recommendationService?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void } }} [options]
+ * @param {{ recommendationPipeline?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void } }} [options]
  */
 function createApp({
   recommendationPipeline,
-  recommendationService,
   preferenceRepository,
   musicBrainzClient,
   artistImageClient,
@@ -93,33 +91,6 @@ function createApp({
       }
     })();
 
-  const resolvedRecommendationPipeline = recommendationPipeline || {
-    async recommend(request = {}) {
-      if (!recommendationService) {
-        throw createRecommendationError("recommendation_unavailable", "recommendation service unavailable");
-      }
-
-      const { mode, preferenceContext, messages } = await resolveRecommendationFacadeInput(
-        request,
-        resolvedPreferenceRepository,
-      );
-
-      const { recommendations, assistantReply = "" } = await recommendationService.getRecommendations(request.query, {
-        mode,
-        preferenceContext,
-        messages,
-      });
-      return {
-        recommendations,
-        assistantReply: typeof assistantReply === "string" ? assistantReply : "",
-        meta: {
-          modeUsed: mode,
-          usedPreferenceContext: preferenceContext.length > 0,
-        },
-      };
-    },
-  };
-
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
@@ -127,10 +98,10 @@ function createApp({
     resolvedMusicBrainzClient,
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
-    resolvedRecommendationPipeline,
+    resolvedRecommendationPipeline: recommendationPipeline,
     logger,
     getRecommendationReadiness:
-      recommendationPipeline && typeof recommendationPipeline.getReadinessSnapshot === "function"
+      typeof recommendationPipeline?.getReadinessSnapshot === "function"
         ? () => recommendationPipeline.getReadinessSnapshot()
         : null,
   });

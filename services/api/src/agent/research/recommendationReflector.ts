@@ -1,7 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { capAndTrim, wrapUserContent } from "../promptGuards.js";
-import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
+import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";

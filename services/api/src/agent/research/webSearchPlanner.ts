@@ -2,7 +2,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
-import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
+import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
 export const WEB_SEARCH_QUERY_MAX_LENGTH = 400;

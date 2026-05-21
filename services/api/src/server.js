@@ -15,10 +15,9 @@ async function start() {
     preferenceRepository,
   });
 
-  const readyTimeoutMs = Number(process.env.RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS || 45000);
   await Promise.race([
     recommendationPipeline.whenReady(),
-    new Promise((resolve) => setTimeout(resolve, readyTimeoutMs)),
+    new Promise((resolve) => setTimeout(resolve, runtimeConfig.pipelineReadyTimeoutMs)),
   ]);
 
   const app = createApp({ runtimeConfig, preferenceRepository, recommendationPipeline });

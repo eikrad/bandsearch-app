@@ -3,7 +3,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
-import { parseModelJsonResponse, withTimeout } from "../recommendationAgent.js";
+import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import type { VerifiedCandidate } from "./candidateVerifier.js";
 

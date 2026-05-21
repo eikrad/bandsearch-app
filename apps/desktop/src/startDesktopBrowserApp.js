@@ -94,6 +94,7 @@ async function startDesktopBrowserApp({
     savedArtistsShell,
     getSettingsViewProps: () => gemini.getSettingsViewProps(),
     saveGeminiApiKey: (key) => gemini.saveGeminiApiKey(key),
+    saveBraveApiKey: (key) => gemini.saveBraveApiKey(key),
     completeOnboarding: () => gemini.completeOnboarding(),
   });
   await reactApp.mount();

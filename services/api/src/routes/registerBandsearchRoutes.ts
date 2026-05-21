@@ -67,11 +67,6 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     return handleArtistSearch(res, req.query.query, resolvedMusicBrainzClient);
   });
 
-  /** @deprecated Use GET /artists/search?query= — same handler, compact query param `q` */
-  app.get("/search/artists", async (req, res) => {
-    return handleArtistSearch(res, req.query.q, resolvedMusicBrainzClient);
-  });
-
   app.get("/artists/image", async (req, res) => {
     const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
     if (!name) {

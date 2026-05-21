@@ -19,6 +19,8 @@ struct BandsearchConfig {
     #[serde(default)]
     gemini_api_key: String,
     #[serde(default)]
+    brave_api_key: String,
+    #[serde(default)]
     onboarding_completed: bool,
 }
 
@@ -26,12 +28,19 @@ struct BandsearchConfig {
 #[serde(rename_all = "camelCase")]
 struct GeminiConfigStatus {
     has_stored_key: bool,
+    has_brave_key: bool,
     onboarding_complete: bool,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SaveGeminiApiKeyRequest {
+    api_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveBraveApiKeyRequest {
     api_key: String,
 }
 
@@ -62,11 +71,13 @@ fn persist_config(cfg: &BandsearchConfig) -> Result<(), String> {
 fn gemini_key_for_spawn() -> Option<String> {
     let cfg = load_config();
     let trimmed = cfg.gemini_api_key.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+}
+
+fn brave_key_for_spawn() -> Option<String> {
+    let cfg = load_config();
+    let trimmed = cfg.brave_api_key.trim();
+    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
 }
 
 fn wait_for_api_tcp(port: u16) {
@@ -134,7 +145,7 @@ fn absolute_bandsearch_db_path(workspace_root: &Path) -> String {
         .into_owned()
 }
 
-fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>) -> Result<Child, std::io::Error> {
+fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) -> Result<Child, std::io::Error> {
     let (binary, args) = api_spawn_args(workspace_root);
     let mut cmd = Command::new(&binary);
     cmd.args(&args).current_dir(workspace_root);
@@ -143,6 +154,12 @@ fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>) -> Result<Ch
         let t = k.trim();
         if !t.is_empty() {
             cmd.env("GEMINI_API_KEY", t);
+        }
+    }
+    if let Some(k) = brave_key {
+        let t = k.trim();
+        if !t.is_empty() {
+            cmd.env("BRAVE_API_KEY", t);
         }
     }
     cmd.spawn()
@@ -155,8 +172,8 @@ fn api_listen_port() -> u16 {
         .unwrap_or(3001)
 }
 
-fn start_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>) {
-    match spawn_api_child(workspace_root, gemini_key) {
+fn start_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) {
+    match spawn_api_child(workspace_root, gemini_key, brave_key) {
         Ok(child) => {
             if let Ok(mut guard) = api.0.lock() {
                 *guard = Some(child);
@@ -172,13 +189,13 @@ fn start_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option
     }
 }
 
-fn restart_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>) {
+fn restart_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) {
     if let Ok(mut guard) = api.0.lock() {
         if let Some(mut child) = guard.take() {
             let _ = child.kill();
         }
     }
-    start_api_sidecar(api, workspace_root, gemini_key);
+    start_api_sidecar(api, workspace_root, gemini_key, brave_key);
 }
 
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -194,6 +211,7 @@ fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
     let cfg = load_config();
     Ok(GeminiConfigStatus {
         has_stored_key: !cfg.gemini_api_key.trim().is_empty(),
+        has_brave_key: !cfg.brave_api_key.trim().is_empty(),
         onboarding_complete: cfg.onboarding_completed,
     })
 }
@@ -212,7 +230,26 @@ fn save_gemini_api_key(
     cfg.gemini_api_key = trimmed.to_string();
     cfg.onboarding_completed = true;
     persist_config(&cfg)?;
-    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed));
+    let brave = brave_key_for_spawn();
+    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref());
+    Ok(())
+}
+
+#[tauri::command]
+fn save_brave_api_key(
+    workspace: State<'_, WorkspaceRoot>,
+    api: State<'_, ApiProcess>,
+    req: SaveBraveApiKeyRequest,
+) -> Result<(), String> {
+    let trimmed = req.api_key.trim();
+    if trimmed.is_empty() {
+        return Err("Brave API key is empty".into());
+    }
+    let mut cfg = load_config();
+    cfg.brave_api_key = trimmed.to_string();
+    persist_config(&cfg)?;
+    let gemini = gemini_key_for_spawn();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed));
     Ok(())
 }
 
@@ -226,7 +263,7 @@ fn complete_onboarding() -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, complete_onboarding])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
@@ -240,7 +277,8 @@ fn main() {
 
             let api = ApiProcess(Mutex::new(None));
             let gemini = gemini_key_for_spawn();
-            start_api_sidecar(&api, &workspace_root, gemini.as_deref());
+            let brave = brave_key_for_spawn();
+            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref());
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));

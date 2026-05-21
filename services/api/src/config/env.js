@@ -20,7 +20,6 @@ function validateRuntimeEnv(env = process.env) {
   }
 
   const port = parseNumber(env.PORT, 3001);
-  const recommendationTimeoutMs = parseNumber(env.RECOMMENDATION_TIMEOUT_MS, 8000);
   const musicBrainzTimeoutMs = parseNumber(env.MUSICBRAINZ_TIMEOUT_MS, 5000);
   const musicBrainzRetries = parseNumber(env.MUSICBRAINZ_RETRIES, 1);
 
@@ -52,9 +51,11 @@ function validateRuntimeEnv(env = process.env) {
   }
 
   const braveApiKey = String(env.BRAVE_API_KEY ?? "").trim();
-  const recommendationPipelineRaw = String(env.RECOMMENDATION_PIPELINE ?? "classic").trim().toLowerCase();
-  const recommendationPipeline =
-    recommendationPipelineRaw === "research" ? "research" : "classic";
+  if (!braveApiKey) {
+    throw new Error("BRAVE_API_KEY is required");
+  }
+
+  const pipelineReadyTimeoutMs = parseNumber(env.RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS, 45000);
 
   const researchMaxInitialSearches = parseNumber(env.RESEARCH_MAX_INITIAL_SEARCHES, 6);
   const researchMaxReflectionSearches = parseNumber(env.RESEARCH_MAX_REFLECTION_SEARCHES, 4);
@@ -66,14 +67,13 @@ function validateRuntimeEnv(env = process.env) {
     geminiApiKey,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
     braveApiKey,
-    recommendationPipeline,
+    pipelineReadyTimeoutMs,
     researchMaxInitialSearches,
     researchMaxReflectionSearches,
     researchTotalSearchBudget,
     researchTimeoutMs,
     researchTargetVerifiedCandidates,
     port,
-    recommendationTimeoutMs,
     musicBrainzTimeoutMs,
     musicBrainzRetries,
     corsOrigin: env.CORS_ORIGIN || "*",
