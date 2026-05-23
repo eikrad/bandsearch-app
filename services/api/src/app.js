@@ -14,7 +14,7 @@ const { writeStructuredLog } = require("./http/structuredLog");
 const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
 
 /**
- * @param {{ recommendationPipeline?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void } }} [options]
+ * @param {{ recommendationPipeline?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void }, createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> } }} [options]
  */
 function createApp({
   recommendationPipeline,
@@ -24,6 +24,7 @@ function createApp({
   chatSessionRepository,
   runtimeConfig = {},
   logger,
+  createTursoClient,
 } = {}) {
   const app = express();
   app.use(helmet());
@@ -99,6 +100,7 @@ function createApp({
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
     resolvedRecommendationPipeline: recommendationPipeline,
+    createTursoClient,
     logger,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
