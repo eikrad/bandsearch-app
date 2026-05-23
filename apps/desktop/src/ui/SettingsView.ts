@@ -1,4 +1,4 @@
-const React = require("react");
+import * as React from "react";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -16,7 +16,17 @@ const palette = {
   warnBorder: "#5c3d28",
 };
 
-function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }) {
+type StatusMessage = { type: "success" | "error"; text: string } | null;
+
+interface ApiKeyCardProps {
+  id: string;
+  label: string;
+  placeholder: string;
+  onSave?: (key: string) => void;
+  statusMessage: StatusMessage;
+}
+
+function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }: ApiKeyCardProps) {
   const [draft, setDraft] = React.useState("");
   return React.createElement(
     "section",
@@ -43,7 +53,7 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }) {
       type: "password",
       autoComplete: "off",
       value: draft,
-      onChange: (e) => setDraft(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
       placeholder,
       className: "settings-api-key-input",
       style: {
@@ -94,11 +104,17 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }) {
   );
 }
 
-function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }) {
+interface TursoConfigCardProps {
+  hasTursoConfig: boolean;
+  statusMessage: StatusMessage;
+  onSave?: (url: string, token: string) => void;
+}
+
+function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }: TursoConfigCardProps) {
   const [draftUrl, setDraftUrl] = React.useState("");
   const [draftToken, setDraftToken] = React.useState("");
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     width: "100%",
     boxSizing: "border-box",
     backgroundColor: palette.inputBg,
@@ -147,7 +163,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }) {
       type: "text",
       autoComplete: "off",
       value: draftUrl,
-      onChange: (e) => setDraftUrl(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftUrl(e.target.value),
       placeholder: hasTursoConfig ? "Enter a new URL to replace the saved URL" : "libsql://your-db.turso.io",
       style: inputStyle,
     }),
@@ -165,7 +181,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }) {
       type: "password",
       autoComplete: "off",
       value: draftToken,
-      onChange: (e) => setDraftToken(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftToken(e.target.value),
       placeholder: hasTursoConfig ? "Enter a new token to replace the saved token" : "Paste your Turso auth token",
       style: inputStyle,
     }),
@@ -204,12 +220,31 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }) {
   );
 }
 
-function SettingsView({ viewProps, handlers }) {
+interface SettingsViewProps {
+  viewProps: {
+    headerTitle?: string;
+    headerSubtitle?: string;
+    hasStoredKey?: boolean;
+    hasBraveKey?: boolean;
+    hasTursoConfig?: boolean;
+    geminiStatusMessage?: StatusMessage;
+    braveStatusMessage?: StatusMessage;
+    tursoStatusMessage?: StatusMessage;
+  };
+  handlers: {
+    onNavigateChat?: () => void;
+    onSaveApiKey?: (key: string) => void;
+    onSaveBraveApiKey?: (key: string) => void;
+    onSaveTursoConfig?: (url: string, token: string) => void;
+  };
+}
+
+export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
   const subtitle =
     viewProps.headerSubtitle ||
     "Your keys are stored locally on this device and passed to the Bandsearch API process.";
 
-  const missingKeys = [];
+  const missingKeys: string[] = [];
   if (viewProps.hasStoredKey === false) missingKeys.push("Gemini");
   if (viewProps.hasBraveKey === false) missingKeys.push("Brave Search");
 
@@ -313,5 +348,3 @@ function SettingsView({ viewProps, handlers }) {
     }),
   );
 }
-
-module.exports = { SettingsView };
