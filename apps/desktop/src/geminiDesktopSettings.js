@@ -1,14 +1,33 @@
 const { FIRST_RUN_ONBOARDING_STORAGE_KEY } = require("./firstRunOnboarding.js");
 
+async function defaultProbeTursoConnection(url, token) {
+  try {
+    const response = await fetch("http://localhost:3001/preferences/turso/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ databaseUrl: url, authToken: token }),
+    });
+    if (!response.ok) return { ok: false, error: `probe request failed: ${response.status}` };
+    const data = /** @type {any} */ (await response.json());
+    return data;
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "probe request failed" };
+  }
+}
+
 /**
  * Desktop API key UI state: Tauri IPC when available, otherwise optional browser localStorage for dev.
  *
- * @param {{ invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown> }} [options]
+ * @param {{
+ *   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>,
+ *   probeTursoConnection?: (url: string, token: string) => Promise<{ ok: boolean; error?: string }>,
+ * }} [options]
  */
 function createGeminiSettingsController(options = {}) {
-  const { invokeTauri } = options;
+  const { invokeTauri, probeTursoConnection } = options;
   let geminiStatus = /** @type {{ type: "success" | "error"; text: string } | null} */ (null);
   let braveStatus = /** @type {{ type: "success" | "error"; text: string } | null} */ (null);
+  let tursoStatus = /** @type {{ type: "success" | "error"; text: string } | null} */ (null);
 
   async function getBootstrapGate() {
     if (typeof invokeTauri === "function") {
@@ -55,14 +74,16 @@ function createGeminiSettingsController(options = {}) {
   async function getSettingsViewProps() {
     let hasStoredKey = false;
     let hasBraveKey = false;
+    let hasTursoConfig = false;
 
     if (typeof invokeTauri === "function") {
       try {
-        const r = /** @type {{ hasStoredKey?: boolean; hasBraveKey?: boolean }} */ (
+        const r = /** @type {{ hasStoredKey?: boolean; hasBraveKey?: boolean; hasTursoConfig?: boolean }} */ (
           await invokeTauri("gemini_config_status")
         );
         hasStoredKey = Boolean(r?.hasStoredKey);
         hasBraveKey = Boolean(r?.hasBraveKey);
+        hasTursoConfig = Boolean(r?.hasTursoConfig);
       } catch {
         /* defaults */
       }
@@ -72,6 +93,7 @@ function createGeminiSettingsController(options = {}) {
         if (ls) {
           hasStoredKey = Boolean(ls.getItem("bandsearch_gemini_api_key")?.trim());
           hasBraveKey = Boolean(ls.getItem("bandsearch_brave_api_key")?.trim());
+          hasTursoConfig = Boolean(ls.getItem("bandsearch_turso_database_url")?.trim());
         }
       } catch {
         /* defaults */
@@ -83,9 +105,11 @@ function createGeminiSettingsController(options = {}) {
       headerSubtitle: "",
       hasStoredKey,
       hasBraveKey,
+      hasTursoConfig,
       statusMessage: geminiStatus ?? braveStatus,
       geminiStatusMessage: geminiStatus,
       braveStatusMessage: braveStatus,
+      tursoStatusMessage: tursoStatus,
     };
   }
 
@@ -156,7 +180,43 @@ function createGeminiSettingsController(options = {}) {
     }
   }
 
-  return { getSettingsViewProps, saveGeminiApiKey, saveBraveApiKey, getBootstrapGate, completeOnboarding };
+  async function saveTursoConfig(databaseUrl, authToken) {
+    const url = String(databaseUrl || "").trim();
+    const token = String(authToken || "").trim();
+    if (!url) {
+      tursoStatus = { type: "error", text: "Enter a non-empty database URL." };
+      return;
+    }
+
+    const probe = probeTursoConnection ?? defaultProbeTursoConnection;
+    const probeResult = await probe(url, token);
+    if (!probeResult.ok) {
+      tursoStatus = { type: "error", text: probeResult.error || "Connection failed." };
+      return;
+    }
+
+    if (typeof invokeTauri === "function") {
+      try {
+        await invokeTauri("save_turso_config", { databaseUrl: url, authToken: token });
+        tursoStatus = { type: "success", text: "Saved. Syncing via Turso from next restart." };
+      } catch (e) {
+        const err = /** @type {{ message?: string }} */ (e);
+        tursoStatus = { type: "error", text: String(err?.message || e || "Could not save config.") };
+      }
+      return;
+    }
+
+    try {
+      globalThis.localStorage?.setItem("bandsearch_turso_database_url", url);
+      globalThis.localStorage?.setItem("bandsearch_turso_auth_token", token);
+      tursoStatus = { type: "success", text: "Stored in browser storage (development only)." };
+    } catch (e) {
+      const err = /** @type {{ message?: string }} */ (e);
+      tursoStatus = { type: "error", text: String(err?.message || e || "Could not save config.") };
+    }
+  }
+
+  return { getSettingsViewProps, saveGeminiApiKey, saveBraveApiKey, saveTursoConfig, getBootstrapGate, completeOnboarding };
 }
 
 module.exports = {

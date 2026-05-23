@@ -22,6 +22,10 @@ struct BandsearchConfig {
     brave_api_key: String,
     #[serde(default)]
     onboarding_completed: bool,
+    #[serde(default)]
+    turso_database_url: String,
+    #[serde(default)]
+    turso_auth_token: String,
 }
 
 #[derive(Serialize)]
@@ -30,6 +34,7 @@ struct GeminiConfigStatus {
     has_stored_key: bool,
     has_brave_key: bool,
     onboarding_complete: bool,
+    has_turso_config: bool,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +47,13 @@ struct SaveGeminiApiKeyRequest {
 #[serde(rename_all = "camelCase")]
 struct SaveBraveApiKeyRequest {
     api_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveTursoConfigRequest {
+    database_url: String,
+    auth_token: String,
 }
 
 fn config_file_path() -> Result<PathBuf, String> {
@@ -78,6 +90,15 @@ fn brave_key_for_spawn() -> Option<String> {
     let cfg = load_config();
     let trimmed = cfg.brave_api_key.trim();
     if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+}
+
+fn turso_for_spawn() -> (Option<String>, Option<String>) {
+    let cfg = load_config();
+    let url = cfg.turso_database_url.trim().to_string();
+    let token = cfg.turso_auth_token.trim().to_string();
+    let url_opt = if url.is_empty() { None } else { Some(url) };
+    let token_opt = if token.is_empty() { None } else { Some(token) };
+    (url_opt, token_opt)
 }
 
 fn wait_for_api_tcp(port: u16) {
@@ -145,7 +166,13 @@ fn absolute_bandsearch_db_path(workspace_root: &Path) -> String {
         .into_owned()
 }
 
-fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) -> Result<Child, std::io::Error> {
+fn spawn_api_child(
+    workspace_root: &Path,
+    gemini_key: Option<&str>,
+    brave_key: Option<&str>,
+    turso_url: Option<&str>,
+    turso_token: Option<&str>,
+) -> Result<Child, std::io::Error> {
     let (binary, args) = api_spawn_args(workspace_root);
     let mut cmd = Command::new(&binary);
     cmd.args(&args).current_dir(workspace_root);
@@ -162,6 +189,19 @@ fn spawn_api_child(workspace_root: &Path, gemini_key: Option<&str>, brave_key: O
             cmd.env("BRAVE_API_KEY", t);
         }
     }
+    if let Some(url) = turso_url {
+        let t = url.trim();
+        if !t.is_empty() {
+            cmd.env("PREFERENCE_STORE", "turso");
+            cmd.env("TURSO_DATABASE_URL", t);
+            if let Some(tok) = turso_token {
+                let tt = tok.trim();
+                if !tt.is_empty() {
+                    cmd.env("TURSO_AUTH_TOKEN", tt);
+                }
+            }
+        }
+    }
     cmd.spawn()
 }
 
@@ -172,8 +212,15 @@ fn api_listen_port() -> u16 {
         .unwrap_or(3001)
 }
 
-fn start_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) {
-    match spawn_api_child(workspace_root, gemini_key, brave_key) {
+fn start_api_sidecar(
+    api: &ApiProcess,
+    workspace_root: &Path,
+    gemini_key: Option<&str>,
+    brave_key: Option<&str>,
+    turso_url: Option<&str>,
+    turso_token: Option<&str>,
+) {
+    match spawn_api_child(workspace_root, gemini_key, brave_key, turso_url, turso_token) {
         Ok(child) => {
             if let Ok(mut guard) = api.0.lock() {
                 *guard = Some(child);
@@ -189,13 +236,20 @@ fn start_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option
     }
 }
 
-fn restart_api_sidecar(api: &ApiProcess, workspace_root: &Path, gemini_key: Option<&str>, brave_key: Option<&str>) {
+fn restart_api_sidecar(
+    api: &ApiProcess,
+    workspace_root: &Path,
+    gemini_key: Option<&str>,
+    brave_key: Option<&str>,
+    turso_url: Option<&str>,
+    turso_token: Option<&str>,
+) {
     if let Ok(mut guard) = api.0.lock() {
         if let Some(mut child) = guard.take() {
             let _ = child.kill();
         }
     }
-    start_api_sidecar(api, workspace_root, gemini_key, brave_key);
+    start_api_sidecar(api, workspace_root, gemini_key, brave_key, turso_url, turso_token);
 }
 
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -213,6 +267,7 @@ fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
         has_stored_key: !cfg.gemini_api_key.trim().is_empty(),
         has_brave_key: !cfg.brave_api_key.trim().is_empty(),
         onboarding_complete: cfg.onboarding_completed,
+        has_turso_config: !cfg.turso_database_url.trim().is_empty(),
     })
 }
 
@@ -231,7 +286,8 @@ fn save_gemini_api_key(
     cfg.onboarding_completed = true;
     persist_config(&cfg)?;
     let brave = brave_key_for_spawn();
-    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref());
+    let (turso_url, turso_tok) = turso_for_spawn();
+    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref());
     Ok(())
 }
 
@@ -249,7 +305,28 @@ fn save_brave_api_key(
     cfg.brave_api_key = trimmed.to_string();
     persist_config(&cfg)?;
     let gemini = gemini_key_for_spawn();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed));
+    let (turso_url, turso_tok) = turso_for_spawn();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed), turso_url.as_deref(), turso_tok.as_deref());
+    Ok(())
+}
+
+#[tauri::command]
+fn save_turso_config(
+    workspace: State<'_, WorkspaceRoot>,
+    api: State<'_, ApiProcess>,
+    req: SaveTursoConfigRequest,
+) -> Result<(), String> {
+    let url = req.database_url.trim();
+    if url.is_empty() {
+        return Err("database URL is empty".into());
+    }
+    let mut cfg = load_config();
+    cfg.turso_database_url = url.to_string();
+    cfg.turso_auth_token = req.auth_token.trim().to_string();
+    persist_config(&cfg)?;
+    let gemini = gemini_key_for_spawn();
+    let brave = brave_key_for_spawn();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), Some(url), Some(cfg.turso_auth_token.as_str()));
     Ok(())
 }
 
@@ -263,7 +340,7 @@ fn complete_onboarding() -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, complete_onboarding])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
@@ -278,7 +355,8 @@ fn main() {
             let api = ApiProcess(Mutex::new(None));
             let gemini = gemini_key_for_spawn();
             let brave = brave_key_for_spawn();
-            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref());
+            let (turso_url, turso_tok) = turso_for_spawn();
+            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref());
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));
