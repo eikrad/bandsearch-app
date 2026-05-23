@@ -41,7 +41,7 @@
 - Shareable recommendations: copy-to-clipboard for a formatted recommendation list (artist + why-text). ✓ Done
 - **Artist grouping**: group saved artists by genre (fetched from MusicBrainz) or by user-defined custom tags/criteria, with the ability to create, rename, and delete groups and drag artists between them. ✓ Done
 
-## Phase 5.5 — Cross-device Sync (Turso)
+## Phase 5.5 — Cross-device Sync (Turso) ✓ Done
 
 - Sync preference data via Turso/libSQL between desktop and phone. Turso is SQLite-compatible with a remote replica: the desktop writes locally (offline-capable) and syncs automatically to the cloud. A future mobile app or web client reads from the same remote database.
 - Minimal invasive: new `TursoPreferenceRepository` adapter for libSQL, activated via `PREFERENCE_STORE=turso`. Connection string and auth token configurable through the settings UI (Phase 3.5). ✓ Done
