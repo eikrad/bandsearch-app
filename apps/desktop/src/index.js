@@ -60,6 +60,7 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
  *   getSettingsViewProps?: () => Promise<any>,
  *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
  *   saveBraveApiKey?: (apiKey: string) => Promise<void>,
+ *   saveTursoConfig?: (url: string, token: string) => Promise<void>,
  *   completeOnboarding?: () => Promise<void>,
  * }} [options]
  */
@@ -73,6 +74,7 @@ function bootstrapDesktopReactApp(options = {}) {
     getSettingsViewProps,
     saveGeminiApiKey,
     saveBraveApiKey,
+    saveTursoConfig,
     completeOnboarding,
   } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
@@ -83,6 +85,7 @@ function bootstrapDesktopReactApp(options = {}) {
     getSettingsViewProps,
     saveGeminiApiKey,
     saveBraveApiKey,
+    saveTursoConfig,
     completeOnboarding,
   });
   return {

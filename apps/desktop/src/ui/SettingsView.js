@@ -94,6 +94,116 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }) {
   );
 }
 
+function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }) {
+  const [draftUrl, setDraftUrl] = React.useState("");
+  const [draftToken, setDraftToken] = React.useState("");
+
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    backgroundColor: palette.inputBg,
+    color: palette.textPrimary,
+    border: `1px solid ${palette.border}`,
+    borderRadius: "8px",
+    padding: "10px 12px",
+    fontSize: "14px",
+    marginBottom: "12px",
+  };
+
+  return React.createElement(
+    "section",
+    {
+      style: {
+        marginTop: "12px",
+        padding: "16px",
+        borderRadius: "10px",
+        border: `1px solid ${palette.border}`,
+        backgroundColor: palette.cardBg,
+      },
+    },
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
+      "Turso cross-device sync",
+    ),
+    !hasTursoConfig
+      ? React.createElement(
+          "p",
+          { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
+          "Add a Turso database URL to sync your saved artists across devices.",
+        )
+      : null,
+    React.createElement(
+      "label",
+      {
+        htmlFor: "turso-database-url",
+        style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
+      },
+      "Database URL",
+    ),
+    React.createElement("input", {
+      id: "turso-database-url",
+      name: "turso-database-url",
+      type: "text",
+      autoComplete: "off",
+      value: draftUrl,
+      onChange: (e) => setDraftUrl(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      placeholder: hasTursoConfig ? "Enter a new URL to replace the saved URL" : "libsql://your-db.turso.io",
+      style: inputStyle,
+    }),
+    React.createElement(
+      "label",
+      {
+        htmlFor: "turso-auth-token",
+        style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
+      },
+      "Auth token",
+    ),
+    React.createElement("input", {
+      id: "turso-auth-token",
+      name: "turso-auth-token",
+      type: "password",
+      autoComplete: "off",
+      value: draftToken,
+      onChange: (e) => setDraftToken(String(/** @type {HTMLInputElement} */ (e.target).value)),
+      placeholder: hasTursoConfig ? "Enter a new token to replace the saved token" : "Paste your Turso auth token",
+      style: inputStyle,
+    }),
+    statusMessage
+      ? React.createElement(
+          "p",
+          {
+            role: "status",
+            style: {
+              fontSize: "13px",
+              color: statusMessage.type === "error" ? "#e57373" : palette.accent,
+              marginBottom: "12px",
+            },
+          },
+          statusMessage.text,
+        )
+      : null,
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => onSave?.(draftUrl.trim(), draftToken.trim()),
+        style: {
+          backgroundColor: palette.accent,
+          color: "#0a0d14",
+          border: "none",
+          borderRadius: "8px",
+          padding: "10px 18px",
+          fontWeight: "600",
+          fontSize: "13px",
+          cursor: "pointer",
+        },
+      },
+      "Save and connect",
+    ),
+  );
+}
+
 function SettingsView({ viewProps, handlers }) {
   const subtitle =
     viewProps.headerSubtitle ||
@@ -195,6 +305,11 @@ function SettingsView({ viewProps, handlers }) {
       placeholder: viewProps.hasBraveKey ? "Enter a new key to replace the saved key" : "Paste your Brave Search API key",
       onSave: (key) => handlers.onSaveBraveApiKey?.(key),
       statusMessage: viewProps.braveStatusMessage ?? null,
+    }),
+    React.createElement(TursoConfigCard, {
+      hasTursoConfig: Boolean(viewProps.hasTursoConfig),
+      statusMessage: viewProps.tursoStatusMessage ?? null,
+      onSave: (url, token) => handlers.onSaveTursoConfig?.(url, token),
     }),
   );
 }

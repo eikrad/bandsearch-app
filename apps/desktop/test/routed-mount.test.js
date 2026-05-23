@@ -151,3 +151,29 @@ test("routed mount calls render with SettingsView when route is settings", async
   assert.equal(renders.length, 1);
   assert.equal(renders[0].type?.name, "SettingsView");
 });
+
+test("routed mount settingsHandlers.onSaveTursoConfig calls provided saveTursoConfig", async () => {
+  const calls = [];
+  const shell = makeShell();
+  const router = makeRouter("settings");
+  const renders = [];
+
+  const mount = createDesktopReactMount({
+    shell,
+    router,
+    getSettingsViewProps: () => ({ headerTitle: "Settings", hasStoredKey: false }),
+    saveTursoConfig: async (url, token) => { calls.push({ url, token }); },
+    createRootImpl: () => ({ render: (el) => renders.push(el) }),
+    resolveContainer: () => ({}),
+  });
+
+  await mount.mount();
+  const rendered = renders[0];
+  const settingsHandlers = rendered?.props?.handlers;
+  assert.ok(typeof settingsHandlers?.onSaveTursoConfig === "function", "should expose onSaveTursoConfig");
+
+  await settingsHandlers.onSaveTursoConfig("libsql://test.turso.io", "mytoken");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "libsql://test.turso.io");
+  assert.equal(calls[0].token, "mytoken");
+});

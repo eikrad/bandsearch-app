@@ -27,6 +27,7 @@ function resolveViewComponent(viewName) {
  *   getSettingsViewProps?: () => any,
  *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
  *   saveBraveApiKey?: (apiKey: string) => Promise<void>,
+ *   saveTursoConfig?: (url: string, token: string) => Promise<void>,
  *   completeOnboarding?: () => Promise<void>,
  *   createRootImpl?: typeof import("react-dom/client").createRoot,
  *   resolveContainer?: () => HTMLElement,
@@ -48,6 +49,10 @@ function createDesktopReactMount({
   },
   saveBraveApiKey = async (apiKey) => {
     void apiKey;
+  },
+  saveTursoConfig = async (url, token) => {
+    void url;
+    void token;
   },
   completeOnboarding = async () => {},
   createRootImpl = createRoot,
@@ -175,6 +180,10 @@ function createDesktopReactMount({
     },
     onSaveBraveApiKey: async (apiKey) => {
       await saveBraveApiKey(apiKey);
+      return renderCurrent();
+    },
+    onSaveTursoConfig: async (url, token) => {
+      await saveTursoConfig(url, token);
       return renderCurrent();
     },
   };
