@@ -1,19 +1,40 @@
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
-const { ChatAppView } = require("./ChatAppView");
-const { formatRecommendationQueryError } = require("../apiErrorMessages.js");
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ChatAppView } from "./ChatAppView.js";
+import { formatRecommendationQueryError } from "../apiErrorMessages.js";
 
-function createDesktopReactShell({
+type ActionStatus = { type: "success" | "error"; message: string } | null;
+
+interface CreateDesktopReactShellOptions {
+  renderAdapter: {
+    onModeChange: (mode: string) => any;
+    onSubmitQuery: (query: string) => any;
+    getViewProps: () => Record<string, any>;
+  };
+  actionHandlers?: Record<string, any>;
+  statusTimeoutMs?: number;
+  errorStatusTimeoutMs?: number;
+  setTimeoutImpl?: typeof setTimeout;
+  getViewImpl?: () => string;
+  navigateImpl?: (view: string) => any;
+  searchArtistsImpl?: (query: string) => Promise<void>;
+  toggleSelectionImpl?: (id: string) => void;
+  deleteSavedArtistImpl?: (id: string) => Promise<void>;
+  activateStyleRefImpl?: () => Promise<void>;
+  getSavedArtistsViewPropsImpl?: () => Record<string, any>;
+}
+
+export function createDesktopReactShell({
   renderAdapter,
   actionHandlers = {},
   statusTimeoutMs = 3000,
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
   getViewImpl = () => "chat",
-  navigateImpl = /** @type {Function} */ (() => {}),
-  searchArtistsImpl = /** @type {Function} */ (async () => {}),
-  toggleSelectionImpl = /** @type {Function} */ (() => {}),
-  deleteSavedArtistImpl = /** @type {Function} */ (async () => {}),
+  navigateImpl = () => {},
+  searchArtistsImpl = async () => {},
+  toggleSelectionImpl = () => {},
+  deleteSavedArtistImpl = async () => {},
   activateStyleRefImpl = async () => {},
   getSavedArtistsViewPropsImpl = () => ({
     header: { title: "Saved Artists", subtitle: "Your style references" },
@@ -23,30 +44,29 @@ function createDesktopReactShell({
     searchResults: [],
     isSearching: false,
   }),
-}) {
-  const resolvedActionHandlers = /** @type {any} */ (actionHandlers);
-  let actionStatus = null;
-  let clearStatusTimer = null;
+}: CreateDesktopReactShellOptions) {
+  let actionStatus: ActionStatus = null;
+  let clearStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function scheduleStatusClear(customDelayMs) {
+  function scheduleStatusClear(customDelayMs?: number) {
     const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
-    if (clearStatusTimer) {
-      clearTimeout(clearStatusTimer);
-    }
+    if (clearStatusTimer) clearTimeout(clearStatusTimer);
     clearStatusTimer = setTimeoutImpl(() => {
       actionStatus = null;
       clearStatusTimer = null;
     }, delayMs);
   }
+
   const handlers = {
-    onModeChange: (mode) => renderAdapter.onModeChange(mode),
-    onQuerySubmit: (query) => renderAdapter.onSubmitQuery(query),
-    onSave: resolvedActionHandlers.onSave || (() => {}),
-    onRate: resolvedActionHandlers.onRate || (() => {}),
-    onMore: resolvedActionHandlers.onMore || (() => {}),
+    onModeChange: (mode: string) => renderAdapter.onModeChange(mode),
+    onQuerySubmit: (query: string) => renderAdapter.onSubmitQuery(query),
+    onSave: actionHandlers.onSave || (() => {}),
+    onRate: actionHandlers.onRate || (() => {}),
+    onMore: actionHandlers.onMore || (() => {}),
   };
 
-  return {
+  const shell = {
+    desktopUi: undefined as any,
     getViewProps() {
       if (getViewImpl() === "saved-artists") {
         return getSavedArtistsViewPropsImpl();
@@ -54,10 +74,10 @@ function createDesktopReactShell({
       const base = renderAdapter.getViewProps();
       return { ...base, actionStatus };
     },
-    async updateMode(mode) {
+    async updateMode(mode: string) {
       return handlers.onModeChange(mode);
     },
-    async submitQuery(query) {
+    async submitQuery(query: string) {
       try {
         return await handlers.onQuerySubmit(query);
       } catch (error) {
@@ -66,7 +86,7 @@ function createDesktopReactShell({
         throw new Error("query failed");
       }
     },
-    async saveBand(artistName) {
+    async saveBand(artistName: string) {
       try {
         const result = await handlers.onSave(artistName);
         actionStatus = { type: "success", message: `Saved ${artistName}.` };
@@ -78,7 +98,7 @@ function createDesktopReactShell({
         throw error;
       }
     },
-    async rateBand(artistName, rating = 5) {
+    async rateBand(artistName: string, rating = 5) {
       try {
         const result = await handlers.onRate(artistName, rating);
         actionStatus = { type: "success", message: `Rated ${artistName}: ${rating}/5.` };
@@ -93,16 +113,16 @@ function createDesktopReactShell({
     getView() {
       return getViewImpl();
     },
-    async navigate(view) {
+    async navigate(view: string) {
       await navigateImpl(view);
     },
-    async searchArtists(query) {
+    async searchArtists(query: string) {
       await searchArtistsImpl(query);
     },
-    toggleSelection(id) {
+    toggleSelection(id: string) {
       toggleSelectionImpl(id);
     },
-    async deleteSavedArtist(id) {
+    async deleteSavedArtist(id: string) {
       try {
         await deleteSavedArtistImpl(id);
       } catch (error) {
@@ -116,11 +136,8 @@ function createDesktopReactShell({
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();
-      return renderToStaticMarkup(React.createElement(ChatAppView, { viewProps, handlers }));
+      return renderToStaticMarkup(React.createElement(ChatAppView as any, { viewProps, handlers }));
     },
   };
+  return shell;
 }
-
-module.exports = {
-  createDesktopReactShell,
-};
