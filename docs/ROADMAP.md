@@ -35,17 +35,19 @@
 - ADR 0001 documents the three-layer defence, residual risks, and what was intentionally not built. ✓ Done
 - **Classic pipeline removed**; research pipeline (Brave + LangGraph + MusicBrainz) is the only recommendation path. `BRAVE_API_KEY` is now required at boot — no silent fallback. Deprecated `GET /search/artists` route removed. ✓ Done
 
-## Phase 4.5 — Data Portability, Sharing & Saved Artists Organisation
+## Phase 4.5 — Data Portability, Sharing & Saved Artists Organisation ✓ Done
 
-- Export / import saved artists as JSON for backup and device transfer.
-- Shareable recommendations: copy-to-clipboard for a formatted recommendation list (artist + why-text).
-- **Artist grouping**: group saved artists by genre (fetched from MusicBrainz) or by user-defined custom tags/criteria, with the ability to create, rename, and delete groups and drag artists between them.
+- Export / import saved artists as JSON for backup and device transfer. ✓ Done
+- Shareable recommendations: copy-to-clipboard for a formatted recommendation list (artist + why-text). ✓ Done
+- **Artist grouping**: group saved artists by genre (fetched from MusicBrainz) or by user-defined custom tags/criteria, with the ability to create, rename, and delete groups and drag artists between them. ✓ Done
 
-## Phase 5.5 — Cross-device Sync (Turso)
+## Phase 5.5 — Cross-device Sync (Turso) ✓ Done
 
 - Sync preference data via Turso/libSQL between desktop and phone. Turso is SQLite-compatible with a remote replica: the desktop writes locally (offline-capable) and syncs automatically to the cloud. A future mobile app or web client reads from the same remote database.
-- Minimal invasive: new `TursoPreferenceRepository` adapter for libSQL, activated via `PREFERENCE_STORE=turso`. Connection string and auth token configurable through the settings UI (Phase 3.5).
+- Minimal invasive: new `TursoPreferenceRepository` adapter for libSQL, activated via `PREFERENCE_STORE=turso`. Connection string and auth token configurable through the settings UI (Phase 3.5). ✓ Done
 - Foundation for Phase 6 multi-user: Turso supports per-user namespacing and row-level security.
+
+Implemented: `POST /preferences/turso/test` connection probe; Turso URL + token configurable in Settings with save-and-test flow; Tauri backend persists credentials and restarts the API with `PREFERENCE_STORE=turso`; `PREFERENCE_STORE=turso` activates `TursoPreferenceRepository` (fully implemented including groups/export).
 
 ## Phase 6 — Auth and Multi-user
 

@@ -1,4 +1,5 @@
 import type { Express, RequestHandler } from "express";
+import { createClient as createLibsqlClient } from "@libsql/client";
 
 import { validateRecommendationRequest } from "../recommendations.js";
 import { sendError } from "../http/errors.js";
@@ -6,6 +7,7 @@ import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 
 type Group = { id: string; name: string; memberIds: string[] };
+type TursoClient = { execute: (sql: string) => Promise<unknown> };
 
 export type BandsearchRouteContext = {
   appVersion: string;
@@ -48,6 +50,7 @@ export type BandsearchRouteContext = {
   };
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: { warn: (obj: Record<string, unknown>) => void };
+  createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
 };
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
@@ -61,6 +64,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     resolvedRecommendationPipeline,
     getRecommendationReadiness,
     logger,
+    createTursoClient,
   } = ctx;
 
   app.get("/health", (_req, res) => {
@@ -307,5 +311,20 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       return sendError(res, result.status ?? 404, "group_member_remove_failed", result.error ?? "failed");
     }
     return res.status(200).json({ ok: true });
+  });
+
+  app.post("/preferences/turso/test", async (req, res) => {
+    const databaseUrl = typeof req.body?.databaseUrl === "string" ? req.body.databaseUrl.trim() : "";
+    const authToken = typeof req.body?.authToken === "string" ? req.body.authToken.trim() : undefined;
+    if (!databaseUrl) return sendError(res, 400, "validation_error", "databaseUrl is required");
+    const factory = createTursoClient ?? ((cfg) => createLibsqlClient(cfg));
+    try {
+      const client = factory({ url: databaseUrl, authToken: authToken || undefined });
+      await client.execute("SELECT 1");
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "connection failed";
+      return res.status(200).json({ ok: false, error: message });
+    }
   });
 }

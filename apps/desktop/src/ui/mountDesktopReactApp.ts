@@ -1,38 +1,41 @@
-const React = require("react");
-const { createRoot } = require("react-dom/client");
-const { ChatAppView } = require("./ChatAppView");
-const { SavedArtistsView } = require("./SavedArtistsView");
-const { SettingsView } = require("./SettingsView");
-const { WelcomeView } = require("./WelcomeView");
+import * as React from "react";
+import { createRoot } from "react-dom/client";
+import { ChatAppView } from "./ChatAppView.js";
+import { SavedArtistsView } from "./SavedArtistsView.js";
+import { SettingsView } from "./SettingsView.js";
+import { WelcomeView } from "./WelcomeView.js";
 
-function defaultContainerResolver() {
-  /** @type {any} */ const browserDocument = globalThis.document;
+type AnyShell = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRouter = any;
+type AnySavedShell = Record<string, any> | null;
+
+function defaultContainerResolver(): HTMLElement {
+  const browserDocument = globalThis.document as Document | undefined;
   const root = browserDocument?.getElementById("root");
-  if (!root) {
-    throw new Error("missing root container");
-  }
+  if (!root) throw new Error("missing root container");
   return root;
 }
 
-function resolveViewComponent(viewName) {
+function resolveViewComponent(viewName: string) {
   if (viewName === "saved-artists") return SavedArtistsView;
   return ChatAppView;
 }
 
-/**
- * @param {{
- *   shell: object,
- *   router?: object | null,
- *   savedArtistsShell?: object | null,
- *   getSettingsViewProps?: () => any,
- *   saveGeminiApiKey?: (apiKey: string) => Promise<void>,
- *   saveBraveApiKey?: (apiKey: string) => Promise<void>,
- *   completeOnboarding?: () => Promise<void>,
- *   createRootImpl?: typeof import("react-dom/client").createRoot,
- *   resolveContainer?: () => HTMLElement,
- * }} options
- */
-function createDesktopReactMount({
+export interface DesktopReactMountOptions {
+  shell: AnyShell;
+  router?: AnyRouter;
+  savedArtistsShell?: AnySavedShell;
+  getSettingsViewProps?: () => any;
+  saveGeminiApiKey?: (apiKey: string) => Promise<void>;
+  saveBraveApiKey?: (apiKey: string) => Promise<void>;
+  saveTursoConfig?: (url: string, token: string) => Promise<void>;
+  completeOnboarding?: () => Promise<void>;
+  createRootImpl?: typeof createRoot;
+  resolveContainer?: () => HTMLElement;
+}
+
+export function createDesktopReactMount({
   shell,
   router = null,
   savedArtistsShell = null,
@@ -43,16 +46,13 @@ function createDesktopReactMount({
     hasBraveKey: false,
     statusMessage: null,
   }),
-  saveGeminiApiKey = async (apiKey) => {
-    void apiKey;
-  },
-  saveBraveApiKey = async (apiKey) => {
-    void apiKey;
-  },
+  saveGeminiApiKey = async (apiKey) => { void apiKey; },
+  saveBraveApiKey = async (apiKey) => { void apiKey; },
+  saveTursoConfig = async (url, token) => { void url; void token; },
   completeOnboarding = async () => {},
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
-}) {
+}: DesktopReactMountOptions) {
   const container = resolveContainer();
   const root = createRootImpl(container);
 
@@ -61,7 +61,7 @@ function createDesktopReactMount({
 
     if (route === "welcome") {
       root.render(
-        React.createElement(WelcomeView, {
+        React.createElement(WelcomeView as any, {
           viewProps: {},
           handlers: welcomeHandlers,
         }),
@@ -72,7 +72,7 @@ function createDesktopReactMount({
     if (route === "saved" && savedArtistsShell) {
       const viewProps = savedArtistsShell.getViewProps();
       root.render(
-        React.createElement(SavedArtistsView, {
+        React.createElement(SavedArtistsView as any, {
           viewProps,
           handlers: savedHandlers,
         }),
@@ -83,7 +83,7 @@ function createDesktopReactMount({
     if (route === "settings") {
       const viewProps = await Promise.resolve(getSettingsViewProps());
       root.render(
-        React.createElement(SettingsView, {
+        React.createElement(SettingsView as any, {
           viewProps,
           handlers: settingsHandlers,
         }),
@@ -94,16 +94,16 @@ function createDesktopReactMount({
     const viewProps = shell.getViewProps();
     const currentView = shell.getView?.() ?? "chat";
     const ViewComponent = resolveViewComponent(currentView);
-    root.render(React.createElement(ViewComponent, { viewProps, handlers }));
+    root.render(React.createElement(ViewComponent as any, { viewProps, handlers }));
     return viewProps;
   }
 
   const handlers = {
-    onModeChange: async (mode) => {
+    onModeChange: async (mode: string) => {
       await shell.updateMode(mode);
       return renderCurrent();
     },
-    onQuerySubmit: async (query) => {
+    onQuerySubmit: async (query: string) => {
       try {
         const pending = shell.submitQuery(query);
         await renderCurrent();
@@ -113,16 +113,16 @@ function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onSave: (artistName) => {
+    onSave: (artistName: string) => {
       return Promise.resolve(shell.saveBand?.(artistName)).then(() => renderCurrent());
     },
-    onRate: (artistName) => {
+    onRate: (artistName: string) => {
       return Promise.resolve(shell.rateBand?.(artistName, 5)).then(() => renderCurrent());
     },
-    onMore: (artistName) => {
+    onMore: (artistName: string) => {
       void artistName;
     },
-    onDelete: async (id) => {
+    onDelete: async (id: string) => {
       try {
         await shell.deleteSavedArtist?.(id);
       } catch {
@@ -130,7 +130,7 @@ function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onToggleSelection: (id) => {
+    onToggleSelection: (id: string) => {
       shell.toggleSelection?.(id);
       return renderCurrent();
     },
@@ -138,11 +138,11 @@ function createDesktopReactMount({
       await shell.activateStyleRef?.();
       return renderCurrent();
     },
-    onSearch: async (query) => {
+    onSearch: async (query: string) => {
       await shell.searchArtists?.(query);
       return renderCurrent();
     },
-    onAddArtist: async ({ name }) => {
+    onAddArtist: async ({ name }: { name: string }) => {
       try {
         await shell.saveBand?.(name);
       } catch {
@@ -150,7 +150,7 @@ function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onNavigate: async (view) => {
+    onNavigate: async (view: string) => {
       await shell.navigate?.(view);
       return renderCurrent();
     },
@@ -162,6 +162,10 @@ function createDesktopReactMount({
       if (router) router.navigate("settings");
       return renderCurrent();
     },
+    onSaveTursoConfig: async (url: string, token: string) => {
+      await saveTursoConfig(url, token);
+      return renderCurrent();
+    },
   };
 
   const settingsHandlers = {
@@ -169,14 +173,15 @@ function createDesktopReactMount({
       if (router) router.navigate("home");
       return renderCurrent();
     },
-    onSaveApiKey: async (apiKey) => {
+    onSaveApiKey: async (apiKey: string) => {
       await saveGeminiApiKey(apiKey);
       return renderCurrent();
     },
-    onSaveBraveApiKey: async (apiKey) => {
+    onSaveBraveApiKey: async (apiKey: string) => {
       await saveBraveApiKey(apiKey);
       return renderCurrent();
     },
+    onSaveTursoConfig: handlers.onSaveTursoConfig,
   };
 
   const welcomeHandlers = {
@@ -192,20 +197,20 @@ function createDesktopReactMount({
   };
 
   const savedHandlers = {
-    onNavigate: (view) => {
+    onNavigate: (view: string) => {
       if (view === "chat" && router) router.navigate("home");
       renderCurrent();
     },
-    onToggleSelection: (id) => {
+    onToggleSelection: (id: string) => {
       savedArtistsShell?.toggleArtistSelection(id);
       renderCurrent();
     },
-    onSearch: async (query) => {
+    onSearch: async (query: string) => {
       savedArtistsShell?.setSearchQuery(query);
       await savedArtistsShell?.searchArtists();
       renderCurrent();
     },
-    onAddArtist: (artist) => {
+    onAddArtist: (artist: any) => {
       Promise.resolve(savedArtistsShell?.addArtist(artist)).then(() => renderCurrent());
     },
     onDelete: async () => {
@@ -225,7 +230,3 @@ function createDesktopReactMount({
     },
   };
 }
-
-module.exports = {
-  createDesktopReactMount,
-};

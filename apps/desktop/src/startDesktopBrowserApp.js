@@ -67,6 +67,20 @@ async function startDesktopBrowserApp({
     typeof invokeTauri === "function" ? invokeTauri : createDefaultTauriInvoke();
   const gemini = createGeminiSettingsController({
     invokeTauri: typeof resolvedInvoke === "function" ? resolvedInvoke : undefined,
+    probeTursoConnection: async (url, token) => {
+      const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+      const resolvedFetch = fetchImpl ?? fetch;
+      try {
+        const response = await resolvedFetch(`${base}/preferences/turso/test`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ databaseUrl: url, authToken: token }),
+        });
+        return response.json();
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "probe failed" };
+      }
+    },
   });
   const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl });
   const router = createHashRouter();
@@ -95,6 +109,7 @@ async function startDesktopBrowserApp({
     getSettingsViewProps: () => gemini.getSettingsViewProps(),
     saveGeminiApiKey: (key) => gemini.saveGeminiApiKey(key),
     saveBraveApiKey: (key) => gemini.saveBraveApiKey(key),
+    saveTursoConfig: (url, token) => gemini.saveTursoConfig(url, token),
     completeOnboarding: () => gemini.completeOnboarding(),
   });
   await reactApp.mount();
