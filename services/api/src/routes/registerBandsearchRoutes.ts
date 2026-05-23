@@ -17,6 +17,7 @@ export type BandsearchRouteContext = {
     ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status: number }>;
     deleteSavedBand: (id: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status: number }>;
     buildContext: () => Promise<string>;
+    importSavedBands: (bands: unknown[]) => Promise<{ imported: number; skipped: number }>;
   };
   resolvedMusicBrainzClient: { searchArtists: (q: string) => Promise<unknown[]> };
   resolvedArtistImageClient: { getArtistImageUrl: (name: string) => Promise<string | null> };
@@ -198,5 +199,19 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     return res.status(200).json({
       context,
     });
+  });
+
+  app.get("/preferences/export", async (_req, res) => {
+    const savedBands = await resolvedPreferenceRepository.listSavedBands();
+    res.setHeader("Content-Disposition", 'attachment; filename="bandsearch-artists.json"');
+    return res.status(200).json(savedBands);
+  });
+
+  app.post("/preferences/import", async (req, res) => {
+    if (!Array.isArray(req.body)) {
+      return sendError(res, 400, "validation_error", "body must be an array of saved bands");
+    }
+    const result = await resolvedPreferenceRepository.importSavedBands(req.body);
+    return res.status(200).json(result);
   });
 }

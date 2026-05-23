@@ -22,6 +22,7 @@ function assertPreferenceRepository(repository) {
     "deleteSavedBand",
     "buildContext",
     "buildContextForIds",
+    "importSavedBands",
   ];
 
   for (const methodName of requiredMethods) {

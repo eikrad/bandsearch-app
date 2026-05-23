@@ -94,6 +94,24 @@ function createPreferenceMemory() {
       if (filtered.length === 0) return "";
       return filtered.map(formatSavedBandContextLine).join("\n");
     },
+
+    async importSavedBands(bands) {
+      const existing = new Set(savedBands.map((b) => b.musicbrainzArtistId));
+      let imported = 0;
+      let skipped = 0;
+      for (const band of bands) {
+        if (existing.has(band.musicbrainzArtistId)) {
+          skipped++;
+          continue;
+        }
+        const result = await this.addSavedBand(band);
+        if (result.ok) {
+          existing.add(band.musicbrainzArtistId);
+          imported++;
+        }
+      }
+      return { imported, skipped };
+    },
   };
 }
 

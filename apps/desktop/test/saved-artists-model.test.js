@@ -189,3 +189,41 @@ test("saved artists model clears search results for empty query", async () => {
   await model.searchArtists("");
   assert.equal(model.getScreenState().searchResults.length, 0);
 });
+
+test("saved artists model exportArtists returns raw saved bands from app", async () => {
+  const bands = [{ id: "b1", name: "Fen", rating: 4, categories: ["post-metal"], note: "" }];
+  const model = createSavedArtistsModel({ app: makeApp(bands) });
+  await model.loadSavedArtists();
+
+  const exported = await model.exportArtists();
+
+  assert.equal(Array.isArray(exported), true);
+  assert.equal(exported.length, 1);
+  assert.equal(exported[0].name, "Fen");
+});
+
+test("saved artists model importArtists calls app importArtists and reloads", async () => {
+  let importCalled = false;
+  let importedBands = null;
+  const store = [];
+  const app = {
+    listSavedBands: async () => [...store],
+    deleteSavedBand: async (id) => { const i = store.findIndex((b) => b.id === id); if (i >= 0) store.splice(i, 1); },
+    importArtists: async (toImport) => {
+      importCalled = true;
+      importedBands = toImport;
+      store.push(...toImport.map((b, i) => ({ ...b, id: `imported-${i}` })));
+      return { imported: toImport.length, skipped: 0 };
+    },
+  };
+
+  const model = createSavedArtistsModel({ app });
+  const payload = [{ musicbrainzArtistId: "x1", name: "Alcest", rating: 5, categories: [], note: "" }];
+  const result = await model.importArtists(payload);
+
+  assert.equal(importCalled, true);
+  assert.deepEqual(importedBands, payload);
+  assert.equal(result.imported, 1);
+  assert.equal(result.skipped, 0);
+  assert.equal(model.getScreenState().artists.length, 1);
+});

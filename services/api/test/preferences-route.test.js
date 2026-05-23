@@ -26,6 +26,24 @@ async function makeRequest(app, method, path, payload) {
   }
 }
 
+async function makeRawRequest(app, method, path, payload) {
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  const port = server.address().port;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const data = await response.json();
+    return { status: response.status, data, headers: response.headers };
+  } finally {
+    server.close();
+  }
+}
+
 test("POST /preferences stores a saved band", async () => {
   const app = freshApp();
   const result = await makeRequest(app, "POST", "/preferences", {
@@ -159,4 +177,75 @@ test("DELETE /preferences/:id returns 404 for unknown id", async () => {
   assert.equal(result.status, 404);
   assert.equal(result.data.error.code, "preference_delete_failed");
   assert.equal(result.data.error.message, "saved band not found");
+});
+
+test("GET /preferences/export returns all saved bands as JSON attachment", async () => {
+  const app = freshApp();
+  await makeRequest(app, "POST", "/preferences", {
+    musicbrainzArtistId: "a1",
+    name: "Alcest",
+    rating: 5,
+    categories: ["blackgaze"],
+    note: "Dreamy.",
+  });
+
+  const result = await makeRawRequest(app, "GET", "/preferences/export");
+
+  assert.equal(result.status, 200);
+  assert.equal(Array.isArray(result.data), true);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].name, "Alcest");
+  assert.equal(
+    result.headers.get("content-disposition")?.includes("attachment"),
+    true,
+    "should set Content-Disposition: attachment",
+  );
+});
+
+test("POST /preferences/import inserts new bands and returns counts", async () => {
+  const app = freshApp();
+  const result = await makeRequest(app, "POST", "/preferences/import", [
+    { musicbrainzArtistId: "b1", name: "Fen", rating: 4, categories: ["post-metal"], note: "" },
+    { musicbrainzArtistId: "b2", name: "Alcest", rating: 5, categories: ["blackgaze"], note: "Dreamy." },
+  ]);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.imported, 2);
+  assert.equal(result.data.skipped, 0);
+
+  const list = await makeRequest(app, "GET", "/preferences");
+  assert.equal(list.data.savedBands.length, 2);
+});
+
+test("POST /preferences/import skips artists that already exist by musicbrainzArtistId", async () => {
+  const app = freshApp();
+  await makeRequest(app, "POST", "/preferences", {
+    musicbrainzArtistId: "a1",
+    name: "Alcest",
+    rating: 5,
+    categories: ["blackgaze"],
+    note: "Already saved.",
+  });
+
+  const result = await makeRequest(app, "POST", "/preferences/import", [
+    { musicbrainzArtistId: "a1", name: "Alcest", rating: 3, categories: [], note: "Should be skipped." },
+    { musicbrainzArtistId: "b2", name: "Fen", rating: 4, categories: ["post-metal"], note: "" },
+  ]);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.imported, 1);
+  assert.equal(result.data.skipped, 1);
+
+  const list = await makeRequest(app, "GET", "/preferences");
+  assert.equal(list.data.savedBands.length, 2);
+  const alcest = list.data.savedBands.find((b) => b.musicbrainzArtistId === "a1");
+  assert.equal(alcest.rating, 5, "existing record should not be overwritten");
+});
+
+test("POST /preferences/import rejects non-array body", async () => {
+  const app = freshApp();
+  const result = await makeRequest(app, "POST", "/preferences/import", { not: "an array" });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.data.error.code, "validation_error");
 });

@@ -203,3 +203,37 @@ test("SavedArtistsView shows searching indicator when isSearching", () => {
 
   assert.equal(html.includes("Searching"), true, "should show searching indicator");
 });
+
+test("SavedArtistsView renders Export button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onExport: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Export"), true, "should render Export button");
+});
+
+test("SavedArtistsView renders Import file input", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onImport: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Import"), true, "should render Import button or label");
+});

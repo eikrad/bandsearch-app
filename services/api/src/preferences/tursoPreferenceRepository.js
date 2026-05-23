@@ -106,6 +106,25 @@ function createTursoPreferenceRepository({ client }) {
       if (filtered.length === 0) return "";
       return filtered.map(formatSavedBandContextLine).join("\n");
     },
+
+    async importSavedBands(bands) {
+      const result = await client.execute({ sql: "SELECT musicbrainz_artist_id FROM saved_bands", args: [] });
+      const existing = new Set(result.rows.map((r) => r.musicbrainz_artist_id));
+      let imported = 0;
+      let skipped = 0;
+      for (const band of bands) {
+        if (existing.has(band.musicbrainzArtistId)) {
+          skipped++;
+          continue;
+        }
+        const addResult = await this.addSavedBand(band);
+        if (addResult.ok) {
+          existing.add(band.musicbrainzArtistId);
+          imported++;
+        }
+      }
+      return { imported, skipped };
+    },
   };
 }
 

@@ -69,6 +69,16 @@ function createSavedArtistsModel({ app }) {
         state.isSearching = false;
       }
     },
+
+    async exportArtists() {
+      return [...state.savedArtists];
+    },
+
+    async importArtists(bands) {
+      const result = await app.importArtists(bands);
+      state.savedArtists = await app.listSavedBands();
+      return result;
+    },
   };
 }
 

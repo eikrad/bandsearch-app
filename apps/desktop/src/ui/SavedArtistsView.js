@@ -312,13 +312,53 @@ function SavedArtistsView({ viewProps, handlers }) {
           React.createElement("p", { style: styles.subtitle }, header.subtitle),
         ),
         React.createElement(
-          "button",
-          {
-            type: "button",
-            style: styles.backBtn,
-            onClick: () => handlers.onNavigate?.("chat"),
-          },
-          "← Recommendations",
+          "div",
+          { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              style: styles.backBtn,
+              onClick: () => handlers.onExport?.(),
+            },
+            "Export",
+          ),
+          React.createElement(
+            "label",
+            {
+              style: { ...styles.backBtn, cursor: "pointer", display: "inline-block" },
+            },
+            "Import",
+            React.createElement("input", {
+              type: "file",
+              accept: ".json,application/json",
+              style: { display: "none" },
+              onChange: (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  try {
+                    const parsed = JSON.parse(ev.target.result);
+                    handlers.onImport?.(parsed);
+                  } catch {
+                    /* ignore parse errors */
+                  }
+                };
+                reader.readAsText(file);
+                e.target.value = "";
+              },
+            }),
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              style: styles.backBtn,
+              onClick: () => handlers.onNavigate?.("chat"),
+            },
+            "← Recommendations",
+          ),
         ),
       ),
       React.createElement("hr", { style: styles.divider }),
