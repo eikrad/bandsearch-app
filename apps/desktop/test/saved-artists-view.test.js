@@ -203,3 +203,91 @@ test("SavedArtistsView shows searching indicator when isSearching", () => {
 
   assert.equal(html.includes("Searching"), true, "should show searching indicator");
 });
+
+test("SavedArtistsView renders Export button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onExport: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Export"), true, "should render Export button");
+});
+
+test("SavedArtistsView renders group sections when groups provided", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [{ id: "b1", name: "Alcest", rating: 5, categoryTags: [], note: "", isSelected: false }],
+        groups: [{ id: "g1", name: "Blackgaze", memberIds: ["b1"] }],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers },
+    }),
+  );
+
+  assert.equal(html.includes("Blackgaze"), true, "should render group name");
+});
+
+test("SavedArtistsView renders Group by genre button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        groups: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onAutoGroup: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Group by genre"), true, "should render Group by genre button");
+});
+
+test("SavedArtistsView renders create group input", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        groups: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onCreateGroup: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("create-group"), true, "should render create group input or form");
+});
+
+test("SavedArtistsView renders Import file input", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SavedArtistsView, {
+      viewProps: {
+        header: { title: "Saved Artists", subtitle: "Your style references" },
+        artists: [],
+        isLoading: false,
+        searchResults: [],
+        isSearching: false,
+      },
+      handlers: { ...baseHandlers, onImport: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Import"), true, "should render Import button or label");
+});

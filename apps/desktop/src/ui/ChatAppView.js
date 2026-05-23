@@ -110,6 +110,15 @@ function renderCardActions(card, theme, handlers) {
     padding: "6px 12px",
     fontSize: "13px",
   };
+  const copyBtnStyle = {
+    background: "transparent",
+    border: "none",
+    color: theme.textTertiary,
+    fontSize: "13px",
+    cursor: "pointer",
+    padding: "4px 6px",
+    title: "Copy",
+  };
   const actions = [];
   if (card.actions?.save?.visible) {
     actions.push(
@@ -138,6 +147,20 @@ function renderCardActions(card, theme, handlers) {
       ),
     );
   }
+  actions.push(
+    React.createElement(
+      "button",
+      {
+        key: "copy",
+        type: "button",
+        className: "copy-card-btn",
+        style: copyBtnStyle,
+        title: "Copy",
+        onClick: () => handlers.onCopyCard?.(card.title, card.why),
+      },
+      "⎘",
+    ),
+  );
   return actions;
 }
 
@@ -469,7 +492,35 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
               )
             : null;
 
-        if (!proseBlock && !cardsBlock && !railHint) return null;
+        const copyAllBlock =
+          hasCards && handlers.onCopyAll
+            ? React.createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "copy-all-btn",
+                  style: {
+                    alignSelf: "flex-start",
+                    background: "transparent",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "6px",
+                    color: theme.textTertiary,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    padding: "3px 10px",
+                  },
+                  onClick: () => {
+                    const text = msg.cards
+                      .map((c) => `${c.title}${c.why ? ` — ${c.why}` : ""}`)
+                      .join("\n");
+                    handlers.onCopyAll(text);
+                  },
+                },
+                "Copy all",
+              )
+            : null;
+
+        if (!proseBlock && !cardsBlock && !railHint && !copyAllBlock) return null;
 
         return React.createElement(
           "div",
@@ -481,6 +532,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
           proseBlock,
           railHint,
           cardsBlock,
+          copyAllBlock,
         );
       }
       return null;

@@ -256,6 +256,135 @@ function SelectionBar({ selectedCount, handlers }) {
   );
 }
 
+function GroupSection({ group, artists, handlers }) {
+  const memberArtists = artists.filter((a) => group.memberIds.includes(a.id));
+  const styles = {
+    section: { marginTop: "20px" },
+    header: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+    },
+    title: { fontSize: "13px", fontWeight: "600", color: theme.textSecondary },
+    deleteBtn: {
+      background: "transparent",
+      border: "none",
+      color: theme.textTertiary,
+      fontSize: "12px",
+      cursor: "pointer",
+      padding: "2px 6px",
+    },
+    list: { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" },
+    empty: { fontSize: "12px", color: theme.textTertiary, padding: "6px 0" },
+  };
+
+  return React.createElement(
+    "section",
+    { style: styles.section },
+    React.createElement(
+      "div",
+      { style: styles.header },
+      React.createElement("p", { style: styles.title }, group.name),
+      React.createElement(
+        "button",
+        { type: "button", style: styles.deleteBtn, onClick: () => handlers.onDeleteGroup?.(group.id) },
+        "×",
+      ),
+    ),
+    memberArtists.length === 0
+      ? React.createElement("p", { style: styles.empty }, "No artists in this group")
+      : React.createElement(
+          "ul",
+          { style: styles.list },
+          memberArtists.map((artist) =>
+            React.createElement(SavedArtistItem, { key: artist.id, artist, handlers }),
+          ),
+        ),
+  );
+}
+
+function GroupsSection({ groups, artists, handlers }) {
+  const styles = {
+    section: { marginTop: "24px" },
+    toolbar: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" },
+    autoBtn: {
+      backgroundColor: theme.buttonBg,
+      color: theme.buttonText,
+      border: `1px solid ${theme.buttonBorder}`,
+      borderRadius: "7px",
+      padding: "6px 12px",
+      fontSize: "12px",
+      cursor: "pointer",
+    },
+    createInput: {
+      flex: 1,
+      backgroundColor: theme.cardBg,
+      border: `1px solid ${theme.border}`,
+      borderRadius: "7px",
+      padding: "6px 10px",
+      fontSize: "12px",
+      color: theme.textPrimary,
+      outline: "none",
+    },
+    createBtn: {
+      backgroundColor: theme.buttonBg,
+      color: theme.buttonText,
+      border: `1px solid ${theme.buttonBorder}`,
+      borderRadius: "7px",
+      padding: "6px 10px",
+      fontSize: "12px",
+      cursor: "pointer",
+    },
+    divider: { border: "none", borderTop: `1px solid ${theme.border}`, margin: "16px 0 0" },
+  };
+
+  return React.createElement(
+    "section",
+    { style: styles.section },
+    React.createElement("hr", { style: styles.divider }),
+    React.createElement(
+      "div",
+      { style: { ...styles.toolbar, marginTop: "16px" } },
+      React.createElement(
+        "button",
+        { type: "button", style: styles.autoBtn, onClick: () => handlers.onAutoGroup?.() },
+        "Group by genre",
+      ),
+      React.createElement(
+        "form",
+        {
+          style: { display: "flex", gap: "6px", flex: 1 },
+          onSubmit: (e) => {
+            e.preventDefault();
+            const input = e.target.elements["create-group"];
+            const name = input.value.trim();
+            if (name) {
+              handlers.onCreateGroup?.(name);
+              input.value = "";
+            }
+          },
+        },
+        React.createElement("input", {
+          type: "text",
+          name: "create-group",
+          placeholder: "New group name…",
+          style: styles.createInput,
+          autoComplete: "off",
+        }),
+        React.createElement(
+          "button",
+          { type: "submit", style: styles.createBtn },
+          "Create",
+        ),
+      ),
+    ),
+    groups.map((group) =>
+      React.createElement(GroupSection, { key: group.id, group, artists, handlers }),
+    ),
+  );
+}
+
 function SavedArtistsView({ viewProps, handlers }) {
   const styles = {
     page: {
@@ -294,7 +423,7 @@ function SavedArtistsView({ viewProps, handlers }) {
     },
   };
 
-  const { artists = [], header, isLoading, searchResults = [], isSearching = false, selectedCount = 0 } = viewProps;
+  const { artists = [], header, isLoading, searchResults = [], isSearching = false, selectedCount = 0, groups = [] } = viewProps;
 
   return React.createElement(
     "main",
@@ -312,13 +441,44 @@ function SavedArtistsView({ viewProps, handlers }) {
           React.createElement("p", { style: styles.subtitle }, header.subtitle),
         ),
         React.createElement(
-          "button",
-          {
-            type: "button",
-            style: styles.backBtn,
-            onClick: () => handlers.onNavigate?.("chat"),
-          },
-          "← Recommendations",
+          "div",
+          { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              style: styles.backBtn,
+              onClick: () => handlers.onExport?.(),
+            },
+            "Export",
+          ),
+          React.createElement(
+            "label",
+            {
+              style: { ...styles.backBtn, cursor: "pointer", display: "inline-block" },
+            },
+            "Import",
+            React.createElement("input", {
+              type: "file",
+              accept: ".json,application/json",
+              style: { display: "none" },
+              onChange: (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handlers.onImportFile?.(file);
+                e.target.value = "";
+              },
+            }),
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              style: styles.backBtn,
+              onClick: () => handlers.onNavigate?.("chat"),
+            },
+            "← Recommendations",
+          ),
         ),
       ),
       React.createElement("hr", { style: styles.divider }),
@@ -338,6 +498,7 @@ function SavedArtistsView({ viewProps, handlers }) {
               React.createElement(SavedArtistItem, { key: artist.id, artist, handlers }),
             ),
           ),
+    React.createElement(GroupsSection, { groups, artists, handlers }),
   );
 }
 
