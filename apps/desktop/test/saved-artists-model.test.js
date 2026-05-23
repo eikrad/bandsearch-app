@@ -202,6 +202,56 @@ test("saved artists model exportArtists returns raw saved bands from app", async
   assert.equal(exported[0].name, "Fen");
 });
 
+test("saved artists model loadGroups stores groups in screen state", async () => {
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      listGroups: async () => [{ id: "g1", name: "Blackgaze", memberIds: [] }],
+    },
+  });
+
+  await model.loadGroups();
+
+  const state = model.getScreenState();
+  assert.equal(Array.isArray(state.groups), true);
+  assert.equal(state.groups.length, 1);
+  assert.equal(state.groups[0].name, "Blackgaze");
+});
+
+test("saved artists model createGroup calls app and reloads groups", async () => {
+  const created = [];
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      listGroups: async () => created.map((n, i) => ({ id: `g${i}`, name: n, memberIds: [] })),
+      createGroup: async (name) => { created.push(name); return { ok: true, group: { id: "g0", name, memberIds: [] } }; },
+    },
+  });
+
+  await model.createGroup("Post-metal");
+
+  const state = model.getScreenState();
+  assert.equal(state.groups.length, 1);
+  assert.equal(state.groups[0].name, "Post-metal");
+});
+
+test("saved artists model autoGroupByGenre calls app and reloads groups", async () => {
+  let autoCalled = false;
+  const model = createSavedArtistsModel({
+    app: {
+      ...makeApp(),
+      listGroups: async () => autoCalled ? [{ id: "g1", name: "blackgaze", memberIds: [] }] : [],
+      autoGroupByGenre: async () => { autoCalled = true; return { groups: [] }; },
+    },
+  });
+
+  await model.autoGroupByGenre();
+
+  assert.equal(autoCalled, true);
+  const state = model.getScreenState();
+  assert.equal(Array.isArray(state.groups), true);
+});
+
 test("saved artists model importArtists calls app importArtists and reloads", async () => {
   let importCalled = false;
   let importedBands = null;

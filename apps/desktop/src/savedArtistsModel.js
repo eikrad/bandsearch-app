@@ -5,6 +5,7 @@ function createSavedArtistsModel({ app }) {
     searchResults: [],
     isSearching: false,
     isLoading: false,
+    groups: [],
   };
 
   return {
@@ -32,6 +33,7 @@ function createSavedArtistsModel({ app }) {
         selectedCount: state.selectedIds.size,
         searchResults: state.searchResults,
         isSearching: state.isSearching,
+        groups: state.groups,
       };
     },
 
@@ -78,6 +80,21 @@ function createSavedArtistsModel({ app }) {
       const result = await app.importArtists(bands);
       state.savedArtists = await app.listSavedBands();
       return result;
+    },
+
+    async loadGroups() {
+      state.groups = await app.listGroups();
+    },
+
+    async createGroup(name) {
+      const result = await app.createGroup(name);
+      state.groups = await app.listGroups();
+      return result;
+    },
+
+    async autoGroupByGenre() {
+      await app.autoGroupByGenre();
+      state.groups = await app.listGroups();
     },
   };
 }
