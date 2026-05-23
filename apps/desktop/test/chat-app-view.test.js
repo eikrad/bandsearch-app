@@ -450,6 +450,84 @@ test("ChatAppView renders genre chips for cards with genres", () => {
   assert.equal(html.includes("cascadian"), true, "second genre chip rendered");
 });
 
+test("RecommendationCard renders a per-card copy button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [
+          {
+            title: "Fen",
+            why: "Atmospheric overlap",
+            genres: [],
+            actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onCopyCard: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("copy-card-btn"), true, "should render per-card copy button");
+});
+
+test("MessageThread renders copy-all button for assistant message with cards", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "Niche recommendations",
+        viewport: "mobile",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        cards: [],
+        messages: [
+          { id: "u1", role: "user", content: "I like dark ambient" },
+          {
+            id: "a1",
+            role: "assistant",
+            content: "Here are picks.",
+            cards: [
+              {
+                title: "Fen",
+                why: "Atmospheric",
+                genres: [],
+                actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
+              },
+            ],
+          },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onCopyCard: () => {},
+        onCopyAll: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("copy-all-btn"), true, "should render copy-all button on assistant reply with cards");
+});
+
 test("ChatAppView uses compact mobile layout and action density", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
