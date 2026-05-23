@@ -23,6 +23,12 @@ function assertPreferenceRepository(repository) {
     "buildContext",
     "buildContextForIds",
     "importSavedBands",
+    "listGroups",
+    "createGroup",
+    "renameGroup",
+    "deleteGroup",
+    "addArtistToGroup",
+    "removeArtistFromGroup",
   ];
 
   for (const methodName of requiredMethods) {
@@ -55,6 +61,7 @@ function createPreferenceRepository(runtimeConfig = {}) {
   }
   // Default: SQLite — persistent, zero-config, works everywhere
   const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+  db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS saved_bands (
       id TEXT PRIMARY KEY,
@@ -65,7 +72,19 @@ function createPreferenceRepository(runtimeConfig = {}) {
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    )
+    );
+    CREATE TABLE IF NOT EXISTS artist_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS artist_group_members (
+      group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
+      saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
+      added_at TEXT NOT NULL,
+      PRIMARY KEY (group_id, saved_band_id)
+    );
   `);
   return createSqlitePreferenceRepository({ db });
 }

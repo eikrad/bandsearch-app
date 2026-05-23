@@ -12,6 +12,12 @@ function createPreferenceRepositoryStub(buildContext) {
     buildContext: async () => buildContext(),
     buildContextForIds: async () => "",
     importSavedBands: async () => ({ imported: 0, skipped: 0 }),
+    listGroups: async () => [],
+    createGroup: async () => ({ ok: false, status: 400, error: "stub" }),
+    renameGroup: async () => ({ ok: false, status: 404, error: "stub" }),
+    deleteGroup: async () => ({ ok: false, status: 404, error: "stub" }),
+    addArtistToGroup: async () => ({ ok: false, status: 404, error: "stub" }),
+    removeArtistFromGroup: async () => ({ ok: false, status: 404, error: "stub" }),
   };
 }
 
