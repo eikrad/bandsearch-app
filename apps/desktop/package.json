@@ -14,12 +14,12 @@
     "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "@tauri-apps/api": "^2.11.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@tauri-apps/cli": "^2.11.2",
     "esbuild": "^0.28.0"
   }
 }
