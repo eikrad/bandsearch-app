@@ -51,6 +51,13 @@ export type BandsearchRouteContext = {
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: { warn: (obj: Record<string, unknown>) => void };
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
+  resolvedAuthService?: {
+    register: (input: { email: string; displayName: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; recoveryCode?: string; error?: string }>;
+    login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
+    resetPassword: (input: { email: string; recoveryCode: string; newPassword: string }) => Promise<{ ok: boolean; newRecoveryCode?: string; error?: string }>;
+    verifyToken: (token: string) => { ok: boolean; userId?: string; error?: string };
+  };
+  authMiddleware?: RequestHandler;
 };
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
@@ -65,7 +72,40 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     getRecommendationReadiness,
     logger,
     createTursoClient,
+    resolvedAuthService,
+    authMiddleware,
   } = ctx;
+
+  // Auth routes (public)
+  if (resolvedAuthService) {
+    app.post("/auth/register", async (req, res) => {
+      const { email, displayName, password } = req.body ?? {};
+      const result = await resolvedAuthService.register({ email: String(email ?? ""), displayName: String(displayName ?? ""), password: String(password ?? "") });
+      if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "registration failed");
+      return res.status(201).json({ user: result.user, token: result.token, recoveryCode: result.recoveryCode });
+    });
+
+    app.post("/auth/login", async (req, res) => {
+      const { email, password } = req.body ?? {};
+      const result = await resolvedAuthService.login({ email: String(email ?? ""), password: String(password ?? "") });
+      if (!result.ok) return sendError(res, 401, "auth_error", result.error ?? "login failed");
+      return res.status(200).json({ user: result.user, token: result.token });
+    });
+
+    app.post("/auth/reset-password", async (req, res) => {
+      const { email, recoveryCode, newPassword } = req.body ?? {};
+      const result = await resolvedAuthService.resetPassword({ email: String(email ?? ""), recoveryCode: String(recoveryCode ?? ""), newPassword: String(newPassword ?? "") });
+      if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "reset failed");
+      return res.status(200).json({ ok: true, newRecoveryCode: result.newRecoveryCode });
+    });
+  }
+
+  // Apply auth middleware to protected route groups
+  if (authMiddleware) {
+    app.use("/preferences", authMiddleware);
+    app.use("/sessions", authMiddleware);
+    app.use("/recommendations", authMiddleware);
+  }
 
   app.get("/health", (_req, res) => {
     const body: Record<string, unknown> = { status: "ok" };

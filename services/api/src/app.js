@@ -9,16 +9,20 @@ const { createMusicBrainzClient } = require("./integrations/musicbrainz");
 const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
+const { createSqliteUserRepository, createInMemoryUserRepository } = require("./auth/userRepository");
+const { createAuthService } = require("./auth/authService");
+const { createAuthMiddleware } = require("./auth/authMiddleware");
 const { sendError } = require("./http/errors");
 const { writeStructuredLog } = require("./http/structuredLog");
 const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
 
 /**
- * @param {{ recommendationPipeline?: any, preferenceRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void }, createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> } }} [options]
+ * @param {{ recommendationPipeline?: any, preferenceRepository?: any, userRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void }, createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> } }} [options]
  */
 function createApp({
   recommendationPipeline,
   preferenceRepository,
+  userRepository,
   musicBrainzClient,
   artistImageClient,
   chatSessionRepository,
@@ -92,6 +96,26 @@ function createApp({
       }
     })();
 
+  const resolvedUserRepository =
+    userRepository ||
+    (() => {
+      try {
+        const Database = require("better-sqlite3");
+        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+        return createSqliteUserRepository({ db });
+      } catch {
+        return createInMemoryUserRepository();
+      }
+    })();
+
+  const jwtSecret = runtimeConfig.jwtSecret;
+  const resolvedAuthService = jwtSecret
+    ? createAuthService({ userRepository: resolvedUserRepository, jwtSecret })
+    : null;
+  const authMiddleware = resolvedAuthService
+    ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
+    : null;
+
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
@@ -102,6 +126,8 @@ function createApp({
     resolvedRecommendationPipeline: recommendationPipeline,
     createTursoClient,
     logger,
+    resolvedAuthService,
+    authMiddleware,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
         ? () => recommendationPipeline.getReadinessSnapshot()

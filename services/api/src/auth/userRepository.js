@@ -48,6 +48,11 @@ function createInMemoryUserRepository() {
       }
       return { ok: false, error: "user not found" };
     },
+
+    async getFirstUser() {
+      const first = users.values().next().value;
+      return first ? { ...first } : null;
+    },
   };
 }
 
@@ -100,6 +105,11 @@ function createSqliteUserRepository({ db }) {
         .run(passwordHash, recoveryCodeHash, id);
       if (result.changes === 0) return Promise.resolve({ ok: false, error: "user not found" });
       return Promise.resolve({ ok: true });
+    },
+
+    getFirstUser() {
+      const row = db.prepare("SELECT * FROM users LIMIT 1").get();
+      return Promise.resolve(row ? rowToUser(row) : null);
     },
   };
 }
