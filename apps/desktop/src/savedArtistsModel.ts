@@ -1,5 +1,12 @@
-function createSavedArtistsModel({ app }) {
-  const state = {
+export function createSavedArtistsModel({ app }: { app: any }) {
+  const state: {
+    savedArtists: any[];
+    selectedIds: Set<string>;
+    searchResults: any[];
+    isSearching: boolean;
+    isLoading: boolean;
+    groups: any[];
+  } = {
     savedArtists: [],
     selectedIds: new Set(),
     searchResults: [],
@@ -37,13 +44,13 @@ function createSavedArtistsModel({ app }) {
       };
     },
 
-    async deleteSavedArtist(id) {
+    async deleteSavedArtist(id: string) {
       await app.deleteSavedBand(id);
       state.savedArtists = state.savedArtists.filter((b) => b.id !== id);
       state.selectedIds.delete(id);
     },
 
-    toggleSelection(id) {
+    toggleSelection(id: string) {
       if (state.selectedIds.has(id)) {
         state.selectedIds.delete(id);
       } else {
@@ -59,7 +66,7 @@ function createSavedArtistsModel({ app }) {
       return [...state.selectedIds];
     },
 
-    async searchArtists(query) {
+    async searchArtists(query: string) {
       if (!query || !query.trim()) {
         state.searchResults = [];
         return;
@@ -76,7 +83,7 @@ function createSavedArtistsModel({ app }) {
       return [...state.savedArtists];
     },
 
-    async importArtists(bands) {
+    async importArtists(bands: any[]) {
       const result = await app.importArtists(bands);
       state.savedArtists = await app.listSavedBands();
       return result;
@@ -86,7 +93,7 @@ function createSavedArtistsModel({ app }) {
       state.groups = await app.listGroups();
     },
 
-    async createGroup(name) {
+    async createGroup(name: string) {
       const result = await app.createGroup(name);
       state.groups = await app.listGroups();
       return result;
@@ -98,5 +105,3 @@ function createSavedArtistsModel({ app }) {
     },
   };
 }
-
-module.exports = { createSavedArtistsModel };

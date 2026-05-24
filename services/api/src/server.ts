@@ -1,10 +1,14 @@
-// server.js lives at services/api/src/ — workspace root is three levels up.
-require("dotenv").config({ path: require("path").resolve(__dirname, "../../../.env") });
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// server.ts lives at services/api/src/ — workspace root is three levels up.
+import { config as dotenvConfig } from "dotenv";
+import { resolve } from "node:path";
 
-const { createApp } = require("./app");
-const { validateRuntimeEnv } = require("./config/env");
-const { createPreferenceRepository } = require("./preferences/preferenceRepository");
-const { createRecommendationPipeline } = require("./recommendationPipeline");
+dotenvConfig({ path: resolve(__dirname, "../../../.env") });
+
+import { createApp } from "./app.js";
+import { validateRuntimeEnv } from "./config/env.js";
+import { createPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createRecommendationPipeline } from "./recommendationPipeline.js";
 
 async function start() {
   const runtimeConfig = validateRuntimeEnv();
@@ -26,7 +30,7 @@ async function start() {
   });
 }
 
-start().catch((e) => {
+start().catch((e: any) => {
   console.error(JSON.stringify({ level: "error", message: "server failed to start", error: e.message }));
   process.exit(1);
 });

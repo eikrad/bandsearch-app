@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const DEFAULT_BASE_URL = "https://musicbrainz.org/ws/2";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
 
@@ -7,8 +8,14 @@ async function fetchWithTimeoutAndRetry({
   timeoutMs,
   retries,
   headers,
+}: {
+  fetchImpl: typeof fetch;
+  url: string;
+  timeoutMs: number;
+  retries: number;
+  headers: Record<string, string>;
 }) {
-  let lastError;
+  let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -27,14 +34,19 @@ async function fetchWithTimeoutAndRetry({
   throw lastError;
 }
 
-function createMusicBrainzClient({
+export function createMusicBrainzClient({
   fetchImpl = fetch,
   baseUrl = DEFAULT_BASE_URL,
   timeoutMs = 5000,
   retries = 1,
+}: {
+  fetchImpl?: typeof fetch;
+  baseUrl?: string;
+  timeoutMs?: number;
+  retries?: number;
 } = {}) {
   return {
-    async searchArtists(query) {
+    async searchArtists(query: string) {
       const encodedQuery = encodeURIComponent(query);
       const url = `${baseUrl}/artist?query=${encodedQuery}&fmt=json&limit=5`;
       const response = await fetchWithTimeoutAndRetry({
@@ -52,10 +64,9 @@ function createMusicBrainzClient({
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
 
-      /** @type {{ artists?: Array<{ id: string, name: string, score: number, disambiguation?: string }> }} */
-      const data = await response.json();
+      const data: any = await response.json();
       const artists = Array.isArray(data.artists) ? data.artists : [];
-      return artists.map((artist) => ({
+      return artists.map((artist: any) => ({
         id: artist.id,
         name: artist.name,
         score: artist.score,
@@ -63,11 +74,7 @@ function createMusicBrainzClient({
       }));
     },
 
-    /**
-     * Artist lookup with tags, genres, and URL relations for grounding / verification.
-     * @param {string} mbid MusicBrainz artist id (UUID)
-     */
-    async lookupArtist(mbid) {
+    async lookupArtist(mbid: string) {
       const id = String(mbid ?? "").trim();
       if (!id) {
         throw new Error("mbid is required for lookupArtist");
@@ -89,17 +96,16 @@ function createMusicBrainzClient({
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
 
-      /** @type {Record<string, unknown>} */
-      const data = await response.json();
+      const data: any = await response.json();
 
       const tags = Array.isArray(data.tags)
-        ? data.tags.map((t) => (t && typeof t.name === "string" ? t.name : "")).filter(Boolean)
+        ? data.tags.map((t: any) => (t && typeof t.name === "string" ? t.name : "")).filter(Boolean)
         : [];
       const genres = Array.isArray(data.genres)
-        ? data.genres.map((g) => (g && typeof g.name === "string" ? g.name : "")).filter(Boolean)
+        ? data.genres.map((g: any) => (g && typeof g.name === "string" ? g.name : "")).filter(Boolean)
         : [];
 
-      const urls = [];
+      const urls: { type: string; url: string }[] = [];
       const relations = Array.isArray(data.relations) ? data.relations : [];
       for (const rel of relations) {
         if (!rel || typeof rel !== "object") continue;
@@ -112,9 +118,9 @@ function createMusicBrainzClient({
       }
 
       const lifeSpanRaw = data["life-span"];
-      let lifeSpan = { begin: undefined, end: undefined, ended: false };
+      let lifeSpan: { begin?: string; end?: string; ended: boolean } = { begin: undefined, end: undefined, ended: false };
       if (lifeSpanRaw && typeof lifeSpanRaw === "object" && !Array.isArray(lifeSpanRaw)) {
-        const ls = /** @type {{ begin?: string, end?: string, ended?: boolean }} */ (lifeSpanRaw);
+        const ls = lifeSpanRaw as { begin?: string; end?: string; ended?: boolean };
         lifeSpan = {
           begin: typeof ls.begin === "string" ? ls.begin : undefined,
           end: typeof ls.end === "string" ? ls.end : undefined,
@@ -133,5 +139,3 @@ function createMusicBrainzClient({
     },
   };
 }
-
-module.exports = { createMusicBrainzClient };

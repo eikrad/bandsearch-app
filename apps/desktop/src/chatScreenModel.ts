@@ -1,8 +1,8 @@
-function normalizeViewport(viewport) {
+function normalizeViewport(viewport: string): string {
   return viewport === "mobile" ? "mobile" : "desktop";
 }
 
-function mapCard(rec, viewport) {
+function mapCard(rec: any, viewport: string): any {
   const isDesktop = viewport === "desktop";
   return {
     title: rec.title,
@@ -21,9 +21,9 @@ function mapCard(rec, viewport) {
   };
 }
 
-function createChatScreenModel({ viewModel }) {
+export function createChatScreenModel({ viewModel }: { viewModel: any }) {
   return {
-    getScreenState({ viewport = "desktop" } = {}) {
+    getScreenState({ viewport = "desktop" }: { viewport?: string } = {}) {
       const resolvedViewport = normalizeViewport(viewport);
       const uiState = viewModel.getUiState();
       const recommendations = viewModel.getRenderableRecommendations();
@@ -36,7 +36,7 @@ function createChatScreenModel({ viewModel }) {
         mode: uiState.mode,
         isLoading: uiState.isLoading,
         lastMeta: uiState.lastMeta,
-        recommendationCards: recommendations.map((rec) => mapCard(rec, resolvedViewport)),
+        recommendationCards: recommendations.map((rec: any) => mapCard(rec, resolvedViewport)),
         conversationMessages:
           typeof viewModel.getConversationMessages === "function"
             ? viewModel.getConversationMessages()
@@ -45,7 +45,3 @@ function createChatScreenModel({ viewModel }) {
     },
   };
 }
-
-module.exports = {
-  createChatScreenModel,
-};

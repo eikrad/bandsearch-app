@@ -1,6 +1,6 @@
-const React = require("react");
+import * as React from "react";
 
-function getTheme(modeValue) {
+function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
   return {
     pageBg: "#0d0f14",
@@ -20,7 +20,7 @@ function getTheme(modeValue) {
   };
 }
 
-function ModePill({ modeValue, modeOptions, onModeChange }) {
+function ModePill({ modeValue, modeOptions, onModeChange }: { modeValue: string; modeOptions: any[]; onModeChange: (v: string) => void }) {
   return React.createElement(
     "div",
     { className: "mode-pill" },
@@ -45,7 +45,7 @@ function ModePill({ modeValue, modeOptions, onModeChange }) {
   );
 }
 
-function GenreChips({ genres, textTertiary, border }) {
+function GenreChips({ genres, textTertiary, border }: { genres: string[] | null | undefined; textTertiary: string; border: string }) {
   if (!genres?.length) return null;
   return React.createElement(
     "div",
@@ -71,7 +71,7 @@ function GenreChips({ genres, textTertiary, border }) {
   );
 }
 
-function PlatformLinks({ links }) {
+function PlatformLinks({ links }: { links: any[] | null | undefined }) {
   if (!links?.length) return null;
   return React.createElement(
     "div",
@@ -101,7 +101,7 @@ function PlatformLinks({ links }) {
   );
 }
 
-function renderCardActions(card, theme, handlers) {
+function renderCardActions(card: any, theme: ReturnType<typeof getTheme>, handlers: any) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
     color: theme.buttonText,
@@ -117,9 +117,8 @@ function renderCardActions(card, theme, handlers) {
     fontSize: "13px",
     cursor: "pointer",
     padding: "4px 6px",
-    title: "Copy",
   };
-  const actions = [];
+  const actions: React.ReactNode[] = [];
   if (card.actions?.save?.visible) {
     actions.push(
       React.createElement(
@@ -164,7 +163,7 @@ function renderCardActions(card, theme, handlers) {
   return actions;
 }
 
-function RecommendationCard({ card, theme, isMobile, handlers }) {
+function RecommendationCard({ card, theme, isMobile, handlers }: { card: any; theme: ReturnType<typeof getTheme>; isMobile: boolean; handlers: any }) {
   const cardStyles = {
     article: {
       backgroundColor: theme.cardBg,
@@ -193,7 +192,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
       marginBottom: "8px",
       fontStyle: "italic",
     },
-    actions: { display: "flex", gap: "8px", flexWrap: isMobile ? "wrap" : "nowrap" },
+    actions: { display: "flex", gap: "8px", flexWrap: (isMobile ? "wrap" : "nowrap") as any },
   };
 
   return React.createElement(
@@ -211,7 +210,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
             borderRadius: "6px",
             marginBottom: "10px",
           },
-          onError: (e) => {
+          onError: (e: any) => {
             e.currentTarget.style.display = "none";
           },
         })
@@ -249,7 +248,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }) {
   );
 }
 
-function SearchInProgress({ visible, theme }) {
+function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnType<typeof getTheme> }) {
   if (!visible) return null;
   return React.createElement(
     "div",
@@ -281,7 +280,7 @@ function SearchInProgress({ visible, theme }) {
   );
 }
 
-function StatusBanner({ actionStatus }) {
+function StatusBanner({ actionStatus }: { actionStatus: any }) {
   if (!actionStatus) return null;
   const isError = actionStatus.type === "error";
   return React.createElement(
@@ -301,12 +300,7 @@ function StatusBanner({ actionStatus }) {
   );
 }
 
-/**
- * Index of the most recent assistant message that includes recommendation cards.
- *
- * @param {{ role: string, cards?: unknown[] }[]|null|undefined} messages
- */
-function findLastAssistantWithCardsIndex(messages) {
+function findLastAssistantWithCardsIndex(messages: any[] | null | undefined): number {
   if (!messages?.length) return -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -315,17 +309,14 @@ function findLastAssistantWithCardsIndex(messages) {
   return -1;
 }
 
-/**
- * @param {{ role: string, cards?: unknown[] }[]|null|undefined} messages
- */
-function getLatestAssistantCards(messages) {
+function getLatestAssistantCards(messages: any[] | null | undefined): any[] {
   const idx = findLastAssistantWithCardsIndex(messages);
   if (idx === -1) return [];
-  const m = messages[idx];
+  const m = (messages as any[])[idx];
   return Array.isArray(m.cards) ? m.cards : [];
 }
 
-function DesktopResultsRail({ cards, theme, isMobile, handlers }) {
+function DesktopResultsRail({ cards, theme, isMobile, handlers }: { cards: any[]; theme: ReturnType<typeof getTheme>; isMobile: boolean; handlers: any }) {
   if (!cards?.length) return null;
   return React.createElement(
     "aside",
@@ -361,7 +352,7 @@ function DesktopResultsRail({ cards, theme, isMobile, handlers }) {
   );
 }
 
-function EmptyState({ modeValue, textSecondary, textTertiary }) {
+function EmptyState({ modeValue, textSecondary, textTertiary }: { modeValue: string; textSecondary: string; textTertiary: string }) {
   const isWarm = modeValue === "preference-aware";
   return React.createElement(
     "div",
@@ -381,7 +372,13 @@ function EmptyState({ modeValue, textSecondary, textTertiary }) {
   );
 }
 
-function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread" }) {
+function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread" }: {
+  messages: any[] | null | undefined;
+  theme: ReturnType<typeof getTheme>;
+  isMobile: boolean;
+  handlers: any;
+  assistantCardsMode?: string;
+}) {
   if (!messages?.length) return null;
   const railLatest = assistantCardsMode === "rail-latest";
   const lastAssistantCardsIdx = railLatest ? findLastAssistantWithCardsIndex(messages) : -1;
@@ -419,7 +416,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
 
         if (!assistantText && !hasCards) return null;
 
-        const cardGrid = (cards) =>
+        const cardGrid = (cards: any[]) =>
           React.createElement(
             "div",
             { style: { display: "grid", gap: "10px" } },
@@ -454,7 +451,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
             )
           : null;
 
-        let cardsBlock = null;
+        let cardsBlock: React.ReactNode = null;
         if (hasCards) {
           if (!railLatest) {
             cardsBlock = cardGrid(msg.cards);
@@ -511,7 +508,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
                   },
                   onClick: () => {
                     const text = msg.cards
-                      .map((c) => `${c.title}${c.why ? ` — ${c.why}` : ""}`)
+                      .map((c: any) => `${c.title}${c.why ? ` — ${c.why}` : ""}`)
                       .join("\n");
                     handlers.onCopyAll(text);
                   },
@@ -540,7 +537,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
   );
 }
 
-function ChatAppView({ viewProps, handlers }) {
+export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers: any }) {
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
   const searchInFlight = viewProps.isLoading === true;
@@ -708,7 +705,7 @@ function ChatAppView({ viewProps, handlers }) {
               : React.createElement(
                   "section",
                   { style: { display: "grid", gap: "8px" } },
-                  viewProps.cards.map((card) =>
+                  viewProps.cards.map((card: any) =>
                     React.createElement(RecommendationCard, {
                       key: card.title,
                       card,
@@ -736,10 +733,10 @@ function ChatAppView({ viewProps, handlers }) {
         "form",
         {
           "aria-busy": searchInFlight,
-          onSubmit: (event) => {
+          onSubmit: (event: any) => {
             event.preventDefault();
-            const form = /** @type {any} */ (event.currentTarget);
-            const queryInput = form.querySelector('input[name="query"]');
+            const form = event.currentTarget as any;
+            const queryInput = form.querySelector('input[name="query"]') as any;
             const query = String(queryInput?.value || "").trim();
             if (!query || viewProps.queryDisabled) return;
             queryInput.value = "";
@@ -793,5 +790,3 @@ function ChatAppView({ viewProps, handlers }) {
     ),
   );
 }
-
-module.exports = { ChatAppView };

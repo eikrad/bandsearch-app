@@ -1,4 +1,4 @@
-const React = require("react");
+import * as React from "react";
 
 const theme = {
   pageBg: "#0d0f14",
@@ -14,7 +14,7 @@ const theme = {
   buttonText: "#c8d4e8",
 };
 
-function SavedArtistItem({ artist, handlers }) {
+function SavedArtistItem({ artist, handlers }: { artist: any; handlers: any }) {
   const itemStyles = {
     li: {
       display: "flex",
@@ -94,7 +94,7 @@ function SavedArtistItem({ artist, handlers }) {
   );
 }
 
-function SearchResultItem({ result, handlers }) {
+function SearchResultItem({ result, handlers }: { result: any; handlers: any }) {
   const styles = {
     li: {
       display: "flex",
@@ -142,7 +142,7 @@ function SearchResultItem({ result, handlers }) {
   );
 }
 
-function SearchResultsList({ results, handlers }) {
+function SearchResultsList({ results, handlers }: { results: any[]; handlers: any }) {
   const listStyle = { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" };
   return React.createElement(
     "ul",
@@ -153,7 +153,7 @@ function SearchResultsList({ results, handlers }) {
   );
 }
 
-function SearchSection({ searchResults, isSearching, handlers }) {
+function SearchSection({ searchResults, isSearching, handlers }: { searchResults: any[]; isSearching: boolean; handlers: any }) {
   const styles = {
     section: { marginTop: "20px" },
     sectionTitle: { fontSize: "13px", fontWeight: "600", color: theme.textSecondary, marginBottom: "8px" },
@@ -188,9 +188,9 @@ function SearchSection({ searchResults, isSearching, handlers }) {
       "form",
       {
         style: styles.row,
-        onSubmit: (e) => {
+        onSubmit: (e: any) => {
           e.preventDefault();
-          const q = e.target.elements["artist-search"].value.trim();
+          const q = (e.target.elements["artist-search"] as any).value.trim();
           if (q) handlers.onSearch?.(q);
         },
       },
@@ -215,7 +215,7 @@ function SearchSection({ searchResults, isSearching, handlers }) {
   );
 }
 
-function SelectionBar({ selectedCount, handlers }) {
+function SelectionBar({ selectedCount, handlers }: { selectedCount: number; handlers: any }) {
   const styles = {
     bar: {
       display: "flex",
@@ -256,7 +256,7 @@ function SelectionBar({ selectedCount, handlers }) {
   );
 }
 
-function GroupSection({ group, artists, handlers }) {
+function GroupSection({ group, artists, handlers }: { group: any; artists: any[]; handlers: any }) {
   const memberArtists = artists.filter((a) => group.memberIds.includes(a.id));
   const styles = {
     section: { marginTop: "20px" },
@@ -304,7 +304,7 @@ function GroupSection({ group, artists, handlers }) {
   );
 }
 
-function GroupsSection({ groups, artists, handlers }) {
+function GroupsSection({ groups, artists, handlers }: { groups: any[]; artists: any[]; handlers: any }) {
   const styles = {
     section: { marginTop: "24px" },
     toolbar: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" },
@@ -355,9 +355,9 @@ function GroupsSection({ groups, artists, handlers }) {
         "form",
         {
           style: { display: "flex", gap: "6px", flex: 1 },
-          onSubmit: (e) => {
+          onSubmit: (e: any) => {
             e.preventDefault();
-            const input = e.target.elements["create-group"];
+            const input = e.target.elements["create-group"] as any;
             const name = input.value.trim();
             if (name) {
               handlers.onCreateGroup?.(name);
@@ -385,7 +385,7 @@ function GroupsSection({ groups, artists, handlers }) {
   );
 }
 
-function SavedArtistsView({ viewProps, handlers }) {
+export function SavedArtistsView({ viewProps, handlers }: { viewProps: any; handlers: any }) {
   const styles = {
     page: {
       backgroundColor: theme.pageBg,
@@ -417,7 +417,7 @@ function SavedArtistsView({ viewProps, handlers }) {
     list: { display: "grid", gap: "8px", marginTop: "20px" },
     empty: {
       padding: "48px 0 24px",
-      textAlign: "center",
+      textAlign: "center" as const,
       fontSize: "14px",
       color: theme.textSecondary,
     },
@@ -462,7 +462,7 @@ function SavedArtistsView({ viewProps, handlers }) {
               type: "file",
               accept: ".json,application/json",
               style: { display: "none" },
-              onChange: (e) => {
+              onChange: (e: any) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 handlers.onImportFile?.(file);
@@ -494,12 +494,10 @@ function SavedArtistsView({ viewProps, handlers }) {
         : React.createElement(
             "ul",
             { style: { ...styles.list, listStyle: "none", padding: "0", margin: "0" } },
-            artists.map((artist) =>
+            artists.map((artist: any) =>
               React.createElement(SavedArtistItem, { key: artist.id, artist, handlers }),
             ),
           ),
     React.createElement(GroupsSection, { groups, artists, handlers }),
   );
 }
-
-module.exports = { SavedArtistsView };

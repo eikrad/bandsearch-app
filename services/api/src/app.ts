@@ -1,26 +1,31 @@
-const express = require("express");
-const helmetLib = require("helmet");
-const cors = require("cors");
-const rateLimitLib = require("express-rate-limit");
-const helmet = /** @type {any} */ (helmetLib.default || helmetLib);
-const rateLimit = /** @type {any} */ (rateLimitLib.default || rateLimitLib);
-const { version: appVersion } = require("../../../package.json");
-const { createMusicBrainzClient } = require("./integrations/musicbrainz");
-const { createWikidataImageClient } = require("./integrations/wikidataImageClient");
-const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
-const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
-const { createSqliteUserRepository, createInMemoryUserRepository } = require("./auth/userRepository");
-const { createTursoUserRepository } = require("./auth/tursoUserRepository");
-const { createAuthService } = require("./auth/authService");
-const { createAuthMiddleware } = require("./auth/authMiddleware");
-const { sendError } = require("./http/errors");
-const { writeStructuredLog } = require("./http/structuredLog");
-const { registerBandsearchRoutes } = require("./routes/registerBandsearchRoutes");
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import express from "express";
+import helmetLib from "helmet";
+import cors from "cors";
+import rateLimitLib from "express-rate-limit";
+import Database from "better-sqlite3";
+import { createClient } from "@libsql/client";
 
-/**
- * @param {{ recommendationPipeline?: any, preferenceRepository?: any, userRepository?: any, musicBrainzClient?: any, artistImageClient?: any, chatSessionRepository?: any, runtimeConfig?: any, logger?: { warn: (obj: Record<string, unknown>) => void }, createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> } }} [options]
- */
-function createApp({
+const helmet = (helmetLib as any).default || helmetLib;
+const rateLimit = (rateLimitLib as any).default || rateLimitLib;
+
+// Read package.json version (CJS-compatible)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version: appVersion } = require("../../../package.json") as { version: string };
+
+import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
+import { createWikidataImageClient } from "./integrations/wikidataImageClient.js";
+import { assertPreferenceRepository, createPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "./sessions/chatSessionRepository.js";
+import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
+import { createTursoUserRepository } from "./auth/tursoUserRepository.js";
+import { createAuthService } from "./auth/authService.js";
+import { createAuthMiddleware } from "./auth/authMiddleware.js";
+import { sendError } from "./http/errors.js";
+import { writeStructuredLog } from "./http/structuredLog.js";
+import { registerBandsearchRoutes } from "./routes/registerBandsearchRoutes.js";
+
+export function createApp({
   recommendationPipeline,
   preferenceRepository,
   userRepository,
@@ -30,6 +35,16 @@ function createApp({
   runtimeConfig = {},
   logger,
   createTursoClient,
+}: {
+  recommendationPipeline?: any;
+  preferenceRepository?: any;
+  userRepository?: any;
+  musicBrainzClient?: any;
+  artistImageClient?: any;
+  chatSessionRepository?: any;
+  runtimeConfig?: any;
+  logger?: { warn: (obj: Record<string, unknown>) => void };
+  createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> };
 } = {}) {
   const app = express();
   app.use(helmet());
@@ -39,7 +54,7 @@ function createApp({
     }),
   );
   app.use(express.json({ limit: "32kb" }));
-  app.use((req, _res, next) => {
+  app.use((req: any, _res: any, next: any) => {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     _res.locals.requestId = requestId;
     const startMs = Date.now();
@@ -89,7 +104,6 @@ function createApp({
     chatSessionRepository ||
     (() => {
       try {
-        const Database = require("better-sqlite3");
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
         return createSqliteChatSessionRepository({ db });
       } catch {
@@ -101,7 +115,6 @@ function createApp({
     userRepository ||
     (() => {
       if (runtimeConfig.preferenceStore === "turso") {
-        const { createClient } = require("@libsql/client");
         const client = createClient({
           url: runtimeConfig.tursoDatabaseUrl,
           authToken: runtimeConfig.tursoAuthToken,
@@ -109,7 +122,6 @@ function createApp({
         return createTursoUserRepository({ client });
       }
       try {
-        const Database = require("better-sqlite3");
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
         return createSqliteUserRepository({ db });
       } catch {
@@ -143,8 +155,8 @@ function createApp({
         : null,
   });
 
-  app.use((req, res) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
-  app.use((error, req, res, next) => {
+  app.use((req: any, res: any) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
+  app.use((error: any, req: any, res: any, next: any) => {
     void next;
     writeStructuredLog("error", {
       component: "http_error",
@@ -156,4 +168,3 @@ function createApp({
 
   return app;
 }
-module.exports = { createApp };

@@ -1,10 +1,11 @@
-const { randomUUID } = require("node:crypto");
-const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
-const { formatSavedBandContextLine } = require("./savedBandContextFormat");
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { randomUUID } from "node:crypto";
+import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
+import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 
 const DEFAULT_USER = "anonymous";
 
-function mapRowToSavedBand(row) {
+function mapRowToSavedBand(row: any) {
   return {
     id: row.id,
     musicbrainzArtistId: row.musicbrainz_artist_id,
@@ -17,15 +18,15 @@ function mapRowToSavedBand(row) {
   };
 }
 
-function createTursoPreferenceRepository({ client }) {
+export function createTursoPreferenceRepository({ client }: { client: any }) {
   return {
-    async addSavedBand(input, userId = DEFAULT_USER) {
+    async addSavedBand(input: any, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) return validation;
 
       const id = randomUUID();
       const now = new Date().toISOString();
-      const categories = JSON.stringify(input.categories.map((c) => String(c).trim()).filter(Boolean));
+      const categories = JSON.stringify(input.categories.map((c: any) => String(c).trim()).filter(Boolean));
       const note = input.note.trim();
       const name = input.name.trim();
       const musicbrainzArtistId = input.musicbrainzArtistId.trim();
@@ -49,7 +50,7 @@ function createTursoPreferenceRepository({ client }) {
       return result.rows.map(mapRowToSavedBand);
     },
 
-    async updateSavedBand(id, updates, userId = DEFAULT_USER) {
+    async updateSavedBand(id: string, updates: any, userId = DEFAULT_USER) {
       const selectResult = await client.execute({
         sql: "SELECT * FROM saved_bands WHERE id = ? AND user_id = ?",
         args: [id, userId],
@@ -68,9 +69,9 @@ function createTursoPreferenceRepository({ client }) {
         name: current.name,
         ...next,
       });
-      if (validation.ok === false) return { ok: false, status: 400, error: validation.error };
+      if (validation.ok === false) return { ok: false, status: 400, error: (validation as any).error };
 
-      const normalizedCategories = JSON.stringify(next.categories.map((c) => String(c).trim()).filter(Boolean));
+      const normalizedCategories = JSON.stringify(next.categories.map((c: any) => String(c).trim()).filter(Boolean));
       const normalizedNote = String(next.note).trim();
       const updatedAt = new Date().toISOString();
 
@@ -85,7 +86,7 @@ function createTursoPreferenceRepository({ client }) {
       return { ok: true, savedBand: mapRowToSavedBand(updateResult.rows[0]) };
     },
 
-    async deleteSavedBand(id, userId = DEFAULT_USER) {
+    async deleteSavedBand(id: string, userId = DEFAULT_USER) {
       const result = await client.execute({
         sql: "DELETE FROM saved_bands WHERE id = ? AND user_id = ?",
         args: [id, userId],
@@ -100,7 +101,7 @@ function createTursoPreferenceRepository({ client }) {
       return savedBands.map(formatSavedBandContextLine).join("\n");
     },
 
-    async buildContextForIds(ids, userId = DEFAULT_USER) {
+    async buildContextForIds(ids: string[], userId = DEFAULT_USER) {
       if (!ids || ids.length === 0) return "";
       const savedBands = await this.listSavedBands(userId);
       const want = new Set(ids);
@@ -109,12 +110,12 @@ function createTursoPreferenceRepository({ client }) {
       return filtered.map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands, userId = DEFAULT_USER) {
+    async importSavedBands(bands: any[], userId = DEFAULT_USER) {
       const result = await client.execute({
         sql: "SELECT musicbrainz_artist_id FROM saved_bands WHERE user_id = ?",
         args: [userId],
       });
-      const existing = new Set(result.rows.map((r) => r.musicbrainz_artist_id));
+      const existing = new Set(result.rows.map((r: any) => r.musicbrainz_artist_id));
       let imported = 0;
       let skipped = 0;
       for (const band of bands) {
@@ -142,12 +143,12 @@ function createTursoPreferenceRepository({ client }) {
           sql: "SELECT saved_band_id FROM artist_group_members WHERE group_id = ?",
           args: [g.id],
         });
-        results.push({ id: g.id, name: g.name, memberIds: members.rows.map((m) => m.saved_band_id) });
+        results.push({ id: g.id, name: g.name, memberIds: members.rows.map((m: any) => m.saved_band_id) });
       }
       return results;
     },
 
-    async createGroup(name, userId = DEFAULT_USER) {
+    async createGroup(name: string, userId = DEFAULT_USER) {
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
       const existing = await client.execute({
@@ -164,7 +165,7 @@ function createTursoPreferenceRepository({ client }) {
       return { ok: true, group: { id, name: trimmed, memberIds: [] } };
     },
 
-    async renameGroup(id, name, userId = DEFAULT_USER) {
+    async renameGroup(id: string, name: string, userId = DEFAULT_USER) {
       const current = await client.execute({
         sql: "SELECT id FROM artist_groups WHERE id = ? AND user_id = ?",
         args: [id, userId],
@@ -186,10 +187,10 @@ function createTursoPreferenceRepository({ client }) {
         sql: "SELECT saved_band_id FROM artist_group_members WHERE group_id = ?",
         args: [id],
       });
-      return { ok: true, group: { id, name: trimmed, memberIds: members.rows.map((m) => m.saved_band_id) } };
+      return { ok: true, group: { id, name: trimmed, memberIds: members.rows.map((m: any) => m.saved_band_id) } };
     },
 
-    async deleteGroup(id, userId = DEFAULT_USER) {
+    async deleteGroup(id: string, userId = DEFAULT_USER) {
       const result = await client.execute({
         sql: "DELETE FROM artist_groups WHERE id = ? AND user_id = ?",
         args: [id, userId],
@@ -198,7 +199,7 @@ function createTursoPreferenceRepository({ client }) {
       return { ok: true, deletedId: id };
     },
 
-    async addArtistToGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+    async addArtistToGroup(groupId: string, savedBandId: string, userId = DEFAULT_USER) {
       const group = await client.execute({
         sql: "SELECT id FROM artist_groups WHERE id = ? AND user_id = ?",
         args: [groupId, userId],
@@ -212,7 +213,7 @@ function createTursoPreferenceRepository({ client }) {
       return { ok: true };
     },
 
-    async removeArtistFromGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+    async removeArtistFromGroup(groupId: string, savedBandId: string, userId = DEFAULT_USER) {
       const group = await client.execute({
         sql: "SELECT id FROM artist_groups WHERE id = ? AND user_id = ?",
         args: [groupId, userId],
@@ -226,5 +227,3 @@ function createTursoPreferenceRepository({ client }) {
     },
   };
 }
-
-module.exports = { createTursoPreferenceRepository };

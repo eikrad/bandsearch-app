@@ -1,4 +1,16 @@
-const PLATFORMS = [
+interface PlatformDef {
+  platform: string;
+  label: string;
+  buildUrl: (name: string) => string;
+}
+
+interface PlatformLink {
+  platform: string;
+  label: string;
+  url: string;
+}
+
+const PLATFORMS: PlatformDef[] = [
   {
     platform: "bandcamp",
     label: "Bandcamp",
@@ -16,7 +28,7 @@ const PLATFORMS = [
   },
 ];
 
-function buildPlatformLinks(artistName) {
+export function buildPlatformLinks(artistName: string): PlatformLink[] {
   if (!artistName) return [];
   return PLATFORMS.map(({ platform, label, buildUrl }) => ({
     platform,
@@ -24,5 +36,3 @@ function buildPlatformLinks(artistName) {
     url: buildUrl(artistName),
   }));
 }
-
-module.exports = { buildPlatformLinks };

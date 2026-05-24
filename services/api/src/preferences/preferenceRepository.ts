@@ -1,27 +1,20 @@
-const { Pool } = require("pg");
-const Database = require("better-sqlite3");
-const { createInMemoryPreferenceRepository } = require("./preferenceMemory");
-const { createPostgresPreferenceRepository } = require("./postgresPreferenceRepository");
-const { createSqlitePreferenceRepository } = require("./sqlitePreferenceRepository");
-const { createTursoPreferenceRepository } = require("./tursoPreferenceRepository");
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { Pool } from "pg";
+import Database from "better-sqlite3";
+import { createClient } from "@libsql/client";
+import { createInMemoryPreferenceRepository } from "./preferenceMemory.js";
+import { createPostgresPreferenceRepository } from "./postgresPreferenceRepository.js";
+import { createSqlitePreferenceRepository } from "./sqlitePreferenceRepository.js";
+import { createTursoPreferenceRepository } from "./tursoPreferenceRepository.js";
 
-function addColumnIfMissing(db, table, column, definition) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+function addColumnIfMissing(db: import("better-sqlite3").Database, table: string, column: string, definition: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 
-/**
- * PreferenceRepository contract (storage abstraction):
- * - addSavedBand(input)
- * - listSavedBands()
- * - updateSavedBand(id, updates)
- * - deleteSavedBand(id)
- * - buildContext()
- * - buildContextForIds(ids) — subset context for priority artist ids (recommendation pipeline)
- */
-function assertPreferenceRepository(repository) {
+export function assertPreferenceRepository(repository: any) {
   const requiredMethods = [
     "addSavedBand",
     "listSavedBands",
@@ -47,7 +40,7 @@ function assertPreferenceRepository(repository) {
   return repository;
 }
 
-function createPreferenceRepository(runtimeConfig = {}) {
+export function createPreferenceRepository(runtimeConfig: any = {}) {
   if (runtimeConfig.preferenceStore === "postgres") {
     const pool = new Pool({
       connectionString: runtimeConfig.databaseUrl,
@@ -56,7 +49,6 @@ function createPreferenceRepository(runtimeConfig = {}) {
     return createPostgresPreferenceRepository({ pool });
   }
   if (runtimeConfig.preferenceStore === "turso") {
-    const { createClient } = require("@libsql/client");
     const client = createClient({
       url: runtimeConfig.tursoDatabaseUrl,
       authToken: runtimeConfig.tursoAuthToken,
@@ -99,8 +91,3 @@ function createPreferenceRepository(runtimeConfig = {}) {
   addColumnIfMissing(db, "artist_groups", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
   return createSqlitePreferenceRepository({ db });
 }
-
-module.exports = {
-  assertPreferenceRepository,
-  createPreferenceRepository,
-};

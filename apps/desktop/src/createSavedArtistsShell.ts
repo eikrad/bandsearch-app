@@ -1,5 +1,11 @@
-function createSavedArtistsShell({ app }) {
-  let state = {
+export function createSavedArtistsShell({ app }: { app: any }) {
+  let state: {
+    savedArtists: any[];
+    selectedIds: any[];
+    searchQuery: string;
+    searchResults: any[];
+    isSearching: boolean;
+  } = {
     savedArtists: [],
     selectedIds: [],
     searchQuery: "",
@@ -16,12 +22,12 @@ function createSavedArtistsShell({ app }) {
       const appSelectedIds = app.getState().selectedArtistIds;
       state = { ...state, savedArtists: bands, selectedIds: appSelectedIds };
     },
-    toggleArtistSelection(id) {
+    toggleArtistSelection(id: string) {
       app.toggleArtistSelection(id);
       const appSelectedIds = app.getState().selectedArtistIds;
       state = { ...state, selectedIds: appSelectedIds };
     },
-    setSearchQuery(query) {
+    setSearchQuery(query: string) {
       state = { ...state, searchQuery: query };
     },
     async searchArtists() {
@@ -35,12 +41,10 @@ function createSavedArtistsShell({ app }) {
         state = { ...state, isSearching: false };
       }
     },
-    async addArtist(mbArtist) {
+    async addArtist(mbArtist: any) {
       await app.saveBand(mbArtist.name, { note: mbArtist.disambiguation || "Added via search." });
       const bands = await app.listSavedBands();
       state = { ...state, savedArtists: bands, searchResults: [] };
     },
   };
 }
-
-module.exports = { createSavedArtistsShell };

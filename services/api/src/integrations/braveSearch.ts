@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
 
@@ -7,8 +8,14 @@ async function fetchWithTimeoutAndRetry({
   timeoutMs,
   retries,
   headers,
+}: {
+  fetchImpl: typeof fetch;
+  url: string;
+  timeoutMs: number;
+  retries: number;
+  headers: Record<string, string>;
 }) {
-  let lastError;
+  let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -27,21 +34,21 @@ async function fetchWithTimeoutAndRetry({
   throw lastError;
 }
 
-function normalizeQueryKey(query) {
+export function normalizeQueryKey(query: string) {
   return String(query || "").trim().toLowerCase();
 }
 
-/**
- * @param {{
- *   fetchImpl?: typeof fetch,
- *   apiKey?: string,
- *   baseUrl?: string,
- *   timeoutMs?: number,
- *   retries?: number,
- *   dedupCache?: Map<string, { results: Array<{ title: string, url: string, description: string }>, fromDuplicateCache?: boolean }>,
- * }} [opts]
- */
-function createBraveSearchClient(opts = {}) {
+type SearchResult = { title: string; url: string; description: string };
+type CacheEntry = { results: SearchResult[]; fromDuplicateCache?: boolean };
+
+export function createBraveSearchClient(opts: {
+  fetchImpl?: typeof fetch;
+  apiKey?: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+  retries?: number;
+  dedupCache?: Map<string, CacheEntry>;
+} = {}) {
   const {
     fetchImpl = fetch,
     apiKey,
@@ -58,18 +65,14 @@ function createBraveSearchClient(opts = {}) {
   const cache = dedupCache ?? null;
 
   return {
-    /**
-     * @param {string} query
-     * @param {{ count?: number }} [options]
-     */
-    async search(query, options = {}) {
+    async search(query: string, options: { count?: number } = {}) {
       const qKey = normalizeQueryKey(query);
       if (!qKey) {
-        return { results: [], fromDuplicateCache: false };
+        return { results: [] as SearchResult[], fromDuplicateCache: false };
       }
 
       if (cache && cache.has(qKey)) {
-        const prev = cache.get(qKey);
+        const prev = cache.get(qKey)!;
         return {
           results: prev.results.map((r) => ({ ...r })),
           fromDuplicateCache: true,
@@ -96,10 +99,9 @@ function createBraveSearchClient(opts = {}) {
         throw new Error(`brave search failed with status ${response.status}`);
       }
 
-      /** @type {{ web?: { results?: Array<{ title?: string, url?: string, description?: string }> } } } */
-      const data = await response.json();
+      const data: any = await response.json();
       const raw = Array.isArray(data.web?.results) ? data.web.results : [];
-      const results = raw.map((r) => ({
+      const results: SearchResult[] = raw.map((r: any) => ({
         title: typeof r.title === "string" ? r.title : "",
         url: typeof r.url === "string" ? r.url : "",
         description: typeof r.description === "string" ? r.description : "",
@@ -113,5 +115,3 @@ function createBraveSearchClient(opts = {}) {
     },
   };
 }
-
-module.exports = { createBraveSearchClient, normalizeQueryKey };

@@ -1,4 +1,6 @@
-function parseNumber(value, fallback) {
+import { randomBytes } from "node:crypto";
+
+function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
@@ -6,18 +8,18 @@ function parseNumber(value, fallback) {
   return fallback;
 }
 
-function normalizeBoolean(value, fallback = false) {
+function normalizeBoolean(value: string | undefined, fallback = false): boolean {
   if (value === undefined) {
     return fallback;
   }
   return value === "true";
 }
 
-function generateSecret() {
-  return require("crypto").randomBytes(32).toString("hex");
+function generateSecret(): string {
+  return randomBytes(32).toString("hex");
 }
 
-function validateRuntimeEnv(env = process.env) {
+export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   const geminiApiKey = String(env.GEMINI_API_KEY ?? "").trim();
   if (!geminiApiKey) {
     throw new Error("GEMINI_API_KEY is required");
@@ -92,7 +94,3 @@ function validateRuntimeEnv(env = process.env) {
     jwtSecret,
   };
 }
-
-module.exports = {
-  validateRuntimeEnv,
-};

@@ -1,32 +1,59 @@
-const { randomUUID } = require("node:crypto");
-const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
-const { formatSavedBandContextLine } = require("./savedBandContextFormat");
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { randomUUID } from "node:crypto";
+import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
+import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
+
+export { validateSavedBandInput };
 
 const DEFAULT_USER = "anonymous";
 
-function createPreferenceMemory() {
-  const savedBands = [];
-  const groups = [];
+type SavedBand = {
+  id: string;
+  userId: string;
+  musicbrainzArtistId: string;
+  name: string;
+  rating: number;
+  categories: string[];
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
-  function toGroupView(g) {
-    return { id: g.id, name: g.name, memberIds: [...g.memberIds] };
-  }
+type Group = {
+  id: string;
+  userId: string;
+  name: string;
+  memberIds: Set<string>;
+};
+
+function withoutUserId({ userId: _uid, ...rest }: SavedBand) {
+  void _uid;
+  return rest;
+}
+
+function toGroupView(g: Group) {
+  return { id: g.id, name: g.name, memberIds: [...g.memberIds] };
+}
+
+export function createPreferenceMemory() {
+  const savedBands: SavedBand[] = [];
+  const groups: Group[] = [];
 
   return {
-    async addSavedBand(input, userId = DEFAULT_USER) {
+    async addSavedBand(input: any, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) {
         return validation;
       }
 
       const now = new Date().toISOString();
-      const savedBand = {
+      const savedBand: SavedBand = {
         id: randomUUID(),
         userId,
         musicbrainzArtistId: input.musicbrainzArtistId.trim(),
         name: input.name.trim(),
         rating: input.rating,
-        categories: input.categories.map((c) => String(c).trim()).filter(Boolean),
+        categories: input.categories.map((c: any) => String(c).trim()).filter(Boolean),
         note: input.note.trim(),
         createdAt: now,
         updatedAt: now,
@@ -40,7 +67,7 @@ function createPreferenceMemory() {
       return savedBands.filter((b) => b.userId === userId).map(withoutUserId);
     },
 
-    async updateSavedBand(id, updates, userId = DEFAULT_USER) {
+    async updateSavedBand(id: string, updates: any, userId = DEFAULT_USER) {
       const index = savedBands.findIndex((band) => band.id === id && band.userId === userId);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
@@ -63,13 +90,13 @@ function createPreferenceMemory() {
       });
 
       if (validation.ok === false) {
-        return { ok: false, status: 400, error: validation.error };
+        return { ok: false, status: 400, error: (validation as any).error };
       }
 
       savedBands[index] = {
         ...current,
         rating: next.rating,
-        categories: next.categories.map((c) => String(c).trim()).filter(Boolean),
+        categories: next.categories.map((c: any) => String(c).trim()).filter(Boolean),
         note: String(next.note).trim(),
         updatedAt: new Date().toISOString(),
       };
@@ -77,7 +104,7 @@ function createPreferenceMemory() {
       return { ok: true, savedBand: withoutUserId(savedBands[index]) };
     },
 
-    async deleteSavedBand(id, userId = DEFAULT_USER) {
+    async deleteSavedBand(id: string, userId = DEFAULT_USER) {
       const index = savedBands.findIndex((band) => band.id === id && band.userId === userId);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
@@ -93,7 +120,7 @@ function createPreferenceMemory() {
       return userBands.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
-    async buildContextForIds(ids, userId = DEFAULT_USER) {
+    async buildContextForIds(ids: string[], userId = DEFAULT_USER) {
       if (!ids || ids.length === 0) return "";
       const want = new Set(ids);
       const filtered = savedBands.filter((b) => b.userId === userId && want.has(b.id));
@@ -101,9 +128,9 @@ function createPreferenceMemory() {
       return filtered.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands, userId = DEFAULT_USER) {
+    async importSavedBands(bands: any[], userId = DEFAULT_USER) {
       const existingIds = new Set(
-        savedBands.filter((b) => b.userId === userId).map((b) => b.musicbrainzArtistId)
+        savedBands.filter((b) => b.userId === userId).map((b) => b.musicbrainzArtistId),
       );
       let imported = 0;
       let skipped = 0;
@@ -125,18 +152,18 @@ function createPreferenceMemory() {
       return groups.filter((g) => g.userId === userId).map(toGroupView);
     },
 
-    async createGroup(name, userId = DEFAULT_USER) {
+    async createGroup(name: string, userId = DEFAULT_USER) {
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
       if (groups.some((g) => g.userId === userId && g.name === trimmed))
         return { ok: false, status: 409, error: "group name already exists" };
       const id = randomUUID();
-      const group = { id, userId, name: trimmed, memberIds: new Set() };
+      const group: Group = { id, userId, name: trimmed, memberIds: new Set() };
       groups.push(group);
       return { ok: true, group: toGroupView(group) };
     },
 
-    async renameGroup(id, name, userId = DEFAULT_USER) {
+    async renameGroup(id: string, name: string, userId = DEFAULT_USER) {
       const group = groups.find((g) => g.id === id && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       const trimmed = String(name || "").trim();
@@ -147,21 +174,21 @@ function createPreferenceMemory() {
       return { ok: true, group: toGroupView(group) };
     },
 
-    async deleteGroup(id, userId = DEFAULT_USER) {
+    async deleteGroup(id: string, userId = DEFAULT_USER) {
       const index = groups.findIndex((g) => g.id === id && g.userId === userId);
       if (index === -1) return { ok: false, status: 404, error: "group not found" };
       groups.splice(index, 1);
       return { ok: true, deletedId: id };
     },
 
-    async addArtistToGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+    async addArtistToGroup(groupId: string, savedBandId: string, userId = DEFAULT_USER) {
       const group = groups.find((g) => g.id === groupId && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       group.memberIds.add(savedBandId);
       return { ok: true };
     },
 
-    async removeArtistFromGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+    async removeArtistFromGroup(groupId: string, savedBandId: string, userId = DEFAULT_USER) {
       const group = groups.find((g) => g.id === groupId && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       group.memberIds.delete(savedBandId);
@@ -170,16 +197,6 @@ function createPreferenceMemory() {
   };
 }
 
-function withoutUserId({ userId: _uid, ...rest }) { // eslint-disable-line no-unused-vars
-  return rest;
-}
-
-function createInMemoryPreferenceRepository() {
+export function createInMemoryPreferenceRepository() {
   return createPreferenceMemory();
 }
-
-module.exports = {
-  createPreferenceMemory,
-  createInMemoryPreferenceRepository,
-  validateSavedBandInput,
-};

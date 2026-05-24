@@ -1,6 +1,6 @@
-const { buildPlatformLinks } = require("./platformLinks");
+import { buildPlatformLinks } from "./platformLinks.js";
 
-function toCardViewProps(item) {
+function toCardViewProps(item: any): any {
   return {
     title: item.title,
     why: item.why || item.reason || "",
@@ -15,10 +15,10 @@ function toCardViewProps(item) {
   };
 }
 
-function toViewProps(renderState) {
+function toViewProps(renderState: any): any {
   const threadMessages = Array.isArray(renderState.conversationMessages)
     ? renderState.conversationMessages
-      .map((msg) => {
+      .map((msg: any) => {
         if (msg.role === "user") {
           return {
             id: msg.id,
@@ -32,7 +32,7 @@ function toViewProps(renderState) {
             id: msg.id,
             role: "assistant",
             content: msg.content || "",
-            cards: (msg.cards || []).map((card) => toCardViewProps({
+            cards: (msg.cards || []).map((card: any) => toCardViewProps({
               ...card,
               actions: card.actions || { save: { visible: true }, rate: { visible: true }, more: { visible: true } },
             })),
@@ -53,27 +53,23 @@ function toViewProps(renderState) {
     isLoading: renderState.isLoading,
     queryPlaceholder: renderState.queryInput.placeholder,
     queryDisabled: renderState.queryInput.disabled,
-    cards: renderState.recommendationList.items.map((item) => toCardViewProps(item)),
+    cards: renderState.recommendationList.items.map((item: any) => toCardViewProps(item)),
     messages: threadMessages && threadMessages.length > 0 ? threadMessages : undefined,
     emptyText: renderState.recommendationList.emptyText,
   };
 }
 
-function createChatRenderAdapter({ desktopUi }) {
+export function createChatRenderAdapter({ desktopUi }: { desktopUi: any }) {
   return {
     getViewProps() {
       return toViewProps(desktopUi.getRenderState());
     },
-    onModeChange(mode) {
+    onModeChange(mode: string) {
       return toViewProps(desktopUi.handleModeChange(mode));
     },
-    async onSubmitQuery(query) {
+    async onSubmitQuery(query: string) {
       const nextState = await desktopUi.handleQuerySubmit(query);
       return toViewProps(nextState);
     },
   };
 }
-
-module.exports = {
-  createChatRenderAdapter,
-};

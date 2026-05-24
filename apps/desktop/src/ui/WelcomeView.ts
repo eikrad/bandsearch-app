@@ -1,4 +1,4 @@
-const React = require("react");
+import * as React from "react";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -15,7 +15,7 @@ const palette = {
 /**
  * First-run welcome: guides the user to add a Gemini API key (Settings) or skip for later.
  */
-function WelcomeView({ viewProps, handlers }) {
+export function WelcomeView({ viewProps, handlers }: { viewProps: any; handlers: any }) {
   void viewProps;
   return React.createElement(
     "main",
@@ -94,5 +94,3 @@ function WelcomeView({ viewProps, handlers }) {
     ),
   );
 }
-
-module.exports = { WelcomeView };

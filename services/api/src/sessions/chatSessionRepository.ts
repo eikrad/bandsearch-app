@@ -1,10 +1,17 @@
-const { randomUUID } = require("node:crypto");
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { randomUUID } from "node:crypto";
+import type { Database } from "better-sqlite3";
 
 const DEFAULT_USER = "anonymous";
 
-function createInMemoryChatSessionRepository() {
-  const sessions = [];
-  const messages = [];
+function withoutUserId({ userId: _uid, ...rest }: { userId: string; [key: string]: any }) {
+  void _uid;
+  return rest;
+}
+
+export function createInMemoryChatSessionRepository() {
+  const sessions: any[] = [];
+  const messages: any[] = [];
 
   return {
     async createSession({ title = "Untitled" } = {}, userId = DEFAULT_USER) {
@@ -19,11 +26,11 @@ function createInMemoryChatSessionRepository() {
         .map(withoutUserId)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
-    async getSession(id, userId = DEFAULT_USER) {
+    async getSession(id: string, userId = DEFAULT_USER) {
       const s = sessions.find((s) => s.id === id && s.userId === userId);
       return s ? withoutUserId(s) : null;
     },
-    async addMessage(sessionId, { role, content }) {
+    async addMessage(sessionId: string, { role, content }: { role: string; content: string }) {
       const now = new Date().toISOString();
       const message = { id: randomUUID(), sessionId, role, content, createdAt: now };
       messages.push(message);
@@ -31,20 +38,22 @@ function createInMemoryChatSessionRepository() {
       if (session) session.updatedAt = now;
       return message;
     },
-    async getMessages(sessionId) {
-      return messages.filter((m) => m.sessionId === sessionId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    async getMessages(sessionId: string) {
+      return messages
+        .filter((m) => m.sessionId === sessionId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
   };
 }
 
-function addColumnIfMissing(db, table, column, definition) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+function addColumnIfMissing(db: Database, table: string, column: string, definition: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 
-function createSqliteChatSessionRepository({ db }) {
+export function createSqliteChatSessionRepository({ db }: { db: Database }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id TEXT PRIMARY KEY,
@@ -76,10 +85,10 @@ function createSqliteChatSessionRepository({ db }) {
     async listSessions(userId = DEFAULT_USER) {
       return db.prepare(`SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC`).all(userId);
     },
-    async getSession(id, userId = DEFAULT_USER) {
+    async getSession(id: string, userId = DEFAULT_USER) {
       return db.prepare(`SELECT * FROM chat_sessions WHERE id = ? AND user_id = ?`).get(id, userId) || null;
     },
-    async addMessage(sessionId, { role, content }) {
+    async addMessage(sessionId: string, { role, content }: { role: string; content: string }) {
       const id = randomUUID();
       const now = new Date().toISOString();
       db.prepare(
@@ -88,16 +97,10 @@ function createSqliteChatSessionRepository({ db }) {
       db.prepare(`UPDATE chat_sessions SET updated_at = ? WHERE id = ?`).run(now, sessionId);
       return db.prepare(`SELECT * FROM chat_messages WHERE id = ?`).get(id);
     },
-    async getMessages(sessionId) {
+    async getMessages(sessionId: string) {
       return db.prepare(
         `SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC`,
       ).all(sessionId);
     },
   };
 }
-
-function withoutUserId({ userId: _uid, ...rest }) { // eslint-disable-line no-unused-vars
-  return rest;
-}
-
-module.exports = { createInMemoryChatSessionRepository, createSqliteChatSessionRepository };

@@ -1,8 +1,8 @@
-function normalizeMode(mode) {
+function normalizeMode(mode: string): string {
   return mode === "preference-aware" ? "preference-aware" : "fresh";
 }
 
-function toRenderableRecommendation(item, savedBands) {
+function toRenderableRecommendation(item: any, savedBands: any[]): any {
   return {
     title: item.artist,
     reason: item.why,
@@ -15,15 +15,15 @@ function toRenderableRecommendation(item, savedBands) {
   };
 }
 
-function createChatViewModel({ app }) {
+export function createChatViewModel({ app }: { app: any }) {
   const uiState = {
     mode: "fresh",
     isLoading: false,
-    lastMeta: { modeUsed: "fresh", usedPreferenceContext: false },
+    lastMeta: { modeUsed: "fresh", usedPreferenceContext: false } as any,
   };
 
   return {
-    setMode(mode) {
+    setMode(mode: string) {
       uiState.mode = normalizeMode(mode);
     },
 
@@ -31,7 +31,7 @@ function createChatViewModel({ app }) {
       return { ...uiState };
     },
 
-    async submitQuery(query) {
+    async submitQuery(query: string) {
       uiState.isLoading = true;
       try {
         const response = await app.requestRecommendations(query, uiState.mode);
@@ -44,17 +44,17 @@ function createChatViewModel({ app }) {
 
     getRenderableRecommendations() {
       const appState = app.getState();
-      const messages = appState.messages || [];
-      const savedBands = appState.savedBands || [];
+      const messages: any[] = appState.messages || [];
+      const savedBands: any[] = appState.savedBands || [];
       const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-      const recommendations = latestAssistant?.recommendations || [];
+      const recommendations: any[] = latestAssistant?.recommendations || [];
       return recommendations.map((item) => toRenderableRecommendation(item, savedBands));
     },
 
     getConversationMessages() {
       const appState = app.getState();
-      const messages = appState.messages || [];
-      const savedBands = appState.savedBands || [];
+      const messages: any[] = appState.messages || [];
+      const savedBands: any[] = appState.savedBands || [];
       const conversation = messages
         .map((msg, index) => {
           if (msg.role === "user") {
@@ -66,7 +66,7 @@ function createChatViewModel({ app }) {
           }
 
           if (msg.role === "assistant") {
-            const cards = (msg.recommendations || []).map((item) => toRenderableRecommendation(item, savedBands));
+            const cards = (msg.recommendations || []).map((item: any) => toRenderableRecommendation(item, savedBands));
             const content = typeof msg.content === "string" ? msg.content : "";
             return {
               id: `assistant-${index}`,
@@ -84,7 +84,3 @@ function createChatViewModel({ app }) {
     },
   };
 }
-
-module.exports = {
-  createChatViewModel,
-};

@@ -3,9 +3,9 @@ const MODE_OPTIONS = [
   { value: "preference-aware", label: "Preference-aware" },
 ];
 
-function createChatScreen({ viewModel, screenModel }) {
+export function createChatScreen({ viewModel, screenModel }: { viewModel: any; screenModel: any }) {
   return {
-    getRenderState({ viewport = "desktop" } = {}) {
+    getRenderState({ viewport = "desktop" }: { viewport?: string } = {}) {
       const state = screenModel.getScreenState({ viewport });
       return {
         ...state,
@@ -24,15 +24,11 @@ function createChatScreen({ viewModel, screenModel }) {
         },
       };
     },
-    handleModeChange(mode) {
+    handleModeChange(mode: string) {
       viewModel.setMode(mode);
     },
-    async handleQuerySubmit(query) {
+    async handleQuerySubmit(query: string) {
       return viewModel.submitQuery(query);
     },
   };
 }
-
-module.exports = {
-  createChatScreen,
-};
