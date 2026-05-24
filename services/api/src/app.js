@@ -10,6 +10,7 @@ const { createWikidataImageClient } = require("./integrations/wikidataImageClien
 const { assertPreferenceRepository, createPreferenceRepository } = require("./preferences/preferenceRepository");
 const { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } = require("./sessions/chatSessionRepository");
 const { createSqliteUserRepository, createInMemoryUserRepository } = require("./auth/userRepository");
+const { createTursoUserRepository } = require("./auth/tursoUserRepository");
 const { createAuthService } = require("./auth/authService");
 const { createAuthMiddleware } = require("./auth/authMiddleware");
 const { sendError } = require("./http/errors");
@@ -99,6 +100,14 @@ function createApp({
   const resolvedUserRepository =
     userRepository ||
     (() => {
+      if (runtimeConfig.preferenceStore === "turso") {
+        const { createClient } = require("@libsql/client");
+        const client = createClient({
+          url: runtimeConfig.tursoDatabaseUrl,
+          authToken: runtimeConfig.tursoAuthToken,
+        });
+        return createTursoUserRepository({ client });
+      }
       try {
         const Database = require("better-sqlite3");
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
