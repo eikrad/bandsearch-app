@@ -1,11 +1,61 @@
-const { randomUUID } = require("crypto");
+import { randomUUID } from "crypto";
 
-function normalizeEmail(email) {
+export type User = {
+  id: string;
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  recoveryCodeHash: string;
+  createdAt: string;
+};
+
+export type PublicUser = Omit<User, "passwordHash" | "recoveryCodeHash">;
+
+export type CreateUserInput = {
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  recoveryCodeHash: string;
+};
+
+export type UpdatePasswordInput = {
+  passwordHash: string;
+  recoveryCodeHash: string;
+};
+
+export type UserRepository = {
+  countUsers(): Promise<number>;
+  create(input: CreateUserInput): Promise<PublicUser>;
+  findByEmail(email: string): Promise<User | null>;
+  findById(id: string): Promise<User | null>;
+  updatePassword(id: string, input: UpdatePasswordInput): Promise<{ ok: true } | { ok: false; error: string }>;
+  getFirstUser(): Promise<User | null>;
+};
+
+function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function createInMemoryUserRepository() {
-  const users = new Map();
+function publicUser(user: User): PublicUser {
+  const { passwordHash: _ph, recoveryCodeHash: _rc, ...pub } = user;
+  void _ph;
+  void _rc;
+  return pub;
+}
+
+function rowToUser(row: Record<string, unknown>): User {
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    displayName: row.display_name as string,
+    passwordHash: row.password_hash as string,
+    recoveryCodeHash: row.recovery_code_hash as string,
+    createdAt: row.created_at as string,
+  };
+}
+
+export function createInMemoryUserRepository(): UserRepository {
+  const users = new Map<string, User>();
 
   return {
     async countUsers() {
@@ -15,7 +65,7 @@ function createInMemoryUserRepository() {
     async create({ email, displayName, passwordHash, recoveryCodeHash }) {
       const key = normalizeEmail(email);
       if (users.has(key)) throw new Error("email already registered");
-      const user = {
+      const user: User = {
         id: randomUUID(),
         email: key,
         displayName,
@@ -56,7 +106,7 @@ function createInMemoryUserRepository() {
   };
 }
 
-function createSqliteUserRepository({ db }) {
+export function createSqliteUserRepository({ db }: { db: import("better-sqlite3").Database }): UserRepository {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -70,7 +120,7 @@ function createSqliteUserRepository({ db }) {
 
   return {
     countUsers() {
-      return Promise.resolve(db.prepare("SELECT COUNT(*) as n FROM users").get().n);
+      return Promise.resolve((db.prepare("SELECT COUNT(*) as n FROM users").get() as { n: number }).n);
     },
 
     create({ email, displayName, passwordHash, recoveryCodeHash }) {
@@ -81,21 +131,25 @@ function createSqliteUserRepository({ db }) {
         db.prepare(
           "INSERT INTO users (id, email, display_name, password_hash, recovery_code_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         ).run(id, normalizedEmail, displayName, passwordHash, recoveryCodeHash, createdAt);
-      } catch (err) {
-        if (err.message?.includes("UNIQUE constraint failed"))
-          return Promise.reject(new Error("email already registered"));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("UNIQUE constraint failed")) return Promise.reject(new Error("email already registered"));
         return Promise.reject(err);
       }
-      return Promise.resolve(publicUser({ id, email: normalizedEmail, displayName, passwordHash, recoveryCodeHash, createdAt }));
+      return Promise.resolve(
+        publicUser({ id, email: normalizedEmail, displayName, passwordHash, recoveryCodeHash, createdAt }),
+      );
     },
 
     findByEmail(email) {
-      const row = db.prepare("SELECT * FROM users WHERE email = ?").get(normalizeEmail(email));
+      const row = db.prepare("SELECT * FROM users WHERE email = ?").get(normalizeEmail(email)) as
+        | Record<string, unknown>
+        | undefined;
       return Promise.resolve(row ? rowToUser(row) : null);
     },
 
     findById(id) {
-      const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+      const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
       return Promise.resolve(row ? rowToUser(row) : null);
     },
 
@@ -108,27 +162,8 @@ function createSqliteUserRepository({ db }) {
     },
 
     getFirstUser() {
-      const row = db.prepare("SELECT * FROM users LIMIT 1").get();
+      const row = db.prepare("SELECT * FROM users LIMIT 1").get() as Record<string, unknown> | undefined;
       return Promise.resolve(row ? rowToUser(row) : null);
     },
   };
 }
-
-function rowToUser(row) {
-  return {
-    id: row.id,
-    email: row.email,
-    displayName: row.display_name,
-    passwordHash: row.password_hash,
-    recoveryCodeHash: row.recovery_code_hash,
-    createdAt: row.created_at,
-  };
-}
-
-function publicUser(user) {
-  // eslint-disable-next-line no-unused-vars
-  const { passwordHash, recoveryCodeHash, ...pub } = user;
-  return pub;
-}
-
-module.exports = { createInMemoryUserRepository, createSqliteUserRepository };
