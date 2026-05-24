@@ -1,13 +1,13 @@
-const {
+import {
   createChatClient,
   createInitialChatState,
   applyAssistantMessage,
   normalizeArtistId,
-} = require("./chatClient");
+} from "./chatClient.js";
 
 const VALID_VIEWS = ["chat", "saved-artists"];
 
-function buildPriorityContext(savedBands, selectedArtistIds) {
+function buildPriorityContext(savedBands: any[], selectedArtistIds: string[]): string {
   if (!selectedArtistIds.length) return "";
   const selected = savedBands.filter((b) => selectedArtistIds.includes(b.id));
   if (!selected.length) return "";
@@ -15,26 +15,31 @@ function buildPriorityContext(savedBands, selectedArtistIds) {
   return `Priority style references: ${names}`;
 }
 
-/**
- * Desktop shell state + API client — HTTP orchestration for chat and saved bands.
- *
- * @param {{ apiBaseUrl?: string, fetchImpl?: any }} [options]
- */
-function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl } = {}) {
-  const chatClient = createChatClient({ apiBaseUrl, fetchImpl });
-  let state = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [], currentSessionId: null };
-  let currentView = "chat";
-  let pendingSelectedArtistIds = [];
+export type BootstrapDesktopAppOptions = {
+  apiBaseUrl?: string;
+  fetchImpl?: typeof fetch;
+  getToken?: (() => string | null) | null;
+};
 
-  function findLatestRecommendationByName(artistName) {
+export function bootstrapDesktopApp({
+  apiBaseUrl = "http://localhost:3001",
+  fetchImpl,
+  getToken = null,
+}: BootstrapDesktopAppOptions = {}) {
+  const chatClient = createChatClient({ apiBaseUrl, fetchImpl: fetchImpl ?? fetch, getToken });
+  let state: any = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [], currentSessionId: null };
+  let currentView = "chat";
+  let pendingSelectedArtistIds: string[] = [];
+
+  function findLatestRecommendationByName(artistName: string) {
     const messages = state.messages || [];
-    const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    const latestAssistant = [...messages].reverse().find((m: any) => m.role === "assistant");
     const recommendations = latestAssistant?.recommendations || [];
-    return recommendations.find((item) => item.artist === artistName);
+    return recommendations.find((item: any) => item.artist === artistName);
   }
 
-  function upsertSavedBand(savedBand) {
-    const existingIndex = state.savedBands.findIndex((item) => item.id === savedBand.id);
+  function upsertSavedBand(savedBand: any) {
+    const existingIndex = state.savedBands.findIndex((item: any) => item.id === savedBand.id);
     if (existingIndex >= 0) {
       const nextSavedBands = [...state.savedBands];
       nextSavedBands[existingIndex] = savedBand;
@@ -45,69 +50,57 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
   }
 
   return {
-    getState() {
-      return state;
-    },
-    getView() {
-      return currentView;
-    },
-    navigate(view) {
+    getState() { return state; },
+    getView() { return currentView; },
+    navigate(view: string) {
       if (!VALID_VIEWS.includes(view)) return;
       currentView = view;
     },
-    setPendingStyleRef(ids) {
+    setPendingStyleRef(ids: string[]) {
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
     async startSession(title = "Untitled") {
-      const result = /** @type {any} */ (await chatClient.createSession(title));
+      const result = await chatClient.createSession(title) as any;
       state = { ...state, currentSessionId: result.session.id };
       return result.session;
     },
     async listSessions() {
-      const result = /** @type {any} */ (await chatClient.listSessions());
+      const result = await chatClient.listSessions() as any;
       return result.sessions;
     },
-    async requestRecommendations(query, mode = "fresh") {
+    async requestRecommendations(query: string, mode = "fresh") {
       const effectiveIds =
         pendingSelectedArtistIds.length > 0 ? [...pendingSelectedArtistIds] : state.selectedArtistIds;
       if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
       let priorityContext = buildPriorityContext(state.savedBands, effectiveIds);
-      if (mode === "preference-aware" && effectiveIds.length > 0) {
-        priorityContext = "";
-      }
-      const conversationHistory = (state.messages || []).flatMap((m) => {
+      if (mode === "preference-aware" && effectiveIds.length > 0) priorityContext = "";
+      const conversationHistory = (state.messages || []).flatMap((m: any) => {
         if (m.role === "user") return [{ role: "user", content: m.content }];
         if (m.role === "assistant") {
           const text =
             typeof m.content === "string" && m.content.trim()
               ? m.content
               : m.recommendations
-                ? m.recommendations.map((r) => r.artist).join(", ")
+                ? m.recommendations.map((r: any) => r.artist).join(", ")
                 : "";
           return [{ role: "assistant", content: text }];
         }
         return [];
       });
       state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
-      const result = await chatClient.fetchRecommendations(
-        query,
-        mode,
-        priorityContext,
-        conversationHistory,
-        effectiveIds,
-      );
-      state = applyAssistantMessage(state, result);
+      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory, effectiveIds);
+      state = applyAssistantMessage(state, result as any);
       return result;
     },
-    toggleArtistSelection(id) {
-      const ids = state.selectedArtistIds;
+    toggleArtistSelection(id: string) {
+      const ids: string[] = state.selectedArtistIds;
       if (ids.includes(id)) {
         state = { ...state, selectedArtistIds: ids.filter((x) => x !== id) };
       } else {
         state = { ...state, selectedArtistIds: [...ids, id] };
       }
     },
-    async saveBand(artistName, options = {}) {
+    async saveBand(artistName: string, options: { rating?: number; categories?: string[]; note?: string } = {}) {
       const recommendation = findLatestRecommendationByName(artistName);
       const mbFromCard =
         recommendation?.musicbrainzArtistId && String(recommendation.musicbrainzArtistId).trim()
@@ -120,16 +113,14 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
         categories: options.categories || [],
         note: options.note || recommendation?.why || "Saved from recommendation card.",
       };
-      const result = /** @type {any} */ (await chatClient.createPreference(payload));
+      const result = await chatClient.createPreference(payload) as any;
       upsertSavedBand(result.savedBand);
       return result.savedBand;
     },
-    async rateBand(artistName, rating = 5) {
-      let savedBand = state.savedBands.find((item) => item.name === artistName);
-      if (!savedBand) {
-        savedBand = await this.saveBand(artistName, { rating });
-      }
-      const result = /** @type {any} */ (await chatClient.updatePreference(savedBand.id, { rating }));
+    async rateBand(artistName: string, rating = 5) {
+      let savedBand = state.savedBands.find((item: any) => item.name === artistName);
+      if (!savedBand) savedBand = await this.saveBand(artistName, { rating });
+      const result = await chatClient.updatePreference(savedBand.id, { rating }) as any;
       upsertSavedBand(result.savedBand);
       return result.savedBand;
     },
@@ -138,17 +129,13 @@ function bootstrapDesktopApp({ apiBaseUrl = "http://localhost:3001", fetchImpl }
       state = { ...state, savedBands: bands };
       return bands;
     },
-    async deleteSavedBand(id) {
+    async deleteSavedBand(id: string) {
       await chatClient.deletePreference(id);
-      state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
+      state = { ...state, savedBands: state.savedBands.filter((b: any) => b.id !== id) };
     },
-    async searchArtists(query) {
-      const result = /** @type {any} */ (await chatClient.searchArtists(query));
+    async searchArtists(query: string) {
+      const result = await chatClient.searchArtists(query) as any;
       return result.artists || [];
     },
   };
 }
-
-module.exports = {
-  bootstrapDesktopApp,
-};

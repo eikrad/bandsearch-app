@@ -1,51 +1,64 @@
-const ROUTE_MAP = {
+const ROUTE_MAP: Record<string, string> = {
   "": "home",
   "#/": "home",
   "#/saved": "saved",
   "#/settings": "settings",
   "#/welcome": "welcome",
+  "#/login": "login",
+  "#/register": "register",
+  "#/reset-password": "reset-password",
 };
 
-function hashToRoute(hash) {
+function hashToRoute(hash: string): string {
   return ROUTE_MAP[hash] ?? "home";
 }
 
-function routeToHash(route) {
+function routeToHash(route: string): string {
   if (route === "saved") return "#/saved";
   if (route === "settings") return "#/settings";
   if (route === "welcome") return "#/welcome";
+  if (route === "login") return "#/login";
+  if (route === "register") return "#/register";
+  if (route === "reset-password") return "#/reset-password";
   return "#/";
 }
 
-function createHashRouter({
+export type HashRouterOptions = {
+  getHash?: () => string;
+  setHash?: (hash: string) => void;
+  addListener?: (fn: () => void) => void;
+  removeListener?: (fn: () => void) => void;
+};
+
+export function createHashRouter({
   getHash = () => (typeof globalThis !== "undefined" && globalThis.location ? globalThis.location.hash : ""),
-  setHash = (hash) => {
+  setHash = (hash: string) => {
     if (typeof globalThis !== "undefined" && globalThis.location) {
       globalThis.location.hash = hash;
     }
   },
-  addListener = (fn) => {
+  addListener = (fn: () => void) => {
     if (typeof globalThis !== "undefined" && globalThis.addEventListener) {
       globalThis.addEventListener("hashchange", fn);
     }
   },
-  removeListener = (fn) => {
+  removeListener = (fn: () => void) => {
     if (typeof globalThis !== "undefined" && globalThis.removeEventListener) {
       globalThis.removeEventListener("hashchange", fn);
     }
   },
-} = {}) {
-  const changeCallbacks = [];
+}: HashRouterOptions = {}) {
+  const changeCallbacks: Array<(route: string) => void> = [];
 
-  function getRoute() {
+  function getRoute(): string {
     return hashToRoute(getHash());
   }
 
-  function navigate(route) {
+  function navigate(route: string): void {
     setHash(routeToHash(route));
   }
 
-  function handleHashChange() {
+  function handleHashChange(): void {
     const route = getRoute();
     changeCallbacks.forEach((fn) => fn(route));
   }
@@ -55,7 +68,7 @@ function createHashRouter({
   return {
     getRoute,
     navigate,
-    onRouteChange(fn) {
+    onRouteChange(fn: (route: string) => void) {
       changeCallbacks.push(fn);
       return () => {
         const i = changeCallbacks.indexOf(fn);
@@ -67,5 +80,3 @@ function createHashRouter({
     },
   };
 }
-
-module.exports = { createHashRouter };
