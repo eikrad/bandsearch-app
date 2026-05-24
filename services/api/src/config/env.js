@@ -13,6 +13,10 @@ function normalizeBoolean(value, fallback = false) {
   return value === "true";
 }
 
+function generateSecret() {
+  return require("crypto").randomBytes(32).toString("hex");
+}
+
 function validateRuntimeEnv(env = process.env) {
   const geminiApiKey = String(env.GEMINI_API_KEY ?? "").trim();
   if (!geminiApiKey) {
@@ -55,6 +59,8 @@ function validateRuntimeEnv(env = process.env) {
     throw new Error("BRAVE_API_KEY is required");
   }
 
+  const jwtSecret = String(env.JWT_SECRET ?? "").trim() || generateSecret();
+
   const pipelineReadyTimeoutMs = parseNumber(env.RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS, 45000);
 
   const researchMaxInitialSearches = parseNumber(env.RESEARCH_MAX_INITIAL_SEARCHES, 6);
@@ -83,6 +89,7 @@ function validateRuntimeEnv(env = process.env) {
     databasePath,
     tursoDatabaseUrl,
     tursoAuthToken,
+    jwtSecret,
   };
 }
 

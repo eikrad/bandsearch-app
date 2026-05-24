@@ -64,3 +64,20 @@ test("validateRuntimeEnv requires database URL when postgres store enabled", () 
     /DATABASE_URL is required/,
   );
 });
+
+test("validateRuntimeEnv uses provided JWT_SECRET", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED, JWT_SECRET: "my-secret-key" });
+  assert.equal(config.jwtSecret, "my-secret-key");
+});
+
+test("validateRuntimeEnv auto-generates jwtSecret when JWT_SECRET is absent", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED });
+  assert.equal(typeof config.jwtSecret, "string");
+  assert.ok(config.jwtSecret.length >= 32);
+});
+
+test("validateRuntimeEnv auto-generates a different jwtSecret each call when absent", () => {
+  const a = validateRuntimeEnv({ ...REQUIRED });
+  const b = validateRuntimeEnv({ ...REQUIRED });
+  assert.notEqual(a.jwtSecret, b.jwtSecret);
+});
