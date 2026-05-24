@@ -12,8 +12,8 @@ export interface RecommendationError extends Error {
 }
 
 export type PreferenceRepositoryFacade = {
-  buildContext: () => Promise<string>;
-  buildContextForIds: (ids: string[]) => Promise<string>;
+  buildContext: (userId?: string) => Promise<string>;
+  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
 };
 
 
@@ -47,6 +47,7 @@ export async function resolveRecommendationFacadeInput(
 ): Promise<{ mode: RecommendationMode; preferenceContext: string; messages: unknown[] }> {
   const req = request ?? {};
   const mode = validateRecommendationMode(req.mode);
+  const userId = typeof req.userId === "string" ? req.userId : undefined;
   const selectedArtistIds = Array.isArray(req.selectedArtistIds)
     ? req.selectedArtistIds.filter((id): id is string => typeof id === "string")
     : [];
@@ -56,9 +57,9 @@ export async function resolveRecommendationFacadeInput(
   if (mode === "preference-aware") {
     let repoContext: string;
     if (selectedArtistIds.length > 0) {
-      repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds);
+      repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds, userId);
     } else {
-      repoContext = await preferenceRepository.buildContext();
+      repoContext = await preferenceRepository.buildContext(userId);
     }
     preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
   }

@@ -5,6 +5,13 @@ const { createPostgresPreferenceRepository } = require("./postgresPreferenceRepo
 const { createSqlitePreferenceRepository } = require("./sqlitePreferenceRepository");
 const { createTursoPreferenceRepository } = require("./tursoPreferenceRepository");
 
+function addColumnIfMissing(db, table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 /**
  * PreferenceRepository contract (storage abstraction):
  * - addSavedBand(input)
@@ -65,6 +72,7 @@ function createPreferenceRepository(runtimeConfig = {}) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS saved_bands (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT 'anonymous',
       musicbrainz_artist_id TEXT NOT NULL,
       name TEXT NOT NULL,
       rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
@@ -75,7 +83,8 @@ function createPreferenceRepository(runtimeConfig = {}) {
     );
     CREATE TABLE IF NOT EXISTS artist_groups (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL DEFAULT 'anonymous',
+      name TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -86,6 +95,8 @@ function createPreferenceRepository(runtimeConfig = {}) {
       PRIMARY KEY (group_id, saved_band_id)
     );
   `);
+  addColumnIfMissing(db, "saved_bands", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
+  addColumnIfMissing(db, "artist_groups", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
   return createSqlitePreferenceRepository({ db });
 }
 

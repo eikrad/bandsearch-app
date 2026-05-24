@@ -1,21 +1,27 @@
 const { randomUUID } = require("node:crypto");
 
+const DEFAULT_USER = "anonymous";
+
 function createInMemoryChatSessionRepository() {
   const sessions = [];
   const messages = [];
 
   return {
-    async createSession({ title = "Untitled" } = {}) {
+    async createSession({ title = "Untitled" } = {}, userId = DEFAULT_USER) {
       const now = new Date().toISOString();
-      const session = { id: randomUUID(), title, createdAt: now, updatedAt: now };
+      const session = { id: randomUUID(), userId, title, createdAt: now, updatedAt: now };
       sessions.push(session);
-      return session;
+      return withoutUserId(session);
     },
-    async listSessions() {
-      return [...sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    async listSessions(userId = DEFAULT_USER) {
+      return sessions
+        .filter((s) => s.userId === userId)
+        .map(withoutUserId)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
-    async getSession(id) {
-      return sessions.find((s) => s.id === id) || null;
+    async getSession(id, userId = DEFAULT_USER) {
+      const s = sessions.find((s) => s.id === id && s.userId === userId);
+      return s ? withoutUserId(s) : null;
     },
     async addMessage(sessionId, { role, content }) {
       const now = new Date().toISOString();
@@ -31,10 +37,18 @@ function createInMemoryChatSessionRepository() {
   };
 }
 
+function addColumnIfMissing(db, table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function createSqliteChatSessionRepository({ db }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT 'anonymous',
       title TEXT NOT NULL DEFAULT 'Untitled',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -48,21 +62,22 @@ function createSqliteChatSessionRepository({ db }) {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages (session_id);
   `);
+  addColumnIfMissing(db, "chat_sessions", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
 
   return {
-    async createSession({ title = "Untitled" } = {}) {
+    async createSession({ title = "Untitled" } = {}, userId = DEFAULT_USER) {
       const id = randomUUID();
       const now = new Date().toISOString();
       db.prepare(
-        `INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-      ).run(id, title, now, now);
+        `INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      ).run(id, userId, title, now, now);
       return db.prepare(`SELECT * FROM chat_sessions WHERE id = ?`).get(id);
     },
-    async listSessions() {
-      return db.prepare(`SELECT * FROM chat_sessions ORDER BY updated_at DESC`).all();
+    async listSessions(userId = DEFAULT_USER) {
+      return db.prepare(`SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC`).all(userId);
     },
-    async getSession(id) {
-      return db.prepare(`SELECT * FROM chat_sessions WHERE id = ?`).get(id) || null;
+    async getSession(id, userId = DEFAULT_USER) {
+      return db.prepare(`SELECT * FROM chat_sessions WHERE id = ? AND user_id = ?`).get(id, userId) || null;
     },
     async addMessage(sessionId, { role, content }) {
       const id = randomUUID();
@@ -79,6 +94,10 @@ function createSqliteChatSessionRepository({ db }) {
       ).all(sessionId);
     },
   };
+}
+
+function withoutUserId({ userId: _uid, ...rest }) { // eslint-disable-line no-unused-vars
+  return rest;
 }
 
 module.exports = { createInMemoryChatSessionRepository, createSqliteChatSessionRepository };

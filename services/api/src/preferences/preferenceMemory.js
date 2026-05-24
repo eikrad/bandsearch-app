@@ -2,6 +2,8 @@ const { randomUUID } = require("node:crypto");
 const { validateSavedBand: validateSavedBandInput } = require("../../../../shared/schemas/src/contracts");
 const { formatSavedBandContextLine } = require("./savedBandContextFormat");
 
+const DEFAULT_USER = "anonymous";
+
 function createPreferenceMemory() {
   const savedBands = [];
   const groups = [];
@@ -11,7 +13,7 @@ function createPreferenceMemory() {
   }
 
   return {
-    async addSavedBand(input) {
+    async addSavedBand(input, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) {
         return validation;
@@ -20,6 +22,7 @@ function createPreferenceMemory() {
       const now = new Date().toISOString();
       const savedBand = {
         id: randomUUID(),
+        userId,
         musicbrainzArtistId: input.musicbrainzArtistId.trim(),
         name: input.name.trim(),
         rating: input.rating,
@@ -30,15 +33,15 @@ function createPreferenceMemory() {
       };
 
       savedBands.push(savedBand);
-      return { ok: true, savedBand };
+      return { ok: true, savedBand: withoutUserId(savedBand) };
     },
 
-    async listSavedBands() {
-      return [...savedBands];
+    async listSavedBands(userId = DEFAULT_USER) {
+      return savedBands.filter((b) => b.userId === userId).map(withoutUserId);
     },
 
-    async updateSavedBand(id, updates) {
-      const index = savedBands.findIndex((band) => band.id === id);
+    async updateSavedBand(id, updates, userId = DEFAULT_USER) {
+      const index = savedBands.findIndex((band) => band.id === id && band.userId === userId);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
       }
@@ -71,11 +74,11 @@ function createPreferenceMemory() {
         updatedAt: new Date().toISOString(),
       };
 
-      return { ok: true, savedBand: savedBands[index] };
+      return { ok: true, savedBand: withoutUserId(savedBands[index]) };
     },
 
-    async deleteSavedBand(id) {
-      const index = savedBands.findIndex((band) => band.id === id);
+    async deleteSavedBand(id, userId = DEFAULT_USER) {
+      const index = savedBands.findIndex((band) => band.id === id && band.userId === userId);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
       }
@@ -84,86 +87,91 @@ function createPreferenceMemory() {
       return { ok: true, deletedId: deleted.id };
     },
 
-    async buildContext() {
-      if (savedBands.length === 0) {
-        return "";
-      }
-
-      return savedBands.map(formatSavedBandContextLine).join("\n");
+    async buildContext(userId = DEFAULT_USER) {
+      const userBands = savedBands.filter((b) => b.userId === userId);
+      if (userBands.length === 0) return "";
+      return userBands.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
-    async buildContextForIds(ids) {
+    async buildContextForIds(ids, userId = DEFAULT_USER) {
       if (!ids || ids.length === 0) return "";
       const want = new Set(ids);
-      const filtered = savedBands.filter((b) => want.has(b.id));
+      const filtered = savedBands.filter((b) => b.userId === userId && want.has(b.id));
       if (filtered.length === 0) return "";
-      return filtered.map(formatSavedBandContextLine).join("\n");
+      return filtered.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands) {
-      const existing = new Set(savedBands.map((b) => b.musicbrainzArtistId));
+    async importSavedBands(bands, userId = DEFAULT_USER) {
+      const existingIds = new Set(
+        savedBands.filter((b) => b.userId === userId).map((b) => b.musicbrainzArtistId)
+      );
       let imported = 0;
       let skipped = 0;
       for (const band of bands) {
-        if (existing.has(band.musicbrainzArtistId)) {
+        if (existingIds.has(band.musicbrainzArtistId)) {
           skipped++;
           continue;
         }
-        const result = await this.addSavedBand(band);
+        const result = await this.addSavedBand(band, userId);
         if (result.ok) {
-          existing.add(band.musicbrainzArtistId);
+          existingIds.add(band.musicbrainzArtistId);
           imported++;
         }
       }
       return { imported, skipped };
     },
 
-    async listGroups() {
-      return groups.map(toGroupView);
+    async listGroups(userId = DEFAULT_USER) {
+      return groups.filter((g) => g.userId === userId).map(toGroupView);
     },
 
-    async createGroup(name) {
+    async createGroup(name, userId = DEFAULT_USER) {
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
-      if (groups.some((g) => g.name === trimmed)) return { ok: false, status: 409, error: "group name already exists" };
-      const { randomUUID } = require("node:crypto");
+      if (groups.some((g) => g.userId === userId && g.name === trimmed))
+        return { ok: false, status: 409, error: "group name already exists" };
       const id = randomUUID();
-      const group = { id, name: trimmed, memberIds: new Set() };
+      const group = { id, userId, name: trimmed, memberIds: new Set() };
       groups.push(group);
       return { ok: true, group: toGroupView(group) };
     },
 
-    async renameGroup(id, name) {
-      const group = groups.find((g) => g.id === id);
+    async renameGroup(id, name, userId = DEFAULT_USER) {
+      const group = groups.find((g) => g.id === id && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
-      if (groups.some((g) => g.name === trimmed && g.id !== id)) return { ok: false, status: 409, error: "group name already exists" };
+      if (groups.some((g) => g.userId === userId && g.name === trimmed && g.id !== id))
+        return { ok: false, status: 409, error: "group name already exists" };
       group.name = trimmed;
       return { ok: true, group: toGroupView(group) };
     },
 
-    async deleteGroup(id) {
-      const index = groups.findIndex((g) => g.id === id);
+    async deleteGroup(id, userId = DEFAULT_USER) {
+      const index = groups.findIndex((g) => g.id === id && g.userId === userId);
       if (index === -1) return { ok: false, status: 404, error: "group not found" };
       groups.splice(index, 1);
       return { ok: true, deletedId: id };
     },
 
-    async addArtistToGroup(groupId, savedBandId) {
-      const group = groups.find((g) => g.id === groupId);
+    async addArtistToGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+      const group = groups.find((g) => g.id === groupId && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       group.memberIds.add(savedBandId);
       return { ok: true };
     },
 
-    async removeArtistFromGroup(groupId, savedBandId) {
-      const group = groups.find((g) => g.id === groupId);
+    async removeArtistFromGroup(groupId, savedBandId, userId = DEFAULT_USER) {
+      const group = groups.find((g) => g.id === groupId && g.userId === userId);
       if (!group) return { ok: false, status: 404, error: "group not found" };
       group.memberIds.delete(savedBandId);
       return { ok: true };
     },
   };
+}
+
+function withoutUserId({ userId: _uid, ...rest }) { // eslint-disable-line no-unused-vars
+  return rest;
 }
 
 function createInMemoryPreferenceRepository() {
