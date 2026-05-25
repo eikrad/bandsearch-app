@@ -20,8 +20,8 @@ export type RecommendationRuntimeConfig = {
 };
 
 export type PreferenceRepositoryPipeline = {
-  buildContext: () => Promise<string>;
-  buildContextForIds: (ids: string[]) => Promise<string>;
+  buildContext: (userId?: string) => Promise<string>;
+  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
 };
 
 export type PipelineLogger = Pick<typeof console, "log" | "warn" | "error" | "info" | "debug">;

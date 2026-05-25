@@ -284,7 +284,7 @@ test("chat client fetches saved bands from GET /preferences", async () => {
   const bands = await client.listPreferences();
 
   assert.equal(calls[0].url, "http://localhost:3001/preferences");
-  assert.equal(calls[0].method, undefined);
+  assert.equal(calls[0].method, "GET");
   assert.equal(bands.length, 1);
   assert.equal(bands[0].name, "Fen");
 });

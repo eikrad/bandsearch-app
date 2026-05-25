@@ -49,12 +49,14 @@
 
 Implemented: `POST /preferences/turso/test` connection probe; Turso URL + token configurable in Settings with save-and-test flow; Tauri backend persists credentials and restarts the API with `PREFERENCE_STORE=turso`; `PREFERENCE_STORE=turso` activates `TursoPreferenceRepository` (fully implemented including groups/export).
 
-## Phase 6 — Auth and Multi-user
+## Phase 6 — Auth and Multi-user ✓ Done
 
-- Multi-user support: auth/session layer and user-scoped preference ownership.
-- User-linked preference schema evolution (`user_id`) and repository updates.
-- API auth middleware and route protection for preference endpoints.
-- Basic onboarding/login UX flow in the desktop client.
+- Multi-user support: auth/session layer and user-scoped preference ownership. ✓ Done
+- User-linked preference schema evolution (`user_id`) and repository updates. ✓ Done
+- API auth middleware and route protection for preference endpoints. ✓ Done
+- Basic onboarding/login UX flow in the desktop client. ✓ Done
+
+Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users → pass-through, 1 user → auto-attach, ≥2 users → 401. Recovery codes (20 random bytes hex). `InMemoryUserRepository`, `SqliteUserRepository`, `TursoUserRepository`. `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password`, `GET /auth/status`. Desktop auth gate in `startDesktopBrowserApp.ts`: checks `/auth/status` on startup, redirects to `#/register` (0 users) or `#/login` (users exist, no token). `LoginView`, `RegisterView`, `ResetPasswordView` using React.createElement. Token stored via `authTokenStore.ts` (localStorage); injected as `Authorization: Bearer` header by `chatClient.ts`. All source files converted to TypeScript; no `any` types remain in touched files.
 
 ## Phase 7 — Platform Expansion
 
@@ -70,6 +72,7 @@ Implemented: `POST /preferences/turso/test` connection probe; Turso URL + token 
 - ✓ Done: `shared/schemas/src/contracts.ts`; API recommendation stack (`recommendations.ts`, `recommendationPipeline.ts`, `recommendationAgent.ts`); HTTP helpers (`http/errors.ts`, `http/artistSearchHandler.ts`) and `registerBandsearchRoutes.ts`. `npm run dev` / `@bandsearch/api` tests run via **tsx** so TypeScript loads next to remaining JavaScript.
 - ✓ Done: first-run welcome route (`#/welcome`), `WelcomeView`, `firstRunOnboarding.ts` gate + persistence (`complete_onboarding` / `onboarding_completed` in Tauri config; `bandsearch_onboarding_complete` in browser dev); desktop tests run with **tsx**.
 - ✓ Done: chat recommendation failures map API error codes to readable banners via `apiErrorMessages.ts` (`rate_limit_exceeded`, pipeline init, MusicBrainz context, Gemini unavailable, connectivity).
+- ✓ Done: all source files from Phase 6 and earlier converted to TypeScript; `eslint-disable @typescript-eslint/no-explicit-any` removed from all 11 batch-converted files; row types, input types, and API response interfaces replace all `any` in repository and integration layers.
 - Keep this track side-by-side with product phases; do not block UX/features on migration tasks.
 
 ## Deferred / Under Review

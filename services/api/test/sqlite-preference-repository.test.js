@@ -9,6 +9,7 @@ function createTestDb() {
   db.exec(`
     CREATE TABLE saved_bands (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT 'anonymous',
       musicbrainz_artist_id TEXT NOT NULL,
       name TEXT NOT NULL,
       rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
@@ -16,8 +17,22 @@ function createTestDb() {
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    )
+    );
+    CREATE TABLE artist_groups (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT 'anonymous',
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE artist_group_members (
+      group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
+      saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
+      added_at TEXT NOT NULL,
+      PRIMARY KEY (group_id, saved_band_id)
+    );
   `);
+  db.pragma("foreign_keys = ON");
   return db;
 }
 

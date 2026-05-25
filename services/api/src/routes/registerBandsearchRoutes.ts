@@ -6,6 +6,10 @@ import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 
+// Augment Express Request to carry the authenticated user id set by authMiddleware.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+declare global { namespace Express { interface Request { userId?: string; } } }
+
 type Group = { id: string; name: string; memberIds: string[] };
 type TursoClient = { execute: (sql: string) => Promise<unknown> };
 
@@ -13,21 +17,22 @@ export type BandsearchRouteContext = {
   appVersion: string;
   recommendationsLimiter: RequestHandler;
   resolvedPreferenceRepository: {
-    addSavedBand: (body: unknown) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
-    listSavedBands: () => Promise<unknown[]>;
+    addSavedBand: (body: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
+    listSavedBands: (userId?: string) => Promise<unknown[]>;
     updateSavedBand: (
       id: string,
       body: Record<string, unknown>,
-    ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status: number }>;
-    deleteSavedBand: (id: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status: number }>;
-    buildContext: () => Promise<string>;
-    importSavedBands: (bands: unknown[]) => Promise<{ imported: number; skipped: number }>;
-    listGroups: () => Promise<Group[]>;
-    createGroup: (name: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
-    renameGroup: (id: string, name: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
-    deleteGroup: (id: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
-    addArtistToGroup: (groupId: string, savedBandId: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
-    removeArtistFromGroup: (groupId: string, savedBandId: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
+      userId?: string,
+    ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
+    deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status?: number }>;
+    buildContext: (userId?: string) => Promise<string>;
+    importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number; failed: number }>;
+    listGroups: (userId?: string) => Promise<Group[]>;
+    createGroup: (name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
+    renameGroup: (id: string, name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
+    deleteGroup: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
+    addArtistToGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
+    removeArtistFromGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
   };
   resolvedMusicBrainzClient: {
     searchArtists: (q: string) => Promise<unknown[]>;
@@ -35,9 +40,9 @@ export type BandsearchRouteContext = {
   };
   resolvedArtistImageClient: { getArtistImageUrl: (name: string) => Promise<string | null> };
   resolvedChatSessionRepository: {
-    createSession: (input: { title: string }) => Promise<Record<string, unknown>>;
-    listSessions: () => Promise<Record<string, unknown>[]>;
-    getSession: (id: string) => Promise<Record<string, unknown> | null>;
+    createSession: (input: { title: string }, userId?: string) => Promise<Record<string, unknown>>;
+    listSessions: (userId?: string) => Promise<Record<string, unknown>[]>;
+    getSession: (id: string, userId?: string) => Promise<Record<string, unknown> | null>;
     getMessages: (id: string) => Promise<Record<string, unknown>[]>;
     addMessage: (id: string, msg: { role: string; content: string }) => Promise<Record<string, unknown>>;
   };
@@ -51,6 +56,14 @@ export type BandsearchRouteContext = {
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: { warn: (obj: Record<string, unknown>) => void };
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
+  resolvedAuthService?: {
+    register: (input: { email: string; displayName: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; recoveryCode?: string; error?: string }>;
+    login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
+    resetPassword: (input: { email: string; recoveryCode: string; newPassword: string }) => Promise<{ ok: boolean; newRecoveryCode?: string; error?: string }>;
+    verifyToken: (token: string) => { ok: boolean; userId?: string; error?: string };
+    getStatus: () => Promise<{ userCount: number }>;
+  };
+  authMiddleware?: RequestHandler;
 };
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
@@ -65,7 +78,49 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     getRecommendationReadiness,
     logger,
     createTursoClient,
+    resolvedAuthService,
+    authMiddleware,
   } = ctx;
+
+  // Always available: client needs this before any auth interaction
+  app.get("/auth/status", async (_req, res) => {
+    if (resolvedAuthService) {
+      const { userCount } = await resolvedAuthService.getStatus();
+      return res.json({ enabled: true, userCount });
+    }
+    return res.json({ enabled: false, userCount: 0 });
+  });
+
+  // Auth routes (public)
+  if (resolvedAuthService) {
+    app.post("/auth/register", async (req, res) => {
+      const { email, displayName, password } = req.body ?? {};
+      const result = await resolvedAuthService.register({ email: String(email ?? ""), displayName: String(displayName ?? ""), password: String(password ?? "") });
+      if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "registration failed");
+      return res.status(201).json({ user: result.user, token: result.token, recoveryCode: result.recoveryCode });
+    });
+
+    app.post("/auth/login", async (req, res) => {
+      const { email, password } = req.body ?? {};
+      const result = await resolvedAuthService.login({ email: String(email ?? ""), password: String(password ?? "") });
+      if (!result.ok) return sendError(res, 401, "auth_error", result.error ?? "login failed");
+      return res.status(200).json({ user: result.user, token: result.token });
+    });
+
+    app.post("/auth/reset-password", async (req, res) => {
+      const { email, recoveryCode, newPassword } = req.body ?? {};
+      const result = await resolvedAuthService.resetPassword({ email: String(email ?? ""), recoveryCode: String(recoveryCode ?? ""), newPassword: String(newPassword ?? "") });
+      if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "reset failed");
+      return res.status(200).json({ ok: true, newRecoveryCode: result.newRecoveryCode });
+    });
+  }
+
+  // Apply auth middleware to protected route groups
+  if (authMiddleware) {
+    app.use("/preferences", authMiddleware);
+    app.use("/sessions", authMiddleware);
+    app.use("/recommendations", authMiddleware);
+  }
 
   app.get("/health", (_req, res) => {
     const body: Record<string, unknown> = { status: "ok" };
@@ -94,7 +149,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
 
   app.post("/sessions", async (req, res) => {
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "Untitled";
-    const session = await resolvedChatSessionRepository.createSession({ title });
+    const session = await resolvedChatSessionRepository.createSession({ title }, req.userId);
     return res.status(201).json({
       session: {
         id: session.id,
@@ -104,15 +159,15 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     });
   });
 
-  app.get("/sessions", async (_req, res) => {
-    const sessions = await resolvedChatSessionRepository.listSessions();
+  app.get("/sessions", async (req, res) => {
+    const sessions = await resolvedChatSessionRepository.listSessions(req.userId);
     return res.status(200).json({
       sessions: sessions.map((s) => ({ id: s.id, title: s.title, updatedAt: s.updated_at || s.updatedAt })),
     });
   });
 
   app.get("/sessions/:id", async (req, res) => {
-    const session = await resolvedChatSessionRepository.getSession(req.params.id);
+    const session = await resolvedChatSessionRepository.getSession(req.params.id, req.userId);
     if (!session) return sendError(res, 404, "not_found", "session not found");
     const messages = await resolvedChatSessionRepository.getMessages(req.params.id);
     return res.status(200).json({
@@ -127,7 +182,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.post("/sessions/:id/messages", async (req, res) => {
-    const session = await resolvedChatSessionRepository.getSession(req.params.id);
+    const session = await resolvedChatSessionRepository.getSession(req.params.id, req.userId);
     if (!session) return sendError(res, 404, "not_found", "session not found");
     const role = typeof req.body?.role === "string" ? req.body.role : "user";
     const content = typeof req.body?.content === "string" ? req.body.content : "";
@@ -160,6 +215,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         selectedArtistIds: validation.selectedArtistIds,
         priorityContext: validation.priorityContext,
         messages: validation.messages,
+        userId: req.userId,
       });
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
@@ -179,22 +235,20 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.post("/preferences", async (req, res) => {
-    const result = await resolvedPreferenceRepository.addSavedBand(req.body);
+    const result = await resolvedPreferenceRepository.addSavedBand(req.body, req.userId);
     if (!result.ok) {
       return sendError(res, 400, "validation_error", result.error ?? "validation failed");
     }
     return res.status(201).json({ savedBand: result.savedBand });
   });
 
-  app.get("/preferences", async (_req, res) => {
-    const savedBands = await resolvedPreferenceRepository.listSavedBands();
-    return res.status(200).json({
-      savedBands,
-    });
+  app.get("/preferences", async (req, res) => {
+    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
+    return res.status(200).json({ savedBands });
   });
 
   app.patch("/preferences/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {});
+    const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {}, req.userId);
     if (!result.ok) {
       return sendError(res, result.status, "preference_update_failed", result.error ?? "update failed");
     }
@@ -202,22 +256,20 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id);
+    const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id, req.userId);
     if (!result.ok) {
       return sendError(res, result.status, "preference_delete_failed", result.error ?? "delete failed");
     }
     return res.status(200).json({ deletedId: result.deletedId });
   });
 
-  app.get("/preferences/context", async (_req, res) => {
-    const context = await resolvedPreferenceRepository.buildContext();
-    return res.status(200).json({
-      context,
-    });
+  app.get("/preferences/context", async (req, res) => {
+    const context = await resolvedPreferenceRepository.buildContext(req.userId);
+    return res.status(200).json({ context });
   });
 
-  app.get("/preferences/export", async (_req, res) => {
-    const savedBands = await resolvedPreferenceRepository.listSavedBands();
+  app.get("/preferences/export", async (req, res) => {
+    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
     res.setHeader("Content-Disposition", 'attachment; filename="bandsearch-artists.json"');
     return res.status(200).json(savedBands);
   });
@@ -226,18 +278,18 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     if (!Array.isArray(req.body)) {
       return sendError(res, 400, "validation_error", "body must be an array of saved bands");
     }
-    const result = await resolvedPreferenceRepository.importSavedBands(req.body);
+    const result = await resolvedPreferenceRepository.importSavedBands(req.body, req.userId);
     return res.status(200).json(result);
   });
 
-  app.get("/preferences/groups", async (_req, res) => {
-    const groups = await resolvedPreferenceRepository.listGroups();
+  app.get("/preferences/groups", async (req, res) => {
+    const groups = await resolvedPreferenceRepository.listGroups(req.userId);
     return res.status(200).json({ groups });
   });
 
-  app.post("/preferences/groups/auto", async (_req, res) => {
-    const savedBands = (await resolvedPreferenceRepository.listSavedBands()) as Array<Record<string, unknown>>;
-    const existingGroups = await resolvedPreferenceRepository.listGroups();
+  app.post("/preferences/groups/auto", async (req, res) => {
+    const savedBands = (await resolvedPreferenceRepository.listSavedBands(req.userId)) as Array<Record<string, unknown>>;
+    const existingGroups = await resolvedPreferenceRepository.listGroups(req.userId);
     const groupByName = new Map(existingGroups.map((g) => [g.name, g]));
 
     for (const band of savedBands) {
@@ -253,25 +305,25 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       }
       for (const genre of artistData.genres ?? []) {
         if (!groupByName.has(genre)) {
-          const createResult = await resolvedPreferenceRepository.createGroup(genre);
+          const createResult = await resolvedPreferenceRepository.createGroup(genre, req.userId);
           if (createResult.ok && createResult.group) {
             groupByName.set(genre, createResult.group);
           }
         }
         const group = groupByName.get(genre);
         if (group && typeof band.id === "string") {
-          await resolvedPreferenceRepository.addArtistToGroup(group.id, band.id);
+          await resolvedPreferenceRepository.addArtistToGroup(group.id, band.id, req.userId);
         }
       }
     }
 
-    const groups = await resolvedPreferenceRepository.listGroups();
+    const groups = await resolvedPreferenceRepository.listGroups(req.userId);
     return res.status(200).json({ groups });
   });
 
   app.post("/preferences/groups", async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name : "";
-    const result = await resolvedPreferenceRepository.createGroup(name);
+    const result = await resolvedPreferenceRepository.createGroup(name, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, result.status === 409 ? "group_name_conflict" : "validation_error", result.error ?? "failed");
     }
@@ -280,7 +332,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
 
   app.patch("/preferences/groups/:id", async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name : "";
-    const result = await resolvedPreferenceRepository.renameGroup(req.params.id, name);
+    const result = await resolvedPreferenceRepository.renameGroup(req.params.id, name, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, "group_update_failed", result.error ?? "failed");
     }
@@ -288,7 +340,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/groups/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.deleteGroup(req.params.id);
+    const result = await resolvedPreferenceRepository.deleteGroup(req.params.id, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 404, "group_delete_failed", result.error ?? "failed");
     }
@@ -298,7 +350,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.post("/preferences/groups/:id/artists", async (req, res) => {
     const savedBandId = typeof req.body?.savedBandId === "string" ? req.body.savedBandId : "";
     if (!savedBandId) return sendError(res, 400, "validation_error", "savedBandId is required");
-    const result = await resolvedPreferenceRepository.addArtistToGroup(req.params.id, savedBandId);
+    const result = await resolvedPreferenceRepository.addArtistToGroup(req.params.id, savedBandId, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, "group_member_add_failed", result.error ?? "failed");
     }
@@ -306,7 +358,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/groups/:id/artists/:savedBandId", async (req, res) => {
-    const result = await resolvedPreferenceRepository.removeArtistFromGroup(req.params.id, req.params.savedBandId);
+    const result = await resolvedPreferenceRepository.removeArtistFromGroup(req.params.id, req.params.savedBandId, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 404, "group_member_remove_failed", result.error ?? "failed");
     }

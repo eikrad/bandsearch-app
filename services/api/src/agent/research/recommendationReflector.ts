@@ -16,7 +16,11 @@ export type ReflectionResult = {
 
 const SYSTEM = [
   "You evaluate whether web search found enough niche band candidates for a music recommendation request.",
-  "If there are too few verified candidates, propose additional Brave web search queries (FFO, site:bandcamp.com, newer bands, scene blogs).",
+  "If there are too few verified candidates, propose additional Brave web search queries.",
+  "Prefer targeted sources: site:bandcamp.com (genre tags, FFO pages), site:rateyourmusic.com (similar-artist lists),",
+  "site:reddit.com/r/ifyoulikeblank, site:last.fm (similar pages), site:metal-archives.com (metal only),",
+  "site:sputnikmusic.com, niche blogs (thequietus.com, heavyblogisheavy.com, cvltnation.com).",
+  "Match sources to the inferred genre — do not suggest metal-archives.com for non-metal queries.",
   `Output ONLY JSON: {"sufficient":true|false,"gaps":["short reason"],"extraQueries":["query strings"]}.`,
   `Each extra query must be one line, at most ${REFLECTION_QUERY_MAX_LENGTH} characters.`,
 ].join(" ");

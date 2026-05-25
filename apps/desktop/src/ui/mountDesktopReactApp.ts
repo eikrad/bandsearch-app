@@ -4,6 +4,9 @@ import { ChatAppView } from "./ChatAppView.js";
 import { SavedArtistsView } from "./SavedArtistsView.js";
 import { SettingsView } from "./SettingsView.js";
 import { WelcomeView } from "./WelcomeView.js";
+import { LoginView } from "./LoginView.js";
+import { RegisterView } from "./RegisterView.js";
+import { ResetPasswordView } from "./ResetPasswordView.js";
 
 type AnyShell = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +34,9 @@ export interface DesktopReactMountOptions {
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
+  onLogin?: (email: string, password: string) => Promise<void>;
+  onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
+  onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -50,6 +56,9 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   completeOnboarding = async () => {},
+  onLogin,
+  onRegister,
+  onResetPassword,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }: DesktopReactMountOptions) {
@@ -58,6 +67,21 @@ export function createDesktopReactMount({
 
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
+
+    if (route === "login") {
+      root.render(React.createElement(LoginView as any, { viewProps: {}, handlers: loginHandlers }));
+      return {};
+    }
+
+    if (route === "register") {
+      root.render(React.createElement(RegisterView as any, { viewProps: {}, handlers: registerHandlers }));
+      return {};
+    }
+
+    if (route === "reset-password") {
+      root.render(React.createElement(ResetPasswordView as any, { viewProps: {}, handlers: resetPasswordHandlers }));
+      return {};
+    }
 
     if (route === "welcome") {
       root.render(
@@ -194,6 +218,34 @@ export function createDesktopReactMount({
       if (router) router.navigate("home");
       return renderCurrent();
     },
+  };
+
+  const loginHandlers = {
+    onLogin: async (email: string, password: string) => {
+      if (onLogin) await onLogin(email, password);
+      if (router) router.navigate("home");
+      return renderCurrent();
+    },
+    onNavigateRegister: () => { if (router) router.navigate("register"); renderCurrent(); },
+    onNavigateReset: () => { if (router) router.navigate("reset-password"); renderCurrent(); },
+  };
+
+  const registerHandlers = {
+    onRegister: async (email: string, displayName: string, password: string) => {
+      const result = onRegister ? await onRegister(email, displayName, password) : { recoveryCode: "" };
+      return result;
+    },
+    onDone: () => { if (router) router.navigate("home"); renderCurrent(); },
+    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
+  };
+
+  const resetPasswordHandlers = {
+    onResetPassword: async (email: string, recoveryCode: string, newPassword: string) => {
+      const result = onResetPassword ? await onResetPassword(email, recoveryCode, newPassword) : { newRecoveryCode: "" };
+      return result;
+    },
+    onDone: () => { if (router) router.navigate("login"); renderCurrent(); },
+    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
   };
 
   const savedHandlers = {
