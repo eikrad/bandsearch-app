@@ -75,7 +75,7 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
 
     async updateSavedBand(id: string, updates: BandUpdates) {
       const currentResult = await pool.query<SavedBandRow>("SELECT * FROM saved_bands WHERE id = $1", [id]);
-      if (currentResult.rowCount === 0) {
+      if (currentResult.rows.length === 0) {
         return { ok: false, status: 404, error: "saved band not found" };
       }
 
@@ -110,12 +110,13 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
         [id, next.rating, normalizedCategories, normalizedNote, updatedAt],
       );
 
+      if (rows.length === 0) return { ok: false, status: 404, error: "saved band not found" };
       return { ok: true, savedBand: mapRowToSavedBand(rows[0]) };
     },
 
     async deleteSavedBand(id: string) {
       const { rowCount } = await pool.query("DELETE FROM saved_bands WHERE id = $1", [id]);
-      if (rowCount === 0) {
+      if ((rowCount ?? 0) === 0) {
         return { ok: false, status: 404, error: "saved band not found" };
       }
       return { ok: true, deletedId: id };
@@ -176,7 +177,7 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
       const existing = await pool.query("SELECT id FROM artist_groups WHERE name = $1", [trimmed]);
-      if (existing.rowCount > 0) return { ok: false, status: 409, error: "group name already exists" };
+      if ((existing.rowCount ?? 0) > 0) return { ok: false, status: 409, error: "group name already exists" };
       const id = randomUUID();
       const now = new Date().toISOString();
       await pool.query(
@@ -188,11 +189,11 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
 
     async renameGroup(id: string, name: string) {
       const current = await pool.query("SELECT id FROM artist_groups WHERE id = $1", [id]);
-      if (current.rowCount === 0) return { ok: false, status: 404, error: "group not found" };
+      if ((current.rowCount ?? 0) === 0) return { ok: false, status: 404, error: "group not found" };
       const trimmed = String(name || "").trim();
       if (!trimmed) return { ok: false, status: 400, error: "group name is required" };
       const conflict = await pool.query("SELECT id FROM artist_groups WHERE name = $1 AND id != $2", [trimmed, id]);
-      if (conflict.rowCount > 0) return { ok: false, status: 409, error: "group name already exists" };
+      if ((conflict.rowCount ?? 0) > 0) return { ok: false, status: 409, error: "group name already exists" };
       const now = new Date().toISOString();
       await pool.query("UPDATE artist_groups SET name = $1, updated_at = $2 WHERE id = $3", [trimmed, now, id]);
       const { rows: members } = await pool.query<MemberRow>(
@@ -204,13 +205,13 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
 
     async deleteGroup(id: string) {
       const { rowCount } = await pool.query("DELETE FROM artist_groups WHERE id = $1", [id]);
-      if (rowCount === 0) return { ok: false, status: 404, error: "group not found" };
+      if ((rowCount ?? 0) === 0) return { ok: false, status: 404, error: "group not found" };
       return { ok: true, deletedId: id };
     },
 
     async addArtistToGroup(groupId: string, savedBandId: string) {
       const group = await pool.query("SELECT id FROM artist_groups WHERE id = $1", [groupId]);
-      if (group.rowCount === 0) return { ok: false, status: 404, error: "group not found" };
+      if ((group.rowCount ?? 0) === 0) return { ok: false, status: 404, error: "group not found" };
       const now = new Date().toISOString();
       await pool.query(
         "INSERT INTO artist_group_members (group_id, saved_band_id, added_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
@@ -221,7 +222,7 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }) {
 
     async removeArtistFromGroup(groupId: string, savedBandId: string) {
       const group = await pool.query("SELECT id FROM artist_groups WHERE id = $1", [groupId]);
-      if (group.rowCount === 0) return { ok: false, status: 404, error: "group not found" };
+      if ((group.rowCount ?? 0) === 0) return { ok: false, status: 404, error: "group not found" };
       await pool.query(
         "DELETE FROM artist_group_members WHERE group_id = $1 AND saved_band_id = $2",
         [groupId, savedBandId],
