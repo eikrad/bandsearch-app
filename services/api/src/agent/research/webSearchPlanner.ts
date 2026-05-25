@@ -16,10 +16,23 @@ export type SearchPlan = {
   queries: string[];
 };
 
+const DISCOVERY_SOURCES = [
+  "Prioritise these sources in queries where relevant:",
+  "site:bandcamp.com — niche releases, genre tags, FFO artist pages (almost always useful);",
+  "site:rateyourmusic.com — genre lists, similar-artist charts, 'sounds like' pages;",
+  "site:reddit.com/r/ifyoulikeblank or site:reddit.com/r/<genre> — community RIYL threads;",
+  "site:last.fm — similar-artist pages (last.fm/music/<artist>/+similar);",
+  "site:metal-archives.com — metal and extreme music only, skip for electronic/jazz/folk;",
+  "site:sputnikmusic.com — rock and metal reviews with FFO sections;",
+  "niche blogs: thequietus.com, heavyblogisheavy.com, cvltnation.com, exclaim.ca — for scene discoveries.",
+  "Match sources to genre — do not use metal-archives.com for ambient or jazz queries.",
+].join(" ");
+
 const PLANNER_ROLE = [
   "You plan Brave web searches to discover niche bands matching the user's taste.",
   "Anchors are reference bands the user named — searches should find OTHER bands (FFO / RIYL / newer acts), not only repeat anchor names.",
-  "Each query must be a concise web search string (keywords, \"FFO …\", site:bandcamp.com when helpful). No natural-language paragraphs.",
+  DISCOVERY_SOURCES,
+  "Each query must be a concise web search string (keywords, site: operators, \"FFO …\"). No natural-language paragraphs.",
   `Output ONLY one JSON object, no markdown fences: {"anchorArtists":[],"styleSignals":[],"mustHave":[],"avoid":[],"queries":[]}.`,
   `queries must be at most ${WEB_SEARCH_PLAN_MAX_QUERIES} items; each query at most ${WEB_SEARCH_QUERY_MAX_LENGTH} characters, single line, non-empty after trim.`,
 ].join(" ");
@@ -98,14 +111,18 @@ function buildPlannerUserContent(input: WebSearchPlannerInput): string {
 /** Fallback when the model fails: single broad query from user text */
 export function fallbackSearchPlan(userQuery: string): SearchPlan {
   const q = String(userQuery || "").trim();
-  const base = q.slice(0, Math.min(q.length, WEB_SEARCH_QUERY_MAX_LENGTH - 40));
-  const queries = sanitizeQueries([`${base} newer band bandcamp FFO`].filter(Boolean));
+  const base = q.slice(0, Math.min(q.length, WEB_SEARCH_QUERY_MAX_LENGTH - 60));
+  const queries = sanitizeQueries([
+    `${base} site:bandcamp.com FFO`,
+    `${base} site:rateyourmusic.com similar artists`,
+    `${base} site:reddit.com/r/ifyoulikeblank`,
+  ].filter(Boolean));
   return {
     anchorArtists: [],
     styleSignals: [],
     mustHave: [],
     avoid: [],
-    queries: queries.length ? queries : ["niche band bandcamp FFO similar artists"],
+    queries: queries.length ? queries : ["niche band site:bandcamp.com FFO similar artists"],
   };
 }
 
