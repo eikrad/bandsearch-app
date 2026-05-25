@@ -1,6 +1,20 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql";
 const LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/";
+
+type WikidataResponse = {
+  results?: {
+    bindings?: Array<{
+      image?: { value?: string };
+    }>;
+  };
+};
+
+type LastFmImage = { size?: string; "#text"?: string };
+type LastFmResponse = {
+  artist?: {
+    image?: LastFmImage[];
+  };
+};
 
 function buildSparqlQuery(artistName: string) {
   const escaped = artistName.replace(/"/g, '\\"');
@@ -43,7 +57,7 @@ export function createWikidataImageClient({
       headers: { accept: "application/sparql-results+json", "user-agent": "bandsearch-app/0.1" },
     });
     if (!response.ok) return null;
-    const data: any = await response.json();
+    const data = await response.json() as WikidataResponse;
     const bindings = data?.results?.bindings ?? [];
     const imageBinding = bindings[0]?.image?.value;
     if (!imageBinding) return null;
@@ -55,11 +69,11 @@ export function createWikidataImageClient({
     const url = `${LASTFM_API_URL}?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${lastFmApiKey}&format=json`;
     const response = await fetchWithTimeout(url);
     if (!response.ok) return null;
-    const data: any = await response.json();
+    const data = await response.json() as LastFmResponse;
     const images = data?.artist?.image ?? [];
-    const large = images.find((img: any) => img.size === "extralarge") || images[images.length - 1];
-    const url2 = large?.["#text"];
-    return url2 && url2.trim() ? url2 : null;
+    const large = images.find((img) => img.size === "extralarge") || images[images.length - 1];
+    const imageUrl = large?.["#text"];
+    return imageUrl && imageUrl.trim() ? imageUrl : null;
   }
 
   return {

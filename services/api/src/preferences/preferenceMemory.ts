@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
@@ -26,6 +25,16 @@ type Group = {
   memberIds: Set<string>;
 };
 
+type SavedBandInput = {
+  musicbrainzArtistId: string;
+  name: string;
+  rating: number;
+  categories: unknown[];
+  note: string;
+};
+
+type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+
 function withoutUserId({ userId: _uid, ...rest }: SavedBand) {
   void _uid;
   return rest;
@@ -40,21 +49,22 @@ export function createPreferenceMemory() {
   const groups: Group[] = [];
 
   return {
-    async addSavedBand(input: any, userId = DEFAULT_USER) {
+    async addSavedBand(input: unknown, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) {
         return validation;
       }
 
+      const bandInput = input as SavedBandInput;
       const now = new Date().toISOString();
       const savedBand: SavedBand = {
         id: randomUUID(),
         userId,
-        musicbrainzArtistId: input.musicbrainzArtistId.trim(),
-        name: input.name.trim(),
-        rating: input.rating,
-        categories: input.categories.map((c: any) => String(c).trim()).filter(Boolean),
-        note: input.note.trim(),
+        musicbrainzArtistId: bandInput.musicbrainzArtistId.trim(),
+        name: bandInput.name.trim(),
+        rating: bandInput.rating,
+        categories: bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
+        note: bandInput.note.trim(),
         createdAt: now,
         updatedAt: now,
       };
@@ -67,7 +77,7 @@ export function createPreferenceMemory() {
       return savedBands.filter((b) => b.userId === userId).map(withoutUserId);
     },
 
-    async updateSavedBand(id: string, updates: any, userId = DEFAULT_USER) {
+    async updateSavedBand(id: string, updates: BandUpdates, userId = DEFAULT_USER) {
       const index = savedBands.findIndex((band) => band.id === id && band.userId === userId);
       if (index === -1) {
         return { ok: false, status: 404, error: "saved band not found" };
@@ -90,13 +100,13 @@ export function createPreferenceMemory() {
       });
 
       if (validation.ok === false) {
-        return { ok: false, status: 400, error: (validation as any).error };
+        return { ok: false, status: 400, error: validation.error };
       }
 
       savedBands[index] = {
         ...current,
         rating: next.rating,
-        categories: next.categories.map((c: any) => String(c).trim()).filter(Boolean),
+        categories: next.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
         note: String(next.note).trim(),
         updatedAt: new Date().toISOString(),
       };
@@ -128,20 +138,22 @@ export function createPreferenceMemory() {
       return filtered.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands: any[], userId = DEFAULT_USER) {
+    async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {
       const existingIds = new Set(
         savedBands.filter((b) => b.userId === userId).map((b) => b.musicbrainzArtistId),
       );
       let imported = 0;
       let skipped = 0;
       for (const band of bands) {
-        if (existingIds.has(band.musicbrainzArtistId)) {
+        const b = band as Record<string, unknown>;
+        const mid = String(b.musicbrainzArtistId ?? "");
+        if (existingIds.has(mid)) {
           skipped++;
           continue;
         }
         const result = await this.addSavedBand(band, userId);
-        if (result.ok) {
-          existingIds.add(band.musicbrainzArtistId);
+        if (result.ok === true) {
+          existingIds.add(mid);
           imported++;
         }
       }

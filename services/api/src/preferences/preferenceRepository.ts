@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Pool } from "pg";
 import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
@@ -7,14 +6,34 @@ import { createPostgresPreferenceRepository } from "./postgresPreferenceReposito
 import { createSqlitePreferenceRepository } from "./sqlitePreferenceRepository.js";
 import { createTursoPreferenceRepository } from "./tursoPreferenceRepository.js";
 
+type PragmaTableRow = { name: string };
+
 function addColumnIfMissing(db: import("better-sqlite3").Database, table: string, column: string, definition: string) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as PragmaTableRow[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 
-export function assertPreferenceRepository(repository: any) {
+type Group = { id: string; name: string; memberIds: string[] };
+
+export type PreferenceRepository = {
+  addSavedBand: (input: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown }>;
+  listSavedBands: (userId?: string) => Promise<unknown[]>;
+  updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
+  deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
+  buildContext: (userId?: string) => Promise<string>;
+  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
+  importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number }>;
+  listGroups: (userId?: string) => Promise<Group[]>;
+  createGroup: (name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
+  renameGroup: (id: string, name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
+  deleteGroup: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
+  addArtistToGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
+  removeArtistFromGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
+};
+
+export function assertPreferenceRepository(repository: unknown): PreferenceRepository {
   const requiredMethods = [
     "addSavedBand",
     "listSavedBands",
@@ -32,15 +51,24 @@ export function assertPreferenceRepository(repository: any) {
   ];
 
   for (const methodName of requiredMethods) {
-    if (typeof repository?.[methodName] !== "function") {
+    if (typeof (repository as Record<string, unknown>)?.[methodName] !== "function") {
       throw new Error(`invalid preference repository: missing method ${methodName}`);
     }
   }
 
-  return repository;
+  return repository as PreferenceRepository;
 }
 
-export function createPreferenceRepository(runtimeConfig: any = {}) {
+type PreferenceConfig = {
+  preferenceStore?: string;
+  databaseUrl?: string;
+  databaseSsl?: boolean;
+  databasePath?: string;
+  tursoDatabaseUrl?: string;
+  tursoAuthToken?: string;
+};
+
+export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {}) {
   if (runtimeConfig.preferenceStore === "postgres") {
     const pool = new Pool({
       connectionString: runtimeConfig.databaseUrl,
@@ -50,7 +78,7 @@ export function createPreferenceRepository(runtimeConfig: any = {}) {
   }
   if (runtimeConfig.preferenceStore === "turso") {
     const client = createClient({
-      url: runtimeConfig.tursoDatabaseUrl,
+      url: runtimeConfig.tursoDatabaseUrl ?? "",
       authToken: runtimeConfig.tursoAuthToken,
     });
     return createTursoPreferenceRepository({ client });

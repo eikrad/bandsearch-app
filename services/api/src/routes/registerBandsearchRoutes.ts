@@ -23,8 +23,8 @@ export type BandsearchRouteContext = {
       id: string,
       body: Record<string, unknown>,
       userId?: string,
-    ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status: number }>;
-    deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status: number }>;
+    ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
+    deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status?: number }>;
     buildContext: (userId?: string) => Promise<string>;
     importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number }>;
     listGroups: (userId?: string) => Promise<Group[]>;

@@ -1,6 +1,30 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const DEFAULT_BASE_URL = "https://musicbrainz.org/ws/2";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
+
+type MusicBrainzSearchResponse = {
+  artists?: Array<{
+    id?: string;
+    name?: string;
+    score?: number;
+    disambiguation?: string;
+  }>;
+};
+
+type MusicBrainzArtistResponse = {
+  id?: string;
+  name?: string;
+  tags?: Array<{ name?: string }>;
+  genres?: Array<{ name?: string }>;
+  relations?: Array<{
+    type?: string;
+    url?: { resource?: string };
+  }>;
+  "life-span"?: {
+    begin?: string;
+    end?: string;
+    ended?: boolean;
+  };
+};
 
 async function fetchWithTimeoutAndRetry({
   fetchImpl,
@@ -64,13 +88,13 @@ export function createMusicBrainzClient({
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
 
-      const data: any = await response.json();
+      const data = await response.json() as MusicBrainzSearchResponse;
       const artists = Array.isArray(data.artists) ? data.artists : [];
-      return artists.map((artist: any) => ({
-        id: artist.id,
-        name: artist.name,
-        score: artist.score,
-        disambiguation: artist.disambiguation || "",
+      return artists.map((artist) => ({
+        id: artist.id ?? "",
+        name: artist.name ?? "",
+        score: artist.score ?? 0,
+        disambiguation: artist.disambiguation ?? "",
       }));
     },
 
@@ -96,13 +120,13 @@ export function createMusicBrainzClient({
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
 
-      const data: any = await response.json();
+      const data = await response.json() as MusicBrainzArtistResponse;
 
       const tags = Array.isArray(data.tags)
-        ? data.tags.map((t: any) => (t && typeof t.name === "string" ? t.name : "")).filter(Boolean)
+        ? data.tags.map((t) => (t && typeof t.name === "string" ? t.name : "")).filter(Boolean)
         : [];
       const genres = Array.isArray(data.genres)
-        ? data.genres.map((g: any) => (g && typeof g.name === "string" ? g.name : "")).filter(Boolean)
+        ? data.genres.map((g) => (g && typeof g.name === "string" ? g.name : "")).filter(Boolean)
         : [];
 
       const urls: { type: string; url: string }[] = [];

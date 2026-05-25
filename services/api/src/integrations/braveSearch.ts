@@ -1,6 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
+
+type SearchResult = { title: string; url: string; description: string };
+type CacheEntry = { results: SearchResult[]; fromDuplicateCache?: boolean };
+
+type BraveSearchResponse = {
+  web?: {
+    results?: Array<{
+      title?: string;
+      url?: string;
+      description?: string;
+    }>;
+  };
+};
 
 async function fetchWithTimeoutAndRetry({
   fetchImpl,
@@ -37,9 +49,6 @@ async function fetchWithTimeoutAndRetry({
 export function normalizeQueryKey(query: string) {
   return String(query || "").trim().toLowerCase();
 }
-
-type SearchResult = { title: string; url: string; description: string };
-type CacheEntry = { results: SearchResult[]; fromDuplicateCache?: boolean };
 
 export function createBraveSearchClient(opts: {
   fetchImpl?: typeof fetch;
@@ -99,9 +108,9 @@ export function createBraveSearchClient(opts: {
         throw new Error(`brave search failed with status ${response.status}`);
       }
 
-      const data: any = await response.json();
-      const raw = Array.isArray(data.web?.results) ? data.web.results : [];
-      const results: SearchResult[] = raw.map((r: any) => ({
+      const data = await response.json() as BraveSearchResponse;
+      const raw = Array.isArray(data.web?.results) ? data.web!.results! : [];
+      const results: SearchResult[] = raw.map((r) => ({
         title: typeof r.title === "string" ? r.title : "",
         url: typeof r.url === "string" ? r.url : "",
         description: typeof r.description === "string" ? r.description : "",

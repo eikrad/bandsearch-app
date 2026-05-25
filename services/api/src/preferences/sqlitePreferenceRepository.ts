@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
@@ -6,13 +5,39 @@ import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 
 const DEFAULT_USER = "anonymous";
 
-function mapRowToSavedBand(row: any) {
+type SavedBandRow = {
+  id: string;
+  user_id: string;
+  musicbrainz_artist_id: string;
+  name: string;
+  rating: number;
+  categories: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type GroupRow = { id: string; name: string };
+type MemberRow = { saved_band_id: string };
+type MusicbrainzIdRow = { musicbrainz_artist_id: string };
+
+type SavedBandInput = {
+  musicbrainzArtistId: string;
+  name: string;
+  rating: number;
+  categories: unknown[];
+  note: string;
+};
+
+type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+
+function mapRowToSavedBand(row: SavedBandRow) {
   return {
     id: row.id,
     musicbrainzArtistId: row.musicbrainz_artist_id,
     name: row.name,
     rating: row.rating,
-    categories: JSON.parse(row.categories || "[]"),
+    categories: JSON.parse(row.categories || "[]") as string[],
     note: row.note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -21,34 +46,35 @@ function mapRowToSavedBand(row: any) {
 
 export function createSqlitePreferenceRepository({ db }: { db: Database }) {
   return {
-    async addSavedBand(input: any, userId = DEFAULT_USER) {
+    async addSavedBand(input: unknown, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) return validation;
 
+      const bandInput = input as SavedBandInput;
       const id = randomUUID();
       const now = new Date().toISOString();
-      const categories = JSON.stringify(input.categories.map((c: any) => String(c).trim()).filter(Boolean));
-      const note = input.note.trim();
-      const name = input.name.trim();
-      const musicbrainzArtistId = input.musicbrainzArtistId.trim();
+      const categories = JSON.stringify(bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
+      const note = bandInput.note.trim();
+      const name = bandInput.name.trim();
+      const musicbrainzArtistId = bandInput.musicbrainzArtistId.trim();
 
       db.prepare(
         `INSERT INTO saved_bands
           (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, userId, musicbrainzArtistId, name, input.rating, categories, note, now, now);
+      ).run(id, userId, musicbrainzArtistId, name, bandInput.rating, categories, note, now, now);
 
-      const row = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id);
+      const row = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id) as SavedBandRow;
       return { ok: true, savedBand: mapRowToSavedBand(row) };
     },
 
     async listSavedBands(userId = DEFAULT_USER) {
-      const rows = db.prepare("SELECT * FROM saved_bands WHERE user_id = ? ORDER BY updated_at DESC").all(userId);
+      const rows = db.prepare("SELECT * FROM saved_bands WHERE user_id = ? ORDER BY updated_at DESC").all(userId) as SavedBandRow[];
       return rows.map(mapRowToSavedBand);
     },
 
-    async updateSavedBand(id: string, updates: any, userId = DEFAULT_USER) {
-      const row = db.prepare("SELECT * FROM saved_bands WHERE id = ? AND user_id = ?").get(id, userId);
+    async updateSavedBand(id: string, updates: BandUpdates, userId = DEFAULT_USER) {
+      const row = db.prepare("SELECT * FROM saved_bands WHERE id = ? AND user_id = ?").get(id, userId) as SavedBandRow | undefined;
       if (!row) return { ok: false, status: 404, error: "saved band not found" };
 
       const current = mapRowToSavedBand(row);
@@ -63,21 +89,21 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
         name: current.name,
         ...next,
       });
-      if (validation.ok === false) return { ok: false, status: 400, error: (validation as any).error };
+      if (validation.ok === false) return { ok: false, status: 400, error: validation.error };
 
       const updatedAt = new Date().toISOString();
       db.prepare(
         `UPDATE saved_bands SET rating = ?, categories = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
       ).run(
         next.rating,
-        JSON.stringify(next.categories.map((c: any) => String(c).trim()).filter(Boolean)),
+        JSON.stringify(next.categories.map((c: unknown) => String(c).trim()).filter(Boolean)),
         String(next.note).trim(),
         updatedAt,
         id,
         userId,
       );
 
-      const updated = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id);
+      const updated = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id) as SavedBandRow;
       return { ok: true, savedBand: mapRowToSavedBand(updated) };
     },
 
@@ -98,26 +124,28 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
       const placeholders = ids.map(() => "?").join(", ");
       const rows = db
         .prepare(`SELECT * FROM saved_bands WHERE user_id = ? AND id IN (${placeholders})`)
-        .all(userId, ...ids);
+        .all(userId, ...ids) as SavedBandRow[];
       if (rows.length === 0) return "";
       return rows.map(mapRowToSavedBand).map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands: any[], userId = DEFAULT_USER) {
+    async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {
       const existingRows = db
         .prepare("SELECT musicbrainz_artist_id FROM saved_bands WHERE user_id = ?")
-        .all(userId) as any[];
+        .all(userId) as MusicbrainzIdRow[];
       const existing = new Set(existingRows.map((r) => r.musicbrainz_artist_id));
       let imported = 0;
       let skipped = 0;
       for (const band of bands) {
-        if (existing.has(band.musicbrainzArtistId)) {
+        const b = band as Record<string, unknown>;
+        const mid = String(b.musicbrainzArtistId ?? "");
+        if (existing.has(mid)) {
           skipped++;
           continue;
         }
         const result = await this.addSavedBand(band, userId);
-        if (result.ok) {
-          existing.add(band.musicbrainzArtistId);
+        if (result.ok === true) {
+          existing.add(mid);
           imported++;
         }
       }
@@ -127,11 +155,11 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
     async listGroups(userId = DEFAULT_USER) {
       const rows = db
         .prepare("SELECT * FROM artist_groups WHERE user_id = ? ORDER BY name ASC")
-        .all(userId) as any[];
+        .all(userId) as GroupRow[];
       return rows.map((g) => {
         const members = db
           .prepare("SELECT saved_band_id FROM artist_group_members WHERE group_id = ?")
-          .all(g.id) as any[];
+          .all(g.id) as MemberRow[];
         return { id: g.id, name: g.name, memberIds: members.map((m) => m.saved_band_id) };
       });
     },
@@ -166,7 +194,7 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
       db.prepare("UPDATE artist_groups SET name = ?, updated_at = ? WHERE id = ?").run(trimmed, now, id);
       const members = db
         .prepare("SELECT saved_band_id FROM artist_group_members WHERE group_id = ?")
-        .all(id) as any[];
+        .all(id) as MemberRow[];
       return { ok: true, group: { id, name: trimmed, memberIds: members.map((m) => m.saved_band_id) } };
     },
 
@@ -202,3 +230,4 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
     },
   };
 }
+

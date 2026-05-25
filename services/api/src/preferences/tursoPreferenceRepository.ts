@@ -1,42 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
+import type { Client as LibSQLClient, Row } from "@libsql/client";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 
 const DEFAULT_USER = "anonymous";
 
-function mapRowToSavedBand(row: any) {
+type SavedBandInput = {
+  musicbrainzArtistId: string;
+  name: string;
+  rating: number;
+  categories: unknown[];
+  note: string;
+};
+
+type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+
+function mapRowToSavedBand(row: Row) {
   return {
-    id: row.id,
-    musicbrainzArtistId: row.musicbrainz_artist_id,
-    name: row.name,
+    id: String(row.id),
+    musicbrainzArtistId: String(row.musicbrainz_artist_id),
+    name: String(row.name),
     rating: Number(row.rating),
-    categories: JSON.parse(row.categories || "[]"),
-    note: row.note,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    categories: JSON.parse(String(row.categories || "[]")) as string[],
+    note: String(row.note),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
   };
 }
 
-export function createTursoPreferenceRepository({ client }: { client: any }) {
+export function createTursoPreferenceRepository({ client }: { client: LibSQLClient }) {
   return {
-    async addSavedBand(input: any, userId = DEFAULT_USER) {
+    async addSavedBand(input: unknown, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
       if (validation.ok === false) return validation;
 
+      const bandInput = input as SavedBandInput;
       const id = randomUUID();
       const now = new Date().toISOString();
-      const categories = JSON.stringify(input.categories.map((c: any) => String(c).trim()).filter(Boolean));
-      const note = input.note.trim();
-      const name = input.name.trim();
-      const musicbrainzArtistId = input.musicbrainzArtistId.trim();
+      const categories = JSON.stringify(bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
+      const note = bandInput.note.trim();
+      const name = bandInput.name.trim();
+      const musicbrainzArtistId = bandInput.musicbrainzArtistId.trim();
 
       const result = await client.execute({
         sql: `INSERT INTO saved_bands
                 (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               RETURNING *`,
-        args: [id, userId, musicbrainzArtistId, name, input.rating, categories, note, now, now],
+        args: [id, userId, musicbrainzArtistId, name, bandInput.rating, categories, note, now, now],
       });
 
       return { ok: true, savedBand: mapRowToSavedBand(result.rows[0]) };
@@ -50,7 +61,7 @@ export function createTursoPreferenceRepository({ client }: { client: any }) {
       return result.rows.map(mapRowToSavedBand);
     },
 
-    async updateSavedBand(id: string, updates: any, userId = DEFAULT_USER) {
+    async updateSavedBand(id: string, updates: BandUpdates, userId = DEFAULT_USER) {
       const selectResult = await client.execute({
         sql: "SELECT * FROM saved_bands WHERE id = ? AND user_id = ?",
         args: [id, userId],
@@ -69,9 +80,9 @@ export function createTursoPreferenceRepository({ client }: { client: any }) {
         name: current.name,
         ...next,
       });
-      if (validation.ok === false) return { ok: false, status: 400, error: (validation as any).error };
+      if (validation.ok === false) return { ok: false, status: 400, error: validation.error };
 
-      const normalizedCategories = JSON.stringify(next.categories.map((c: any) => String(c).trim()).filter(Boolean));
+      const normalizedCategories = JSON.stringify(next.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
       const normalizedNote = String(next.note).trim();
       const updatedAt = new Date().toISOString();
 
@@ -110,22 +121,24 @@ export function createTursoPreferenceRepository({ client }: { client: any }) {
       return filtered.map(formatSavedBandContextLine).join("\n");
     },
 
-    async importSavedBands(bands: any[], userId = DEFAULT_USER) {
+    async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {
       const result = await client.execute({
         sql: "SELECT musicbrainz_artist_id FROM saved_bands WHERE user_id = ?",
         args: [userId],
       });
-      const existing = new Set(result.rows.map((r: any) => r.musicbrainz_artist_id));
+      const existing = new Set(result.rows.map((r: Row) => String(r.musicbrainz_artist_id)));
       let imported = 0;
       let skipped = 0;
       for (const band of bands) {
-        if (existing.has(band.musicbrainzArtistId)) {
+        const b = band as Record<string, unknown>;
+        const mid = String(b.musicbrainzArtistId ?? "");
+        if (existing.has(mid)) {
           skipped++;
           continue;
         }
         const addResult = await this.addSavedBand(band, userId);
-        if (addResult.ok) {
-          existing.add(band.musicbrainzArtistId);
+        if (addResult.ok === true) {
+          existing.add(mid);
           imported++;
         }
       }
@@ -141,9 +154,9 @@ export function createTursoPreferenceRepository({ client }: { client: any }) {
       for (const g of res.rows) {
         const members = await client.execute({
           sql: "SELECT saved_band_id FROM artist_group_members WHERE group_id = ?",
-          args: [g.id],
+          args: [String(g.id)],
         });
-        results.push({ id: g.id, name: g.name, memberIds: members.rows.map((m: any) => m.saved_band_id) });
+        results.push({ id: String(g.id), name: String(g.name), memberIds: members.rows.map((m: Row) => String(m.saved_band_id)) });
       }
       return results;
     },
@@ -187,7 +200,7 @@ export function createTursoPreferenceRepository({ client }: { client: any }) {
         sql: "SELECT saved_band_id FROM artist_group_members WHERE group_id = ?",
         args: [id],
       });
-      return { ok: true, group: { id, name: trimmed, memberIds: members.rows.map((m: any) => m.saved_band_id) } };
+      return { ok: true, group: { id, name: trimmed, memberIds: members.rows.map((m: Row) => String(m.saved_band_id)) } };
     },
 
     async deleteGroup(id: string, userId = DEFAULT_USER) {

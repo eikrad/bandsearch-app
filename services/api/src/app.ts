@@ -1,13 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
 import helmetLib from "helmet";
 import cors from "cors";
 import rateLimitLib from "express-rate-limit";
 import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
+import type { UserRepository } from "./auth/userRepository.js";
+import type { PreferenceRepository } from "./preferences/preferenceRepository.js";
 
-const helmet = (helmetLib as any).default || helmetLib;
-const rateLimit = (rateLimitLib as any).default || rateLimitLib;
+// ESM/CJS interop — these modules may wrap their export in a .default in some build environments
+const helmet = ((helmetLib as unknown as { default?: typeof helmetLib }).default) ?? helmetLib;
+const rateLimit = ((rateLimitLib as unknown as { default?: typeof rateLimitLib }).default) ?? rateLimitLib;
 
 // Read package.json version (CJS-compatible)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -24,6 +27,37 @@ import { createAuthMiddleware } from "./auth/authMiddleware.js";
 import { sendError } from "./http/errors.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
 import { registerBandsearchRoutes } from "./routes/registerBandsearchRoutes.js";
+import type { BandsearchRouteContext } from "./routes/registerBandsearchRoutes.js";
+
+type AppRuntimeConfig = {
+  corsOrigin?: string;
+  databasePath?: string;
+  preferenceStore?: string;
+  databaseUrl?: string;
+  databaseSsl?: boolean;
+  tursoDatabaseUrl?: string;
+  tursoAuthToken?: string;
+  musicBrainzTimeoutMs?: number;
+  musicBrainzRetries?: number;
+  wikidataTimeoutMs?: number;
+  lastFmApiKey?: string;
+  jwtSecret?: string;
+};
+
+type CreateAppOptions = {
+  recommendationPipeline?: BandsearchRouteContext["resolvedRecommendationPipeline"] & {
+    whenReady?: () => Promise<void>;
+    getReadinessSnapshot?: () => Record<string, unknown>;
+  };
+  preferenceRepository?: PreferenceRepository;
+  userRepository?: UserRepository;
+  musicBrainzClient?: BandsearchRouteContext["resolvedMusicBrainzClient"];
+  artistImageClient?: BandsearchRouteContext["resolvedArtistImageClient"];
+  chatSessionRepository?: BandsearchRouteContext["resolvedChatSessionRepository"];
+  runtimeConfig?: AppRuntimeConfig;
+  logger?: BandsearchRouteContext["logger"];
+  createTursoClient?: BandsearchRouteContext["createTursoClient"];
+};
 
 export function createApp({
   recommendationPipeline,
@@ -35,17 +69,7 @@ export function createApp({
   runtimeConfig = {},
   logger,
   createTursoClient,
-}: {
-  recommendationPipeline?: any;
-  preferenceRepository?: any;
-  userRepository?: any;
-  musicBrainzClient?: any;
-  artistImageClient?: any;
-  chatSessionRepository?: any;
-  runtimeConfig?: any;
-  logger?: { warn: (obj: Record<string, unknown>) => void };
-  createTursoClient?: (config: { url: string; authToken?: string }) => { execute: (sql: string) => Promise<unknown> };
-} = {}) {
+}: CreateAppOptions = {}) {
   const app = express();
   app.use(helmet());
   app.use(
@@ -54,17 +78,17 @@ export function createApp({
     }),
   );
   app.use(express.json({ limit: "32kb" }));
-  app.use((req: any, _res: any, next: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    _res.locals.requestId = requestId;
+    res.locals.requestId = requestId;
     const startMs = Date.now();
-    _res.on("finish", () => {
+    res.on("finish", () => {
       writeStructuredLog("info", {
         component: "http_request",
         requestId,
         method: req.method,
         path: req.path,
-        status: _res.statusCode,
+        status: res.statusCode,
         durationMs: Date.now() - startMs,
       });
     });
@@ -116,7 +140,7 @@ export function createApp({
     (() => {
       if (runtimeConfig.preferenceStore === "turso") {
         const client = createClient({
-          url: runtimeConfig.tursoDatabaseUrl,
+          url: runtimeConfig.tursoDatabaseUrl ?? "",
           authToken: runtimeConfig.tursoAuthToken,
         });
         return createTursoUserRepository({ client });
@@ -148,20 +172,20 @@ export function createApp({
     createTursoClient,
     logger,
     resolvedAuthService,
-    authMiddleware,
+    authMiddleware: authMiddleware ?? undefined,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
-        ? () => recommendationPipeline.getReadinessSnapshot()
+        ? () => recommendationPipeline.getReadinessSnapshot!()
         : null,
   });
 
-  app.use((req: any, res: any) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
-  app.use((error: any, req: any, res: any, next: any) => {
+  app.use((req: Request, res: Response) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
+  app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
     void next;
     writeStructuredLog("error", {
       component: "http_error",
-      requestId: res.locals.requestId,
-      message: error?.message || "unexpected error",
+      requestId: res.locals.requestId as string,
+      message: error instanceof Error ? error.message : "unexpected error",
     });
     return sendError(res, 500, "internal_error", "unexpected server error");
   });

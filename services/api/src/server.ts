@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // server.ts lives at services/api/src/ — workspace root is three levels up.
 import { config as dotenvConfig } from "dotenv";
 import { resolve } from "node:path";
@@ -30,7 +29,8 @@ async function start() {
   });
 }
 
-start().catch((e: any) => {
-  console.error(JSON.stringify({ level: "error", message: "server failed to start", error: e.message }));
+start().catch((e: unknown) => {
+  const message = e instanceof Error ? e.message : String(e);
+  console.error(JSON.stringify({ level: "error", message: "server failed to start", error: message }));
   process.exit(1);
 });
