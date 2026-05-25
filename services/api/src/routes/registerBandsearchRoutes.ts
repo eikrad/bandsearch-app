@@ -61,6 +61,7 @@ export type BandsearchRouteContext = {
     login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
     resetPassword: (input: { email: string; recoveryCode: string; newPassword: string }) => Promise<{ ok: boolean; newRecoveryCode?: string; error?: string }>;
     verifyToken: (token: string) => { ok: boolean; userId?: string; error?: string };
+    getStatus: () => Promise<{ userCount: number }>;
   };
   authMiddleware?: RequestHandler;
 };
@@ -80,6 +81,15 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     resolvedAuthService,
     authMiddleware,
   } = ctx;
+
+  // Always available: client needs this before any auth interaction
+  app.get("/auth/status", async (_req, res) => {
+    if (resolvedAuthService) {
+      const { userCount } = await resolvedAuthService.getStatus();
+      return res.json({ enabled: true, userCount });
+    }
+    return res.json({ enabled: false, userCount: 0 });
+  });
 
   // Auth routes (public)
   if (resolvedAuthService) {

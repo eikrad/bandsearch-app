@@ -17,6 +17,7 @@ export type AuthService = {
   resetPassword(input: { email: string; recoveryCode: string; newPassword: string }): Promise<
     { ok: true; newRecoveryCode: string } | { ok: false; error: string }
   >;
+  getStatus(): Promise<{ userCount: number }>;
 };
 
 function generateRecoveryCode(): string {
@@ -96,5 +97,10 @@ export function createAuthService({
     return { ok: true as const, newRecoveryCode };
   }
 
-  return { register, login, verifyToken, resetPassword };
+  async function getStatus() {
+    const userCount = await userRepository.countUsers();
+    return { userCount };
+  }
+
+  return { register, login, verifyToken, resetPassword, getStatus };
 }

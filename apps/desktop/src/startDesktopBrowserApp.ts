@@ -8,8 +8,10 @@ import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetP
 
 const VIEWPORT_BREAKPOINT_MAX_PX = 767;
 
+type ViewportController = { setViewport: (viewport: string) => void };
+
 function browserWindow(): Window | undefined {
-  return typeof globalThis !== "undefined" ? (globalThis as any).window : undefined;
+  return (globalThis as unknown as { window?: Window }).window;
 }
 
 function resolveInitialViewport(fallbackViewport: string): string {
@@ -18,35 +20,44 @@ function resolveInitialViewport(fallbackViewport: string): string {
   return w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`).matches ? "mobile" : "desktop";
 }
 
-function subscribeViewportChanges(desktopUi: any, rerender: () => void): void {
+type LegacyMQL = MediaQueryList & { addListener?: (cb: () => void) => void };
+
+function subscribeViewportChanges(desktopUi: ViewportController, rerender: () => void): void {
   const w = browserWindow();
   if (!w || typeof w.matchMedia !== "function") return;
-  const mql = w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`);
+  const mql = w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`) as LegacyMQL;
   const onViewportChange = () => {
     desktopUi.setViewport(mql.matches ? "mobile" : "desktop");
     rerender();
   };
   if (typeof mql.addEventListener === "function") {
     mql.addEventListener("change", onViewportChange);
-  } else {
-    (mql as any).addListener(onViewportChange);
+  } else if (typeof mql.addListener === "function") {
+    mql.addListener(onViewportChange);
   }
 }
 
 function createDefaultTauriInvoke(): ((cmd: string, args?: Record<string, string>) => Promise<unknown>) | undefined {
   try {
-    const { invoke } = require("@tauri-apps/api/core");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { invoke } = require("@tauri-apps/api/core") as { invoke: (cmd: string, args?: Record<string, string>) => Promise<unknown> };
     return (cmd: string, args?: Record<string, string>) => invoke(cmd, args);
   } catch {
     return undefined;
   }
 }
 
+export type ActionHandlers = {
+  onSave?: (artistName: string) => void;
+  onRate?: (artistName: string) => void;
+  onMore?: () => void;
+};
+
 export type StartDesktopBrowserAppOptions = {
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
   viewport?: string;
-  actionHandlers?: any;
+  actionHandlers?: ActionHandlers;
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
 };
 
@@ -70,7 +81,7 @@ export async function startDesktopBrowserApp({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ databaseUrl: url, authToken: token }),
         });
-        return response.json();
+        return response.json() as Promise<{ ok: boolean; error?: string }>;
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "probe failed" };
       }
@@ -85,9 +96,20 @@ export async function startDesktopBrowserApp({
 
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
-  const gate = await (gemini as any).getBootstrapGate();
+
+  const gate = await gemini.getBootstrapGate();
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
     router.navigate("welcome");
+  } else {
+    // Auth gate: check if the API requires authentication and route accordingly
+    const authStatus = await authClient.getAuthStatus();
+    if (authStatus.enabled) {
+      if (authStatus.userCount === 0) {
+        router.navigate("register");
+      } else if (!getAuthToken()) {
+        router.navigate("login");
+      }
+    }
   }
 
   async function onLogin(email: string, password: string): Promise<void> {
@@ -116,18 +138,18 @@ export async function startDesktopBrowserApp({
     actionHandlers,
     router,
     savedArtistsShell,
-    getSettingsViewProps: () => (gemini as any).getSettingsViewProps(),
-    saveGeminiApiKey: (key: string) => (gemini as any).saveGeminiApiKey(key),
-    saveBraveApiKey: (key: string) => (gemini as any).saveBraveApiKey(key),
-    saveTursoConfig: (url: string, token: string) => (gemini as any).saveTursoConfig(url, token),
-    completeOnboarding: () => (gemini as any).completeOnboarding(),
+    getSettingsViewProps: () => gemini.getSettingsViewProps(),
+    saveGeminiApiKey: (key: string) => gemini.saveGeminiApiKey(key),
+    saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
+    saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),
+    completeOnboarding: () => gemini.completeOnboarding(),
     onLogin,
     onRegister,
     onResetPassword,
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
-    subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
+    subscribeViewportChanges(reactApp.desktopUi as ViewportController, () => void reactApp.mount());
   }
   return reactApp;
 }
