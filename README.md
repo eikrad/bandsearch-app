@@ -2,14 +2,12 @@
 
 [![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
-![Version: 0.3.0--alpha.1](https://img.shields.io/badge/version-0.3.0--alpha.1-blue)
+![Version: 0.4.0--alpha.0](https://img.shields.io/badge/version-0.4.0--alpha.0-blue)
 
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
 
-**Classic pipeline (default):** Before each MusicBrainz lookup, a **Gemini planner** turns the user’s message (plus recent chat context) into a short search string suited to MusicBrainz’s artist index; the same user text still feeds the main recommendation step. Curated notes live in `services/api/src/agent/prompts/musicbrainz-artist-search.md` for editing; the same text is **embedded in TypeScript** (`musicBrainzArtistSearchReference.embedded.ts`) so the API works even if the markdown file is not deployed—when the file is present locally, it overrides the embed.
-
-**Research pipeline (optional):** Set `RECOMMENDATION_PIPELINE=research` and provide **`BRAVE_API_KEY`**. Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs **one** reflection round with extra searches within a fixed Brave budget, then ranks picks with **evidence-grounded** `why` text (URLs enforced). Without `BRAVE_API_KEY`, the API stays on the classic pipeline and logs a warning.
+**Recommendation pipeline:** Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs one reflection round within a fixed Brave call budget, then ranks picks with evidence-grounded `why` text. `BRAVE_API_KEY` is required at startup — there is no fallback.
 
 ---
 
@@ -21,12 +19,12 @@ Combines conversational AI with MusicBrainz metadata and preference memory.
 git clone https://github.com/eikrad/bandsearch-app
 cd bandsearch-app
 npm install
-cp .env.example .env        # then add your GEMINI_API_KEY
+cp .env.example .env        # then add GEMINI_API_KEY and BRAVE_API_KEY
 npm run dev                 # API starts on http://localhost:3001
 ```
 
 Preferences are saved automatically to `bandsearch.db` — no database setup needed.
-`GEMINI_API_KEY` is required to start the API (including local development).
+Both `GEMINI_API_KEY` and `BRAVE_API_KEY` are required to start the API.
 
 Test it:
 
@@ -56,34 +54,47 @@ sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
 sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 ```
 
-**Gemini API key (desktop):** On first launch, a **welcome** screen (`#/welcome`) explains that a Gemini key is needed and links to Settings. You can skip and open chat later; completion is stored in `config.json` as `onboarding_completed` (Tauri) or in browser dev storage. Use **Settings** in the app header (or `#/settings`) to save your key. It is written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes `GEMINI_API_KEY` to the bundled Node API process and restarts that process after you save. It also sets **`DATABASE_PATH`** to an absolute `bandsearch.db` next to the repo root (resolved from the app binary), so preference SQLite storage does not depend on the OS current working directory. Developers can still use a workspace `.env` file; when present, the usual API startup behavior applies (dotenv does not override variables already set when the process starts). If a recommendation call fails (rate limit, unreachable API, or Gemini errors), the chat view shows a **banner** with a short, human-readable hint instead of failing silently.
+**Gemini API key (desktop):** On first launch, a **welcome** screen (`#/welcome`) explains that a Gemini key is needed and links to Settings. Use **Settings** in the app header (or `#/settings`) to save your key and Brave API key. They are written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes both keys to the bundled Node API process and restarts it after you save.
+
+If a recommendation call fails (rate limit, unreachable API, or Gemini errors), the chat view shows a banner with a short, human-readable hint instead of failing silently.
+
+---
+
+## Authentication
+
+Bandsearch uses optional local multi-user auth (bcrypt + 30-day JWT).
+
+**Single-user bypass (default):** When no users are registered the API runs open with no auth checks — ideal for local single-user setups. Auth is enforced only once you register the first account.
+
+| Users registered | Behaviour |
+|-----------------|-----------|
+| 0 | Pass-through — all requests accepted, no token needed |
+| 1 | Auto-attach — requests are automatically associated with the single user |
+| ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
+
+**Registration:** `POST /auth/register` returns a JWT token and a **recovery code**. Store the recovery code safely — it is the only way to reset your password. Tokens expire after 30 days.
+
+**Recovery:** `POST /auth/reset-password` accepts the recovery code and issues a new code. The old code is invalidated immediately.
+
+**JWT secret:** Set `JWT_SECRET` in your environment for persistent sessions. Without it, a random secret is generated on startup and all tokens are invalidated on restart.
+
+The desktop client persists the token in browser storage and injects it as `Authorization: Bearer` on every API call. The login/register/reset-password screens are shown automatically on startup when the API requires authentication.
 
 ---
 
 ## Storage
 
-Bandsearch currently uses two persistence domains:
+Bandsearch uses two persistence domains:
 
-- **Preferences store** (`saved_bands`) — configurable via `PREFERENCE_STORE`.
-- **Session store** (`chat_sessions`, `chat_messages`) — currently local SQLite in `DATABASE_PATH` (default `bandsearch.db`), with in-memory fallback if SQLite is unavailable.
-
-Preferences are persisted by default in a local SQLite file (`bandsearch.db`) — no server or configuration required.
+- **Preferences store** (`saved_bands`, groups) — configurable via `PREFERENCE_STORE`.
+- **Session store** (`chat_sessions`, `chat_messages`) — local SQLite in `DATABASE_PATH` (default `bandsearch.db`), with in-memory fallback if SQLite is unavailable.
 
 | `PREFERENCE_STORE` | Description |
 |--------------------|-------------|
 | `sqlite` (default) | Local file, zero-config, data survives restarts |
 | `memory` | In-process only, data lost on restart |
 | `postgres` | Postgres/Supabase, requires `DATABASE_URL` |
-| `turso` | Turso/libSQL cloud SQLite, requires `TURSO_DATABASE_URL` |
-
-### Session persistence
-
-Session and chat message history is stored in local SQLite tables created automatically by the API:
-
-- `chat_sessions`
-- `chat_messages`
-
-No separate migration step is required for these session tables; they are created on startup if missing.
+| `turso` | Turso/libSQL cloud SQLite, requires `TURSO_DATABASE_URL` — enables cross-device sync |
 
 **Postgres setup:**
 
@@ -109,9 +120,10 @@ PREFERENCE_STORE=turso
 TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your_turso_auth_token_here
 
-npm run migrate
 npm run dev
 ```
+
+Turso URL and auth token can also be saved through the **Settings** screen in the desktop app; the API restarts automatically with the new credentials.
 
 ---
 
@@ -120,7 +132,9 @@ npm run dev
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
-| `GEMINI_API_KEY` | — | Required — API will not start without it |
+| `GEMINI_API_KEY` | — | **Required** — API will not start without it |
+| `BRAVE_API_KEY` | — | **Required** — Brave Search token (`X-Subscription-Token`) |
+| `JWT_SECRET` | *(auto-generated)* | Signing secret for JWT tokens; set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `DATABASE_PATH` | `bandsearch.db` | SQLite file path |
 | `DATABASE_URL` | — | Required when `PREFERENCE_STORE=postgres` |
@@ -129,20 +143,18 @@ npm run dev
 | `TURSO_AUTH_TOKEN` | — | Turso auth token (omit for local libSQL) |
 | `CORS_ORIGIN` | `*` | Allowed browser origin |
 | `RECOMMENDATION_TIMEOUT_MS` | `8000` | Gemini request timeout |
-| `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the recommendation pipeline initializes (non-blocking cap) |
+| `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the pipeline initializes |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
-| `LASTFM_API_KEY` | — | Optional — Last.fm helper for artist images (via validated runtime config) |
+| `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
 | `LANGSMITH_PROJECT` | — | LangSmith project name |
-| `RECOMMENDATION_PIPELINE` | `classic` | `classic` or `research` (research requires `BRAVE_API_KEY`) |
-| `BRAVE_API_KEY` | — | Brave Search API token (`X-Subscription-Token`) when using research pipeline |
 | `RESEARCH_MAX_INITIAL_SEARCHES` | `6` | Max Brave queries on first pass |
 | `RESEARCH_MAX_REFLECTION_SEARCHES` | `4` | Cap on extra queries after reflection |
 | `RESEARCH_TOTAL_SEARCH_BUDGET` | `10` | Max Brave calls per recommendation request |
-| `RESEARCH_TIMEOUT_MS` | `25000` | Upper bound for multi-step research workflow timing |
-| `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified MB hits before skipping reflection (when budget allows) |
+| `RESEARCH_TIMEOUT_MS` | `25000` | Upper bound for the multi-step research workflow |
+| `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified MusicBrainz hits before skipping reflection |
 
 ---
 
@@ -155,11 +167,20 @@ npm run dev
 | `GET` | `/health` | Service health probe |
 | `GET` | `/version` | Returns app version |
 
+### Auth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/auth/status` | Returns `{ enabled, userCount }` — always public |
+| `POST` | `/auth/register` | Register; returns `{ user, token, recoveryCode }` |
+| `POST` | `/auth/login` | Login; returns `{ user, token }` |
+| `POST` | `/auth/reset-password` | Reset password with recovery code; returns `{ newRecoveryCode }` |
+
 ### Recommendations
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/recommendations` | Generate recommendations with `fresh` (default) or `preference-aware` mode |
+| `POST` | `/recommendations` | Generate recommendations (`fresh` or `preference-aware` mode) |
 
 Request body example:
 
@@ -176,7 +197,7 @@ Request body example:
 }
 ```
 
-Response includes `recommendations`, optional **`assistantReply`** (short conversational text from the model: acknowledgement + suggested next step), and `meta` (`modeUsed`, `usedPreferenceContext`).
+Response includes `recommendations`, optional `assistantReply` (conversational prose from the model), and `meta` (`modeUsed`, `usedPreferenceContext`).
 
 ### Preferences
 
@@ -187,6 +208,20 @@ Response includes `recommendations`, optional **`assistantReply`** (short conver
 | `PATCH` | `/preferences/:id` | Update rating / categories / note |
 | `DELETE` | `/preferences/:id` | Remove a band |
 | `GET` | `/preferences/context` | Render AI context string from saved bands |
+| `GET` | `/preferences/export` | Export all saved bands as JSON |
+| `POST` | `/preferences/import` | Import saved bands from JSON array; returns `{ imported, skipped, failed }` |
+
+### Artist Groups
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/preferences/groups` | List all groups with member IDs |
+| `POST` | `/preferences/groups` | Create a group |
+| `POST` | `/preferences/groups/auto` | Auto-generate groups by genre (MusicBrainz tags) |
+| `PATCH` | `/preferences/groups/:id` | Rename a group |
+| `DELETE` | `/preferences/groups/:id` | Delete a group |
+| `POST` | `/preferences/groups/:id/artists` | Add artist to group |
+| `DELETE` | `/preferences/groups/:id/artists/:savedBandId` | Remove artist from group |
 
 ### Sessions
 
@@ -201,9 +236,8 @@ Response includes `recommendations`, optional **`assistantReply`** (short conver
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/artists/search?query=...` | Search artists (canonical) |
-| `GET` | `/search/artists?q=...` | Same behavior as `/artists/search` (legacy query param `q`) |
-| `GET` | `/artists/image?name=...` | Resolve artist image URL |
+| `GET` | `/artists/search?query=...` | Search artists via MusicBrainz |
+| `GET` | `/artists/image?name=...` | Resolve artist image URL (Wikidata + Last.fm fallback) |
 
 ---
 
@@ -214,7 +248,7 @@ npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
 ```
 
-The API, shared schema, and **desktop** workspaces run tests with **tsx** so `.ts` sources execute next to existing `.js` modules (`npm run dev` / `npm start` use tsx for the API entrypoint as well).
+The API, shared schema, and **desktop** workspaces run tests with **tsx** so `.ts` sources execute next to remaining `.js` modules. `npm run dev` / `npm start` also use tsx for the API entrypoint.
 
 `npm run ci` runs **ruff** and **black** on Python sources (same as GitHub Actions). `npm run lint:py` uses `scripts/lint-py.sh`, which prefers a repo-local **`.venv`** (`python3 -m venv .venv && .venv/bin/pip install ruff black`) and falls back to tools on your `PATH`. The `.venv/` directory is gitignored.
 
@@ -227,7 +261,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 ```
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
-shared/schemas/   — shared validation contracts (TypeScript `contracts.ts` + tests)
+shared/schemas/   — shared validation contracts (TypeScript contracts.ts + tests)
 docs/             — roadmap and design specs
 ```
 
@@ -239,6 +273,7 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 - [Google Gemini](https://deepmind.google/technologies/gemini/) — large language model powering the recommendation and explanation layer.
 - [LangChain](https://www.langchain.com) — framework used to structure and invoke the Gemini model calls.
 - [Tauri](https://tauri.app) — framework for building the native desktop wrapper around the web UI.
+- [Brave Search](https://brave.com/search/api/) — web search API used for niche artist discovery.
 
 ---
 
