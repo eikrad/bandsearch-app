@@ -129,6 +129,7 @@ export function createTursoPreferenceRepository({ client }: { client: LibSQLClie
       const existing = new Set(result.rows.map((r: Row) => String(r.musicbrainz_artist_id)));
       let imported = 0;
       let skipped = 0;
+      let failed = 0;
       for (const band of bands) {
         const b = band as Record<string, unknown>;
         const mid = String(b.musicbrainzArtistId ?? "");
@@ -140,9 +141,11 @@ export function createTursoPreferenceRepository({ client }: { client: LibSQLClie
         if (addResult.ok === true) {
           existing.add(mid);
           imported++;
+        } else {
+          failed++;
         }
       }
-      return { imported, skipped };
+      return { imported, skipped, failed };
     },
 
     async listGroups(userId = DEFAULT_USER) {

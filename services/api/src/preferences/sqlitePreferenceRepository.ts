@@ -136,6 +136,7 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
       const existing = new Set(existingRows.map((r) => r.musicbrainz_artist_id));
       let imported = 0;
       let skipped = 0;
+      let failed = 0;
       for (const band of bands) {
         const b = band as Record<string, unknown>;
         const mid = String(b.musicbrainzArtistId ?? "");
@@ -147,9 +148,11 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }) {
         if (result.ok === true) {
           existing.add(mid);
           imported++;
+        } else {
+          failed++;
         }
       }
-      return { imported, skipped };
+      return { imported, skipped, failed };
     },
 
     async listGroups(userId = DEFAULT_USER) {

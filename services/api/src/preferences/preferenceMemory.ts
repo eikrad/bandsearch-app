@@ -144,6 +144,7 @@ export function createPreferenceMemory() {
       );
       let imported = 0;
       let skipped = 0;
+      let failed = 0;
       for (const band of bands) {
         const b = band as Record<string, unknown>;
         const mid = String(b.musicbrainzArtistId ?? "");
@@ -155,9 +156,11 @@ export function createPreferenceMemory() {
         if (result.ok === true) {
           existingIds.add(mid);
           imported++;
+        } else {
+          failed++;
         }
       }
-      return { imported, skipped };
+      return { imported, skipped, failed };
     },
 
     async listGroups(userId = DEFAULT_USER) {

@@ -97,19 +97,21 @@ export async function startDesktopBrowserApp({
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
+  async function runAuthGate(): Promise<void> {
+    const authStatus = await authClient.getAuthStatus();
+    if (!authStatus.enabled) return;
+    if (authStatus.userCount === 0) {
+      router.navigate("register");
+    } else if (!getAuthToken()) {
+      router.navigate("login");
+    }
+  }
+
   const gate = await gemini.getBootstrapGate();
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
     router.navigate("welcome");
   } else {
-    // Auth gate: check if the API requires authentication and route accordingly
-    const authStatus = await authClient.getAuthStatus();
-    if (authStatus.enabled) {
-      if (authStatus.userCount === 0) {
-        router.navigate("register");
-      } else if (!getAuthToken()) {
-        router.navigate("login");
-      }
-    }
+    await runAuthGate();
   }
 
   async function onLogin(email: string, password: string): Promise<void> {
@@ -142,7 +144,7 @@ export async function startDesktopBrowserApp({
     saveGeminiApiKey: (key: string) => gemini.saveGeminiApiKey(key),
     saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
     saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),
-    completeOnboarding: () => gemini.completeOnboarding(),
+    completeOnboarding: async () => { await gemini.completeOnboarding(); await runAuthGate(); },
     onLogin,
     onRegister,
     onResetPassword,
