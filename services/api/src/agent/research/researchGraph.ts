@@ -4,12 +4,10 @@ import type { ChatMessage, RecommendationMode } from "../../../../../shared/sche
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type SearchHitInput } from "./candidateExtractor.js";
-import {
-  verifyCandidatesWithMusicBrainz,
-  type VerifiedCandidate,
-} from "./candidateVerifier.js";
+import { verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
-import { createRecommendationReflector } from "./recommendationReflector.js";
+import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
+import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
 import { createWebSearchPlanner, type SearchPlan } from "./webSearchPlanner.js";
 
 export type ResearchGraphDeps = {
@@ -35,21 +33,6 @@ export type ResearchGraphInput = {
   messages: ChatMessage[];
   mode: RecommendationMode;
 };
-
-/** Exported for tests — same logic as the conditional edge after `verify`. */
-export function shouldRouteToRankAfterVerify(
-  verifiedCandidates: VerifiedCandidate[],
-  reflectionUsed: boolean,
-  searchCallsUsed: number,
-  deps: Pick<ResearchGraphDeps, "targetVerifiedCount" | "totalSearchBudget">,
-): boolean {
-  const verifiedOk = verifiedCandidates.filter((c) => c.verified).length;
-  return (
-    verifiedOk >= deps.targetVerifiedCount
-    || reflectionUsed
-    || searchCallsUsed >= deps.totalSearchBudget
-  );
-}
 
 export type ResearchGraphState = {
   userQuery: string;
@@ -81,12 +64,20 @@ const ResearchAnnotation = Annotation.Root({
   assistantReply: Annotation<string>(),
 });
 
+type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
+
 async function runBraveQueries(
-  brave: ReturnType<typeof createBraveSearchClient>,
+  config: { apiKey: string; dedupCache: BraveDedupCache; budget: ResearchBudget },
   queries: string[],
   budgetLeft: number,
   perQueryCount: number,
 ): Promise<{ hits: SearchHitInput[]; calls: number }> {
+  const brave = createBraveSearchClient({
+    apiKey: config.apiKey,
+    timeoutMs: config.budget.allocate(10000),
+    retries: 1,
+    dedupCache: config.dedupCache,
+  });
   const hits: SearchHitInput[] = [];
   let calls = 0;
   for (const q of queries) {
@@ -94,45 +85,43 @@ async function runBraveQueries(
     const res = await brave.search(q, { count: perQueryCount });
     calls += 1;
     for (const r of res.results) {
-      hits.push({
-        sourceQuery: q,
-        title: r.title,
-        url: r.url,
-        description: r.description,
-      });
+      hits.push({ sourceQuery: q, title: r.title, url: r.url, description: r.description });
     }
   }
   return { hits, calls };
 }
 
-export async function buildResearchGraph(deps: ResearchGraphDeps) {
+export async function buildResearchGraph(deps: ResearchGraphDeps, budget: ResearchBudget) {
   const log = deps.onLog ?? (() => {});
-
-  const planWeb = await createWebSearchPlanner({
-    apiKey: deps.geminiApiKey,
-    timeoutMs: Math.min(8000, deps.researchTimeoutMs),
-  });
-  const extract = await createCandidateExtractor({
-    apiKey: deps.geminiApiKey,
-    timeoutMs: Math.min(12000, deps.researchTimeoutMs),
-  });
-  const reflector = await createRecommendationReflector({
-    apiKey: deps.geminiApiKey,
-    timeoutMs: Math.min(6000, deps.researchTimeoutMs),
-    maxExtraQueries: deps.maxReflectionSearches,
-  });
-  const ranker = await createRecommendationRanker({
-    apiKey: deps.geminiApiKey,
-    timeoutMs: Math.min(12000, deps.researchTimeoutMs),
-  });
 
   const mb = createMusicBrainzClient({
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
   });
 
+  const braveDedup: BraveDedupCache = new Map();
+  const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
+    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget }, queries, budgetLeft, perQueryCount);
+
+  const reflectionSubgraph = buildReflectionSubgraph({
+    geminiApiKey: deps.geminiApiKey,
+    mb,
+    runQueries,
+    budget,
+    maxRounds: 2,
+    maxReflectionSearches: deps.maxReflectionSearches,
+    targetVerifiedCount: deps.targetVerifiedCount,
+    totalSearchBudget: deps.totalSearchBudget,
+    onLog: deps.onLog,
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graph = new StateGraph(ResearchAnnotation)
     .addNode("plan", async (state) => {
+      const planWeb = await createWebSearchPlanner({
+        apiKey: deps.geminiApiKey,
+        timeoutMs: budget.allocate(8000),
+      });
       const plan = await planWeb({
         userQuery: state.userQuery,
         preferenceContext: state.preferenceContext,
@@ -145,33 +134,18 @@ export async function buildResearchGraph(deps: ResearchGraphDeps) {
       return { searchPlan: plan };
     })
     .addNode("brave_initial", async (state) => {
-      const dedup = new Map<string, { results: Array<{ title: string; url: string; description: string }> }>();
-      const brave = createBraveSearchClient({
-        apiKey: deps.braveApiKey,
-        timeoutMs: 10000,
-        retries: 1,
-        dedupCache: dedup,
-      });
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];
-      const { hits, calls } = await runBraveQueries(brave, slice, deps.totalSearchBudget, 8);
-      log("info", "research_brave_call", {
-        phase: "initial",
-        calls,
-        hitCount: hits.length,
-      });
-      return {
-        braveHits: hits,
-        searchCallsUsed: calls,
-      };
+      const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, 8);
+      log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
+      return { braveHits: hits, searchCallsUsed: calls };
     })
     .addNode("extract", async (state) => {
-      const anchors = state.searchPlan?.anchorArtists?.length
-        ? state.searchPlan.anchorArtists
-        : [];
-      const candidates = await extract({
-        hits: state.braveHits,
-        anchorArtists: anchors,
+      const extract = await createCandidateExtractor({
+        apiKey: deps.geminiApiKey,
+        timeoutMs: budget.allocate(12000),
       });
+      const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
+      const candidates = await extract({ hits: state.braveHits, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });
       return { extractedCandidates: candidates };
     })
@@ -180,67 +154,18 @@ export async function buildResearchGraph(deps: ResearchGraphDeps) {
       const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors);
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
+        phase: "initial",
         verified: verifiedCount,
         total: verified.length,
       });
       return { verifiedCandidates: verified };
     })
-    .addNode("reflect", async (state) => {
-      const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
-      const reflection = await reflector({
-        userQuery: state.userQuery,
-        plan: state.searchPlan ?? { anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: [] },
-        verifiedCandidates: state.verifiedCandidates,
-        targetVerifiedCount: deps.targetVerifiedCount,
-        searchBudgetRemaining: budgetLeft,
-      });
-      const extra = reflection.sufficient ? [] : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
-      log("info", "research_reflection_fired", {
-        sufficient: reflection.sufficient,
-        extraQueries: extra.length,
-        gaps: reflection.gaps,
-      });
-
-      if (extra.length === 0 || budgetLeft <= 0) {
-        return { reflectionUsed: true };
-      }
-
-      const dedup = new Map<string, { results: Array<{ title: string; url: string; description: string }> }>();
-      const brave = createBraveSearchClient({
-        apiKey: deps.braveApiKey,
-        timeoutMs: 10000,
-        retries: 1,
-        dedupCache: dedup,
-      });
-      const { hits: newHits, calls } = await runBraveQueries(brave, extra, budgetLeft, 8);
-      const merged = [...state.braveHits, ...newHits];
-      log("info", "research_brave_call", {
-        phase: "reflection",
-        calls,
-        hitCount: newHits.length,
-      });
-      return {
-        braveHits: merged,
-        searchCallsUsed: state.searchCallsUsed + calls,
-        reflectionUsed: true,
-      };
-    })
-    .addNode("extract_after_reflect", async (state) => {
-      const anchors = state.searchPlan?.anchorArtists?.length
-        ? state.searchPlan.anchorArtists
-        : [];
-      const candidates = await extract({
-        hits: state.braveHits,
-        anchorArtists: anchors,
-      });
-      return { extractedCandidates: candidates };
-    })
-    .addNode("verify_after_reflect", async (state) => {
-      const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors);
-      return { verifiedCandidates: verified };
-    })
+    .addNode("reflect_if_needed", reflectionSubgraph as any)
     .addNode("rank", async (state) => {
+      const ranker = await createRecommendationRanker({
+        apiKey: deps.geminiApiKey,
+        timeoutMs: budget.allocate(12000),
+      });
       const { recommendations, assistantReply } = await ranker({
         query: state.userQuery,
         preferenceContext: state.preferenceContext,
@@ -251,34 +176,14 @@ export async function buildResearchGraph(deps: ResearchGraphDeps) {
       log("info", "research_ranked", {
         finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
       });
-      return {
-        recommendations,
-        assistantReply,
-      };
+      return { recommendations, assistantReply };
     })
     .addEdge(START, "plan")
     .addEdge("plan", "brave_initial")
     .addEdge("brave_initial", "extract")
     .addEdge("extract", "verify")
-    .addConditionalEdges(
-      "verify",
-      (s) =>
-        shouldRouteToRankAfterVerify(
-          s.verifiedCandidates,
-          s.reflectionUsed,
-          s.searchCallsUsed,
-          deps,
-        )
-          ? "rank"
-          : "reflect",
-      {
-        reflect: "reflect",
-        rank: "rank",
-      },
-    )
-    .addEdge("reflect", "extract_after_reflect")
-    .addEdge("extract_after_reflect", "verify_after_reflect")
-    .addEdge("verify_after_reflect", "rank")
+    .addEdge("verify", "reflect_if_needed")
+    .addEdge("reflect_if_needed", "rank")
     .addEdge("rank", END);
 
   return graph.compile();
@@ -288,7 +193,8 @@ export async function invokeResearchGraph(
   deps: ResearchGraphDeps,
   input: ResearchGraphInput,
 ): Promise<{ recommendations: unknown[]; assistantReply: string }> {
-  const graph = await buildResearchGraph(deps);
+  const budget = createResearchBudget(deps.researchTimeoutMs);
+  const graph = await buildResearchGraph(deps, budget);
   const result = await graph.invoke({
     userQuery: input.userQuery,
     preferenceContext: input.preferenceContext,
