@@ -81,3 +81,45 @@ Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users
 - Optional Spotify import with explicit user consent.
 - Billing and subscription controls.
 - Optional migration to Vertex AI governance mode.
+
+## Architecture — Pending Deepening
+
+The following refactors were identified during architecture review but not yet implemented. Each has a clear action and known files.
+
+### 1. Extract auto-group inference out of the route handler
+
+**Files:** `services/api/src/routes/registerBandsearchRoutes.ts` (lines 290–322)
+
+The logic that fetches saved bands, calls MusicBrainz for each artist's genre, and creates/updates groups lives inline in the `POST /preferences/auto-group` HTTP handler. It is untested, has a race condition when two concurrent requests try to create the same genre group, and cannot be reused by non-HTTP callers (e.g. the import flow).
+
+**Action:** Extract a `bandGroupInference` module (or similar name grounded in domain vocabulary) with one function: given a band name and MusicBrainz metadata, return zero or more group assignments. The route handler calls this and applies the result. Move the MusicBrainz I/O, deduplication, and group upsert logic inside the new module. Add unit tests for at least the race condition and the silent-MusicBrainz-failure path.
+
+---
+
+### 2. Split the monolithic preference repository interface
+
+**Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
+
+All four implementations carry 13 methods covering three distinct concerns: band CRUD (4), context building for the recommendation pipeline (2), and group management (5 + import + status). Adding any method means touching four files.
+
+**Action:** Split into two interfaces: `BandRepository` (CRUD + context building) and `BandGroupRepository` (group operations + import). Each adapter implements only its relevant interface. The factory selects both implementations for the active store. The context-building methods (`buildContext`, `buildContextForIds`) move closer to the recommendation pipeline, where the LLM prompt format is the real concern.
+
+---
+
+### 3. Consolidate the HTTP retry seam shared by integration clients
+
+**Files:** `services/api/src/integrations/musicbrainz.ts`, `braveSearch.ts`
+
+`fetchWithTimeoutAndRetry` is copied verbatim in both files — same function, same signature, same AbortController pattern. A bug fix or timeout policy change must be applied in two places.
+
+**Action:** Extract `fetchWithTimeoutAndRetry` into a shared `services/api/src/integrations/httpClient.ts` module. Both `musicbrainz.ts` and `braveSearch.ts` import from it. Add a focused test for the retry and timeout behaviour in the new shared module; remove the duplicated copies from both clients.
+
+---
+
+### 4. Remove duplicated user repository helpers
+
+**Files:** `services/api/src/auth/userRepository.ts`, `tursoUserRepository.ts`
+
+`normalizeEmail()`, `publicUser()`, and `rowToUser()` are copied verbatim in both user repository adapters.
+
+**Action:** Move the three functions into a shared `services/api/src/auth/userModel.ts` module. Both adapters import from it. The factory in `userRepository.ts` is unchanged. Test `normalizeEmail` once in `userModel.test.ts`.

@@ -1,19 +1,28 @@
-import { createChatViewModel } from "./chatViewModel.js";
-import { createChatScreenModel } from "./chatScreenModel.js";
-import { createChatScreen } from "./chatScreen.js";
+import { createChatAppModel, type ConversationMessage } from "./chatAppModel.js";
+
+export type DesktopChatUiStack = {
+  setViewport(next: string): void;
+  getViewport(): string;
+  setMode(mode: string): void;
+  getMode(): string;
+  isLoading(): boolean;
+  getConversation(): ConversationMessage[] | null;
+  submitQuery(query: string): Promise<unknown>;
+};
 
 function normalizeViewport(v: string): string {
   return v === "mobile" ? "mobile" : "desktop";
 }
 
-/**
- * Single composition root for the desktop chat UI stack (view model → screen model → screen).
- */
-export function createDesktopChatUiStack({ app, viewport = "desktop" }: { app: any; viewport?: string }) {
+export function createDesktopChatUiStack({
+  app,
+  viewport = "desktop",
+}: {
+  app: any;
+  viewport?: string;
+}): DesktopChatUiStack {
   let viewportState = normalizeViewport(viewport);
-  const viewModel = createChatViewModel({ app });
-  const screenModel = createChatScreenModel({ viewModel });
-  const screen = createChatScreen({ viewModel, screenModel });
+  const appModel = createChatAppModel({ app });
 
   return {
     setViewport(next: string) {
@@ -22,16 +31,20 @@ export function createDesktopChatUiStack({ app, viewport = "desktop" }: { app: a
     getViewport() {
       return viewportState;
     },
-    getRenderState() {
-      return screen.getRenderState({ viewport: viewportState });
+    setMode(mode: string) {
+      appModel.setMode(mode);
     },
-    handleModeChange(mode: string) {
-      screen.handleModeChange(mode);
-      return screen.getRenderState({ viewport: viewportState });
+    getMode() {
+      return appModel.getMode();
     },
-    async handleQuerySubmit(query: string) {
-      await screen.handleQuerySubmit(query);
-      return screen.getRenderState({ viewport: viewportState });
+    isLoading() {
+      return appModel.isLoading();
+    },
+    getConversation() {
+      return appModel.getConversation();
+    },
+    async submitQuery(query: string) {
+      return appModel.submitQuery(query);
     },
   };
 }

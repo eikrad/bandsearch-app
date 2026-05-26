@@ -1,75 +1,92 @@
 import { buildPlatformLinks } from "./platformLinks.js";
+import type { ConversationMessage, RenderableRecommendation } from "./chatAppModel.js";
+import type { DesktopChatUiStack } from "./desktopChatUiStack.js";
 
-function toCardViewProps(item: any): any {
+const MODE_OPTIONS = [
+  { value: "fresh", label: "Fresh search" },
+  { value: "preference-aware", label: "Preference-aware" },
+];
+
+function buildCardViewProps(card: RenderableRecommendation, isMobile: boolean) {
   return {
-    title: item.title,
-    why: item.why || item.reason || "",
-    country: item.country || "",
-    genres: item.genres || [],
-    connection: item.connection || "",
-    saved: !!item.saved,
-    rating: item.rating || null,
-    actions: item.actions || {},
-    imageUrl: item.imageUrl || null,
-    platformLinks: buildPlatformLinks(item.title),
+    title: card.title,
+    why: card.why,
+    country: card.country,
+    genres: card.genres,
+    signals: card.signals,
+    connection: card.connection,
+    imageUrl: card.imageUrl,
+    saved: card.saved,
+    rating: card.rating,
+    actions: {
+      save: { visible: !isMobile },
+      rate: { visible: !isMobile },
+      more: { visible: true },
+    },
+    platformLinks: buildPlatformLinks(card.title),
   };
 }
 
-function toViewProps(renderState: any): any {
-  const threadMessages = Array.isArray(renderState.conversationMessages)
-    ? renderState.conversationMessages
-      .map((msg: any) => {
-        if (msg.role === "user") {
-          return {
-            id: msg.id,
-            role: "user",
-            content: msg.content || "",
-          };
-        }
+function buildMessageViewProps(messages: ConversationMessage[], isMobile: boolean) {
+  return messages.map((msg) => {
+    if (msg.role === "user") {
+      return { id: msg.id, role: "user" as const, content: msg.content };
+    }
+    return {
+      id: msg.id,
+      role: "assistant" as const,
+      content: msg.content,
+      cards: msg.cards.map((card) => buildCardViewProps(card, isMobile)),
+    };
+  });
+}
 
-        if (msg.role === "assistant") {
-          return {
-            id: msg.id,
-            role: "assistant",
-            content: msg.content || "",
-            cards: (msg.cards || []).map((card: any) => toCardViewProps({
-              ...card,
-              actions: card.actions || { save: { visible: true }, rate: { visible: true }, more: { visible: true } },
-            })),
-          };
-        }
+function getLatestCards(conversation: ConversationMessage[] | null, isMobile: boolean) {
+  if (!conversation) return [];
+  for (let i = conversation.length - 1; i >= 0; i--) {
+    const msg = conversation[i];
+    if (msg.role === "assistant" && msg.cards.length > 0) {
+      return msg.cards.map((card) => buildCardViewProps(card, isMobile));
+    }
+  }
+  return [];
+}
 
-        return null;
-      })
-      .filter(Boolean)
-    : null;
+function buildViewProps(desktopUi: DesktopChatUiStack) {
+  const viewport = desktopUi.getViewport();
+  const isMobile = viewport === "mobile";
+  const conversation = desktopUi.getConversation();
+  const loading = desktopUi.isLoading();
+
+  const messageViewProps = conversation ? buildMessageViewProps(conversation, isMobile) : null;
+  const cards = getLatestCards(conversation, isMobile);
 
   return {
-    headerTitle: renderState.header.title,
-    headerSubtitle: renderState.header.subtitle,
-    viewport: renderState.viewport || "desktop",
-    modeValue: renderState.modeSelector.value,
-    modeOptions: renderState.modeSelector.options,
-    isLoading: renderState.isLoading,
-    queryPlaceholder: renderState.queryInput.placeholder,
-    queryDisabled: renderState.queryInput.disabled,
-    cards: renderState.recommendationList.items.map((item: any) => toCardViewProps(item)),
-    messages: threadMessages && threadMessages.length > 0 ? threadMessages : undefined,
-    emptyText: renderState.recommendationList.emptyText,
+    headerTitle: "Bandsearch",
+    headerSubtitle: "Niche music recommendations",
+    viewport,
+    modeValue: desktopUi.getMode(),
+    modeOptions: MODE_OPTIONS,
+    isLoading: loading,
+    queryPlaceholder: "Describe bands you like...",
+    queryDisabled: loading,
+    cards,
+    messages: messageViewProps && messageViewProps.length > 0 ? messageViewProps : undefined,
   };
 }
 
-export function createChatRenderAdapter({ desktopUi }: { desktopUi: any }) {
+export function createChatRenderAdapter({ desktopUi }: { desktopUi: DesktopChatUiStack }) {
   return {
     getViewProps() {
-      return toViewProps(desktopUi.getRenderState());
+      return buildViewProps(desktopUi);
     },
     onModeChange(mode: string) {
-      return toViewProps(desktopUi.handleModeChange(mode));
+      desktopUi.setMode(mode);
+      return buildViewProps(desktopUi);
     },
     async onSubmitQuery(query: string) {
-      const nextState = await desktopUi.handleQuerySubmit(query);
-      return toViewProps(nextState);
+      await desktopUi.submitQuery(query);
+      return buildViewProps(desktopUi);
     },
   };
 }
