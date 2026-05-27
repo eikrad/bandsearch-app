@@ -115,7 +115,6 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     onLog: deps.onLog,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graph = new StateGraph(ResearchAnnotation)
     .addNode("plan", async (state) => {
       const planWeb = await createWebSearchPlanner({
@@ -160,6 +159,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       });
       return { verifiedCandidates: verified };
     })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .addNode("reflect_if_needed", reflectionSubgraph as any)
     .addNode("rank", async (state) => {
       const ranker = await createRecommendationRanker({

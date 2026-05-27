@@ -3,30 +3,28 @@ const assert = require("node:assert/strict");
 
 const { bootstrapDesktopUi } = require("../src");
 
-test("desktop ui bootstrap returns render state and updates mode", () => {
+test("desktop ui bootstrap exposes mode get/set", () => {
   const ui = bootstrapDesktopUi({
     app: {
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
-      getState: () => ({ messages: [] }),
+      getState: () => ({ messages: [], savedBands: [] }),
     },
   });
 
-  const initial = ui.getRenderState();
-  assert.equal(initial.mode, "fresh");
-  assert.equal(initial.modeSelector.options.length, 2);
-
-  const afterMode = ui.handleModeChange("preference-aware");
-  assert.equal(afterMode.mode, "preference-aware");
+  assert.equal(ui.getMode(), "fresh");
+  ui.setMode("preference-aware");
+  assert.equal(ui.getMode(), "preference-aware");
 });
 
-test("desktop ui bootstrap refreshes render state after query submission", async () => {
-  const appState = { messages: [] };
+test("desktop ui bootstrap refreshes conversation after query submission", async () => {
+  const appState = { messages: [], savedBands: [] };
   const ui = bootstrapDesktopUi({
     app: {
       requestRecommendations: async () => {
         appState.messages = [
           {
             role: "assistant",
+            content: "",
             recommendations: [
               {
                 artist: "Fen",
@@ -43,7 +41,9 @@ test("desktop ui bootstrap refreshes render state after query submission", async
     },
   });
 
-  const state = await ui.handleQuerySubmit("I like blackgaze");
-  assert.equal(state.recommendationList.items.length, 1);
-  assert.equal(state.recommendationList.items[0].title, "Fen");
+  await ui.submitQuery("I like blackgaze");
+  const conversation = ui.getConversation();
+  assert.ok(conversation, "conversation is non-null after query");
+  assert.equal(conversation[0].role, "assistant");
+  assert.equal(conversation[0].cards[0].title, "Fen");
 });

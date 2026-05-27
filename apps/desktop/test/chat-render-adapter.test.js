@@ -3,21 +3,47 @@ const assert = require("node:assert/strict");
 
 const { createChatRenderAdapter } = require("../src/chatRenderAdapter");
 
-test("render adapter builds view props from UI render state", () => {
-  const adapter = createChatRenderAdapter({
-    desktopUi: {
-      getRenderState: () => ({
-        header: { title: "Bandsearch", subtitle: "Niche music recommendations" },
-        mode: "fresh",
-        isLoading: false,
-        modeSelector: { value: "fresh", options: [{ value: "fresh", label: "Fresh search" }] },
-        queryInput: { placeholder: "Describe bands you like...", disabled: false },
-        recommendationList: { items: [{ title: "Fen", why: "Atmospheric overlap" }], emptyText: "none" },
-      }),
-    },
-  });
+function makeCard(title, overrides = {}) {
+  return {
+    title,
+    why: "Some reason",
+    country: "GB",
+    genres: ["post-metal"],
+    signals: ["musicbrainz_search"],
+    connection: "",
+    imageUrl: null,
+    saved: false,
+    rating: null,
+    savedBandId: null,
+    ...overrides,
+  };
+}
 
+function makeDesktopUi(overrides = {}) {
+  let mode = "fresh";
+  let conversation = null;
+  return {
+    getViewport: () => "desktop",
+    getMode: () => mode,
+    isLoading: () => false,
+    getConversation: () => conversation,
+    setMode: (m) => { mode = m; },
+    submitQuery: async () => {},
+    _setConversation: (c) => { conversation = c; },
+    _setMode: (m) => { mode = m; },
+    ...overrides,
+  };
+}
+
+test("render adapter builds header and platform links from conversation cards", () => {
+  const ui = makeDesktopUi();
+  ui._setConversation([
+    { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
+  ]);
+
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
   const props = adapter.getViewProps();
+
   assert.equal(props.headerTitle, "Bandsearch");
   assert.equal(props.viewport, "desktop");
   assert.equal(props.modeValue, "fresh");
@@ -27,47 +53,69 @@ test("render adapter builds view props from UI render state", () => {
   assert.equal(props.cards[0].platformLinks[0].platform, "bandcamp");
 });
 
-test("render adapter forwards interaction handlers and refreshes state", async () => {
-  const calls = [];
-  const adapter = createChatRenderAdapter({
-    desktopUi: {
-      getRenderState: () => ({
-        header: { title: "Bandsearch", subtitle: "" },
-        mode: "fresh",
-        isLoading: false,
-        modeSelector: { value: "fresh", options: [] },
-        queryInput: { placeholder: "", disabled: false },
-        recommendationList: { items: [], emptyText: "" },
-      }),
-      handleModeChange: (mode) => {
-        calls.push({ type: "mode", mode });
-        return {
-          header: { title: "Bandsearch", subtitle: "" },
-          mode,
-          isLoading: false,
-          modeSelector: { value: mode, options: [] },
-          queryInput: { placeholder: "", disabled: false },
-          recommendationList: { items: [], emptyText: "" },
-        };
-      },
-      handleQuerySubmit: async (query) => {
-        calls.push({ type: "submit", query });
-        return {
-          header: { title: "Bandsearch", subtitle: "" },
-          mode: "fresh",
-          isLoading: false,
-          modeSelector: { value: "fresh", options: [] },
-          queryInput: { placeholder: "", disabled: false },
-          recommendationList: { items: [{ title: "Alcest", why: "Dreamlike blackgaze" }], emptyText: "" },
-        };
-      },
+test("render adapter preserves imageUrl from card", () => {
+  const ui = makeDesktopUi();
+  ui._setConversation([
+    {
+      id: "a-0",
+      role: "assistant",
+      content: "",
+      cards: [makeCard("Alcest", { imageUrl: "https://example.com/alcest.jpg" })],
     },
-  });
+  ]);
+
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const props = adapter.getViewProps();
+
+  assert.equal(props.cards[0].imageUrl, "https://example.com/alcest.jpg");
+});
+
+test("render adapter hides save/rate actions on mobile", () => {
+  const ui = makeDesktopUi({ getViewport: () => "mobile" });
+  ui._setConversation([
+    { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
+  ]);
+
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const props = adapter.getViewProps();
+
+  assert.equal(props.cards[0].actions.save.visible, false, "save hidden on mobile");
+  assert.equal(props.cards[0].actions.rate.visible, false, "rate hidden on mobile");
+  assert.equal(props.cards[0].actions.more.visible, true, "more always visible");
+});
+
+test("render adapter shows save/rate actions on desktop", () => {
+  const ui = makeDesktopUi();
+  ui._setConversation([
+    { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
+  ]);
+
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const props = adapter.getViewProps();
+
+  assert.equal(props.cards[0].actions.save.visible, true, "save visible on desktop");
+  assert.equal(props.cards[0].actions.rate.visible, true, "rate visible on desktop");
+});
+
+test("onModeChange updates mode and returns refreshed view props", () => {
+  const ui = makeDesktopUi();
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
 
   const afterMode = adapter.onModeChange("preference-aware");
+
+  assert.equal(afterMode.modeValue, "preference-aware");
+});
+
+test("onSubmitQuery delegates to desktopUi and returns updated cards", async () => {
+  const ui = makeDesktopUi();
+  ui.submitQuery = async () => {
+    ui._setConversation([
+      { id: "a-0", role: "assistant", content: "", cards: [makeCard("Alcest")] },
+    ]);
+  };
+
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
   const afterSubmit = await adapter.onSubmitQuery("I like blackgaze");
 
-  assert.equal(calls.length, 2);
-  assert.equal(afterMode.modeValue, "preference-aware");
   assert.equal(afterSubmit.cards[0].title, "Alcest");
 });
