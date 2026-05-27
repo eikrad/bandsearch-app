@@ -67,7 +67,7 @@ Bandsearch uses optional local multi-user auth (bcrypt + 30-day JWT).
 **Single-user bypass (default):** When no users are registered the API runs open with no auth checks — ideal for local single-user setups. Auth is enforced only once you register the first account.
 
 | Users registered | Behaviour |
-|-----------------|-----------|
+|-----------------|----------|
 | 0 | Pass-through — all requests accepted, no token needed |
 | 1 | Auto-attach — requests are automatically associated with the single user |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
@@ -274,6 +274,25 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 - [LangChain](https://www.langchain.com) — framework used to structure and invoke the Gemini model calls.
 - [Tauri](https://tauri.app) — framework for building the native desktop wrapper around the web UI.
 - [Brave Search](https://brave.com/search/api/) — web search API used for niche artist discovery.
+
+---
+
+## Maintenance notes
+
+**2026-05-27 — Weekly maintenance**
+
+### Fixes applied
+
+- **CI**: `npm install` changed to `npm ci` for reproducible, locked installs in CI environments.
+- **CI**: Action versions bumped to current stable — `checkout@v6`, `setup-node@v6`, `setup-python@v6`.
+
+### Major upgrades available (not auto-applied — require testing)
+
+| Package | In use | Latest | Notes |
+|---|---|---|---|
+| `eslint` / `@eslint/js` | `^9.x` | `10.x` | Flat-config updates; review eslint v10 migration guide |
+| `globals` | `^16.5.0` | `17.x` | Breaking changes in the globals API |
+| `typescript` | `^5.9.x` | `6.x` | New type-system features; some breaking changes |
 
 ---
 
