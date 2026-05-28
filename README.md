@@ -38,14 +38,15 @@ curl -X POST http://localhost:3001/recommendations \
 
 ## Desktop App (Tauri)
 
-**Additional prerequisites:** [Rust](https://rustup.rs) + Linux system deps (see below)
+**Additional prerequisites:** [Rust](https://rustup.rs) + platform build tools (see below)
 
 ```bash
 npm run desktop             # opens native window, starts API automatically
 ```
 
-**Linux system dependencies:**
+### Platform prerequisites
 
+**Linux:**
 ```bash
 # Arch / Manjaro
 sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
@@ -54,7 +55,27 @@ sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
 sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 ```
 
-**Gemini API key (desktop):** On first launch, a **welcome** screen (`#/welcome`) explains that a Gemini key is needed and links to Settings. Use **Settings** in the app header (or `#/settings`) to save your key and Brave API key. They are written to the OS config directory as `bandsearch/config.json` (e.g. `~/.config/bandsearch/config.json` on Linux). The Tauri shell passes both keys to the bundled Node API process and restarts it after you save.
+**macOS:** Xcode Command Line Tools (`xcode-select --install`). No additional packages needed.
+
+**Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **Desktop development with C++** workload. WebView2 is built into Windows 10 1803+ and Windows 11 — no manual install needed.
+
+### How the API server is launched
+
+The desktop app spawns a Node.js API server as a child process. In development it uses the system `node` on your `PATH`. In a production bundle (`tauri build`), it looks for a Tauri-bundled Node sidecar placed next to the executable — named `node-<target-triple>[.exe]` — and prefers that over the system node. If no sidecar is present, it falls back to system `node` automatically.
+
+To produce a production build you must place the correct Node binary in `apps/desktop/src-tauri/binaries/` before running `tauri build`. See `apps/desktop/src-tauri/binaries/README` for the naming convention and download instructions.
+
+### API key storage
+
+Keys are written to the OS config directory as `bandsearch/config.json`:
+
+| OS | Path |
+|----|------|
+| Linux | `~/.config/bandsearch/config.json` |
+| macOS | `~/Library/Application Support/bandsearch/config.json` |
+| Windows | `%APPDATA%\bandsearch\config.json` |
+
+**First launch:** A welcome screen (`#/welcome`) explains that a Gemini key is needed and links to Settings. Use **Settings** in the app header (or `#/settings`) to save your Gemini and Brave keys. The Tauri shell passes both keys to the Node API process and restarts it after you save.
 
 If a recommendation call fails (rate limit, unreachable API, or Gemini errors), the chat view shows a banner with a short, human-readable hint instead of failing silently.
 
@@ -254,6 +275,8 @@ The API, shared schema, and **desktop** workspaces run tests with **tsx** so `.t
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`).
 
+**CI** runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix. All `run:` steps use Bash (Git Bash on Windows) so shell scripts like `lint-py.sh` work cross-platform without modification.
+
 ---
 
 ## Monorepo Structure
@@ -278,6 +301,16 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 ---
 
 ## Maintenance notes
+
+**2026-05-28 — Phase 7 Windows support**
+
+### Changes
+
+- **CI**: Added `windows-latest` runner to the CI matrix alongside `ubuntu-latest`. `fail-fast: false` keeps both legs visible if one fails. All `run:` steps use `shell: bash` so scripts work identically on both platforms.
+- **Tauri sidecar**: `api_spawn_args` now probes for a Tauri-bundled Node sidecar next to the executable (`node-<target-triple>[.exe]`) via `env!("TARGET")` and falls back to system `node` in dev/CI. `externalBin: ["binaries/node"]` added to `tauri.conf.json`.
+- **Docs**: `apps/desktop/src-tauri/binaries/README` added — explains which Node binary to place there and where to download it before running `tauri build`.
+
+---
 
 **2026-05-27 — Weekly maintenance**
 
