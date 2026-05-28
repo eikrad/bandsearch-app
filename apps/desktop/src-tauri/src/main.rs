@@ -116,6 +116,53 @@ fn wait_for_api_tcp(port: u16) {
     eprintln!("[bandsearch] warning: API port {port} did not accept TCP within 30s");
 }
 
+/// Returns the Rust target triple for the current platform, e.g. `x86_64-pc-windows-msvc`.
+/// Used to locate the Tauri-bundled Node sidecar binary next to the executable.
+fn build_target_triple() -> String {
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "x86" => "i686",
+        other => other,
+    };
+    match std::env::consts::OS {
+        "windows" => format!("{}-pc-windows-msvc", arch),
+        "macos" => format!("{}-apple-darwin", arch),
+        _ => format!("{}-unknown-linux-gnu", arch),
+    }
+}
+
+/// Returns the expected filename of the bundled Node sidecar for the current platform.
+fn sidecar_name() -> String {
+    let stem = format!("node-{}", build_target_triple());
+    if cfg!(target_os = "windows") {
+        format!("{}.exe", stem)
+    } else {
+        stem
+    }
+}
+
+/// Resolves the Node binary to use for spawning the API server.
+/// Prefers a bundled sidecar binary placed next to the executable by `tauri build`;
+/// falls back to the system `node` for dev and CI.
+fn resolve_node_binary_in(exe_dir: &Path) -> String {
+    let candidate = exe_dir.join(sidecar_name());
+    if candidate.exists() {
+        candidate.to_string_lossy().into_owned()
+    } else {
+        "node".to_string()
+    }
+}
+
+fn resolve_node_binary() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            return resolve_node_binary_in(dir);
+        }
+    }
+    "node".to_string()
+}
+
 fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
     let server_path = workspace_root
         .join("services")
@@ -123,7 +170,7 @@ fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
         .join("src")
         .join("server.js");
     (
-        "node".to_string(),
+        resolve_node_binary(),
         vec![
             "--import".to_string(),
             "tsx".to_string(),
@@ -424,6 +471,67 @@ mod tests {
         let root = PathBuf::from("/any/root");
         let (binary, _) = api_spawn_args(&root);
         assert_eq!(binary, "node");
+    }
+
+    #[test]
+    fn build_target_triple_is_non_empty() {
+        let triple = build_target_triple();
+        assert!(!triple.is_empty(), "target triple must not be empty");
+    }
+
+    #[test]
+    fn build_target_triple_contains_current_os() {
+        let triple = build_target_triple();
+        let expected = if cfg!(target_os = "windows") {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "darwin"
+        } else {
+            "linux"
+        };
+        assert!(
+            triple.contains(expected),
+            "triple '{}' must contain '{}'",
+            triple,
+            expected,
+        );
+    }
+
+    #[test]
+    fn resolve_node_binary_falls_back_to_system_node_when_no_sidecar() {
+        let dir = std::env::temp_dir().join("bandsearch_test_no_sidecar");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let binary = resolve_node_binary_in(&dir);
+        assert_eq!(binary, "node", "should fall back to system node when sidecar absent");
+    }
+
+    #[test]
+    fn resolve_node_binary_returns_sidecar_path_when_binary_exists() {
+        let dir = std::env::temp_dir().join("bandsearch_test_sidecar");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let sidecar = dir.join(sidecar_name());
+        std::fs::write(&sidecar, b"").expect("write dummy sidecar");
+        let binary = resolve_node_binary_in(&dir);
+        assert_eq!(
+            binary,
+            sidecar.to_string_lossy(),
+            "should return the sidecar path when binary exists",
+        );
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn tauri_conf_has_external_bin_for_node_sidecar() {
+        let conf = include_str!("../tauri.conf.json");
+        let parsed: serde_json::Value =
+            serde_json::from_str(conf).expect("tauri.conf.json must be valid JSON");
+        let external_bin = parsed["bundle"]["externalBin"]
+            .as_array()
+            .expect("bundle.externalBin must be an array");
+        assert!(
+            external_bin.iter().any(|e| e.as_str() == Some("binaries/node")),
+            "bundle.externalBin must contain 'binaries/node'",
+        );
     }
 
     #[test]
