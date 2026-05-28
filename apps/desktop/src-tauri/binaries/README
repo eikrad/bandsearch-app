@@ -1,0 +1,14 @@
+Place the platform-specific Node.js binary here before running `tauri build`.
+
+Tauri bundles whichever file matches `node-<target-triple>[.exe]` declared in
+`tauri.conf.json` `bundle.externalBin`. Examples:
+
+  binaries/node-x86_64-unknown-linux-gnu   (Linux glibc x86_64)
+  binaries/node-aarch64-apple-darwin       (macOS Apple Silicon)
+  binaries/node-x86_64-pc-windows-msvc.exe (Windows x86_64)
+
+Fetch the official Node.js binary for each target from https://nodejs.org/dist/,
+strip the archive, rename the executable to match the pattern above, and make it
+executable. A release CI step or Makefile target should automate this.
+
+These binaries are NOT committed to the repository.

@@ -116,29 +116,15 @@ fn wait_for_api_tcp(port: u16) {
     eprintln!("[bandsearch] warning: API port {port} did not accept TCP within 30s");
 }
 
-/// Returns the Rust target triple for the current platform, e.g. `x86_64-pc-windows-msvc`.
-/// Used to locate the Tauri-bundled Node sidecar binary next to the executable.
-fn build_target_triple() -> String {
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => "x86_64",
-        "aarch64" => "aarch64",
-        "x86" => "i686",
-        other => other,
-    };
-    match std::env::consts::OS {
-        "windows" => format!("{}-pc-windows-msvc", arch),
-        "macos" => format!("{}-apple-darwin", arch),
-        _ => format!("{}-unknown-linux-gnu", arch),
-    }
-}
-
 /// Returns the expected filename of the bundled Node sidecar for the current platform.
+/// `env!("TARGET")` is the full Rust target triple baked in at compile time (e.g.
+/// `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`), matching the name Tauri's
+/// bundler uses for the sidecar placed next to the executable.
 fn sidecar_name() -> String {
-    let stem = format!("node-{}", build_target_triple());
     if cfg!(target_os = "windows") {
-        format!("{}.exe", stem)
+        format!("node-{}.exe", env!("TARGET"))
     } else {
-        stem
+        format!("node-{}", env!("TARGET"))
     }
 }
 
@@ -474,27 +460,18 @@ mod tests {
     }
 
     #[test]
-    fn build_target_triple_is_non_empty() {
-        let triple = build_target_triple();
-        assert!(!triple.is_empty(), "target triple must not be empty");
-    }
-
-    #[test]
-    fn build_target_triple_contains_current_os() {
-        let triple = build_target_triple();
-        let expected = if cfg!(target_os = "windows") {
-            "windows"
+    fn sidecar_name_reflects_current_os() {
+        let name = sidecar_name();
+        if cfg!(target_os = "windows") {
+            assert!(name.ends_with(".exe"), "Windows sidecar must end with .exe, got: {name}");
+            assert!(name.contains("windows"), "Windows sidecar must contain 'windows', got: {name}");
         } else if cfg!(target_os = "macos") {
-            "darwin"
+            assert!(!name.ends_with(".exe"), "macOS sidecar must not end with .exe");
+            assert!(name.contains("darwin"), "macOS sidecar must contain 'darwin', got: {name}");
         } else {
-            "linux"
-        };
-        assert!(
-            triple.contains(expected),
-            "triple '{}' must contain '{}'",
-            triple,
-            expected,
-        );
+            assert!(!name.ends_with(".exe"), "Linux sidecar must not end with .exe");
+            assert!(name.contains("linux"), "Linux sidecar must contain 'linux', got: {name}");
+        }
     }
 
     #[test]
