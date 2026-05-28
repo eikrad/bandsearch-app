@@ -60,7 +60,7 @@ Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users
 
 ## Phase 7 — Platform Expansion
 
-- Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI.
+- Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI. ✓ Done: `externalBin: ["binaries/node"]` added to `tauri.conf.json`; `build_target_triple()` + `resolve_node_binary_in()` in `main.rs` probe for the bundled sidecar next to the executable and fall back to system `node` in dev/CI; `windows-latest` runner added to CI matrix with `fail-fast: false`.
 - Android: use Tauri's Android target (`tauri android init`). Voice input as the primary chat input method via the Web Speech API (`SpeechRecognition`), which works natively in Chromium-based Android webviews — no native plugin needed. Requires responsive layout review and touch-friendly tap targets throughout the UI.
 
 ## Parallel Track — Incremental TypeScript Migration (Non-blocking)
