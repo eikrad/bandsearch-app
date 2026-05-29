@@ -84,15 +84,16 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 
 **Implementation steps (in order, each independently deployable):**
 
-- [ ] Step 1: `recommendation_events` logging — persist every recommendation request with query, obscurity target, verified count, and reflection status
+- [ ] Step 1: `recommendation_events` logging — persist every recommendation request with query, obscurity target, verified count, reflection status, `pipeline_diagnostics_json`, and pipeline versioning (`pipeline_version`, prompt hashes, model IDs)
 - [ ] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent
 - [ ] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log
-- [ ] Step 4: Search source quality scorer — URL heuristic measuring what fraction of Brave results came from known discovery sources (Bandcamp, RYM, Reddit, metal-archives…); stored per event, no LLM needed
+- [ ] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed
 - [ ] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `ANTHROPIC_API_KEY`; silently skipped if absent
-- [ ] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments
-- [ ] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true`
+- [ ] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas
+- [ ] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version`
+- [ ] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true`
 - [ ] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input
-- [ ] Step 9: Golden dataset — `services/eval/golden-set.json` with 10–15 manually curated query → expected-bands pairs; `run-golden.ts` script computing precision@8 for regression runs before significant prompt changes
+- [ ] Step 9: Golden dataset — `services/eval/golden-set.json` with 10–15 curated queries including `nuggets` and `antiBands`; `run-golden.ts` computing precision@8, antiBandRate@8 (CI fail if > 0), and nuggetCoverage@8
 
 **Future (after data exists):**
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
