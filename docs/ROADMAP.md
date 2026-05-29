@@ -78,7 +78,7 @@ Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users
 
 ## Phase 8 — Eval & Quality Observability
 
-**Spec:** [`docs/superpowers/specs/2026-05-29-eval-architecture.md`](superpowers/specs/2026-05-29-eval-architecture.md)
+**Spec:** [`docs/architecture/2026-05-29-eval-architecture.md`](architecture/2026-05-29-eval-architecture.md)
 
 Three-layer system to measure recommendation quality over time: automatic obscurity scoring, LLM-as-judge evaluation, and minimal user feedback — all surfaced in a developer dashboard with baseline comparison so prompt changes and model updates have visible before/after impact.
 
@@ -96,6 +96,84 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 
 **Future (after data exists):**
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
+
+---
+
+## Phase 9 — Cloud Deployment (Azure Free Tier + Turso)
+
+Deploy the Express API to Azure App Service so the desktop app can connect to a public endpoint instead of requiring a local sidecar. Consolidate on Turso/libSQL as the sole database backend for production (local `better-sqlite3` remains for offline/dev).
+
+Independent of Phase 8 — eval instrumentation can run against a local API first; cloud deployment unlocks shared hosting and cross-device access without a running desktop sidecar.
+
+### 9.1 — Turso chat session repository
+
+**Files:** `services/api/src/sessions/chatSessionRepository.ts`
+
+The chat session repository currently has only SQLite (`better-sqlite3`) and in-memory implementations. Preferences and users already have Turso adapters, but sessions do not — this is the last piece blocking a fully Turso-backed deployment.
+
+**Action:**
+1. Create `services/api/src/sessions/tursoChatSessionRepository.ts` implementing the same interface as the existing SQLite variant, using `@libsql/client`.
+2. Wire it into the factory in `chatSessionRepository.ts` so that `PREFERENCE_STORE=turso` (or a dedicated `SESSION_STORE` env var) selects the Turso adapter.
+3. Add unit tests mirroring the existing SQLite session tests.
+
+---
+
+### 9.2 — Turso migration script
+
+**Files:** `services/api/scripts/migrate.js`
+
+The existing migration script targets local SQLite and Postgres. It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
+
+**Action:**
+1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`.
+2. Include all tables from preferences, auth, and sessions.
+3. Document the migration command in the README: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso`.
+
+---
+
+### 9.3 — Azure App Service deployment
+
+Deploy the Express API to Azure App Service (F1 free tier).
+
+**Action:**
+1. Add a minimal deployment configuration — either an Azure CLI script (`scripts/deploy-azure.sh` using `az webapp up`) or a GitHub Actions workflow (`.github/workflows/deploy-azure.yml`).
+2. Configure required environment variables on the App Service: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`, `PORT` (Azure injects this automatically).
+3. Ensure the `start` script in `package.json` works for Azure (it already uses `tsx services/api/src/server.js` — verify Azure's Node.js runtime supports this or add a build step that compiles to plain JS).
+4. Verify health check endpoint (`GET /`) responds correctly so Azure keeps the app alive.
+
+---
+
+### 9.4 — Desktop app: configurable API endpoint
+
+**Files:** `apps/desktop/src/`, `apps/desktop/src-tauri/`
+
+The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
+
+**Action:**
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.azurewebsites.net`).
+2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials.
+3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend.
+4. Update `chatClient.ts` and all API callers to use the configured endpoint.
+
+---
+
+### 9.5 — End-to-end verification
+
+**Action:**
+1. Create a Turso database and run the migration script against it.
+2. Deploy the API to Azure App Service with `PREFERENCE_STORE=turso`.
+3. Verify from the desktop app: register a user, log in, get recommendations, save artists, create groups, chat sessions persist across restarts.
+4. Verify cold-start latency on the Azure free tier is acceptable (F1 has ~20–30 s cold starts).
+5. Document any free-tier limitations (60 min/day CPU, cold starts) in the README.
+
+---
+
+### 9.6 — CI/CD pipeline (optional)
+
+**Action:**
+1. Add a GitHub Actions workflow that deploys to Azure on push to `main` (or a `deploy` branch).
+2. Use Azure's publish profile or `az webapp deploy` with OIDC credentials.
+3. Run `npm run ci` before deploying to prevent broken code from reaching production.
 
 ---
 
