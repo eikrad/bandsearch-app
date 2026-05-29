@@ -76,6 +76,29 @@ Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users
 - ✓ Done: all source files from Phase 6 and earlier converted to TypeScript; `eslint-disable @typescript-eslint/no-explicit-any` removed from all 11 batch-converted files; row types, input types, and API response interfaces replace all `any` in repository and integration layers.
 - Keep this track side-by-side with product phases; do not block UX/features on migration tasks.
 
+## Phase 8 — Eval & Quality Observability
+
+**Spec:** [`docs/superpowers/specs/2026-05-29-eval-architecture.md`](superpowers/specs/2026-05-29-eval-architecture.md)
+
+Three-layer system to measure recommendation quality over time: automatic obscurity scoring, LLM-as-judge evaluation, and minimal user feedback — all surfaced in a developer dashboard with baseline comparison so prompt changes and model updates have visible before/after impact.
+
+**Implementation steps (in order, each independently deployable):**
+
+- [ ] Step 1: `recommendation_events` logging — persist every recommendation request with query, obscurity target, verified count, and reflection status
+- [ ] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent
+- [ ] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log
+- [ ] Step 4: Search source quality scorer — URL heuristic measuring what fraction of Brave results came from known discovery sources (Bandcamp, RYM, Reddit, metal-archives…); stored per event, no LLM needed
+- [ ] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `ANTHROPIC_API_KEY`; silently skipped if absent
+- [ ] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments
+- [ ] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true`
+- [ ] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input
+- [ ] Step 9: Golden dataset — `services/eval/golden-set.json` with 10–15 manually curated query → expected-bands pairs; `run-golden.ts` script computing precision@8 for regression runs before significant prompt changes
+
+**Future (after data exists):**
+- `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
+
+---
+
 ## Deferred / Under Review
 
 - PWA client on shared API.
