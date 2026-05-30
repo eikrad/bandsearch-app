@@ -117,3 +117,23 @@ test("validateRecommendationHttpBody silently truncates priorityContext over PRI
   assert.equal(v.ok, true);
   assert.equal(v.priorityContext.length, PRIORITY_CONTEXT_MAX_LEN);
 });
+
+test("validateRecommendationHttpBody accepts valid obscurityTarget values", () => {
+  for (const target of ["cult", "underground", "obscure"]) {
+    const v = validateRecommendationHttpBody({ query: "dark ambient", obscurityTarget: target });
+    assert.equal(v.ok, true);
+    assert.equal(v.obscurityTarget, target);
+  }
+});
+
+test("validateRecommendationHttpBody silently ignores invalid obscurityTarget", () => {
+  const v = validateRecommendationHttpBody({ query: "dark ambient", obscurityTarget: "mainstream" });
+  assert.equal(v.ok, true);
+  assert.equal(v.obscurityTarget, undefined);
+});
+
+test("validateRecommendationHttpBody returns undefined obscurityTarget when not provided", () => {
+  const v = validateRecommendationHttpBody({ query: "dark ambient" });
+  assert.equal(v.ok, true);
+  assert.equal(v.obscurityTarget, undefined);
+});

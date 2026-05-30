@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
+import type { ChatMessage, ObscurityTarget } from "../../../../../shared/schemas/src/contracts.js";
 import { validateRecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 
 import type { MusicBrainzArtistHit } from "../../recommendations.js";
@@ -18,6 +18,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
         mode?: unknown;
         preferenceContext?: string;
         messages?: ChatMessage[];
+        obscurityTarget?: ObscurityTarget;
       } = {},
     ) {
       const mode = validateRecommendationMode(options.mode);
@@ -29,6 +30,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
         preferenceContext,
         messages,
         mode,
+        obscurityTarget: options.obscurityTarget,
       });
 
       const items = Array.isArray(rawItems) ? rawItems : [];

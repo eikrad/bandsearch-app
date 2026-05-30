@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type SearchHitInput } from "./candidateExtractor.js";
@@ -32,6 +32,7 @@ export type ResearchGraphInput = {
   preferenceContext: string;
   messages: ChatMessage[];
   mode: RecommendationMode;
+  obscurityTarget?: ObscurityTarget;
 };
 
 export type ResearchGraphState = {
@@ -39,6 +40,7 @@ export type ResearchGraphState = {
   preferenceContext: string;
   messages: ChatMessage[];
   mode: RecommendationMode;
+  obscurityTarget?: ObscurityTarget;
   searchPlan?: SearchPlan;
   braveHits: SearchHitInput[];
   searchCallsUsed: number;
@@ -54,6 +56,7 @@ const ResearchAnnotation = Annotation.Root({
   preferenceContext: Annotation<string>(),
   messages: Annotation<ChatMessage[]>(),
   mode: Annotation<RecommendationMode>(),
+  obscurityTarget: Annotation<ObscurityTarget | undefined>(),
   searchPlan: Annotation<SearchPlan | undefined>(),
   braveHits: Annotation<SearchHitInput[]>(),
   searchCallsUsed: Annotation<number>(),
@@ -125,6 +128,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         userQuery: state.userQuery,
         preferenceContext: state.preferenceContext,
         messages: state.messages,
+        obscurityTarget: state.obscurityTarget,
       });
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
@@ -208,6 +212,7 @@ export async function invokeResearchGraph(
     preferenceContext: input.preferenceContext,
     messages: input.messages,
     mode: input.mode,
+    obscurityTarget: input.obscurityTarget,
     braveHits: [],
     searchCallsUsed: 0,
     extractedCandidates: [],

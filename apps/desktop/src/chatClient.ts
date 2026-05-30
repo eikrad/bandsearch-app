@@ -56,6 +56,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       priorityContext = "",
       messages: unknown[] = [],
       selectedArtistIds: string[] = [],
+      obscurityTarget?: string,
     ) {
       const body: Record<string, unknown> = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
@@ -63,6 +64,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       if (Array.isArray(selectedArtistIds) && selectedArtistIds.length > 0) {
         body.selectedArtistIds = selectedArtistIds.filter((id) => typeof id === "string");
       }
+      if (obscurityTarget) body.obscurityTarget = obscurityTarget;
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: jsonHeaders(),
@@ -153,7 +155,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
 
 export type ChatClient = ReturnType<typeof createChatClient>;
 
-export type ChatMessage = { role: "user" | "assistant"; content: string; recommendations?: unknown[]; meta?: unknown };
+export type ChatMessage = { role: "user" | "assistant"; content: string; recommendations?: unknown[]; meta?: unknown; eventId?: string };
 export type ChatState = { messages: ChatMessage[]; savedBands: unknown[]; selectedArtistIds: string[]; currentSessionId: string | null };
 
 export function createInitialChatState(): Pick<ChatState, "messages"> {
@@ -182,11 +184,13 @@ export function applyAssistantMessage(state: ChatState, recommendationResponse: 
       lastUser && typeof lastUser.content === "string" ? lastUser.content : "",
     );
   }
+  const responseMeta = recommendationResponse.meta as Record<string, unknown> | undefined;
   const nextMessage: ChatMessage = {
     role: "assistant",
     content: assistantReply,
     recommendations: recommendationResponse.recommendations as unknown[] | undefined,
     meta: recommendationResponse.meta,
+    eventId: typeof responseMeta?.eventId === "string" ? responseMeta.eventId : undefined,
   };
   return { ...state, messages: [...state.messages, nextMessage] };
 }

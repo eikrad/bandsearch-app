@@ -326,3 +326,53 @@ test("POST /recommendations defaults to fresh mode", async () => {
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });
+
+test("POST /recommendations forwards valid obscurityTarget to the pipeline", async () => {
+  const calls = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
+        return {
+          recommendations: [{ artist: "Wolves in the Throne Room", why: "Niche", sourceSignals: [] }],
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        };
+      },
+    },
+    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+  });
+
+  const result = await makeRequest(app, "/recommendations", {
+    query: "atmospheric black metal",
+    obscurityTarget: "underground",
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].obscurityTarget, "underground");
+});
+
+test("POST /recommendations silently ignores invalid obscurityTarget", async () => {
+  const calls = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
+        return {
+          recommendations: [],
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        };
+      },
+    },
+    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+  });
+
+  const result = await makeRequest(app, "/recommendations", {
+    query: "dark ambient",
+    obscurityTarget: "mainstream",
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].obscurityTarget, undefined);
+});

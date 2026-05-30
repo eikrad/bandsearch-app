@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
+import type { ChatMessage, ObscurityTarget } from "../../../shared/schemas/src/contracts.js";
 import { createResearchRecommendationService } from "./agent/research/researchService.js";
 import type { RecommendationError } from "./recommendations.js";
 import {
@@ -144,12 +144,14 @@ export function createRecommendationPipeline({
         preferenceRepository,
       );
 
+      const obscurityTarget = request.obscurityTarget as ObscurityTarget | undefined;
       const { recommendations, assistantReply = "", pipelineDiagnostics } = await activeService.getRecommendations(
         String(request.query ?? ""),
         {
           mode,
           preferenceContext,
           messages: messages as ChatMessage[],
+          obscurityTarget,
         },
       );
 
