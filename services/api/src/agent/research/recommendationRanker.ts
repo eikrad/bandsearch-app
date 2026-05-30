@@ -5,7 +5,7 @@ import { validateRecommendationItem } from "../../../../../shared/schemas/src/co
 import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
-import type { VerifiedCandidate } from "./candidateVerifier.js";
+import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
 
 function pickReplyFromParsed(parsed: unknown): string {
   if (!parsed || typeof parsed !== "object") return "";
@@ -114,9 +114,10 @@ export function attachEvidenceCitationsToRecommendations(
   return out;
 }
 
-function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string {
+export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string {
+  const deduped = mergeVerifiedCandidates(candidates);
   const lines: string[] = [];
-  for (const c of candidates) {
+  for (const c of deduped) {
     const name = c.canonicalName || c.name;
     const bits = [
       `artist: ${name}`,
