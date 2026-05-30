@@ -41,7 +41,7 @@ function normalizeAnchors(anchors: string[]): Set<string> {
   return s;
 }
 
-function mergeCandidates(rows: ExtractedCandidate[]): ExtractedCandidate[] {
+export function mergeExtractedCandidates(rows: ExtractedCandidate[]): ExtractedCandidate[] {
   const map = new Map<string, ExtractedCandidate>();
   for (const row of rows) {
     const name = String(row.name || "").trim();
@@ -98,7 +98,7 @@ function extractFromParsed(parsed: unknown, anchors: Set<string>): ExtractedCand
     if (evidenceUrls.length === 0 && evidenceSnippets.length === 0) continue;
     out.push({ name, evidenceUrls, evidenceSnippets, sourceQueries });
   }
-  return mergeCandidates(out);
+  return mergeExtractedCandidates(out);
 }
 
 /** Test helper */
