@@ -1,0 +1,192 @@
+# Bandsearch Architecture
+
+## Overview
+
+Bandsearch is an AI-powered music recommendation system that discovers niche and lesser-known artists based on user taste. It is a monorepo containing a TypeScript/Express API backend, a Tauri+React desktop client, and shared validation contracts.
+
+---
+
+## Monorepo Structure
+
+```
+bandsearch-app/
+├── apps/
+│   └── desktop/         — Tauri + React desktop application (Rust + TypeScript)
+├── services/
+│   └── api/             — Express.js API server (TypeScript, Node.js 20+)
+├── shared/
+│   └── schemas/         — Shared TypeScript validation contracts
+├── docs/                — Architecture docs, ADRs, design specs, roadmap
+├── scripts/             — Build and lint utilities
+└── tests/               — End-to-end tests (Playwright)
+```
+
+---
+
+## API Server (`services/api`)
+
+The API is an Express.js application structured as follows:
+
+| Module | Responsibility |
+|--------|---------------|
+| `server.ts` | Entry point — validates env, initializes pipeline, starts HTTP listener |
+| `app.ts` | Express app factory — middleware (helmet, CORS, rate-limit, JSON logging) and route registration |
+| `routes/registerBandsearchRoutes.ts` | Mounts all route handlers (auth, recommendations, preferences, sessions, artist search) |
+| `recommendationPipeline.ts` | Lifecycle manager for the research graph — exposes `recommend()` and `whenReady()` |
+| `agent/research/researchService.ts` | Thin wrapper around `invokeResearchGraph()` with error handling |
+
+---
+
+## LangGraph Pipeline
+
+The core recommendation logic is a LangGraph state machine defined in `agent/research/researchGraph.ts`.
+
+### Graph State (`ResearchGraphState`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `userQuery` | `string` | Raw user input |
+| `preferenceContext` | `string` | Formatted saved-band context |
+| `messages` | `ChatMessage[]` | Conversation history |
+| `mode` | `RecommendationMode` | `fresh` or `preference-aware` |
+| `searchPlan` | `SearchPlan` | Planner output (anchor artists, style signals, queries) |
+| `braveHits` | `SearchHitInput[]` | Raw web search results |
+| `extractedCandidates` | `ExtractedCandidate[]` | Band names extracted from snippets |
+| `verifiedCandidates` | `VerifiedCandidate[]` | MusicBrainz-verified candidates with metadata |
+| `searchCallsUsed` | `number` | Brave API call counter |
+| `reflectionUsed` | `boolean` | Whether reflection ran |
+| `recommendations` | `unknown[]` | Final ranked output |
+| `assistantReply` | `string` | Optional conversational prose |
+
+### Main Graph
+
+```
+START → plan → brave_initial → extract → verify → reflect_if_needed → rank → END
+```
+
+| Node | Model / Service | Description |
+|------|----------------|-------------|
+| `plan` | Gemini | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
+| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
+| `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
+| `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
+| `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
+| `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
+
+### Reflection Subgraph (`reflectionSubgraph.ts`)
+
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to `maxRounds` (default 2) additional search-extract-verify cycles when the initial pass does not yield enough verified candidates.
+
+```
+START → assess →(sufficient or budget gone)─────────────────────────────► END
+              │(needs more)
+              ▼
+            search → extract_r → verify_r →(maxRounds or budget gone)► END
+                                     │(rounds remaining)
+                                     └──────────────────► assess
+```
+
+| Node | Model / Service | Description |
+|------|----------------|-------------|
+| `assess` | Gemini | Evaluates current results; generates `extraQueries` when gaps are found |
+| `search` | Brave Search API | Executes extra queries against remaining budget |
+| `extract_r` | Gemini | Re-extracts candidates from the expanded hit pool |
+| `verify_r` | MusicBrainz | Re-verifies new candidates; merges results |
+
+### Budget Management (`researchBudget.ts`)
+
+A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 25 s). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+
+---
+
+## External Integrations
+
+| Integration | Used in | Purpose |
+|-------------|---------|---------|
+| **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
+| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
+| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
+| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
+| **Anthropic Claude** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
+
+---
+
+## Evaluation Layer
+
+Defined in `docs/architecture/2026-05-29-eval-architecture.md`. An async, non-blocking quality-scoring system that runs after the HTTP response is sent.
+
+| Layer | Mechanism | Signals |
+|-------|-----------|---------|
+| **1 — Automatic metrics** | Runs immediately | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
+| **1.5 — Deterministic checks** | Runs immediately | Citation support rate (evidence URLs per recommendation), generic-why detection |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | Claude scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `ANTHROPIC_API_KEY` is set |
+| **3 — Human feedback** | Event-driven | Implicit saves + explicit one-tap batch reactions |
+
+Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
+
+---
+
+## Storage
+
+Two persistence domains, both backed by an abstract repository pattern to allow swapping backends without changing business logic.
+
+### Preferences Store (`PREFERENCE_STORE`)
+
+| Backend | Config | Use case |
+|---------|--------|---------|
+| `sqlite` (default) | `DATABASE_PATH` | Local, zero-config |
+| `memory` | — | Ephemeral / testing |
+| `postgres` | `DATABASE_URL` | Shared or hosted deployment |
+| `turso` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Cross-device cloud sync |
+
+Tables: `saved_bands` (rating, categories, notes), `artist_groups`
+
+### Session Store
+
+SQLite (`bandsearch.db`) with in-memory fallback. Tables: `chat_sessions`, `chat_messages`.
+
+### Auth Store
+
+Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with 30-day expiry; password recovery via single-use recovery codes.
+
+---
+
+## Authentication
+
+Three-tier progressive auth — determined by the number of registered users at runtime:
+
+| Users registered | Mode |
+|-----------------|------|
+| 0 | Pass-through — no auth checks |
+| 1 | Auto-attach — all requests associated with the single user |
+| ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
+
+---
+
+## Desktop Client (`apps/desktop`)
+
+- **Stack:** Tauri (Rust shell) + React (TypeScript)
+- **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
+- **Screens:** Welcome, Settings, Chat (responsive layout via `matchMedia`, breakpoint 767 px)
+- **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
+
+---
+
+## Prompt Guards
+
+`agent/promptGuards.ts` wraps all user-controlled content before sending to models — escapes special characters, formats preference context blocks, and structures conversation history to prevent prompt injection. See `docs/adr/0001-prompt-injection-guardrails.md` for the design rationale.
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
+| **Claude as optional async judge only** | Keeps Claude off the critical response path; eval can be added/removed without touching the graph |
+| **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
+| **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
+| **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
+| **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |
+| **Reflection as nested subgraph** | LangGraph subgraph encapsulates the reflection loop's own state and conditional edges cleanly, keeping the main graph linear |

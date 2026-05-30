@@ -26,6 +26,27 @@ export type MusicBrainzVerifyClient = {
   }>;
 };
 
+export function mergeVerifiedCandidates(candidates: VerifiedCandidate[]): VerifiedCandidate[] {
+  const map = new Map<string, VerifiedCandidate>();
+  for (const c of candidates) {
+    const key = c.mbid ?? (c.canonicalName ?? c.name).toLowerCase();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...c });
+    } else {
+      const winner = c.verified && !existing.verified ? c : existing;
+      const other = winner === c ? existing : c;
+      map.set(key, {
+        ...winner,
+        evidenceUrls: [...new Set([...winner.evidenceUrls, ...other.evidenceUrls])],
+        evidenceSnippets: [...new Set([...winner.evidenceSnippets, ...other.evidenceSnippets])],
+        sourceQueries: [...new Set([...winner.sourceQueries, ...other.sourceQueries])],
+      });
+    }
+  }
+  return [...map.values()];
+}
+
 export function normalizeAnchorSet(anchorArtists: string[]): Set<string> {
   const s = new Set<string>();
   for (const a of anchorArtists) {

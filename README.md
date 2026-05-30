@@ -9,6 +9,31 @@ Combines conversational AI with MusicBrainz metadata and preference memory.
 
 **Recommendation pipeline:** Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs one reflection round within a fixed Brave call budget, then ranks picks with evidence-grounded `why` text. `BRAVE_API_KEY` is required at startup — there is no fallback.
 
+```mermaid
+flowchart TD
+    START(["START"]) --> plan["plan\nWebSearchPlanner · Gemini"]
+    plan --> brave_initial["brave_initial\nBrave Search API"]
+    brave_initial --> extract["extract\nCandidateExtractor · Gemini"]
+    extract --> verify["verify\nMusicBrainz"]
+    verify --> reflect_if_needed
+
+    subgraph reflect_if_needed["reflect_if_needed — Reflection Subgraph"]
+        direction TD
+        subSTART(["START"]) --> assess["assess\nRecommendationReflector · Gemini"]
+        assess -- "sufficient or budget gone" --> subEND(["END"])
+        assess -- "needs more data" --> search["search\nBrave Search API"]
+        search --> extract_r["extract_r\nCandidateExtractor · Gemini"]
+        extract_r --> verify_r["verify_r\nMusicBrainz"]
+        verify_r -- "maxRounds or budget gone" --> subEND
+        verify_r -- "loop" --> assess
+    end
+
+    reflect_if_needed --> rank["rank\nRecommendationRanker · Gemini"]
+    rank --> END(["END"])
+```
+
+See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for a full description of all nodes, state fields, and design decisions.
+
 ---
 
 ## Quick Start

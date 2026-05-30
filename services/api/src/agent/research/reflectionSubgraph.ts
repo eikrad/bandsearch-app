@@ -1,7 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 
-import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
+import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
+import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationReflector } from "./recommendationReflector.js";
 import type { ResearchBudget } from "./researchBudget.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
@@ -24,6 +24,7 @@ export type ReflectionSubgraphDeps = {
 
 const ReflectionAnnotation = Annotation.Root({
   braveHits: Annotation<SearchHitInput[]>(),
+  newHits: Annotation<SearchHitInput[]>(),
   verifiedCandidates: Annotation<VerifiedCandidate[]>(),
   extractedCandidates: Annotation<ExtractedCandidate[]>(),
   searchCallsUsed: Annotation<number>(),
@@ -78,6 +79,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       });
       return {
         braveHits: [...state.braveHits, ...newHits],
+        newHits,
         searchCallsUsed: state.searchCallsUsed + calls,
       };
     })
@@ -87,21 +89,30 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         timeoutMs: deps.budget.allocate(12000),
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      const candidates = await extract({ hits: state.braveHits, anchorArtists: anchors });
-      return { extractedCandidates: candidates };
+      const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
+      return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
     })
     .addNode("verify_r", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(deps.mb, state.extractedCandidates, anchors);
-      const verifiedCount = verified.filter((v) => v.verified).length;
+      const seen = new Set<string>();
+      for (const v of state.verifiedCandidates) {
+        seen.add(v.name.toLowerCase());
+        if (v.canonicalName) seen.add(v.canonicalName.toLowerCase());
+      }
+      const toVerify = state.extractedCandidates.filter((c) => !seen.has(c.name.toLowerCase()));
+      const fresh = toVerify.length > 0
+        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors)
+        : [];
+      const merged = mergeVerifiedCandidates([...state.verifiedCandidates, ...fresh]);
       const round = (state.roundsCompleted ?? 0) + 1;
       log("info", "research_verification_done", {
         phase: "reflection",
         round,
-        verified: verifiedCount,
-        total: verified.length,
+        verified: merged.filter((v) => v.verified).length,
+        total: merged.length,
+        newlyVerified: fresh.length,
       });
-      return { verifiedCandidates: verified, roundsCompleted: round };
+      return { verifiedCandidates: merged, roundsCompleted: round };
     })
     .addEdge(START, "assess")
     .addConditionalEdges("assess", (state) =>
