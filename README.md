@@ -7,7 +7,7 @@
 AI-powered music recommendations for niche and lesser-known artists.
 Combines conversational AI with MusicBrainz metadata and preference memory.
 
-**Recommendation pipeline:** Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs one reflection round within a fixed Brave call budget, then ranks picks with evidence-grounded `why` text. `BRAVE_API_KEY` is required at startup — there is no fallback.
+**Recommendation pipeline:** Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs up to two reflection rounds (each processes only the new hits from that round and accumulates candidates across rounds), then ranks picks with evidence-grounded `why` text. `BRAVE_API_KEY` is required at startup — there is no fallback.
 
 ```mermaid
 flowchart TD
@@ -310,7 +310,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
 shared/schemas/   — shared validation contracts (TypeScript contracts.ts + tests)
-docs/             — roadmap and design specs
+docs/             — architecture docs, ADRs, design specs, roadmap
 ```
 
 In development (browser or embedded webview), the chat UI chooses **mobile vs desktop layout** from window width (`matchMedia`, max-width **767px**), so you do not need to pass a `viewport` option manually when resizing the window.
@@ -326,6 +326,15 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 ---
 
 ## Maintenance notes
+
+**2026-05-30 — Reflection subgraph fixes + architecture docs**
+
+### Changes
+
+- **Research pipeline**: Fixed three bugs in the reflection subgraph — `extract_r` now processes only the new hits from each round (not all accumulated hits), `verify_r` skips already-verified candidates and merges results across rounds instead of overwriting, and `formatEvidenceForPrompt` defensively deduplicates candidates before building the LLM evidence block.
+- **Docs**: Added `docs/architecture/ARCHITECTURE.md` with a full description of the pipeline, state fields, integrations, storage, auth, and key design decisions. Added a Mermaid LangGraph diagram to `README.md`.
+
+---
 
 **2026-05-28 — Phase 7 Windows support**
 
