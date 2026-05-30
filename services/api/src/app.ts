@@ -11,6 +11,7 @@ import { createNoOpEvalRepository, createInMemoryEvalRepository } from "./eval/e
 import type { EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
+import { createLastFmClient } from "./eval/lastFmClient.js";
 
 // ESM/CJS interop — these modules may wrap their export in a .default in some build environments
 const helmet = ((helmetLib as unknown as { default?: typeof helmetLib }).default) ?? helmetLib;
@@ -170,13 +171,21 @@ export function createApp({
     ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
     : null;
 
-  const resolvedEvalRepository = evalRepository ?? createNoOpEvalRepository();
-  const resolvedEvalWorker: EvalWorker = evalWorker ?? (() => {
-    if (runtimeConfig.preferenceStore === "memory") {
-      return createEvalWorker({ evalRepository: createInMemoryEvalRepository() });
-    }
-    return createNoOpEvalWorker();
-  })();
+  // Eval repository and worker share a single store so the /eval routes read
+  // exactly what the worker writes. When no store is injected we keep events
+  // in memory while the dashboard is enabled, otherwise everything is a no-op.
+  const resolvedEvalRepository: EvalRepository =
+    evalRepository ?? (runtimeConfig.evalDashboardEnabled ? createInMemoryEvalRepository() : createNoOpEvalRepository());
+  const resolvedEvalWorker: EvalWorker =
+    evalWorker ??
+    (runtimeConfig.evalDashboardEnabled
+      ? createEvalWorker({
+          evalRepository: resolvedEvalRepository,
+          lastFmClient: runtimeConfig.lastFmApiKey
+            ? createLastFmClient({ apiKey: runtimeConfig.lastFmApiKey })
+            : undefined,
+        })
+      : createNoOpEvalWorker());
 
   registerBandsearchRoutes(app, {
     appVersion,

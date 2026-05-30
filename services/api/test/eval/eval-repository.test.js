@@ -75,3 +75,47 @@ test("createNoOpEvalRepository: listEvents returns empty array", async () => {
   const events = await repo.listEvents();
   assert.deepEqual(events, []);
 });
+
+test("createInMemoryEvalRepository: upsertBandEvalScore stores and lists scores per event", async () => {
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const eventId = await repo.logEvent(sampleEvent);
+
+  await repo.upsertBandEvalScore({ eventId, bandName: "Lustmord", listeners: 30000, obscurityTier: "cult" });
+  await repo.upsertBandEvalScore({ eventId, bandName: "Raison d'être", listeners: 1500, obscurityTier: "obscure" });
+
+  const scores = await repo.listBandEvalScores(eventId);
+  assert.equal(scores.length, 2);
+  const lustmord = scores.find((s) => s.bandName === "Lustmord");
+  assert.equal(lustmord.listeners, 30000);
+  assert.equal(lustmord.obscurityTier, "cult");
+});
+
+test("createInMemoryEvalRepository: upsertBandEvalScore merges fields for the same (event, band)", async () => {
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const eventId = await repo.logEvent(sampleEvent);
+
+  await repo.upsertBandEvalScore({ eventId, bandName: "Lustmord", listeners: 30000, obscurityTier: "cult" });
+  await repo.upsertBandEvalScore({ eventId, bandName: "Lustmord", sourceQuality: "high" });
+
+  const scores = await repo.listBandEvalScores(eventId);
+  assert.equal(scores.length, 1);
+  assert.equal(scores[0].listeners, 30000);
+  assert.equal(scores[0].obscurityTier, "cult");
+  assert.equal(scores[0].sourceQuality, "high");
+});
+
+test("createInMemoryEvalRepository: listBandEvalScores returns empty for unknown event", async () => {
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const scores = await repo.listBandEvalScores("does-not-exist");
+  assert.deepEqual(scores, []);
+});
+
+test("createNoOpEvalRepository: band score methods are safe no-ops", async () => {
+  const { createNoOpEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createNoOpEvalRepository();
+  await repo.upsertBandEvalScore({ eventId: "x", bandName: "y" });
+  assert.deepEqual(await repo.listBandEvalScores("x"), []);
+});
