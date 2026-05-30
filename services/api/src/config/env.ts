@@ -92,5 +92,6 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     tursoDatabaseUrl,
     tursoAuthToken,
     jwtSecret,
+    evalDashboardEnabled: normalizeBoolean(env.EVAL_DASHBOARD_ENABLED, false),
   };
 }

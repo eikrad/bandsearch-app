@@ -33,9 +33,15 @@ test("validateRuntimeEnv returns defaults for minimal env", () => {
   assert.equal(config.musicBrainzTimeoutMs, 5000);
   assert.equal(config.musicBrainzRetries, 1);
   assert.equal(config.corsOrigin, "*");
+  assert.equal(config.evalDashboardEnabled, false);
   // classic-only fields are gone
   assert.equal("recommendationPipeline" in config, false);
   assert.equal("recommendationTimeoutMs" in config, false);
+});
+
+test("validateRuntimeEnv enables eval dashboard when EVAL_DASHBOARD_ENABLED=true", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED, EVAL_DASHBOARD_ENABLED: "true" });
+  assert.equal(config.evalDashboardEnabled, true);
 });
 
 test("validateRuntimeEnv pipelineReadyTimeoutMs defaults to 45000", () => {

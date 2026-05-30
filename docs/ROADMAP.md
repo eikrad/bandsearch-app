@@ -85,7 +85,7 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 **Implementation steps (in order, each independently deployable):**
 
 - [x] Step 1: `recommendation_events` logging — persist every recommendation request with query, obscurity target, verified count, reflection status, `pipeline_diagnostics_json`, and pipeline versioning (`pipeline_version`, prompt hashes, model IDs) ✓ Done
-- [ ] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent
+- [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [ ] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log
 - [ ] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed
 - [ ] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `ANTHROPIC_API_KEY`; silently skipped if absent
