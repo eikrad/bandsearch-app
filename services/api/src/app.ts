@@ -7,6 +7,10 @@ import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
 import type { UserRepository } from "./auth/userRepository.js";
 import type { PreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createNoOpEvalRepository, createInMemoryEvalRepository } from "./eval/evalRepository.js";
+import type { EvalRepository } from "./eval/evalRepository.js";
+import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
+import type { EvalWorker } from "./eval/evalWorker.js";
 
 // ESM/CJS interop — these modules may wrap their export in a .default in some build environments
 const helmet = ((helmetLib as unknown as { default?: typeof helmetLib }).default) ?? helmetLib;
@@ -42,6 +46,7 @@ type AppRuntimeConfig = {
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
   jwtSecret?: string;
+  evalDashboardEnabled?: boolean;
 };
 
 type CreateAppOptions = {
@@ -54,6 +59,8 @@ type CreateAppOptions = {
   musicBrainzClient?: BandsearchRouteContext["resolvedMusicBrainzClient"];
   artistImageClient?: BandsearchRouteContext["resolvedArtistImageClient"];
   chatSessionRepository?: BandsearchRouteContext["resolvedChatSessionRepository"];
+  evalRepository?: EvalRepository;
+  evalWorker?: EvalWorker;
   runtimeConfig?: AppRuntimeConfig;
   logger?: BandsearchRouteContext["logger"];
   createTursoClient?: BandsearchRouteContext["createTursoClient"];
@@ -66,6 +73,8 @@ export function createApp({
   musicBrainzClient,
   artistImageClient,
   chatSessionRepository,
+  evalRepository,
+  evalWorker,
   runtimeConfig = {},
   logger,
   createTursoClient,
@@ -161,6 +170,14 @@ export function createApp({
     ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
     : null;
 
+  const resolvedEvalRepository = evalRepository ?? createNoOpEvalRepository();
+  const resolvedEvalWorker: EvalWorker = evalWorker ?? (() => {
+    if (runtimeConfig.preferenceStore === "memory") {
+      return createEvalWorker({ evalRepository: createInMemoryEvalRepository() });
+    }
+    return createNoOpEvalWorker();
+  })();
+
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
@@ -177,6 +194,9 @@ export function createApp({
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
         ? () => recommendationPipeline.getReadinessSnapshot!()
         : null,
+    evalWorker: resolvedEvalWorker,
+    evalRepository: resolvedEvalRepository,
+    evalDashboardEnabled: runtimeConfig.evalDashboardEnabled ?? false,
   });
 
   app.use((req: Request, res: Response) => sendError(res, 404, "not_found", `route not found: ${req.path}`));

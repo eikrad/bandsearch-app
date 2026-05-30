@@ -189,10 +189,18 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   return graph.compile();
 }
 
+export type PipelineDiagnostics = {
+  braveHitCount: number;
+  extractedCandidateCount: number;
+  verifiedCount: number;
+  reflectionTriggered: boolean;
+  searchBudgetUsed: number;
+};
+
 export async function invokeResearchGraph(
   deps: ResearchGraphDeps,
   input: ResearchGraphInput,
-): Promise<{ recommendations: unknown[]; assistantReply: string }> {
+): Promise<{ recommendations: unknown[]; assistantReply: string; pipelineDiagnostics: PipelineDiagnostics }> {
   const budget = createResearchBudget(deps.researchTimeoutMs);
   const graph = await buildResearchGraph(deps, budget);
   const result = await graph.invoke({
@@ -209,8 +217,19 @@ export async function invokeResearchGraph(
     assistantReply: "",
   });
 
+  const pipelineDiagnostics: PipelineDiagnostics = {
+    braveHitCount: Array.isArray(result.braveHits) ? result.braveHits.length : 0,
+    extractedCandidateCount: Array.isArray(result.extractedCandidates) ? result.extractedCandidates.length : 0,
+    verifiedCount: Array.isArray(result.verifiedCandidates)
+      ? result.verifiedCandidates.filter((v: VerifiedCandidate) => v.verified).length
+      : 0,
+    reflectionTriggered: Boolean(result.reflectionUsed),
+    searchBudgetUsed: typeof result.searchCallsUsed === "number" ? result.searchCallsUsed : 0,
+  };
+
   return {
     recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
     assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
+    pipelineDiagnostics,
   };
 }
