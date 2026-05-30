@@ -89,9 +89,9 @@ START → assess →(sufficient or budget gone)───────────
 | Node | Model / Service | Description |
 |------|----------------|-------------|
 | `assess` | Gemini | Evaluates current results; generates `extraQueries` when gaps are found |
-| `search` | Brave Search API | Executes extra queries against remaining budget |
-| `extract_r` | Gemini | Re-extracts candidates from the expanded hit pool |
-| `verify_r` | MusicBrainz | Re-verifies new candidates; merges results |
+| `search` | Brave Search API | Executes extra queries against remaining budget; stores new hits in `newHits` separately from the accumulated `braveHits` |
+| `extract_r` | Gemini | Extracts candidates from `newHits` **only** (not all accumulated hits); merges result into existing `extractedCandidates` via `mergeExtractedCandidates` |
+| `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges into existing set via `mergeVerifiedCandidates` — preserves all prior-round results |
 
 ### Budget Management (`researchBudget.ts`)
 
@@ -190,3 +190,5 @@ Three-tier progressive auth — determined by the number of registered users at 
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
 | **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |
 | **Reflection as nested subgraph** | LangGraph subgraph encapsulates the reflection loop's own state and conditional edges cleanly, keeping the main graph linear |
+| **Symmetric merge helpers** | `mergeExtractedCandidates` and `mergeVerifiedCandidates` follow the same contract (flat array → deduped array); reused across reflection rounds and as a defensive layer inside `formatEvidenceForPrompt` |
+| **Defensive ranker dedup** | `formatEvidenceForPrompt` deduplicates `verifiedCandidates` by `mbid › canonicalName › name` before building the LLM evidence block, regardless of upstream state |
