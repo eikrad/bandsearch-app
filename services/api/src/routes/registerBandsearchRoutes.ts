@@ -5,6 +5,10 @@ import { validateRecommendationRequest } from "../recommendations.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
+import { registerEvalRoutes } from "../eval/evalRoutes.js";
+import { createNoOpEvalRepository } from "../eval/evalRepository.js";
+import type { EvalWorker } from "../eval/evalWorker.js";
+import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -56,6 +60,9 @@ export type BandsearchRouteContext = {
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: { warn: (obj: Record<string, unknown>) => void };
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
+  evalWorker?: EvalWorker;
+  evalRepository?: EvalRepository;
+  evalDashboardEnabled?: boolean;
   resolvedAuthService?: {
     register: (input: { email: string; displayName: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; recoveryCode?: string; error?: string }>;
     login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
@@ -78,6 +85,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     getRecommendationReadiness,
     logger,
     createTursoClient,
+    evalWorker,
+    evalRepository,
+    evalDashboardEnabled = false,
     resolvedAuthService,
     authMiddleware,
   } = ctx;
@@ -217,10 +227,29 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         messages: validation.messages,
         userId: req.userId,
       });
+
+      const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
+      if (evalWorker) {
+        void evalWorker.processEvent({
+          query: validation.query,
+          mode: validation.mode,
+          userId: req.userId,
+          pipelineVersion: appVersion,
+          pipelineDiagnostics: (pipelineDiagnostics as PipelineDiagnostics | undefined) ?? {
+            braveHitCount: 0,
+            extractedCandidateCount: 0,
+            verifiedCount: 0,
+            reflectionTriggered: false,
+            searchBudgetUsed: 0,
+          },
+          recommendations: pipelineResult.recommendations,
+        });
+      }
+
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: pipelineResult.meta,
+        meta: publicMeta,
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
@@ -378,5 +407,10 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       const message = err instanceof Error ? err.message : "connection failed";
       return res.status(200).json({ ok: false, error: message });
     }
+  });
+
+  registerEvalRoutes(app, {
+    evalRepository: evalRepository ?? createNoOpEvalRepository(),
+    evalDashboardEnabled,
   });
 }

@@ -24,7 +24,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
       const preferenceContext = mode === "preference-aware" ? options.preferenceContext || "" : "";
       const messages = Array.isArray(options.messages) ? options.messages : [];
 
-      const { recommendations: rawItems, assistantReply } = await invokeResearchGraph(graphDeps, {
+      const { recommendations: rawItems, assistantReply, pipelineDiagnostics } = await invokeResearchGraph(graphDeps, {
         userQuery: query,
         preferenceContext,
         messages,
@@ -52,6 +52,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
       return {
         recommendations,
         assistantReply: typeof assistantReply === "string" ? assistantReply : "",
+        pipelineDiagnostics,
       };
     },
   };

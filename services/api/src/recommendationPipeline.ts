@@ -144,7 +144,7 @@ export function createRecommendationPipeline({
         preferenceRepository,
       );
 
-      const { recommendations, assistantReply = "" } = await activeService.getRecommendations(
+      const { recommendations, assistantReply = "", pipelineDiagnostics } = await activeService.getRecommendations(
         String(request.query ?? ""),
         {
           mode,
@@ -159,6 +159,7 @@ export function createRecommendationPipeline({
         meta: {
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,
+          pipelineDiagnostics: pipelineDiagnostics ?? null,
         },
       };
     },
