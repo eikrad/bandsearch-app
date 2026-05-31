@@ -1,9 +1,10 @@
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph } from "@langchain/langgraph";
+import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
-import { createCandidateExtractor, type SearchHitInput } from "./candidateExtractor.js";
+import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
@@ -34,41 +35,25 @@ export type ResearchGraphInput = {
   mode: RecommendationMode;
 };
 
-export type ResearchGraphState = {
-  userQuery: string;
-  preferenceContext: string;
-  messages: ChatMessage[];
-  mode: RecommendationMode;
-  searchPlan?: SearchPlan;
-  braveHits: SearchHitInput[];
-  newHits: SearchHitInput[];
-  searchCallsUsed: number;
-  extractedCandidates: import("./candidateExtractor.js").ExtractedCandidate[];
-  verifiedCandidates: VerifiedCandidate[];
-  reflectionUsed: boolean;
-  roundsCompleted: number;
-  nextExtraQueries: string[];
-  recommendations: unknown[];
-  assistantReply: string;
-};
-
-const ResearchAnnotation = Annotation.Root({
-  userQuery: Annotation<string>(),
-  preferenceContext: Annotation<string>(),
-  messages: Annotation<ChatMessage[]>(),
-  mode: Annotation<RecommendationMode>(),
-  searchPlan: Annotation<SearchPlan | undefined>(),
-  braveHits: Annotation<SearchHitInput[]>(),
-  newHits: Annotation<SearchHitInput[]>(),
-  searchCallsUsed: Annotation<number>(),
-  extractedCandidates: Annotation<import("./candidateExtractor.js").ExtractedCandidate[]>(),
-  verifiedCandidates: Annotation<VerifiedCandidate[]>(),
-  reflectionUsed: Annotation<boolean>(),
-  roundsCompleted: Annotation<number>(),
-  nextExtraQueries: Annotation<string[]>(),
-  recommendations: Annotation<unknown[]>(),
-  assistantReply: Annotation<string>(),
+export const RESEARCH_SCHEMA = z.object({
+  userQuery: z.string(),
+  preferenceContext: z.string(),
+  messages: z.custom<ChatMessage[]>(),
+  mode: z.custom<RecommendationMode>(),
+  searchPlan: z.custom<SearchPlan | undefined>(),
+  braveHits: z.custom<SearchHitInput[]>(),
+  newHits: z.custom<SearchHitInput[]>(),
+  searchCallsUsed: z.number(),
+  extractedCandidates: z.custom<ExtractedCandidate[]>(),
+  verifiedCandidates: z.custom<VerifiedCandidate[]>(),
+  reflectionUsed: z.boolean(),
+  roundsCompleted: z.number(),
+  nextExtraQueries: z.array(z.string()),
+  recommendations: z.custom<unknown[]>(),
+  assistantReply: z.string(),
 });
+
+export type ResearchGraphState = z.infer<typeof RESEARCH_SCHEMA>;
 
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
@@ -121,7 +106,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     onLog: deps.onLog,
   });
 
-  const graph = new StateGraph(ResearchAnnotation)
+  const graph = new StateGraph(RESEARCH_SCHEMA)
     .addNode("plan", async (state) => {
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
