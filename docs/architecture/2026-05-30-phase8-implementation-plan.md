@@ -24,7 +24,7 @@ critical path.
 | 8.2 — Last.fm obscurity scoring | ✓ Done |
 | 8.3 — Obscurity target UI + API threading | ✓ Done |
 | 8.4 — Search source quality + evidence checks | ✓ Done |
-| 8.5 — LLM-as-judge (batched) | — |
+| 8.5 — LLM-as-judge (batched) | ✓ Done |
 | 8.5b — Judge calibration | — |
 | 8.6 — Baseline snapshots + eval API | — |
 | 8.7 — Developer dashboard | — |

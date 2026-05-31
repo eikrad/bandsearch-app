@@ -204,3 +204,57 @@ test("createEvalWorker: scoreHeuristics does not throw when why/sourceSignals ar
 
   await assert.doesNotReject(() => worker.processEvent(ctxWithMissingFields));
 });
+
+// ─── Phase 8.5: judge integration ──────────────────────────────────────────
+
+test("createEvalWorker: processEvent calls judgeWorker.judgeEvent with enriched band data", async () => {
+  const { createEvalWorker } = require("../../src/eval/evalWorker");
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const judgeEventCalls = [];
+  const judgeWorker = {
+    judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
+  };
+
+  const worker = createEvalWorker({ evalRepository: repo, judgeWorker });
+  await worker.processEvent(heuristicsCtx);
+
+  assert.equal(judgeEventCalls.length, 1, "judgeEvent should be called once");
+  assert.ok(typeof judgeEventCalls[0].eventId === "string", "eventId should be a string");
+  assert.equal(judgeEventCalls[0].bands.length, 2, "both bands should be passed to judge");
+  assert.ok(judgeEventCalls[0].bands.every((b) => typeof b.bandName === "string"), "each entry has bandName");
+  assert.ok(judgeEventCalls[0].bands.every((b) => b.query === heuristicsCtx.query), "query is threaded");
+});
+
+test("createEvalWorker: processEvent does not call judgeEvent when no judgeWorker provided", async () => {
+  const { createEvalWorker } = require("../../src/eval/evalWorker");
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const worker = createEvalWorker({ evalRepository: repo });
+
+  await assert.doesNotReject(() => worker.processEvent(heuristicsCtx));
+  const events = await repo.listEvents();
+  assert.equal(events.length, 1, "event still logged without judge");
+});
+
+test("createEvalWorker: processEvent passes listener and heuristic data to judgeWorker", async () => {
+  const { createEvalWorker } = require("../../src/eval/evalWorker");
+  const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
+  const repo = createInMemoryEvalRepository();
+  const lastFmClient = {
+    getListenerCount: async (name) => (name === "Wolves in the Throne Room" ? 80000 : 600000),
+  };
+  const judgeEventCalls = [];
+  const judgeWorker = {
+    judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
+  };
+
+  const worker = createEvalWorker({ evalRepository: repo, lastFmClient, judgeWorker });
+  await worker.processEvent(heuristicsCtx);
+
+  const wittr = judgeEventCalls[0].bands.find((b) => b.bandName === "Wolves in the Throne Room");
+  assert.ok(wittr, "WITTR should be in judge inputs");
+  assert.equal(wittr.listeners, 80000, "listeners enriched from Last.fm scoring");
+  assert.ok(typeof wittr.citationSupportRate === "number", "citationSupportRate populated from heuristics");
+  assert.ok(typeof wittr.genericWhyFlag === "boolean", "genericWhyFlag populated from heuristics");
+});

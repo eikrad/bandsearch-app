@@ -1,5 +1,6 @@
 import type { EvalRepository, PipelineDiagnostics } from "./evalRepository.js";
 import type { LastFmClient } from "./lastFmClient.js";
+import type { JudgeWorker, JudgeInput } from "./judgeWorker.js";
 import { classifyObscurityTier } from "./obscurityScorer.js";
 import { scoreSearchSources, ratioToSourceQuality } from "./searchSourceScorer.js";
 import { checkEvidence } from "./evidenceChecker.js";
@@ -52,9 +53,11 @@ function extractRecommendations(recommendations: unknown[]): RecommendationItem[
 export function createEvalWorker({
   evalRepository,
   lastFmClient,
+  judgeWorker,
 }: {
   evalRepository: EvalRepository;
   lastFmClient?: LastFmClient;
+  judgeWorker?: JudgeWorker;
 }): EvalWorker {
   async function scoreObscurity(eventId: string, recs: RecommendationItem[]) {
     if (!lastFmClient) return;
@@ -105,7 +108,24 @@ export function createEvalWorker({
 
       await scoreObscurity(eventId, recs);
       await scoreHeuristics(eventId, recs);
-      // Phase 8.5: judgeEvent
+
+      if (judgeWorker && recs.length > 0) {
+        const bandScores = await evalRepository.listBandEvalScores(eventId);
+        const judgeInputs: JudgeInput[] = recs.map((r) => {
+          const dbScore = bandScores.find((s) => s.bandName === r.artist);
+          return {
+            bandName: r.artist,
+            query: ctx.query,
+            obscurityTarget: ctx.obscurityTarget,
+            why: r.why,
+            sourceSignals: r.sourceSignals,
+            listeners: dbScore?.listeners,
+            citationSupportRate: dbScore?.citationSupportRate,
+            genericWhyFlag: dbScore?.genericWhyFlag,
+          };
+        });
+        await judgeWorker.judgeEvent(eventId, judgeInputs);
+      }
     },
   };
 }
