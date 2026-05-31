@@ -325,44 +325,6 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 
 ---
 
-## Maintenance notes
-
-**2026-05-30 — Reflection subgraph fixes + architecture docs**
-
-### Changes
-
-- **Research pipeline**: Fixed three bugs in the reflection subgraph — `extract_r` now processes only the new hits from each round (not all accumulated hits), `verify_r` skips already-verified candidates and merges results across rounds instead of overwriting, and `formatEvidenceForPrompt` defensively deduplicates candidates before building the LLM evidence block.
-- **Docs**: Added `docs/architecture/ARCHITECTURE.md` with a full description of the pipeline, state fields, integrations, storage, auth, and key design decisions. Added a Mermaid LangGraph diagram to `README.md`.
-
----
-
-**2026-05-28 — Phase 7 Windows support**
-
-### Changes
-
-- **CI**: Added `windows-latest` runner to the CI matrix alongside `ubuntu-latest`. `fail-fast: false` keeps both legs visible if one fails. All `run:` steps use `shell: bash` so scripts work identically on both platforms.
-- **Tauri sidecar**: `api_spawn_args` now probes for a Tauri-bundled Node sidecar next to the executable (`node-<target-triple>[.exe]`) via `env!("TARGET")` and falls back to system `node` in dev/CI. `externalBin: ["binaries/node"]` added to `tauri.conf.json`.
-- **Docs**: `apps/desktop/src-tauri/binaries/README` added — explains which Node binary to place there and where to download it before running `tauri build`.
-
----
-
-**2026-05-27 — Weekly maintenance**
-
-### Fixes applied
-
-- **CI**: `npm install` changed to `npm ci` for reproducible, locked installs in CI environments.
-- **CI**: Action versions bumped to current stable — `checkout@v6`, `setup-node@v6`, `setup-python@v6`.
-
-### Major upgrades available (not auto-applied — require testing)
-
-| Package | In use | Latest | Notes |
-|---|---|---|---|
-| `eslint` / `@eslint/js` | `^9.x` | `10.x` | Flat-config updates; review eslint v10 migration guide |
-| `globals` | `^16.5.0` | `17.x` | Breaking changes in the globals API |
-| `typescript` | `^5.9.x` | `6.x` | New type-system features; some breaking changes |
-
----
-
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
