@@ -1,0 +1,242 @@
+[
+  {
+    "id": "ut-01",
+    "description": "fabricated URL in why-text not present in sourceSignals → evidenceQuality should be low",
+    "input": {
+      "bandName": "Phantom Band",
+      "query": "post-rock instrumental",
+      "obscurityTarget": "underground",
+      "why": "Reviewed in depth at https://fake-blog-that-was-not-searched.com/phantom-band",
+      "sourceSignals": ["https://bandcamp.com/realsite"],
+      "listeners": 15000,
+      "citationSupportRate": 0.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "low" }
+  },
+  {
+    "id": "ut-02",
+    "description": "generic boilerplate why-text with no specifics → evidenceQuality should be low",
+    "input": {
+      "bandName": "Generic Doom Band",
+      "query": "funeral doom metal",
+      "obscurityTarget": "cult",
+      "why": "A band with unique sound and wide influences that many listeners enjoy across the globe.",
+      "sourceSignals": [],
+      "listeners": 50000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": true
+    },
+    "expectedDirection": { "evidenceQuality": "low" }
+  },
+  {
+    "id": "ut-03",
+    "description": "specific cited why-text with URLs present in signals → evidenceQuality should be high",
+    "input": {
+      "bandName": "Verdant Rituals",
+      "query": "blackgaze shoegaze metal",
+      "obscurityTarget": "underground",
+      "why": "Finnish blackgaze duo blending Alcest-style reverb with Nordic folk. See https://bandcamp.com/verdantrituals and https://metalinjection.net/verdantrituals.",
+      "sourceSignals": ["https://bandcamp.com/verdantrituals", "https://metalinjection.net/verdantrituals"],
+      "listeners": 3000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "high" }
+  },
+  {
+    "id": "ut-04",
+    "description": "very mainstream band (millions of listeners) for 'obscure' target → obscurityFit should be low",
+    "input": {
+      "bandName": "Metallica",
+      "query": "heavy metal",
+      "obscurityTarget": "obscure",
+      "why": "Thrash metal legends from San Francisco. Documented at https://metallica.com and https://allmusic.com/metallica.",
+      "sourceSignals": ["https://metallica.com", "https://allmusic.com/metallica"],
+      "listeners": 8000000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "low" }
+  },
+  {
+    "id": "ut-05",
+    "description": "very obscure band (<1k listeners) for 'obscure' target → obscurityFit should be high",
+    "input": {
+      "bandName": "Aortic Void",
+      "query": "black metal raw underground",
+      "obscurityTarget": "obscure",
+      "why": "Romanian raw black metal project releasing self-distributed cassettes. Only available via https://discogs.com/aorticvoid.",
+      "sourceSignals": ["https://discogs.com/aorticvoid"],
+      "listeners": 200,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "high" }
+  },
+  {
+    "id": "ut-06",
+    "description": "underground band (~30k listeners) for 'underground' target → obscurityFit should be high",
+    "input": {
+      "bandName": "Panopticon",
+      "query": "atmospheric black metal folk",
+      "obscurityTarget": "underground",
+      "why": "Kentucky black metal project by Austin Lunn weaving Appalachian folk with black metal. Covered at https://bandcamp.com/panopticon.",
+      "sourceSignals": ["https://bandcamp.com/panopticon"],
+      "listeners": 30000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "high" }
+  },
+  {
+    "id": "ut-07",
+    "description": "mainstream band (600k listeners) for 'underground' target → obscurityFit should be low",
+    "input": {
+      "bandName": "Deafheaven",
+      "query": "blackgaze black metal",
+      "obscurityTarget": "underground",
+      "why": "San Francisco blackgaze pioneers with wide critical acclaim. Reviewed at https://pitchfork.com/deafheaven.",
+      "sourceSignals": ["https://pitchfork.com/deafheaven"],
+      "listeners": 600000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "low" }
+  },
+  {
+    "id": "ut-08",
+    "description": "mix of generic phrases and no URLs in why → evidenceQuality should be low",
+    "input": {
+      "bandName": "Misty Void",
+      "query": "doom metal melancholic",
+      "obscurityTarget": "cult",
+      "why": "Known for their unique sound and wide influences. They are considered pioneers in the genre by many fans.",
+      "sourceSignals": ["https://bandcamp.com/mistyvoid"],
+      "listeners": 60000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": true
+    },
+    "expectedDirection": { "evidenceQuality": "low" }
+  },
+  {
+    "id": "ut-09",
+    "description": "cult-range band (~300k listeners) for 'cult' target → obscurityFit should be high",
+    "input": {
+      "bandName": "Ahab",
+      "query": "funeral doom nautical themed",
+      "obscurityTarget": "cult",
+      "why": "German funeral doom band with nautical Moby Dick concept albums. Documented at https://encyclopaedia-metallum.com/ahab and https://rateyourmusic.com/ahab.",
+      "sourceSignals": ["https://encyclopaedia-metallum.com/ahab", "https://rateyourmusic.com/ahab"],
+      "listeners": 100000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "high" }
+  },
+  {
+    "id": "ut-10",
+    "description": "cited why-text + high citation support rate → evidenceQuality should be high",
+    "input": {
+      "bandName": "Wiegedood",
+      "query": "post-black metal",
+      "obscurityTarget": "underground",
+      "why": "Belgian post-black metal trio from the Consouling Sounds label. See https://consouling.be/wiegedood and https://bandcamp.com/wiegedood.",
+      "sourceSignals": ["https://consouling.be/wiegedood", "https://bandcamp.com/wiegedood"],
+      "listeners": 20000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "high" }
+  },
+  {
+    "id": "ut-11",
+    "description": "no URLs in why but also no generic flags → evidenceQuality borderline, at least not clearly low",
+    "input": {
+      "bandName": "Serpent Column",
+      "query": "dissonant black metal",
+      "obscurityTarget": "obscure",
+      "why": "Anonymous US project releasing dense, dissonant black metal with labyrinthine song structures on Mystískaos and Gilead Media.",
+      "sourceSignals": ["https://gileadmedia.net/serpentcolumn"],
+      "listeners": 2000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "high" }
+  },
+  {
+    "id": "ut-12",
+    "description": "band with 0 listeners for 'obscure' target → obscurityFit should be high",
+    "input": {
+      "bandName": "Void Séance",
+      "query": "ambient black metal",
+      "obscurityTarget": "obscure",
+      "why": "Brand-new ambient black metal project with no streaming presence, releasing only physical tapes.",
+      "sourceSignals": [],
+      "listeners": 0,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "high" }
+  },
+  {
+    "id": "ut-13",
+    "description": "genre mismatch: jazz band recommended for death metal query → relevance should be low",
+    "input": {
+      "bandName": "Miles Davis",
+      "query": "brutal death metal technical",
+      "obscurityTarget": null,
+      "why": "Jazz legend whose modal and fusion works are foundational. Documented at https://allmusic.com/milesdavis.",
+      "sourceSignals": ["https://allmusic.com/milesdavis"],
+      "listeners": 2000000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "relevance": "low", "obscurityFit": "low" }
+  },
+  {
+    "id": "ut-14",
+    "description": "genre match with specific why → relevance should be high",
+    "input": {
+      "bandName": "Tribulation",
+      "query": "gothic death metal dark rock",
+      "obscurityTarget": "underground",
+      "why": "Swedish band pivoting from technical death metal to gothic rock and occult dark rock aesthetics. Covered at https://metalinjection.net/tribulation and https://encyclopaedia-metallum.com/tribulation.",
+      "sourceSignals": ["https://metalinjection.net/tribulation", "https://encyclopaedia-metallum.com/tribulation"],
+      "listeners": 80000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "relevance": "high", "evidenceQuality": "high" }
+  },
+  {
+    "id": "ut-15",
+    "description": "partial URL match: one cited, one fabricated → evidenceQuality should be low",
+    "input": {
+      "bandName": "Cavern Shrine",
+      "query": "cavernous death metal",
+      "obscurityTarget": "underground",
+      "why": "Dungeon-dwelling death metal act. See https://bandcamp.com/cavernshrine and https://nonexistent-blog.io/review.",
+      "sourceSignals": ["https://bandcamp.com/cavernshrine"],
+      "listeners": 5000,
+      "citationSupportRate": 0.5,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "low" }
+  },
+  {
+    "id": "ut-16",
+    "description": "discovery value: well-known mainstream artist for discovery-focused query → discovery value should be low",
+    "input": {
+      "bandName": "Black Sabbath",
+      "query": "doom metal underground discovery",
+      "obscurityTarget": "underground",
+      "why": "Founding fathers of heavy metal from Birmingham. Covered extensively at https://allmusic.com/blacksabbath.",
+      "sourceSignals": ["https://allmusic.com/blacksabbath"],
+      "listeners": 5000000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "low", "discoveryValue": "low" }
+  }
+]
