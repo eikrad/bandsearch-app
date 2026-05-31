@@ -1,4 +1,5 @@
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph } from "@langchain/langgraph";
+import * as z from "zod";
 
 import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
@@ -22,23 +23,23 @@ export type ReflectionSubgraphDeps = {
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
 };
 
-const ReflectionAnnotation = Annotation.Root({
-  braveHits: Annotation<SearchHitInput[]>(),
-  newHits: Annotation<SearchHitInput[]>(),
-  verifiedCandidates: Annotation<VerifiedCandidate[]>(),
-  extractedCandidates: Annotation<ExtractedCandidate[]>(),
-  searchCallsUsed: Annotation<number>(),
-  searchPlan: Annotation<SearchPlan | undefined>(),
-  userQuery: Annotation<string>(),
-  reflectionUsed: Annotation<boolean>(),
-  roundsCompleted: Annotation<number>(),
-  nextExtraQueries: Annotation<string[]>(),
+export const REFLECTION_SCHEMA = z.object({
+  braveHits: z.custom<SearchHitInput[]>(),
+  newHits: z.custom<SearchHitInput[]>(),
+  verifiedCandidates: z.custom<VerifiedCandidate[]>(),
+  extractedCandidates: z.custom<ExtractedCandidate[]>(),
+  searchCallsUsed: z.number(),
+  searchPlan: z.custom<SearchPlan | undefined>(),
+  userQuery: z.string(),
+  reflectionUsed: z.boolean(),
+  roundsCompleted: z.number(),
+  nextExtraQueries: z.array(z.string()),
 });
 
 export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
   const log = deps.onLog ?? (() => {});
 
-  return new StateGraph(ReflectionAnnotation)
+  return new StateGraph(REFLECTION_SCHEMA)
     .addNode("assess", async (state) => {
       const reflector = await createRecommendationReflector({
         apiKey: deps.geminiApiKey,
