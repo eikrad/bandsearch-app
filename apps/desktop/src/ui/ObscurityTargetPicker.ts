@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export type ObscurityTarget = "cult" | "underground" | "obscure";
+import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 
 const BUTTONS: Array<{ value: ObscurityTarget; label: string }> = [
   { value: "cult", label: "Cult Following" },

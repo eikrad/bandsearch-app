@@ -1,6 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
+import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
@@ -16,14 +17,20 @@ export type SearchPlan = {
   queries: string[];
 };
 
+const DOMAIN_DESCRIPTIONS: Record<string, string> = {
+  "bandcamp.com": "site:bandcamp.com — niche releases, genre tags, FFO artist pages (almost always useful);",
+  "rateyourmusic.com": "site:rateyourmusic.com — genre lists, similar-artist charts, 'sounds like' pages;",
+  "rym.xyz": "site:rym.xyz — RYM mirror, same genre lists and charts;",
+  "reddit.com": "site:reddit.com/r/ifyoulikeblank or site:reddit.com/r/<genre> — community RIYL threads;",
+  "last.fm": "site:last.fm — similar-artist pages (last.fm/music/<artist>/+similar);",
+  "lastfm.com": "site:lastfm.com — similar-artist pages;",
+  "metal-archives.com": "site:metal-archives.com — metal and extreme music only, skip for electronic/jazz/folk;",
+  "sputnikmusic.com": "site:sputnikmusic.com — rock and metal reviews with FFO sections;",
+};
+
 const DISCOVERY_SOURCES = [
   "Prioritise these sources in queries where relevant:",
-  "site:bandcamp.com — niche releases, genre tags, FFO artist pages (almost always useful);",
-  "site:rateyourmusic.com — genre lists, similar-artist charts, 'sounds like' pages;",
-  "site:reddit.com/r/ifyoulikeblank or site:reddit.com/r/<genre> — community RIYL threads;",
-  "site:last.fm — similar-artist pages (last.fm/music/<artist>/+similar);",
-  "site:metal-archives.com — metal and extreme music only, skip for electronic/jazz/folk;",
-  "site:sputnikmusic.com — rock and metal reviews with FFO sections;",
+  ...DISCOVERY_DOMAINS.map((d) => DOMAIN_DESCRIPTIONS[d] ?? `site:${d};`),
   "niche blogs: thequietus.com, heavyblogisheavy.com, cvltnation.com, exclaim.ca — for scene discoveries.",
   "Match sources to genre — do not use metal-archives.com for ambient or jazz queries.",
 ].join(" ");
