@@ -341,22 +341,24 @@ File: `services/eval/golden-set.json`
 ]
 ```
 
-**`expectedBands`** — bands a good pipeline should surface (direction matters more than exact overlap).
+**`expectedBands`** — example bands that illustrate the direction a good pipeline should take. **Not used for automated pass/fail.** Many equally valid answers exist for any query; exact-match metrics against this list would penalise correct responses that happen to pick different but equivalent bands. Used as calibration anchors in `judge-calibration.json` so human labellers know what "good" looks like.
 
-**`antiBands`** — explicitly too well-known bands that reveal when the pipeline takes an easy path instead of searching.
+**`antiBands`** — explicitly too well-known bands that reveal when the pipeline takes an easy path instead of searching. Hard constraint: any hit here is a clear, unambiguous failure.
 
-**`nuggets`** — atomic sonic properties (genre, era, trait) inspired by nugget evaluation (NuggetRecall / TREC methodology). Manual curation for v1; full AutoNuggetizer pipeline deferred.
+**`nuggets`** — atomic sonic properties (genre, era, trait) inspired by nugget evaluation (NuggetRecall / TREC methodology). Evaluated against MusicBrainz genres/tags of recommended bands. This is the primary positive quality gate: it tests whether the pipeline covered the *right sonic space*, not whether it named specific bands. Manual curation for v1; full AutoNuggetizer pipeline deferred.
 
 **Metrics for `run-golden.ts`:**
 
 | Metric | Description | CI gate |
 |--------|-------------|---------|
-| `precision@8` | Fraction of `expectedBands` in top-8 | Warn if drops >10% vs last run |
 | `antiBandRate@8` | Fraction of top-8 that hit `antiBands` | **Fail if > 0** |
-| `nuggetCoverage@8` | Fraction of `nuggets` covered by recommended bands' MB genres/tags | Fail if below `minNuggetCoverage` |
+| `nuggetCoverage@8` | Fraction of `nuggets` covered by recommended bands' MB genres/tags | **Fail if below `minNuggetCoverage`** |
+| `precision@8` | Fraction of `expectedBands` in top-8 (exact name match) | Informational only — tracked as trend, never a CI gate |
 | `ndcg@8` (optional) | Ranking-aware partial credit for expected bands | Informational only |
 
-**Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query and computes all metrics. Run manually before/after significant prompt changes; binary gates (`antiBandRate@8`, `nuggetCoverage@8`) provide pass/fail for regression runs.
+**Rationale for demoting `precision@8`:** Band recommendations are an open-ended retrieval task — there is no single correct answer. A pipeline that returns Celeste and Les Discrets instead of Lantlôs and Amesoeurs may be equally correct. Exact-match precision against a predefined list would generate false regression failures and reward memorisation over genuine quality. `nuggetCoverage@8` and `antiBandRate@8` test the *properties* a response must have rather than comparing it to a reference answer.
+
+**Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query and computes all metrics. Run manually before/after significant prompt changes; only `antiBandRate@8` and `nuggetCoverage@8` are hard pass/fail gates.
 
 ---
 
