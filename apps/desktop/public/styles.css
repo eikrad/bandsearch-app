@@ -194,6 +194,33 @@ input {
   transform: rotate(90deg);
 }
 
+/* Obscurity target picker */
+.obscurity-target-picker {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.obscurity-target-picker button {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  background: transparent;
+  color: #6b7a90;
+  transition: background 0.15s, color 0.15s;
+}
+
+.obscurity-target-picker button.active {
+  background: var(--obscurity-active-bg, #1c2d42);
+  color: var(--obscurity-active-text, #7aa7d9);
+}
+
+.obscurity-target-picker button:not(.active):hover {
+  color: #aeb8cc;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0d0f14; }

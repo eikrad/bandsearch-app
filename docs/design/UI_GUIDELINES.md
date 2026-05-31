@@ -25,11 +25,37 @@ Scope:
 
 ## Core Visual System
 
-### Color model
-- Base: dark neutral surfaces and text hierarchy focused on readability.
-- Accent: mode-adaptive at medium intensity.
-  - `fresh` mode: cool neutral accent.
-  - `preference-aware` mode: muted warm accent.
+### Color tokens (locked)
+
+| Token | Value | Role |
+|-------|-------|------|
+| `pageBg` | `#0d0f14` | Page/shell background |
+| `cardBg` | `#111827` | Card and input surfaces |
+| `border` | `#1e2a3a` | Borders and dividers |
+| `textPrimary` | `#f0f4f8` | Band name, body text |
+| `textSecondary` | `#8896a8` | Meta, country, connection text |
+| `textTertiary` | `#5a6880` | Labels, chips, helper text |
+| `buttonBg` | `#161e2e` | Secondary button fill |
+| `buttonBorder` | `#243044` | Secondary button border |
+| `buttonText` | `#c8d4e8` | Secondary button label |
+| `inputBg` | `#0b0e18` | Query input background |
+| `inputBorder` | `#1e2a3a` | Query input border (idle) |
+
+**Fresh mode accent tokens:**
+
+| Token | Value |
+|-------|-------|
+| `accent` | `#7aa7d9` |
+| `accentDim` | `#1c2d42` |
+| `accentStripe` | `#5b9bd5` |
+
+**Preference-aware mode accent tokens:**
+
+| Token | Value |
+|-------|-------|
+| `accent` | `#d7a870` |
+| `accentDim` | `#2d2318` |
+| `accentStripe` | `#c4944a` |
 
 ### Accent usage rules (medium intensity)
 - Always on active mode toggle.
@@ -37,30 +63,37 @@ Scope:
 - On subtle section separators and small emphasis elements.
 - Never as full-screen or full-card fill for standard content states.
 
-## Iconography (Recommended)
+## Iconography
 
-### Icon family and style
-- Use one icon family across the product (no mixing families in MVP).
-- Prefer outline icons with consistent visual weight.
-- Keep geometry restrained and editorial (not playful/cartoonish).
+### MVP approach (locked)
+- No external icon library in desktop MVP: use text labels for all primary actions ("Save", "Rate", "···" for overflow).
+- Unicode symbols (`⎘`, `✓`, `○`, `×`) may be used only for supplementary controls (copy, tick/untick, delete) that have a `title` tooltip fallback.
+- Do not use color alone to indicate icon meaning.
 
-### Size and density rules
-- Use a fixed icon size scale (for example: 16, 20, 24).
-- Avoid arbitrary icon sizing per component.
-- Keep icon density low: prioritize readability over decoration.
-
-### Semantic consistency
-- One meaning per icon across the app (e.g. save, rate, retry).
-- Use icon + text when meaning may be ambiguous.
-- Avoid relying on color-only cues for icon meaning.
+### Icon family for future phases
+- If a dedicated icon library is added post-MVP, use one family with consistent outline stroke style across the product (no mixing).
+- Fixed size scale: 16 / 20 / 24 px — no arbitrary per-component sizing.
+- Keep icon density low: readability over decoration.
 
 ## Typography
 
-### Hierarchy intent
-1. Band name (primary)
-2. Why selected (secondary narrative)
-3. Metadata (country, genres, connection text)
-4. Utility labels/chips/meta badges
+### Type scale (locked)
+
+| Role | Size | Weight | Style | Color token |
+|------|------|--------|-------|-------------|
+| Page title (h1) | 15px | 700 | normal | `textPrimary` |
+| Section headings | 15px | 700 | normal | `textPrimary` |
+| Band name (h2) | 15px | 600, `-0.01em` tracking | normal | `textPrimary` |
+| Why selected | 13px | 400 | italic, 1.5 line-height | `textPrimary` |
+| Meta (country, genres) | 13px | 400 | normal | `textSecondary` |
+| Connection text | 13px | 400 | italic | `textSecondary` |
+| Body / assistant prose | 14px | 400 | normal, 1.45 line-height | `textPrimary` |
+| Action buttons | 13px | 400 | normal | `buttonText` |
+| Genre chips / badges | 11px | 400 | uppercase, 0.04em tracking | `textTertiary` |
+| Section rail labels | 11px | 600 | uppercase, 0.06em tracking | `textTertiary` |
+| Helper / hint text | 12px | 400 | normal | `textTertiary` |
+
+Base font stack: `Inter, "Segoe UI", Roboto, Arial, sans-serif` at 15px / 1.5 line-height.
 
 ### Readability rules
 - Keep recommendation rationale concise and scannable.
@@ -69,24 +102,49 @@ Scope:
 
 ## Spacing and Layout Rhythm
 
-- Use a consistent spacing scale (4/8-based rhythm).
-- Maintain clear vertical separation between chat turns.
-- Keep recommendation cards compact but breathable.
-- Prioritize text clarity over decorative density.
+### Spacing scale (locked, 4/8-based)
 
-## Recommendation Card Anatomy (Locked Order)
+| Step | Value | Typical use |
+|------|-------|-------------|
+| xs | 4px | Tight chip/badge padding, icon nudges |
+| sm | 8px | Card internal gap, button gap in rows |
+| md | 10px | Card padding, section internal gap |
+| lg | 12px | Card internal grid gap, composer margin |
+| xl | 16px | Composer padding-top, header divider margin |
+| 2xl | 20px | Desktop rail gap |
+| 3xl | 24px | Header margin-bottom, page section separation |
+| 4xl | 32px | Page horizontal padding (desktop) |
 
-Each recommendation tile should render fields in this order:
+### Layout (locked)
+- Single-column content max-width: **760px**, centered.
+- Desktop split layout (chat + results rail): `grid-template-columns: minmax(0, 1fr) minmax(280px, 340px)`, gap 20px. Combined max-width: `min(1120px, 100%)`.
+- Page horizontal padding: 32px desktop / 16px mobile.
+- Maintain clear vertical separation between chat turns (grid gap: 16px in message thread).
+- Recommendation card gap: 10px between cards in grid.
 
-1. Band name
-2. Why selected
-3. Country + genres
-4. Connection to previously discussed bands (plain text sentence)
-5. Action row
+## Recommendation Card Anatomy (Locked)
+
+Each recommendation tile renders fields in this exact order:
+
+1. Band name (h2, 15px/600, accent left stripe on card border)
+2. Saved badge (11px chip, inline with title, visible only when saved)
+3. Why selected (13px italic, `textPrimary`)
+4. Country + genres as a single meta line (`country · genre1, genre2`, 13px `textSecondary`)
+5. Genre chips row (11px uppercase chips, same genre data, visual emphasis)
+6. Platform links (11px chips, e.g. Bandcamp, Spotify — only when present)
+7. Connection text (13px italic `textSecondary`, separated by top border)
+8. Action row
+
+Card visual spec:
+- Background: `cardBg` (`#111827`)
+- Border: 1px `border` (`#1e2a3a`) + 3px left `accentStripe` (mode-dependent)
+- Border radius: 8px
+- Padding: 10px
 
 Action row policy (desktop MVP):
-- Always visible: Save, Rate
-- Compact menu: Category, Note
+- Always visible: Save, Rate (text-label buttons)
+- Compact overflow: "···" button for Category/Note
+- Copy shortcut: `⎘` icon-only button with `title="Copy"` tooltip, at row end
 
 ## Interaction and State Design
 
@@ -103,11 +161,25 @@ Action row policy (desktop MVP):
 - Save/Rate should provide immediate visual confirmation.
 - Category/Note interactions should not block the main flow.
 
-### Component state matrix (recommended baseline)
-- Recommendation card: default, hover, focus, loading, fallback, error.
-- Primary actions: default, hover, focus, disabled, success.
-- Mode toggle: default, active, hover, focus.
-- Input area: idle, typing, submitting, error.
+### Component state matrix (locked baseline)
+- Recommendation card: default, hover (`.action-btn:hover` via CSS), loading, fallback.
+- Primary actions: default, hover (`filter: brightness(1.1)`), disabled (`opacity: 0.45`, `cursor: not-allowed`), active.
+- Secondary action buttons: default, hover (`background: #2d374f`, `border-color: #3a4a63`), focus-visible (2px `#7aa7d9` outline, 2px offset).
+- Mode toggle: default (transparent/`#6b7a90`), active-fresh (`#1c2d42` bg / `#7aa7d9` text), active-warm (`#2d2318` bg / `#d7a870` text), hover (inactive: `#aeb8cc` text).
+- Input area: idle, focus (`border-color: #3a5070`, `box-shadow: 0 0 0 2px rgba(90,150,210,0.12)`), submitting (disabled).
+- Loading indicator: 18px spinner, 2px border, `border-top-color` = current accent, 0.75s linear spin.
+
+## Obscurity Target Picker
+
+Three-button segmented selector (cult / underground / obscure). Shares the same visual language as the mode pill:
+
+- Container: `display: inline-flex`, `gap: 4px`
+- Inactive button: transparent bg, `#6b7a90` text, no border
+- Active button: `accentDim` bg, `accent` text, no border
+- Button shape: `border-radius: 6px`, `padding: 5px 12px`, `font-size: 12px`
+- Deselect by clicking the active button again (toggle-off)
+
+CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscurity-target-picker button.active`.
 
 ## Mode Behavior
 

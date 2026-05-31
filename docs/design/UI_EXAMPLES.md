@@ -41,13 +41,14 @@ Example content structure:
 ## Mode Accent Example
 
 ### Fresh mode
-- Cool neutral accent on:
-  - mode toggle active state
-  - active action highlights
-  - thin separators
+- Accent `#7aa7d9` on:
+  - mode toggle active state (bg `#1c2d42`, text `#7aa7d9`)
+  - card left border stripe (`#5b9bd5`)
+  - submit button background
+  - saved-badge text and selection indicators
 
 ### Preference-aware mode
-- Muted warm accent on the same roles.
+- Accent `#d7a870` on the same roles (bg `#2d2318`, stripe `#c4944a`).
 - No full-card color flood; keep editorial restraint.
 
 ## Chat Turn Example
