@@ -1,4 +1,4 @@
-import { END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
@@ -35,7 +35,7 @@ export type ResearchGraphInput = {
   mode: RecommendationMode;
 };
 
-export const RESEARCH_SCHEMA = z.object({
+export const RESEARCH_SCHEMA = new StateSchema({
   userQuery: z.string(),
   preferenceContext: z.string(),
   messages: z.custom<ChatMessage[]>(),
@@ -53,7 +53,7 @@ export const RESEARCH_SCHEMA = z.object({
   assistantReply: z.string(),
 });
 
-export type ResearchGraphState = z.infer<typeof RESEARCH_SCHEMA>;
+export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 

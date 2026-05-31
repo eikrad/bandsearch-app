@@ -5,6 +5,7 @@ import { classifyObscurityTier } from "./obscurityScorer.js";
 export type EvalEventContext = {
   query: string;
   mode: string;
+  sessionId?: string | null;
   userId?: string;
   obscurityTarget?: string | null;
   pipelineVersion: string;
@@ -67,6 +68,7 @@ export function createEvalWorker({
       const eventId = await evalRepository.logEvent({
         query: ctx.query,
         mode: ctx.mode,
+        sessionId: ctx.sessionId ?? null,
         obscurityTarget: ctx.obscurityTarget ?? null,
         pipelineVersion: ctx.pipelineVersion,
         pipelineDiagnostics: ctx.pipelineDiagnostics,

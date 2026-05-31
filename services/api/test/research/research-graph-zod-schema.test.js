@@ -32,25 +32,27 @@ test("REFLECTION_SCHEMA is exported from reflectionSubgraph", () => {
   assert.ok(REFLECTION_SCHEMA !== undefined, "REFLECTION_SCHEMA must be exported");
 });
 
-test("RESEARCH_SCHEMA is a Zod schema (has _def.typeName)", () => {
+test("RESEARCH_SCHEMA is a StateSchema (has fields property and getChannelKeys method)", () => {
   assert.ok(
     RESEARCH_SCHEMA !== null &&
     typeof RESEARCH_SCHEMA === "object" &&
-    "_def" in RESEARCH_SCHEMA,
-    "RESEARCH_SCHEMA must be a Zod schema object with a _def property",
+    "fields" in RESEARCH_SCHEMA &&
+    typeof RESEARCH_SCHEMA.getChannelKeys === "function",
+    "RESEARCH_SCHEMA must be a StateSchema instance",
   );
 });
 
-test("REFLECTION_SCHEMA is a Zod schema (has _def.typeName)", () => {
+test("REFLECTION_SCHEMA is a StateSchema (has fields property and getChannelKeys method)", () => {
   assert.ok(
     REFLECTION_SCHEMA !== null &&
     typeof REFLECTION_SCHEMA === "object" &&
-    "_def" in REFLECTION_SCHEMA,
-    "REFLECTION_SCHEMA must be a Zod schema object with a _def property",
+    "fields" in REFLECTION_SCHEMA &&
+    typeof REFLECTION_SCHEMA.getChannelKeys === "function",
+    "REFLECTION_SCHEMA must be a StateSchema instance",
   );
 });
 
-// --- Zod parse tests ---
+// --- Schema validation tests ---
 
 const VALID_RESEARCH_STATE = {
   userQuery: "bands like Neurosis",
@@ -70,24 +72,35 @@ const VALID_RESEARCH_STATE = {
   assistantReply: "",
 };
 
-test("RESEARCH_SCHEMA.safeParse accepts a valid full state object", () => {
-  const result = RESEARCH_SCHEMA.safeParse(VALID_RESEARCH_STATE);
-  assert.ok(result.success, `safeParse should succeed but got: ${JSON.stringify(result.error)}`);
+test("RESEARCH_SCHEMA.validateInput accepts a valid full state object", async () => {
+  await assert.doesNotReject(
+    async () => RESEARCH_SCHEMA.validateInput(VALID_RESEARCH_STATE),
+    "validateInput should not reject for a valid state",
+  );
 });
 
-test("RESEARCH_SCHEMA.safeParse rejects when userQuery is not a string", () => {
-  const result = RESEARCH_SCHEMA.safeParse({ ...VALID_RESEARCH_STATE, userQuery: 42 });
-  assert.strictEqual(result.success, false, "safeParse should fail when userQuery is a number");
+test("RESEARCH_SCHEMA.validateInput rejects when userQuery is not a string", async () => {
+  await assert.rejects(
+    async () => RESEARCH_SCHEMA.validateInput({ ...VALID_RESEARCH_STATE, userQuery: 42 }),
+    /userQuery/,
+    "validateInput should reject for non-string userQuery",
+  );
 });
 
-test("RESEARCH_SCHEMA.safeParse rejects when searchCallsUsed is not a number", () => {
-  const result = RESEARCH_SCHEMA.safeParse({ ...VALID_RESEARCH_STATE, searchCallsUsed: "five" });
-  assert.strictEqual(result.success, false, "safeParse should fail when searchCallsUsed is a string");
+test("RESEARCH_SCHEMA.validateInput rejects when searchCallsUsed is not a number", async () => {
+  await assert.rejects(
+    async () => RESEARCH_SCHEMA.validateInput({ ...VALID_RESEARCH_STATE, searchCallsUsed: "five" }),
+    /searchCallsUsed/,
+    "validateInput should reject for non-number searchCallsUsed",
+  );
 });
 
-test("RESEARCH_SCHEMA.safeParse rejects when reflectionUsed is not a boolean", () => {
-  const result = RESEARCH_SCHEMA.safeParse({ ...VALID_RESEARCH_STATE, reflectionUsed: "yes" });
-  assert.strictEqual(result.success, false, "safeParse should fail when reflectionUsed is a string");
+test("RESEARCH_SCHEMA.validateInput rejects when reflectionUsed is not a boolean", async () => {
+  await assert.rejects(
+    async () => RESEARCH_SCHEMA.validateInput({ ...VALID_RESEARCH_STATE, reflectionUsed: "yes" }),
+    /reflectionUsed/,
+    "validateInput should reject for non-boolean reflectionUsed",
+  );
 });
 
 const VALID_REFLECTION_STATE = {
@@ -103,14 +116,19 @@ const VALID_REFLECTION_STATE = {
   nextExtraQueries: [],
 };
 
-test("REFLECTION_SCHEMA.safeParse accepts a valid full state object", () => {
-  const result = REFLECTION_SCHEMA.safeParse(VALID_REFLECTION_STATE);
-  assert.ok(result.success, `safeParse should succeed but got: ${JSON.stringify(result.error)}`);
+test("REFLECTION_SCHEMA.validateInput accepts a valid full state object", async () => {
+  await assert.doesNotReject(
+    async () => REFLECTION_SCHEMA.validateInput(VALID_REFLECTION_STATE),
+    "validateInput should not reject for a valid state",
+  );
 });
 
-test("REFLECTION_SCHEMA.safeParse rejects when userQuery is not a string", () => {
-  const result = REFLECTION_SCHEMA.safeParse({ ...VALID_REFLECTION_STATE, userQuery: null });
-  assert.strictEqual(result.success, false, "safeParse should fail when userQuery is null");
+test("REFLECTION_SCHEMA.validateInput rejects when userQuery is not a string", async () => {
+  await assert.rejects(
+    async () => REFLECTION_SCHEMA.validateInput({ ...VALID_REFLECTION_STATE, userQuery: null }),
+    /userQuery/,
+    "validateInput should reject for null userQuery",
+  );
 });
 
 // --- Schema shape tests ---
@@ -122,10 +140,9 @@ test("RESEARCH_SCHEMA contains all expected field keys", () => {
     "extractedCandidates", "verifiedCandidates", "reflectionUsed",
     "roundsCompleted", "nextExtraQueries", "recommendations", "assistantReply",
   ];
-  const shape = RESEARCH_SCHEMA.shape ?? RESEARCH_SCHEMA._def?.shape?.();
-  assert.ok(shape, "RESEARCH_SCHEMA must expose a shape property");
+  const keys = RESEARCH_SCHEMA.getChannelKeys();
   for (const key of expectedKeys) {
-    assert.ok(key in shape, `RESEARCH_SCHEMA is missing field: ${key}`);
+    assert.ok(keys.includes(key), `RESEARCH_SCHEMA is missing field: ${key}`);
   }
 });
 
@@ -135,28 +152,27 @@ test("REFLECTION_SCHEMA contains all expected field keys", () => {
     "searchCallsUsed", "searchPlan", "userQuery", "reflectionUsed",
     "roundsCompleted", "nextExtraQueries",
   ];
-  const shape = REFLECTION_SCHEMA.shape ?? REFLECTION_SCHEMA._def?.shape?.();
-  assert.ok(shape, "REFLECTION_SCHEMA must expose a shape property");
+  const keys = REFLECTION_SCHEMA.getChannelKeys();
   for (const key of expectedKeys) {
-    assert.ok(key in shape, `REFLECTION_SCHEMA is missing field: ${key}`);
+    assert.ok(keys.includes(key), `REFLECTION_SCHEMA is missing field: ${key}`);
   }
 });
 
 // --- Graph channel invariants still hold after migration ---
 
-test("parent graph channels still include all required keys after Zod migration", async () => {
+test("parent graph channels still include all required keys after StateSchema migration", async () => {
   const budget = createResearchBudget(5000);
   const g = await buildResearchGraph(BASE_DEPS, budget);
   const required = ["roundsCompleted", "nextExtraQueries", "newHits", "braveHits", "reflectionUsed"];
   for (const key of required) {
     assert.ok(
       Object.keys(g.channels).includes(key),
-      `channel "${key}" must be present in compiled graph after Zod migration`,
+      `channel "${key}" must be present in compiled graph after StateSchema migration`,
     );
   }
 });
 
-test("all reflection subgraph channels still present in parent after Zod migration", async () => {
+test("all reflection subgraph channels still present in parent after StateSchema migration", async () => {
   const budget = createResearchBudget(5000);
   const parentGraph = await buildResearchGraph(BASE_DEPS, budget);
   const subgraph = buildReflectionSubgraph({
@@ -178,7 +194,7 @@ test("all reflection subgraph channels still present in parent after Zod migrati
   for (const ch of subgraphChannels) {
     assert.ok(
       parentChannels.has(ch),
-      `reflection subgraph channel "${ch}" is missing from parent after Zod migration`,
+      `reflection subgraph channel "${ch}" is missing from parent — subgraph is a blackbox`,
     );
   }
 });
