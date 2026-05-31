@@ -12,6 +12,7 @@ import type { EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
 import { createLastFmClient } from "./eval/lastFmClient.js";
+import { createJudgeWorker, createNoOpJudgeWorker } from "./eval/judgeWorker.js";
 
 // ESM/CJS interop — these modules may wrap their export in a .default in some build environments
 const helmet = ((helmetLib as unknown as { default?: typeof helmetLib }).default) ?? helmetLib;
@@ -46,6 +47,7 @@ type AppRuntimeConfig = {
   musicBrainzRetries?: number;
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
+  anthropicApiKey?: string;
   jwtSecret?: string;
   evalDashboardEnabled?: boolean;
 };
@@ -176,6 +178,13 @@ export function createApp({
   // in memory while the dashboard is enabled, otherwise everything is a no-op.
   const resolvedEvalRepository: EvalRepository =
     evalRepository ?? (runtimeConfig.evalDashboardEnabled ? createInMemoryEvalRepository() : createNoOpEvalRepository());
+  const resolvedJudgeWorker = runtimeConfig.anthropicApiKey
+    ? createJudgeWorker({
+        anthropicApiKey: runtimeConfig.anthropicApiKey,
+        evalRepository: resolvedEvalRepository,
+      })
+    : createNoOpJudgeWorker();
+
   const resolvedEvalWorker: EvalWorker =
     evalWorker ??
     (runtimeConfig.evalDashboardEnabled
@@ -184,6 +193,7 @@ export function createApp({
           lastFmClient: runtimeConfig.lastFmApiKey
             ? createLastFmClient({ apiKey: runtimeConfig.lastFmApiKey })
             : undefined,
+          judgeWorker: resolvedJudgeWorker,
         })
       : createNoOpEvalWorker());
 

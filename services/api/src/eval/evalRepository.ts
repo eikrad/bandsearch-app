@@ -35,6 +35,14 @@ export type BandEvalScoreInput = {
   sourceQuality?: string;
   citationSupportRate?: number;
   genericWhyFlag?: boolean;
+  // LLM judge fields (Phase 8.5) — upserted after automatic scoring
+  relevance?: number;
+  obscurityFit?: number;
+  evidenceQuality?: number;
+  discoveryValue?: number;
+  judgeReasoning?: string;
+  judgePromptHash?: string;
+  modelId?: string;
 };
 
 export type BandEvalScore = BandEvalScoreInput & {
