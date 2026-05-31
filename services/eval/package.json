@@ -1,0 +1,11 @@
+{
+  "name": "@bandsearch/eval",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Eval scripts: judge calibration and golden dataset regression runner",
+  "type": "module",
+  "scripts": {
+    "calibrate": "tsx run-calibration.ts",
+    "golden": "tsx run-golden.ts"
+  }
+}

@@ -1,0 +1,227 @@
+[
+  {
+    "query": "blackgaze atmospheric black metal",
+    "obscurityTarget": "underground",
+    "bandName": "Deafheaven",
+    "whyText": "Known for their blackgaze sound blending black metal and shoegaze. A popular band in the genre.",
+    "sourceSignals": [],
+    "listeners": 600000,
+    "humanScores": { "relevance": 0.8, "obscurityFit": 0.1, "evidenceQuality": 0.2 }
+  },
+  {
+    "query": "blackgaze atmospheric black metal",
+    "obscurityTarget": "underground",
+    "bandName": "Wolves in the Throne Room",
+    "whyText": "Pacific Northwest atmospheric black metal with dense, layered textures. Their Cascadian approach is documented at https://bandcamp.com/wittr and reviewed on https://rym.xyz/wittr.",
+    "sourceSignals": ["https://bandcamp.com/wittr", "https://rym.xyz/wittr"],
+    "listeners": 80000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.8, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "blackgaze atmospheric black metal",
+    "obscurityTarget": "underground",
+    "bandName": "Lantlôs",
+    "whyText": "French-German blackgaze project with lush, reverb-drenched post-black metal. Featured on https://metalinjection.net/lantlos and documented at https://rateyourmusic.com/lantlos.",
+    "sourceSignals": ["https://metalinjection.net/lantlos", "https://rateyourmusic.com/lantlos"],
+    "listeners": 15000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.9, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "death-doom metal slow heavy",
+    "obscurityTarget": "cult",
+    "bandName": "My Dying Bride",
+    "whyText": "Seminal death-doom act from Bradford, UK. Pioneered the genre with violin-led dirges. Extensively covered at https://encyclopaedia-metallum.com/mydyingbride.",
+    "sourceSignals": ["https://encyclopaedia-metallum.com/mydyingbride"],
+    "listeners": 200000,
+    "humanScores": { "relevance": 0.95, "obscurityFit": 0.7, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "death-doom metal slow heavy",
+    "obscurityTarget": "cult",
+    "bandName": "Pallbearer",
+    "whyText": "Arkansas doom band with huge, melodic riffs and clean vocals over crushing tempos. Reviewed at https://pitchfork.com/pallbearer and https://sputnikmusic.com/pallbearer.",
+    "sourceSignals": ["https://pitchfork.com/pallbearer", "https://sputnikmusic.com/pallbearer"],
+    "listeners": 100000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.85, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "death-doom metal slow heavy",
+    "obscurityTarget": "cult",
+    "bandName": "Skepticism",
+    "whyText": "Finnish funeral doom pioneers with organs and glacial tempos. One of the slowest acts in metal. Documented at https://encyclopaedia-metallum.com/skepticism.",
+    "sourceSignals": ["https://encyclopaedia-metallum.com/skepticism"],
+    "listeners": 20000,
+    "humanScores": { "relevance": 0.95, "obscurityFit": 0.9, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "death-doom metal slow heavy",
+    "obscurityTarget": "cult",
+    "bandName": "Panopticon",
+    "whyText": "A band with unique sound and wide influences that many listeners enjoy.",
+    "sourceSignals": [],
+    "listeners": 80000,
+    "humanScores": { "relevance": 0.5, "obscurityFit": 0.75, "evidenceQuality": 0.1 }
+  },
+  {
+    "query": "drone doom experimental",
+    "obscurityTarget": "obscure",
+    "bandName": "Sunn O)))",
+    "whyText": "Iconic drone doom duo known for extreme volume and extended compositions. Covered extensively at https://allmusic.com/sunno and https://thewire.co.uk/sunno.",
+    "sourceSignals": ["https://allmusic.com/sunno", "https://thewire.co.uk/sunno"],
+    "listeners": 400000,
+    "humanScores": { "relevance": 0.85, "obscurityFit": 0.35, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "drone doom experimental",
+    "obscurityTarget": "obscure",
+    "bandName": "Corrupted",
+    "whyText": "Japanese funeral doom band releasing rare, private-press cassettes. Extreme in length and weight. Documented at https://discogs.com/corrupted and https://rateyourmusic.com/corrupted.",
+    "sourceSignals": ["https://discogs.com/corrupted", "https://rateyourmusic.com/corrupted"],
+    "listeners": 5000,
+    "humanScores": { "relevance": 0.95, "obscurityFit": 0.95, "evidenceQuality": 0.9 }
+  },
+  {
+    "query": "drone doom experimental",
+    "obscurityTarget": "obscure",
+    "bandName": "Monarch",
+    "whyText": "French sludge-drone duo with crushing riffs and harsh vocals, releasing limited vinyl runs. Featured at https://heavymetalmerch.com/monarch.",
+    "sourceSignals": ["https://heavymetalmerch.com/monarch"],
+    "listeners": 8000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.95, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "drone doom experimental",
+    "obscurityTarget": "obscure",
+    "bandName": "Boris",
+    "whyText": "Japanese experimental rock trio spanning drone, noise, and stoner. Their drone works are covered at https://allmusic.com/boris and https://pitchfork.com/boris.",
+    "sourceSignals": ["https://allmusic.com/boris", "https://pitchfork.com/boris"],
+    "listeners": 150000,
+    "humanScores": { "relevance": 0.8, "obscurityFit": 0.4, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "jazz-influenced post-rock instrumental",
+    "obscurityTarget": "underground",
+    "bandName": "Tortoise",
+    "whyText": "Chicago post-rock collective blending jazz, dub, and minimalism. Reviewed at https://pitchfork.com/tortoise and https://allmusic.com/tortoise.",
+    "sourceSignals": ["https://pitchfork.com/tortoise", "https://allmusic.com/tortoise"],
+    "listeners": 150000,
+    "humanScores": { "relevance": 0.75, "obscurityFit": 0.5, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "jazz-influenced post-rock instrumental",
+    "obscurityTarget": "underground",
+    "bandName": "Bohren & der Club of Gore",
+    "whyText": "German dark jazz quartet with funeral tempos, baritone saxophone, and noir atmosphere. Documented at https://discogs.com/bohren and https://lastfm.com/bohren.",
+    "sourceSignals": ["https://discogs.com/bohren", "https://lastfm.com/bohren"],
+    "listeners": 20000,
+    "humanScores": { "relevance": 0.85, "obscurityFit": 0.9, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "jazz-influenced post-rock instrumental",
+    "obscurityTarget": "underground",
+    "bandName": "Do Make Say Think",
+    "whyText": "Canadian post-rock collective with jazz and ambient influences, building from quiet passages to orchestral peaks. Reviewed at https://sputnikmusic.com/domakesaythink.",
+    "sourceSignals": ["https://sputnikmusic.com/domakesaythink"],
+    "listeners": 30000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.85, "evidenceQuality": 0.75 }
+  },
+  {
+    "query": "jazz-influenced post-rock instrumental",
+    "obscurityTarget": "underground",
+    "bandName": "Godspeed You! Black Emperor",
+    "whyText": "A band with unique sound and wide influences that many listeners enjoy.",
+    "sourceSignals": [],
+    "listeners": 400000,
+    "humanScores": { "relevance": 0.5, "obscurityFit": 0.15, "evidenceQuality": 0.1 }
+  },
+  {
+    "query": "folk black metal pagan",
+    "obscurityTarget": "cult",
+    "bandName": "Agalloch",
+    "whyText": "Portland black-folk-metal band weaving acoustic folk and melancholic black metal. Covered at https://metalinjection.net/agalloch and https://encyclopaedia-metallum.com/agalloch.",
+    "sourceSignals": ["https://metalinjection.net/agalloch", "https://encyclopaedia-metallum.com/agalloch"],
+    "listeners": 200000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.7, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "folk black metal pagan",
+    "obscurityTarget": "cult",
+    "bandName": "Wolcensmen",
+    "whyText": "UK neofolk act mixing Old English poetry with atmospheric folk metal. Documented at https://bandcamp.com/wolcensmen and https://encyclopaedia-metallum.com/wolcensmen.",
+    "sourceSignals": ["https://bandcamp.com/wolcensmen", "https://encyclopaedia-metallum.com/wolcensmen"],
+    "listeners": 30000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.9, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "folk black metal pagan",
+    "obscurityTarget": "cult",
+    "bandName": "Wardruna",
+    "whyText": "Norwegian ritualistic folk project using traditional instruments and runic Norse texts. Very popular via the Vikings TV series. Documented at https://wardruna.com and https://spotify.com/wardruna.",
+    "sourceSignals": ["https://wardruna.com", "https://spotify.com/wardruna"],
+    "listeners": 700000,
+    "humanScores": { "relevance": 0.6, "obscurityFit": 0.05, "evidenceQuality": 0.75 }
+  },
+  {
+    "query": "noise rock harsh experimental",
+    "obscurityTarget": "underground",
+    "bandName": "Health",
+    "whyText": "Los Angeles noise rock trio known for abrasive textures and electronic-drum compositions. Documented at https://soundcloud.com/health and https://bandcamp.com/health.",
+    "sourceSignals": ["https://soundcloud.com/health", "https://bandcamp.com/health"],
+    "listeners": 80000,
+    "humanScores": { "relevance": 0.85, "obscurityFit": 0.8, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "noise rock harsh experimental",
+    "obscurityTarget": "underground",
+    "bandName": "Daughters",
+    "whyText": "Providence noise rock act with convulsive rhythms and angular post-hardcore riffs. Reviewed at https://pitchfork.com/daughters and https://sputnikmusic.com/daughters.",
+    "sourceSignals": ["https://pitchfork.com/daughters", "https://sputnikmusic.com/daughters"],
+    "listeners": 40000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.85, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "noise rock harsh experimental",
+    "obscurityTarget": "underground",
+    "bandName": "Swans",
+    "whyText": "New York noise-rock institution spanning four decades and multiple reinventions. Covered at https://allmusic.com/swans and https://pitchfork.com/swans.",
+    "sourceSignals": ["https://allmusic.com/swans", "https://pitchfork.com/swans"],
+    "listeners": 600000,
+    "humanScores": { "relevance": 0.75, "obscurityFit": 0.1, "evidenceQuality": 0.8 }
+  },
+  {
+    "query": "noise rock harsh experimental",
+    "obscurityTarget": "underground",
+    "bandName": "Merzbow",
+    "whyText": "A Japanese artist with unique sound and wide influences.",
+    "sourceSignals": [],
+    "listeners": 50000,
+    "humanScores": { "relevance": 0.7, "obscurityFit": 0.85, "evidenceQuality": 0.1 }
+  },
+  {
+    "query": "melodic black metal nordic",
+    "obscurityTarget": "obscure",
+    "bandName": "Mgła",
+    "whyText": "Polish black metal duo with cold, minimalist riffing and bleak atmospheres. Widely discussed at https://encyclopaedia-metallum.com/mgla and https://rateyourmusic.com/mgla.",
+    "sourceSignals": ["https://encyclopaedia-metallum.com/mgla", "https://rateyourmusic.com/mgla"],
+    "listeners": 200000,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.35, "evidenceQuality": 0.85 }
+  },
+  {
+    "query": "melodic black metal nordic",
+    "obscurityTarget": "obscure",
+    "bandName": "Batushka",
+    "whyText": "A black metal band known for their unique sound and their Orthodox liturgical influences.",
+    "sourceSignals": [],
+    "listeners": 100000,
+    "humanScores": { "relevance": 0.85, "obscurityFit": 0.45, "evidenceQuality": 0.1 }
+  },
+  {
+    "query": "melodic black metal nordic",
+    "obscurityTarget": "obscure",
+    "bandName": "Hvile I Kaos",
+    "whyText": "Icelandic avant-garde black metal collective with ritualistic chaos and extremely limited distribution. Documented at https://encyclopaedia-metallum.com/hvileikaos.",
+    "sourceSignals": ["https://encyclopaedia-metallum.com/hvileikaos"],
+    "listeners": 800,
+    "humanScores": { "relevance": 0.9, "obscurityFit": 0.99, "evidenceQuality": 0.8 }
+  }
+]
