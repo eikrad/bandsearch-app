@@ -41,10 +41,13 @@ export type ResearchGraphState = {
   mode: RecommendationMode;
   searchPlan?: SearchPlan;
   braveHits: SearchHitInput[];
+  newHits: SearchHitInput[];
   searchCallsUsed: number;
   extractedCandidates: import("./candidateExtractor.js").ExtractedCandidate[];
   verifiedCandidates: VerifiedCandidate[];
   reflectionUsed: boolean;
+  roundsCompleted: number;
+  nextExtraQueries: string[];
   recommendations: unknown[];
   assistantReply: string;
 };
@@ -56,10 +59,13 @@ const ResearchAnnotation = Annotation.Root({
   mode: Annotation<RecommendationMode>(),
   searchPlan: Annotation<SearchPlan | undefined>(),
   braveHits: Annotation<SearchHitInput[]>(),
+  newHits: Annotation<SearchHitInput[]>(),
   searchCallsUsed: Annotation<number>(),
   extractedCandidates: Annotation<import("./candidateExtractor.js").ExtractedCandidate[]>(),
   verifiedCandidates: Annotation<VerifiedCandidate[]>(),
   reflectionUsed: Annotation<boolean>(),
+  roundsCompleted: Annotation<number>(),
+  nextExtraQueries: Annotation<string[]>(),
   recommendations: Annotation<unknown[]>(),
   assistantReply: Annotation<string>(),
 });
@@ -159,8 +165,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       });
       return { verifiedCandidates: verified };
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .addNode("reflect_if_needed", reflectionSubgraph as any)
+    .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("rank", async (state) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
@@ -209,10 +214,13 @@ export async function invokeResearchGraph(
     messages: input.messages,
     mode: input.mode,
     braveHits: [],
+    newHits: [],
     searchCallsUsed: 0,
     extractedCandidates: [],
     verifiedCandidates: [],
     reflectionUsed: false,
+    roundsCompleted: 0,
+    nextExtraQueries: [],
     recommendations: [],
     assistantReply: "",
   });
