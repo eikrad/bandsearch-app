@@ -33,6 +33,7 @@ export type ResearchGraphInput = {
   preferenceContext: string;
   messages: ChatMessage[];
   mode: RecommendationMode;
+  obscurityTarget?: string;
 };
 
 export const RESEARCH_SCHEMA = new StateSchema({
@@ -40,6 +41,7 @@ export const RESEARCH_SCHEMA = new StateSchema({
   preferenceContext: z.string(),
   messages: z.custom<ChatMessage[]>(),
   mode: z.custom<RecommendationMode>(),
+  obscurityTarget: z.string().optional(),
   searchPlan: z.custom<SearchPlan | undefined>(),
   braveHits: z.custom<SearchHitInput[]>(),
   newHits: z.custom<SearchHitInput[]>(),
@@ -116,6 +118,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         userQuery: state.userQuery,
         preferenceContext: state.preferenceContext,
         messages: state.messages,
+        obscurityTarget: state.obscurityTarget,
       });
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
@@ -198,6 +201,7 @@ export async function invokeResearchGraph(
     preferenceContext: input.preferenceContext,
     messages: input.messages,
     mode: input.mode,
+    obscurityTarget: input.obscurityTarget,
     braveHits: [],
     newHits: [],
     searchCallsUsed: 0,

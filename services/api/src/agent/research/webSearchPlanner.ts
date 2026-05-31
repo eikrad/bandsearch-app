@@ -96,6 +96,13 @@ export type WebSearchPlannerInput = {
   userQuery: string;
   preferenceContext?: string;
   messages?: ChatMessage[];
+  obscurityTarget?: string;
+};
+
+const OBSCURITY_CONSTRAINT: Record<string, string> = {
+  cult: "Prioritise bands with 50k–500k Last.fm listeners — niche enough to feel like a discovery, not totally unknown.",
+  underground: "Prioritise bands with under 50k Last.fm listeners — genuinely underground, avoid any mainstream crossover acts.",
+  obscure: "Prioritise bands with under 5k Last.fm listeners — truly obscure, deep-cut discoveries only.",
 };
 
 function buildPlannerUserContent(input: WebSearchPlannerInput): string {
@@ -105,8 +112,13 @@ function buildPlannerUserContent(input: WebSearchPlannerInput): string {
   const parts = [`current_user_query: ${wrappedQuery}`];
   if (prefBlock) parts.push(prefBlock);
   if (history) parts.push(`conversation_excerpt:\n${history}`);
+  const constraint = input.obscurityTarget ? OBSCURITY_CONSTRAINT[input.obscurityTarget] : undefined;
+  if (constraint) parts.push(`obscurity_target (${input.obscurityTarget}): ${constraint}`);
   return parts.join("\n\n");
 }
+
+/** Exported for testing only — do not use in production code */
+export const buildPlannerUserContentForTest = buildPlannerUserContent;
 
 /** Fallback when the model fails: single broad query from user text */
 export function fallbackSearchPlan(userQuery: string): SearchPlan {

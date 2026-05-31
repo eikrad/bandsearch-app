@@ -30,3 +30,21 @@ test("fallbackSearchPlan yields one sanitized query", () => {
 test("createWebSearchPlanner rejects empty apiKey", async () => {
   await assert.rejects(() => createWebSearchPlanner({ apiKey: "  " }), /apiKey is required/);
 });
+
+// ─── Phase 8.3: obscurityTarget constraint ─────────────────────────────────
+
+test("buildPlannerUserContent includes obscurity constraint when obscurityTarget is set", () => {
+  const { buildPlannerUserContentForTest } = require("../../src/agent/research/webSearchPlanner");
+  const content = buildPlannerUserContentForTest({
+    userQuery: "blackgaze bands",
+    obscurityTarget: "underground",
+  });
+  assert.match(content, /underground/i, "prompt should mention the obscurity target");
+  assert.match(content, /obscurity|niche|listener/i, "prompt should contain an obscurity constraint");
+});
+
+test("buildPlannerUserContent omits obscurity constraint when obscurityTarget is not set", () => {
+  const { buildPlannerUserContentForTest } = require("../../src/agent/research/webSearchPlanner");
+  const content = buildPlannerUserContentForTest({ userQuery: "blackgaze bands" });
+  assert.doesNotMatch(content, /obscurity_target:/i);
+});

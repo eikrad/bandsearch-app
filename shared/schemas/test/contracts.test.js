@@ -117,3 +117,25 @@ test("validateRecommendationHttpBody silently truncates priorityContext over PRI
   assert.equal(v.ok, true);
   assert.equal(v.priorityContext.length, PRIORITY_CONTEXT_MAX_LEN);
 });
+
+// ─── Phase 8.3: obscurityTarget ────────────────────────────────────────────
+
+test("validateRecommendationHttpBody accepts valid obscurityTarget values", () => {
+  for (const target of ["cult", "underground", "obscure"]) {
+    const v = validateRecommendationHttpBody({ query: "dark ambient", obscurityTarget: target });
+    assert.equal(v.ok, true);
+    assert.equal(v.obscurityTarget, target, `expected ${target} to be passed through`);
+  }
+});
+
+test("validateRecommendationHttpBody silently drops invalid obscurityTarget", () => {
+  const v = validateRecommendationHttpBody({ query: "dark ambient", obscurityTarget: "mainstream" });
+  assert.equal(v.ok, true);
+  assert.equal(v.obscurityTarget, undefined, "invalid target should be silently dropped");
+});
+
+test("validateRecommendationHttpBody leaves obscurityTarget undefined when omitted", () => {
+  const v = validateRecommendationHttpBody({ query: "dark ambient" });
+  assert.equal(v.ok, true);
+  assert.equal(v.obscurityTarget, undefined);
+});

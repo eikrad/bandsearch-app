@@ -263,6 +263,49 @@ test("chat client sends conversation messages in recommendations request", async
   assert.equal(body.messages.length, 2);
 });
 
+// ─── Phase 8.3: obscurityTarget ────────────────────────────────────────────
+
+test("chat client includes obscurityTarget in recommendations request body when provided", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          recommendations: [],
+          meta: { modeUsed: "fresh", usedPreferenceContext: false, eventId: "evt-123" },
+        }),
+      };
+    },
+  });
+
+  await client.fetchRecommendations("dark ambient", "fresh", "", [], [], "underground");
+  const body = JSON.parse(calls[0].init.body);
+  assert.equal(body.obscurityTarget, "underground");
+});
+
+test("chat client omits obscurityTarget from request body when not provided", async () => {
+  const calls = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
+      };
+    },
+  });
+
+  await client.fetchRecommendations("dark ambient");
+  const body = JSON.parse(calls[0].init.body);
+  assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
+});
+
 test("normalizeArtistId creates stable local fallback id", () => {
   assert.equal(normalizeArtistId("Alcest"), "local-alcest");
   assert.equal(normalizeArtistId("Les Discrets"), "local-les-discrets");
