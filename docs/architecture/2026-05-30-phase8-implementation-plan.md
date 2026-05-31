@@ -23,7 +23,7 @@ critical path.
 | 8.1 — Event logging + evalWorker scaffold | ✓ Done |
 | 8.2 — Last.fm obscurity scoring | ✓ Done |
 | 8.3 — Obscurity target UI + API threading | next |
-| 8.4 — Search source quality + evidence checks | — |
+| 8.4 — Search source quality + evidence checks | ✓ Done |
 | 8.5 — LLM-as-judge (batched) | — |
 | 8.5b — Judge calibration | — |
 | 8.6 — Baseline snapshots + eval API | — |
