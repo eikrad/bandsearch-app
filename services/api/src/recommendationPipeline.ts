@@ -144,12 +144,15 @@ export function createRecommendationPipeline({
         preferenceRepository,
       );
 
+      const obscurityTarget = typeof request.obscurityTarget === "string" ? request.obscurityTarget : undefined;
+
       const { recommendations, assistantReply = "", pipelineDiagnostics } = await activeService.getRecommendations(
         String(request.query ?? ""),
         {
           mode,
           preferenceContext,
           messages: messages as ChatMessage[],
+          obscurityTarget,
         },
       );
 

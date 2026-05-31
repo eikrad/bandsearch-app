@@ -5,6 +5,17 @@ export const PRIORITY_CONTEXT_MAX_LEN = 2000;
 
 export type RecommendationMode = "fresh" | "preference-aware";
 
+export type ObscurityTarget = "cult" | "underground" | "obscure";
+
+const VALID_OBSCURITY_TARGETS: ReadonlySet<string> = new Set(["cult", "underground", "obscure"]);
+
+export function validateObscurityTarget(value: unknown): ObscurityTarget | undefined {
+  if (typeof value === "string" && VALID_OBSCURITY_TARGETS.has(value)) {
+    return value as ObscurityTarget;
+  }
+  return undefined;
+}
+
 export type ChatTurnRole = "user" | "assistant";
 
 export type ChatMessage = { role: ChatTurnRole; content: string };
@@ -27,6 +38,7 @@ export type ValidatedRecommendationHttpBody =
       readonly selectedArtistIds: string[];
       readonly priorityContext: string;
       readonly truncated: string[];
+      readonly obscurityTarget: ObscurityTarget | undefined;
     };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -161,5 +173,6 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     selectedArtistIds,
     priorityContext,
     truncated,
+    obscurityTarget: validateObscurityTarget(b.obscurityTarget),
   };
 }

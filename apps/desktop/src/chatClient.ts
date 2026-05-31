@@ -56,6 +56,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       priorityContext = "",
       messages: unknown[] = [],
       selectedArtistIds: string[] = [],
+      obscurityTarget?: string,
     ) {
       const body: Record<string, unknown> = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
@@ -63,6 +64,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       if (Array.isArray(selectedArtistIds) && selectedArtistIds.length > 0) {
         body.selectedArtistIds = selectedArtistIds.filter((id) => typeof id === "string");
       }
+      if (obscurityTarget) body.obscurityTarget = obscurityTarget;
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: jsonHeaders(),

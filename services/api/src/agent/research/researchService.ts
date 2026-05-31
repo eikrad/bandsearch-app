@@ -18,6 +18,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
         mode?: unknown;
         preferenceContext?: string;
         messages?: ChatMessage[];
+        obscurityTarget?: string;
       } = {},
     ) {
       const mode = validateRecommendationMode(options.mode);
@@ -29,6 +30,7 @@ export function createResearchRecommendationService({ graphDeps }: ResearchRecom
         preferenceContext,
         messages,
         mode,
+        obscurityTarget: options.obscurityTarget,
       });
 
       const items = Array.isArray(rawItems) ? rawItems : [];

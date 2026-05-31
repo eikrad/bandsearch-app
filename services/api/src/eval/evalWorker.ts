@@ -1,6 +1,8 @@
 import type { EvalRepository, PipelineDiagnostics } from "./evalRepository.js";
 import type { LastFmClient } from "./lastFmClient.js";
 import { classifyObscurityTier } from "./obscurityScorer.js";
+import { scoreSearchSources, ratioToSourceQuality } from "./searchSourceScorer.js";
+import { checkEvidence } from "./evidenceChecker.js";
 
 export type EvalEventContext = {
   query: string;
@@ -23,20 +25,28 @@ export function createNoOpEvalWorker(): EvalWorker {
   };
 }
 
-function extractBandNames(recommendations: unknown[]): string[] {
-  if (!Array.isArray(recommendations)) {
-    return [];
-  }
-  const names: string[] = [];
+type RecommendationItem = {
+  artist: string;
+  why?: string;
+  sourceSignals?: string[];
+};
+
+function extractRecommendations(recommendations: unknown[]): RecommendationItem[] {
+  if (!Array.isArray(recommendations)) return [];
+  const items: RecommendationItem[] = [];
   for (const item of recommendations) {
-    if (item && typeof item === "object" && typeof (item as { artist?: unknown }).artist === "string") {
-      const name = (item as { artist: string }).artist.trim();
-      if (name) {
-        names.push(name);
+    if (item && typeof item === "object") {
+      const r = item as Record<string, unknown>;
+      if (typeof r.artist === "string" && r.artist.trim()) {
+        items.push({
+          artist: r.artist.trim(),
+          why: typeof r.why === "string" ? r.why : undefined,
+          sourceSignals: Array.isArray(r.sourceSignals) ? (r.sourceSignals as string[]) : undefined,
+        });
       }
     }
   }
-  return names;
+  return items;
 }
 
 export function createEvalWorker({
@@ -46,16 +56,14 @@ export function createEvalWorker({
   evalRepository: EvalRepository;
   lastFmClient?: LastFmClient;
 }): EvalWorker {
-  async function scoreObscurity(eventId: string, bandNames: string[]) {
-    if (!lastFmClient) {
-      return;
-    }
+  async function scoreObscurity(eventId: string, recs: RecommendationItem[]) {
+    if (!lastFmClient) return;
     await Promise.allSettled(
-      bandNames.map(async (bandName) => {
-        const listeners = await lastFmClient.getListenerCount(bandName);
+      recs.map(async ({ artist }) => {
+        const listeners = await lastFmClient.getListenerCount(artist);
         await evalRepository.upsertBandEvalScore({
           eventId,
-          bandName,
+          bandName: artist,
           listeners,
           obscurityTier: classifyObscurityTier(listeners),
         });
@@ -63,8 +71,28 @@ export function createEvalWorker({
     );
   }
 
+  async function scoreHeuristics(eventId: string, recs: RecommendationItem[]) {
+    await Promise.allSettled(
+      recs.map(async ({ artist, why = "", sourceSignals = [] }) => {
+        const urlSignals = sourceSignals.filter((s) => s.startsWith("http"));
+        const ratio = scoreSearchSources(urlSignals);
+        const sourceQuality = ratioToSourceQuality(ratio);
+        const { citationSupportRate, genericWhyFlag } = checkEvidence(why, sourceSignals);
+        await evalRepository.upsertBandEvalScore({
+          eventId,
+          bandName: artist,
+          sourceQuality,
+          citationSupportRate,
+          genericWhyFlag,
+        });
+      }),
+    );
+  }
+
   return {
     async processEvent(ctx) {
+      const recs = extractRecommendations(ctx.recommendations);
+
       const eventId = await evalRepository.logEvent({
         query: ctx.query,
         mode: ctx.mode,
@@ -72,12 +100,11 @@ export function createEvalWorker({
         obscurityTarget: ctx.obscurityTarget ?? null,
         pipelineVersion: ctx.pipelineVersion,
         pipelineDiagnostics: ctx.pipelineDiagnostics,
-        recommendationCount: Array.isArray(ctx.recommendations) ? ctx.recommendations.length : 0,
+        recommendationCount: recs.length,
       });
 
-      const bandNames = extractBandNames(ctx.recommendations);
-      await scoreObscurity(eventId, bandNames);
-      // Phase 8.4: enrichWithHeuristics
+      await scoreObscurity(eventId, recs);
+      await scoreHeuristics(eventId, recs);
       // Phase 8.5: judgeEvent
     },
   };
