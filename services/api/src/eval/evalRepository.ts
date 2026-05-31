@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AggregatedMetrics } from "./evalAggregator.js";
 
 export type PipelineDiagnostics = {
   braveHitCount: number;
@@ -49,11 +50,21 @@ export type BandEvalScore = BandEvalScoreInput & {
   createdAt: string;
 };
 
+export type EvalBaseline = {
+  id: string;
+  label: string;
+  metricsJson: string;
+  createdAt: string;
+};
+
 export type EvalRepository = {
   logEvent(input: RecommendationEventInput): Promise<string>;
   listEvents(limit?: number): Promise<RecommendationEvent[]>;
   upsertBandEvalScore(input: BandEvalScoreInput): Promise<void>;
   listBandEvalScores(eventId: string): Promise<BandEvalScore[]>;
+  createBaseline(label: string, metrics: AggregatedMetrics): Promise<EvalBaseline>;
+  listBaselines(): Promise<EvalBaseline[]>;
+  getLatestBaseline(): Promise<EvalBaseline | null>;
 };
 
 export function createNoOpEvalRepository(): EvalRepository {
@@ -68,12 +79,24 @@ export function createNoOpEvalRepository(): EvalRepository {
     async listBandEvalScores() {
       return [];
     },
+    async createBaseline(label, metrics) {
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      return { id, label, metricsJson: JSON.stringify(metrics), createdAt };
+    },
+    async listBaselines() {
+      return [];
+    },
+    async getLatestBaseline() {
+      return null;
+    },
   };
 }
 
 export function createInMemoryEvalRepository(): EvalRepository {
   const events: RecommendationEvent[] = [];
   const bandScores: BandEvalScore[] = [];
+  const baselines: EvalBaseline[] = [];
   return {
     async logEvent(input) {
       const id = randomUUID();
@@ -98,6 +121,20 @@ export function createInMemoryEvalRepository(): EvalRepository {
     },
     async listBandEvalScores(eventId) {
       return bandScores.filter((s) => s.eventId === eventId);
+    },
+    async createBaseline(label, metrics) {
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      const baseline: EvalBaseline = { id, label, metricsJson: JSON.stringify(metrics), createdAt };
+      baselines.push(baseline);
+      return baseline;
+    },
+    async listBaselines() {
+      return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async getLatestBaseline() {
+      if (baselines.length === 0) return null;
+      return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     },
   };
 }
