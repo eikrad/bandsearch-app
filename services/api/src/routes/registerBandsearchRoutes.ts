@@ -233,6 +233,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         void evalWorker.processEvent({
           query: validation.query,
           mode: validation.mode,
+          sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
           userId: req.userId,
           pipelineVersion: appVersion,
           pipelineDiagnostics: (pipelineDiagnostics as PipelineDiagnostics | undefined) ?? {

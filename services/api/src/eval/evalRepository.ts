@@ -11,6 +11,7 @@ export type PipelineDiagnostics = {
 export type RecommendationEventInput = {
   query: string;
   mode: string;
+  sessionId?: string | null;
   obscurityTarget?: string | null;
   pipelineVersion: string;
   pipelineDiagnostics: PipelineDiagnostics;

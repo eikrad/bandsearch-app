@@ -1,4 +1,4 @@
-import { END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
@@ -23,7 +23,7 @@ export type ReflectionSubgraphDeps = {
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
 };
 
-export const REFLECTION_SCHEMA = z.object({
+export const REFLECTION_SCHEMA = new StateSchema({
   braveHits: z.custom<SearchHitInput[]>(),
   newHits: z.custom<SearchHitInput[]>(),
   verifiedCandidates: z.custom<VerifiedCandidate[]>(),
