@@ -5,6 +5,8 @@ export type DesktopChatUiStack = {
   getViewport(): string;
   setMode(mode: string): void;
   getMode(): string;
+  setObscurityTarget(target: string | undefined): void;
+  getObscurityTarget(): string | undefined;
   isLoading(): boolean;
   getConversation(): ConversationMessage[] | null;
   submitQuery(query: string): Promise<unknown>;
@@ -36,6 +38,12 @@ export function createDesktopChatUiStack({
     },
     getMode() {
       return appModel.getMode();
+    },
+    setObscurityTarget(target: string | undefined) {
+      appModel.setObscurityTarget(target);
+    },
+    getObscurityTarget(): string | undefined {
+      return appModel.getObscurityTarget();
     },
     isLoading() {
       return appModel.isLoading();

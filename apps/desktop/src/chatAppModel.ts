@@ -35,6 +35,7 @@ function toRenderableRecommendation(item: any, savedBands: any[]): RenderableRec
 
 export function createChatAppModel({ app }: { app: any }) {
   let mode = "fresh";
+  let obscurityTarget: string | undefined = "underground";
   let loadingState = false;
   let lastMeta: { modeUsed: string; usedPreferenceContext: boolean } = {
     modeUsed: "fresh",
@@ -48,6 +49,12 @@ export function createChatAppModel({ app }: { app: any }) {
     getMode() {
       return mode;
     },
+    setObscurityTarget(next: string | undefined) {
+      obscurityTarget = next;
+    },
+    getObscurityTarget(): string | undefined {
+      return obscurityTarget;
+    },
     isLoading() {
       return loadingState;
     },
@@ -57,7 +64,7 @@ export function createChatAppModel({ app }: { app: any }) {
     async submitQuery(query: string) {
       loadingState = true;
       try {
-        const response = await app.requestRecommendations(query, mode) as any;
+        const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
         lastMeta = response.meta ?? lastMeta;
         return response;
       } finally {

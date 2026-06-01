@@ -294,6 +294,87 @@ test("POST /recommendations forwards priorityContext to the pipeline", async () 
   assert.equal(result.data.meta.usedPreferenceContext, true);
 });
 
+// ─── Phase 8.3b: obscurityTarget threading ───────────────────────────────────
+
+test("POST /recommendations forwards obscurityTarget to the pipeline", async () => {
+  const calls = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (input) => {
+        calls.push(input);
+        return {
+          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+          assistantReply: "",
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        };
+      },
+    },
+  });
+
+  await makeRequest(app, "/recommendations", {
+    query: "dark drone",
+    obscurityTarget: "underground",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].obscurityTarget, "underground");
+});
+
+test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", async () => {
+  const processedContexts = [];
+  const evalWorker = {
+    processEvent: async (ctx) => { processedContexts.push(ctx); },
+  };
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+        assistantReply: "",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+    evalWorker,
+  });
+
+  await makeRequest(app, "/recommendations", {
+    query: "dark drone",
+    obscurityTarget: "obscure",
+  });
+
+  // Give the fire-and-forget a tick to settle
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(processedContexts.length, 1);
+  assert.equal(processedContexts[0].obscurityTarget, "obscure");
+});
+
+test("POST /recommendations passes undefined obscurityTarget when not set", async () => {
+  const processedContexts = [];
+  const evalWorker = {
+    processEvent: async (ctx) => { processedContexts.push(ctx); },
+  };
+  const pipelineCalls = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (input) => {
+        pipelineCalls.push(input);
+        return {
+          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+          assistantReply: "",
+          meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        };
+      },
+    },
+    evalWorker,
+  });
+
+  await makeRequest(app, "/recommendations", { query: "dark drone" });
+
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(pipelineCalls[0].obscurityTarget, undefined);
+  // evalWorker context uses null (DB-bound), not undefined
+  assert.equal(processedContexts[0].obscurityTarget, null);
+});
+
 test("POST /recommendations defaults to fresh mode", async () => {
   const calls = [];
   const app = createApp({
