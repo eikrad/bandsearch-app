@@ -100,9 +100,9 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 
 ---
 
-## Phase 9 — Cloud Deployment (Azure Free Tier + Turso)
+## Phase 9 — Cloud Deployment (Render + Turso)
 
-Deploy the Express API to Azure App Service so the desktop app can connect to a public endpoint instead of requiring a local sidecar. Consolidate on Turso/libSQL as the sole database backend for production (local `better-sqlite3` remains for offline/dev).
+Deploy the Express API to Render so the desktop app can connect to a public endpoint instead of requiring a local sidecar. Consolidate on Turso/libSQL as the sole database backend for production (local `better-sqlite3` remains for offline/dev).
 
 Independent of Phase 8 — eval instrumentation can run against a local API first; cloud deployment unlocks shared hosting and cross-device access without a running desktop sidecar.
 
@@ -132,15 +132,15 @@ The existing migration script targets local SQLite and Postgres. It needs to als
 
 ---
 
-### 9.3 — Azure App Service deployment
+### 9.3 — Render Web Service deployment
 
-Deploy the Express API to Azure App Service (F1 free tier).
+Deploy the Express API as a Render Web Service.
 
 **Action:**
-1. Add a minimal deployment configuration — either an Azure CLI script (`scripts/deploy-azure.sh` using `az webapp up`) or a GitHub Actions workflow (`.github/workflows/deploy-azure.yml`).
-2. Configure required environment variables on the App Service: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`, `PORT` (Azure injects this automatically).
-3. Ensure the `start` script in `package.json` works for Azure (it already uses `tsx services/api/src/server.js` — verify Azure's Node.js runtime supports this or add a build step that compiles to plain JS).
-4. Verify health check endpoint (`GET /`) responds correctly so Azure keeps the app alive.
+1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install --prefix services/api`, start command `npm start --prefix services/api`, health check path `/`, and `region: frankfurt`.
+2. Configure required environment variables in `render.yaml` (non-secret keys) and via the Render dashboard (secrets): `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`. Render injects `PORT` automatically.
+3. Verify the `start` script in `services/api/package.json` works — it already uses `tsx`; confirm the installed Node.js version on Render matches local (specify `engines.node` in `package.json` if needed).
+4. Connect the GitHub repository to Render; auto-deploy triggers on push to `main`.
 
 ---
 
@@ -151,7 +151,7 @@ Deploy the Express API to Azure App Service (F1 free tier).
 The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
 
 **Action:**
-1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.azurewebsites.net`).
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`).
 2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials.
 3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend.
 4. Update `chatClient.ts` and all API callers to use the configured endpoint.
@@ -162,19 +162,21 @@ The desktop app currently assumes the API runs as a local Tauri sidecar on `loca
 
 **Action:**
 1. Create a Turso database and run the migration script against it.
-2. Deploy the API to Azure App Service with `PREFERENCE_STORE=turso`.
+2. Deploy the API to Render with `PREFERENCE_STORE=turso`.
 3. Verify from the desktop app: register a user, log in, get recommendations, save artists, create groups, chat sessions persist across restarts.
-4. Verify cold-start latency on the Azure free tier is acceptable (F1 has ~20–30 s cold starts).
-5. Document any free-tier limitations (60 min/day CPU, cold starts) in the README.
+4. Verify cold-start latency on the Render free tier is acceptable (free tier spins down after 15 min inactivity; first request takes 30–60 s — upgrade to Starter $7/month for always-on if needed).
+5. Document free-tier limitations (cold starts, no SLA) in the README.
 
 ---
 
 ### 9.6 — CI/CD pipeline (optional)
 
+Render auto-deploys on every push to the connected branch, so no separate deploy workflow is needed. The optional hardening step is a pre-deploy gate.
+
 **Action:**
-1. Add a GitHub Actions workflow that deploys to Azure on push to `main` (or a `deploy` branch).
-2. Use Azure's publish profile or `az webapp deploy` with OIDC credentials.
-3. Run `npm run ci` before deploying to prevent broken code from reaching production.
+1. Add a GitHub Actions workflow (`.github/workflows/deploy-render.yml`) that runs `npm run ci` on push to `main` and, only if tests pass, triggers a Render deploy hook (`curl -X POST $RENDER_DEPLOY_HOOK_URL`).
+2. Store the Render deploy hook URL as a GitHub Actions secret (`RENDER_DEPLOY_HOOK_URL`) — available in the Render service dashboard under Settings → Deploy Hook.
+3. Optionally disable Render's automatic git-push deploys and rely solely on the Actions-triggered hook so broken code never reaches production.
 
 ---
 

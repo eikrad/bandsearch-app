@@ -251,6 +251,17 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: any; th
 }
 
 function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnType<typeof getTheme> }) {
+  const [showSlowHint, setShowSlowHint] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!visible) {
+      setShowSlowHint(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowSlowHint(true), 8000);
+    return () => clearTimeout(timer);
+  }, [visible]);
+
   if (!visible) return null;
   return React.createElement(
     "div",
@@ -278,7 +289,25 @@ function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnT
       style: { ["--spinner-accent"]: theme.accent },
       "aria-hidden": true,
     }),
-    React.createElement("span", null, "Finding niche recommendations…"),
+    React.createElement(
+      "span",
+      null,
+      "Finding niche recommendations…",
+      showSlowHint
+        ? React.createElement(
+            "span",
+            {
+              style: {
+                display: "block",
+                fontSize: "12px",
+                color: theme.textTertiary,
+                marginTop: "3px",
+              },
+            },
+            "The server may be waking up after a period of inactivity — first requests can take up to 60 s.",
+          )
+        : null,
+    ),
   );
 }
 
