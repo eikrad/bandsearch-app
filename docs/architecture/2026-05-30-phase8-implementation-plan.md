@@ -22,14 +22,35 @@ critical path.
 |-------|--------|
 | 8.1 — Event logging + evalWorker scaffold | ✓ Done |
 | 8.2 — Last.fm obscurity scoring | ✓ Done |
-| 8.3 — Obscurity target UI + API threading | ✓ Done |
-| 8.4 — Search source quality + evidence checks | ✓ Done |
-| 8.5 — LLM-as-judge (batched) | ✓ Done |
+| 8.3 — Obscurity target UI + API threading | ⚠ **Partial — not wired end-to-end (see Review Findings)** |
+| 8.3b — Obscurity target remediation | ← **next (new, blocking)** |
+| 8.4 — Search source quality + evidence checks | ✓ Done (heuristic tuning open — see Findings F8) |
+| 8.5 — LLM-as-judge (batched) | ✓ Done (threshold mismatch — see Findings F3) |
 | 8.5b — Judge calibration | ✓ Done |
-| 8.6 — Baseline snapshots + eval API | ✓ Done |
+| 8.6 — Baseline snapshots + eval API | ✓ Done (distribution gap — see Findings F4) |
 | 8.7 — Developer dashboard | ✓ Done |
-| 8.8 — User feedback reaction bar | — |
+| 8.8 — User feedback reaction bar | — (needs eventId plumbing — see F5) |
 | 8.9 — Golden dataset + regression runner | — |
+
+---
+
+### Implementation Review Findings (2026-06-01)
+
+A code review of the merged work surfaced deficiencies that change the plan.
+**Most important:** the central Phase-8 feature — the obscurity target — is
+built in pieces but is **not connected end-to-end**, so it currently has no
+effect on recommendations or on the logged data.
+
+| # | Severity | Finding | Where |
+|---|----------|---------|-------|
+| F1 | 🔴 Critical | `validation.obscurityTarget` is computed but **never passed** to `recommend()` **nor** to `evalWorker.processEvent()`. Planner never receives the constraint; `obscurity_target` column is always NULL. | `routes/registerBandsearchRoutes.ts` (`POST /recommendations`) |
+| F2 | 🔴 Critical | `ObscurityTargetPicker.ts` exists but is **never imported/rendered** in `ChatAppView`; no caller passes `obscurityTarget` into `chatClient`. The user cannot set a target. | `apps/desktop/src/ui/` |
+| F3 | 🟠 Medium | Judge system prompt states "cult < 500k, underground < 100k, obscure < 10k" — **contradicts** `obscurityScorer.ts` (cult 20k–500k, underground 2k–20k, obscure < 2k). Calibration measures the judge against a different definition than the deterministic tier. | `eval/judgeWorker.ts` vs `eval/obscurityScorer.ts` |
+| F4 | 🟠 Medium | `obscurityDistribution` counts only cult/underground/obscure — **drops `mainstream` and `unknown`**, hiding the "too mainstream" signal that justifies the whole layer. | `eval/evalAggregator.ts` |
+| F5 | 🟠 Medium (blocks 8.8) | `eventId` is generated inside `processEvent` (fire-and-forget) and **never reaches the HTTP response**, so feedback in 8.8 has nothing to bind to. | `eval/evalWorker.ts`, route |
+| F6 | 🟡 Low | Integration point moved: `processEvent` is called from `registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Plan's Design Decision #2 is stale. | this doc |
+| F7 | 🟡 Low | Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`. Spec's "link to full recommendations" and prompt-hash filtering are not possible. | `eval/evalRepository.ts` |
+| F8 | 🟡 Low | `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that appears in legitimately good why-text → noisy `genericWhyFlag`. `citationSupportRate` also defaults to 1.0 when a why has no URLs, inflating evidence metrics. | `eval/evidenceChecker.ts` |
 
 ---
 
@@ -58,14 +79,20 @@ all needed counts after graph completion (`braveHits.length`,
 return value. All downstream callers pass `pipelineDiagnostics` through `meta`
 and strip it before the HTTP JSON response.
 
-**2. `evalWorker` as the single integration point:** `recommendationPipeline.ts`
-makes exactly **one** fire-and-forget call after each successful recommendation:
+**2. `evalWorker` as the single integration point:** exactly **one**
+fire-and-forget call is made after each successful recommendation:
 ```ts
 void evalWorker.processEvent(context);
 ```
 `evalWorker` owns the full async pipeline: log event → obscurity → heuristics
-→ judge. The pipeline never touches `evalRepository` directly. This keeps
-`recommendationPipeline.ts` clean.
+→ judge. The caller never touches `evalRepository` directly.
+
+> **As built (F6):** the call lives in `routes/registerBandsearchRoutes.ts`
+> inside the `POST /recommendations` handler (not in `recommendationPipeline.ts`).
+> This is acceptable — the route already strips `pipelineDiagnostics` from
+> `meta` there — but **two gaps must be closed** (see Phase 8.3b): the route
+> currently omits `obscurityTarget` from both `recommend()` and the
+> `processEvent` context (F1), and `eventId` is not surfaced for 8.8 (F5).
 
 ---
 
@@ -158,6 +185,18 @@ CREATE TABLE IF NOT EXISTS eval_baselines (
 `band_eval_scores` merges what the spec called two tables into one — simpler
 schema, one `upsertBandEvalScore()` method that works across both phases.
 
+> **Schema drift vs. eval-architecture.md (F7) — decision needed.** The as-built
+> event table omits `recommendations_json`, `planner_prompt_hash`,
+> `ranker_prompt_hash`, `gemini_model`, `brave_budget_config`, and `user_id`
+> from the original spec. Consequences: the dashboard cannot link to the full
+> recommendation payload, and baselines cannot be filtered by prompt hash /
+> model for apples-to-apples comparison (a stated goal of the baseline workflow).
+> The `recommendation_feedback` table (8.8) is also still unbuilt.
+> **Recommendation:** keep the lean schema for now, but add `recommendations_json`
+> (cheap, unblocks the event-log drill-down) and `user_id` when building 8.8,
+> and treat prompt-hash filtering as explicitly deferred — update
+> `eval-architecture.md` to match rather than leaving the docs in conflict.
+
 ---
 
 ### New Files
@@ -231,10 +270,19 @@ in `app.ts` had their factory functions swapped; regression test added in
 
 ---
 
-#### Phase 8.3 — Obscurity Target UI + API Threading 🟡
-_(next — can run in parallel with 8.9 if you want to split work)_
+#### Phase 8.3 — Obscurity Target UI + API Threading ⚠ Partial
+_(built but not wired — superseded by Phase 8.3b below)_
 
-**Build:**
+**What landed:** `ObscurityTarget` type + validation in `contracts.ts`;
+`obscurityTarget` accepted by `validateRecommendationHttpBody`; planner-input
+plumbing in `webSearchPlanner.ts`; `ObscurityTargetPicker.ts` component;
+`obscurityTarget` param in `chatClient`.
+
+**What is missing (→ Phase 8.3b):** the route never forwards the validated
+`obscurityTarget` (F1), the picker is never mounted (F2), and no UI caller
+supplies the value. The feature is inert from the API boundary inward.
+
+**Originally planned build:**
 1. `shared/schemas/contracts.ts`: `ObscurityTarget = 'cult' | 'underground' | 'obscure'`.
    Add `obscurityTarget?: ObscurityTarget` to `ValidatedRecommendationHttpBody`.
    Invalid values silently become `undefined`.
@@ -260,6 +308,35 @@ _(next — can run in parallel with 8.9 if you want to split work)_
 
 ---
 
+#### Phase 8.3b — Obscurity Target Remediation 🔴 _(next — blocking)_
+
+Closes F1 and F2: connect the already-built pieces so the obscurity target
+actually influences recommendations and is recorded on every event.
+
+**Build:**
+1. `routes/registerBandsearchRoutes.ts` (`POST /recommendations`):
+   - Pass `obscurityTarget: validation.obscurityTarget` into
+     `resolvedRecommendationPipeline.recommend({ ... })`. (The pipeline already
+     reads `request.obscurityTarget` and threads it to the planner.)
+   - Add `obscurityTarget: validation.obscurityTarget ?? null` to the
+     `evalWorker.processEvent({ ... })` context so `obscurity_target` is logged.
+2. `apps/desktop/src/ui/ChatAppView.ts`: import and render
+   `ObscurityTargetPicker`; hold the selected target in view state (default
+   `underground` per spec).
+3. `apps/desktop/src/chatAppModel.ts` (or the message-send path): pass the
+   selected `obscurityTarget` through to `chatClient`'s recommendation call.
+
+**Tests (write first):**
+- `test/recommendations-route.test.js`: a request with `obscurityTarget`
+  threads it (a) into the pipeline `recommend()` call and (b) into the
+  `processEvent` context. Assert `obscurity_target` is persisted (in-memory repo).
+- `test/obscurity-target-picker.test.js`: already present — extend to assert
+  `ChatAppView` mounts the picker and a selection reaches the send call.
+
+**Commit:** `fix(eval): wire obscurity target through route, worker, and UI`
+
+---
+
 #### Phase 8.4 — Search Source Quality + Evidence Checks 🟢
 
 **Build:**
@@ -282,6 +359,17 @@ _(next — can run in parallel with 8.9 if you want to split work)_
 - `test/eval/evidence-checker.test.js`: cited vs. uncited; `genericWhyFlag` true/false
 
 **Commit:** `feat(eval): search source quality and evidence heuristics`
+
+**Follow-up (F8 — heuristic tuning, do alongside 8.5b calibration):**
+- `GENERIC_PHRASES` currently flags "fans of", "similar to", "in the vein of",
+  "reminiscent of" — comparison phrasing that appears in good why-text. Consider
+  only flagging when such phrasing co-occurs with **zero** cited URLs, or narrow
+  the list to true filler ("you might enjoy", "great band", "check them out").
+- `checkEvidence` returns `citationSupportRate = 1.0` for why-text with no URLs
+  ("vacuously supported"). Document this and have the judge/aggregator treat
+  "no URLs" distinctly from "all URLs supported" so evidence metrics aren't
+  inflated by ungrounded prose. Validate the chosen behaviour against the
+  calibration set before locking it in.
 
 ---
 
@@ -317,6 +405,19 @@ This is 8× cheaper, faster, and simpler than per-band calls.
 **Refactor:** `buildJudgePrompt` exported and snapshot-tested independently.
 
 **Commit:** `feat(eval): batched LLM-as-judge via Claude with prompt caching`
+
+**Fix (F3 — threshold mismatch, do before re-running calibration):**
+The judge system prompt hardcodes obscurity cut points ("cult < 500k,
+underground < 100k, obscure < 10k") that contradict `obscurityScorer.ts`
+(`OBSCURITY_THRESHOLDS`: cult 20k–500k, underground 2k–20k, obscure < 2k).
+- Make `obscurityScorer.OBSCURITY_THRESHOLDS` the single source of truth and
+  derive the prompt's tier description from it (or restate it verbatim).
+- Pass the already-computed `obscurityTier` into `JudgeInput` (the worker
+  reads it from the DB row) so the judge scores `obscurity_fit` against the
+  same tier the deterministic layer assigned, not against re-derived numbers.
+- `judge_prompt_hash` will change → re-run `run-calibration.ts` afterward.
+
+**Commit (fix):** `fix(eval): align judge obscurity thresholds with obscurityScorer`
 
 ---
 
@@ -368,6 +469,16 @@ This is 8× cheaper, faster, and simpler than per-band calls.
 
 **Commit:** `feat(eval): baseline snapshots and eval API endpoints`
 
+**Fix (F4 — distribution gap):** `aggregateMetrics.obscurityDistribution`
+counts only `cult|underground|obscure` and silently ignores `mainstream` and
+`unknown`. Add both keys to `obscurityDistribution` (and to the dashboard's
+stacked bar). A high `mainstream` share is precisely the "too mainstream"
+regression signal the layer exists to catch; `unknown` (not on Last.fm) is a
+positive obscurity signal worth its own slice. Update `evalAggregator.test.js`
+to assert all five buckets.
+
+**Commit (fix):** `fix(eval): include mainstream and unknown in obscurity distribution`
+
 ---
 
 #### Phase 8.7 — Developer Dashboard 🟢
@@ -399,12 +510,26 @@ One self-contained HTML file. No separate JS file to serve or path to resolve.
 
 #### Phase 8.8 — User Feedback Reaction Bar 🟡
 
+**Prerequisite (F5 — eventId plumbing):** `processEvent` currently generates the
+event id internally and runs fire-and-forget, so the HTTP response has no id to
+bind feedback to. Fix this first:
+- Add `recommendation_feedback` table + `logFeedback()` (already in the
+  architecture spec but never built).
+- Pre-generate the event id in the route (`const eventId = randomUUID()`),
+  pass it into `processEvent(ctx)` (extend `EvalEventContext` with `eventId`),
+  and have `evalRepository.logEvent` accept an optional pre-supplied id instead
+  of always minting its own. Return `eventId` in the `/recommendations` response
+  `meta`. The eval call stays fire-and-forget — the id is generated synchronously,
+  the logging is not awaited.
+
 **Build:**
-1. `evalRepository.ts`: add `logFeedback(input: FeedbackInput): Promise<void>`.
-2. `evalRoutes.ts`: add `POST /eval/feedback` — validates `feedback_type` enum;
-   calls `evalRepository.logFeedback()`; returns `{ ok: true }`.
-3. `registerBandsearchRoutes.ts`: expose `eventId` in `POST /recommendations`
-   response `meta` field so the UI can reference it.
+1. `evalRepository.ts`: add `logFeedback(input: FeedbackInput): Promise<void>`
+   and the `recommendation_feedback` table (no-op + in-memory + SQLite).
+2. `evalRoutes.ts`: add `POST /eval/feedback` — validates `feedback_type` enum
+   (`good|too_mainstream|wrong_direction`); calls `evalRepository.logFeedback()`;
+   returns `{ ok: true }`. Gate behind `evalDashboardEnabled` like the others.
+3. `registerBandsearchRoutes.ts`: surface the pre-generated `eventId` in the
+   `POST /recommendations` response `meta` field (see Prerequisite above).
 4. `FeedbackReactionBar.ts` — `React.createElement` component. Props:
    `{ visible: boolean; onFeedback(type): void; onDismiss(): void }`. Three
    buttons + label. `useEffect` auto-dismiss after 12 s.
@@ -453,14 +578,18 @@ _(can run in parallel with 8.3–8.8 immediately)_
 ```
 8.1  event logging + evalWorker scaffold       ✓ done
 8.2  Last.fm obscurity                         ✓ done
-8.3  obscurity target UI/API                   ← next
-8.4  heuristics                                ← 8.2
-8.5  LLM judge (batched)                       ← 8.4
-8.5b calibration                               ← 8.5
-8.6  baselines + eval API                      ← 8.4, 8.5
-8.7  dashboard                                 ← 8.6
-8.8  feedback bar                              ← 8.6
+8.3  obscurity target UI/API                   ⚠ partial (built, not wired)
+8.3b obscurity target remediation              ← next, blocking (closes F1, F2)
+8.4  heuristics                                ✓ done (F8 tuning open)
+8.5  LLM judge (batched)                        ✓ done (F3 fix before re-calibration)
+8.5b calibration                               ✓ done (re-run after F3 fix)
+8.6  baselines + eval API                       ✓ done (F4 distribution fix)
+8.7  dashboard                                  ✓ done
+8.8  feedback bar                              ← needs F5 eventId plumbing
 8.9  golden dataset                            ← 8.1  (can start now)
+
+Remediation order: 8.3b (blocking) → F3 + F4 fixes (quality) →
+8.8 (incl. F5) → 8.9. F8 tuning folds into the next calibration pass.
 ```
 
 ---

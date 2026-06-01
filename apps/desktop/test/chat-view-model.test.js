@@ -88,3 +88,36 @@ test("chat app model includes assistant prose in conversation thread", () => {
   assert.ok(thread[1].content.includes("punk edge"), "assistant prose preserved");
   assert.equal(thread[1].cards[0].title, "Mudhoney");
 });
+
+// ─── Phase 8.3b: obscurityTarget state ──────────────────────────────────────
+
+test("chatAppModel defaults obscurityTarget to 'underground'", () => {
+  const vm = createChatAppModel({
+    app: { requestRecommendations: async () => ({ recommendations: [], meta: {} }), getState: () => ({ messages: [], savedBands: [] }) },
+  });
+  assert.equal(vm.getObscurityTarget(), "underground");
+});
+
+test("chatAppModel setObscurityTarget updates the target", () => {
+  const vm = createChatAppModel({
+    app: { requestRecommendations: async () => ({ recommendations: [], meta: {} }), getState: () => ({ messages: [], savedBands: [] }) },
+  });
+  vm.setObscurityTarget("obscure");
+  assert.equal(vm.getObscurityTarget(), "obscure");
+});
+
+test("chatAppModel passes obscurityTarget to requestRecommendations", async () => {
+  const calls = [];
+  const vm = createChatAppModel({
+    app: {
+      requestRecommendations: async (query, mode, obscurityTarget) => {
+        calls.push({ query, mode, obscurityTarget });
+        return { recommendations: [], meta: {} };
+      },
+      getState: () => ({ messages: [], savedBands: [] }),
+    },
+  });
+  vm.setObscurityTarget("cult");
+  await vm.submitQuery("dark drone");
+  assert.equal(calls[0].obscurityTarget, "cult");
+});

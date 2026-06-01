@@ -1,6 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatAppView } from "./ChatAppView.js";
+import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { formatRecommendationQueryError } from "../apiErrorMessages.js";
 
 type ActionStatus = { type: "success" | "error"; message: string } | null;
@@ -9,6 +10,7 @@ interface CreateDesktopReactShellOptions {
   renderAdapter: {
     onModeChange: (mode: string) => any;
     onSubmitQuery: (query: string) => any;
+    onObscurityTargetChange?: (target: string | undefined) => any;
     getViewProps: () => Record<string, any>;
   };
   actionHandlers?: Record<string, any>;
@@ -60,6 +62,7 @@ export function createDesktopReactShell({
   const handlers = {
     onModeChange: (mode: string) => renderAdapter.onModeChange(mode),
     onQuerySubmit: (query: string) => renderAdapter.onSubmitQuery(query),
+    onObscurityTargetChange: (target: string | undefined) => renderAdapter.onObscurityTargetChange?.(target),
     onSave: actionHandlers.onSave || (() => {}),
     onRate: actionHandlers.onRate || (() => {}),
     onMore: actionHandlers.onMore || (() => {}),
