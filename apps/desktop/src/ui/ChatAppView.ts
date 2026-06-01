@@ -1,5 +1,6 @@
 import * as React from "react";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
+import { FeedbackReactionBar } from "./FeedbackReactionBar.js";
 
 function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
@@ -730,6 +731,11 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers:
         },
       },
       React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
+      React.createElement(FeedbackReactionBar, {
+        visible: viewProps.showFeedbackBar === true,
+        onFeedback: (type: string) => handlers.onFeedback?.(type),
+        onDismiss: () => handlers.onFeedbackDismiss?.(),
+      }),
       React.createElement(ObscurityTargetPicker, {
         target: viewProps.obscurityTarget,
         onTargetChange: (target: string | undefined) => handlers.onObscurityTargetChange?.(target),

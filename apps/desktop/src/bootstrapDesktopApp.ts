@@ -68,7 +68,7 @@ export function bootstrapDesktopApp({
       const result = await chatClient.listSessions() as any;
       return result.sessions;
     },
-    async requestRecommendations(query: string, mode = "fresh") {
+    async requestRecommendations(query: string, mode = "fresh", obscurityTarget?: string) {
       const effectiveIds =
         pendingSelectedArtistIds.length > 0 ? [...pendingSelectedArtistIds] : state.selectedArtistIds;
       if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
@@ -88,9 +88,12 @@ export function bootstrapDesktopApp({
         return [];
       });
       state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
-      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory, effectiveIds);
+      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget);
       state = applyAssistantMessage(state, result as any);
       return result;
+    },
+    async sendFeedback(eventId: string, feedbackType: string) {
+      return chatClient.sendFeedback(eventId, feedbackType);
     },
     toggleArtistSelection(id: string) {
       const ids: string[] = state.selectedArtistIds;
