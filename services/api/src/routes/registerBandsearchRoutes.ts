@@ -104,6 +104,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   // Auth routes (public)
   if (resolvedAuthService) {
     app.post("/auth/register", async (req, res) => {
+      if (process.env.REGISTRATION_OPEN === "false") {
+        return sendError(res, 403, "registration_closed", "registration is currently closed");
+      }
       const { email, displayName, password } = req.body ?? {};
       const result = await resolvedAuthService.register({ email: String(email ?? ""), displayName: String(displayName ?? ""), password: String(password ?? "") });
       if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "registration failed");
