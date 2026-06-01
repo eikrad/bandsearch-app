@@ -11,6 +11,7 @@ export type PipelineDiagnostics = {
 };
 
 export type RecommendationEventInput = {
+  id?: string;
   query: string;
   mode: string;
   sessionId?: string | null;
@@ -58,6 +59,14 @@ export type EvalBaseline = {
   createdAt: string;
 };
 
+export type FeedbackType = "good" | "too_mainstream" | "wrong_direction";
+
+export type FeedbackInput = {
+  eventId: string;
+  feedbackType: FeedbackType;
+  userId?: string;
+};
+
 export type EvalRepository = {
   logEvent(input: RecommendationEventInput): Promise<string>;
   listEvents(limit?: number): Promise<RecommendationEvent[]>;
@@ -67,12 +76,13 @@ export type EvalRepository = {
   createBaseline(label: string, metrics: AggregatedMetrics): Promise<EvalBaseline>;
   listBaselines(): Promise<EvalBaseline[]>;
   getLatestBaseline(): Promise<EvalBaseline | null>;
+  logFeedback(input: FeedbackInput): Promise<void>;
 };
 
 export function createNoOpEvalRepository(): EvalRepository {
   return {
-    async logEvent() {
-      return "noop";
+    async logEvent(input) {
+      return input.id ?? "noop";
     },
     async listEvents() {
       return [];
@@ -95,6 +105,7 @@ export function createNoOpEvalRepository(): EvalRepository {
     async getLatestBaseline() {
       return null;
     },
+    async logFeedback() {},
   };
 }
 
@@ -102,9 +113,10 @@ export function createInMemoryEvalRepository(): EvalRepository {
   const events: RecommendationEvent[] = [];
   const bandScores: BandEvalScore[] = [];
   const baselines: EvalBaseline[] = [];
+  const feedbackRows: (FeedbackInput & { id: string; createdAt: string })[] = [];
   return {
     async logEvent(input) {
-      const id = randomUUID();
+      const id = input.id ?? randomUUID();
       const createdAt = new Date().toISOString();
       events.push({ ...input, id, createdAt });
       return id;
@@ -144,6 +156,9 @@ export function createInMemoryEvalRepository(): EvalRepository {
     async getLatestBaseline() {
       if (baselines.length === 0) return null;
       return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    },
+    async logFeedback(input) {
+      feedbackRows.push({ ...input, id: randomUUID(), createdAt: new Date().toISOString() });
     },
   };
 }
@@ -271,6 +286,13 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       UNIQUE(event_id, band_name)
     );
     CREATE INDEX IF NOT EXISTS idx_band_eval_scores_event_id ON band_eval_scores (event_id);
+    CREATE TABLE IF NOT EXISTS recommendation_feedback (
+      id            TEXT PRIMARY KEY,
+      event_id      TEXT NOT NULL,
+      user_id       TEXT NOT NULL DEFAULT 'anonymous',
+      feedback_type TEXT NOT NULL,
+      created_at    TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS eval_baselines (
       id           TEXT PRIMARY KEY,
       label        TEXT NOT NULL,
@@ -281,7 +303,7 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
 
   return {
     async logEvent(input) {
-      const id = randomUUID();
+      const id = input.id ?? randomUUID();
       const createdAt = new Date().toISOString();
       const d = input.pipelineDiagnostics;
       db.prepare(`
@@ -387,6 +409,14 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
         `SELECT * FROM eval_baselines ORDER BY created_at DESC LIMIT 1`,
       ).get() as BaselineRow | undefined;
       return row ? mapBaselineRow(row) : null;
+    },
+
+    async logFeedback(input) {
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      db.prepare(
+        `INSERT INTO recommendation_feedback (id, event_id, user_id, feedback_type, created_at) VALUES (?, ?, ?, ?, ?)`,
+      ).run(id, input.eventId, input.userId ?? "anonymous", input.feedbackType, createdAt);
     },
   };
 }

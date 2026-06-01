@@ -1,0 +1,82 @@
+[
+  {
+    "id": "blackgaze-underground",
+    "query": "atmospheric black metal with shoegaze elements, dreamy and ethereal",
+    "obscurityTarget": "underground",
+    "nuggets": ["Alcest", "Fen", "Les Discrets"],
+    "antiBands": ["Coldplay", "Radiohead", "Sigur Rós", "Deafheaven"],
+    "notes": "Deafheaven is mainstream enough to be an anti-band at underground target"
+  },
+  {
+    "id": "death-doom-obscure",
+    "query": "slow crushing death doom metal with funeral atmosphere",
+    "obscurityTarget": "obscure",
+    "nuggets": ["Evoken", "Mournful Congregation", "Worship"],
+    "antiBands": ["Paradise Lost", "My Dying Bride", "Katatonia"],
+    "notes": "Paradise Lost and MDB are too well known for obscure target"
+  },
+  {
+    "id": "drone-doom-obscure",
+    "query": "minimal drone doom with long sustained notes and meditative quality",
+    "obscurityTarget": "obscure",
+    "nuggets": ["Corrupted", "Nadja", "Sunn O)))"],
+    "antiBands": ["Earth", "Boris"],
+    "notes": "Earth and Boris crossed over to wider audiences"
+  },
+  {
+    "id": "jazz-adjacent-cult",
+    "query": "jazz-influenced avant garde metal with odd time signatures",
+    "obscurityTarget": "cult",
+    "nuggets": ["Ephel Duath", "Deathspell Omega", "Arcturus"],
+    "antiBands": ["Tool", "Meshuggah", "Opeth"],
+    "notes": "Tool and Meshuggah are mainstream; Opeth too well-known"
+  },
+  {
+    "id": "folk-metal-underground",
+    "query": "pagan folk metal with authentic traditional instruments",
+    "obscurityTarget": "underground",
+    "nuggets": ["Månegarm", "Arkona", "Falkenbach"],
+    "antiBands": ["Wardruna", "Heilung", "Amon Amarth"],
+    "notes": "Wardruna and Heilung crossed to mainstream; Amon Amarth is major"
+  },
+  {
+    "id": "noise-rock-underground",
+    "query": "harsh noise rock with abrasive textures and post-punk roots",
+    "obscurityTarget": "underground",
+    "nuggets": ["Big Black", "Shellac", "The Jesus Lizard"],
+    "antiBands": ["Nirvana", "Sonic Youth", "Pixies"],
+    "notes": "Sonic Youth and Pixies are classic alt-rock staples"
+  },
+  {
+    "id": "black-metal-raw-obscure",
+    "query": "raw lo-fi black metal with kvlt atmosphere and minimal production",
+    "obscurityTarget": "obscure",
+    "nuggets": ["Ildjarn", "Bone Awl", "Leviathan"],
+    "antiBands": ["Darkthrone", "Burzum", "Mayhem"],
+    "notes": "Second wave Norwegian bands are benchmark artists, not hidden gems"
+  },
+  {
+    "id": "post-metal-cult",
+    "query": "cinematic post-metal with instrumental passages and emotional peaks",
+    "obscurityTarget": "cult",
+    "nuggets": ["Mouth of the Architect", "Neurosis", "Cult of Luna"],
+    "antiBands": ["Explosions in the Sky", "Russian Circles", "ISIS"],
+    "notes": "ISIS and Russian Circles are reasonably well known; Explosions is mainstream"
+  },
+  {
+    "id": "dark-ambient-obscure",
+    "query": "cold dark ambient with field recordings and sparse textural sound design",
+    "obscurityTarget": "obscure",
+    "nuggets": ["Lustmord", "Atrium Carceri", "Trobar de Morte"],
+    "antiBands": ["Brian Eno", "Stars of the Lid", "Tim Hecker"],
+    "notes": "Brian Eno and Tim Hecker have mainstream recognition"
+  },
+  {
+    "id": "psychedelic-heavy-cult",
+    "query": "heavy psychedelic rock with long improvisational jams and fuzz guitar",
+    "obscurityTarget": "cult",
+    "nuggets": ["Colour Haze", "Barn Owl", "Earthless"],
+    "antiBands": ["Black Sabbath", "Led Zeppelin", "Hawkwind"],
+    "notes": "Sabbath and Zeppelin are stadium rock legends"
+  }
+]

@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Express } from "express";
 import { sendError } from "../http/errors.js";
-import type { EvalRepository } from "./evalRepository.js";
+import type { EvalRepository, FeedbackType } from "./evalRepository.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
 import type { AggregatedMetrics } from "./evalAggregator.js";
+
+const VALID_FEEDBACK_TYPES = new Set<FeedbackType>(["good", "too_mainstream", "wrong_direction"]);
 
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
@@ -85,6 +87,25 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
     });
+  });
+
+  app.post("/eval/feedback", async (req, res) => {
+    if (!evalDashboardEnabled) {
+      return sendError(res, 404, "not_found", "route not found: /eval/feedback");
+    }
+    const { eventId, feedbackType, userId } = req.body ?? {};
+    if (!eventId || typeof eventId !== "string") {
+      return sendError(res, 400, "validation_error", "eventId is required");
+    }
+    if (!VALID_FEEDBACK_TYPES.has(feedbackType as FeedbackType)) {
+      return sendError(res, 400, "validation_error", "feedbackType must be one of: good, too_mainstream, wrong_direction");
+    }
+    await evalRepository.logFeedback({
+      eventId,
+      feedbackType: feedbackType as FeedbackType,
+      userId: typeof userId === "string" ? userId : undefined,
+    });
+    return res.status(200).json({ ok: true });
   });
 
   app.get("/eval/dashboard", (req, res) => {

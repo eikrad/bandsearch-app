@@ -74,6 +74,16 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       return response.json();
     },
 
+    async sendFeedback(eventId: string, feedbackType: string) {
+      const response = await fetchImpl(`${baseUrl}/eval/feedback`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ eventId, feedbackType }),
+      });
+      if (!response.ok) return;
+      return response.json();
+    },
+
     async createPreference(savedBand: unknown) {
       const response = await fetchImpl(`${baseUrl}/preferences`, {
         method: "POST",

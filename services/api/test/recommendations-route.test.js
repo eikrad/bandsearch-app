@@ -407,3 +407,50 @@ test("POST /recommendations defaults to fresh mode", async () => {
   assert.equal(result.data.meta.modeUsed, "fresh");
   assert.equal(result.data.meta.usedPreferenceContext, false);
 });
+
+test("POST /recommendations includes eventId in meta when evalWorker is set", async () => {
+  const processedContexts = [];
+  const evalWorker = {
+    processEvent: async (ctx) => { processedContexts.push(ctx); },
+  };
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [] }],
+        assistantReply: "",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+    evalWorker,
+  });
+
+  const result = await makeRequest(app, "/recommendations", { query: "blackgaze bands" });
+
+  assert.equal(result.status, 200);
+  assert.ok(typeof result.data.meta.eventId === "string", "meta.eventId should be a string");
+  assert.ok(result.data.meta.eventId.length > 0, "meta.eventId should not be empty");
+});
+
+test("POST /recommendations passes pre-generated eventId to processEvent", async () => {
+  const processedContexts = [];
+  const evalWorker = {
+    processEvent: async (ctx) => { processedContexts.push(ctx); },
+  };
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [] }],
+        assistantReply: "",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+    evalWorker,
+  });
+
+  const result = await makeRequest(app, "/recommendations", { query: "blackgaze bands" });
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.equal(result.status, 200);
+  assert.equal(processedContexts.length, 1);
+  assert.equal(processedContexts[0].eventId, result.data.meta.eventId);
+});

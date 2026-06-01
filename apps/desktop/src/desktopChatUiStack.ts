@@ -8,8 +8,11 @@ export type DesktopChatUiStack = {
   setObscurityTarget(target: string | undefined): void;
   getObscurityTarget(): string | undefined;
   isLoading(): boolean;
+  isShowFeedbackBar(): boolean;
+  dismissFeedbackBar(): void;
   getConversation(): ConversationMessage[] | null;
   submitQuery(query: string): Promise<unknown>;
+  submitFeedback(feedbackType: string): Promise<void>;
 };
 
 function normalizeViewport(v: string): string {
@@ -48,11 +51,20 @@ export function createDesktopChatUiStack({
     isLoading() {
       return appModel.isLoading();
     },
+    isShowFeedbackBar() {
+      return appModel.isShowFeedbackBar();
+    },
+    dismissFeedbackBar() {
+      appModel.dismissFeedbackBar();
+    },
     getConversation() {
       return appModel.getConversation();
     },
     async submitQuery(query: string) {
       return appModel.submitQuery(query);
+    },
+    async submitFeedback(feedbackType: string) {
+      return appModel.submitFeedback(feedbackType);
     },
   };
 }

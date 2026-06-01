@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "calibrate": "tsx run-calibration.ts",
-    "golden": "tsx run-golden.ts"
+    "golden": "tsx run-golden.ts",
+    "test": "tsx --test run-golden.test.ts"
   }
 }

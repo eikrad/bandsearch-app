@@ -37,10 +37,11 @@ export function createChatAppModel({ app }: { app: any }) {
   let mode = "fresh";
   let obscurityTarget: string | undefined = "underground";
   let loadingState = false;
-  let lastMeta: { modeUsed: string; usedPreferenceContext: boolean } = {
+  let lastMeta: { modeUsed: string; usedPreferenceContext: boolean; eventId?: string } = {
     modeUsed: "fresh",
     usedPreferenceContext: false,
   };
+  let showFeedbackBar = false;
 
   return {
     setMode(next: string) {
@@ -61,15 +62,31 @@ export function createChatAppModel({ app }: { app: any }) {
     getLastMeta() {
       return lastMeta;
     },
+    isShowFeedbackBar() {
+      return showFeedbackBar;
+    },
+    dismissFeedbackBar() {
+      showFeedbackBar = false;
+    },
     async submitQuery(query: string) {
+      showFeedbackBar = false;
       loadingState = true;
       try {
         const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
         lastMeta = response.meta ?? lastMeta;
+        if (Array.isArray(response.recommendations) && response.recommendations.length > 0) {
+          showFeedbackBar = true;
+        }
         return response;
       } finally {
         loadingState = false;
       }
+    },
+    async submitFeedback(feedbackType: string) {
+      showFeedbackBar = false;
+      const eventId = lastMeta?.eventId;
+      if (!eventId) return;
+      await app.sendFeedback(eventId, feedbackType);
     },
     getConversation(): ConversationMessage[] | null {
       const appState = app.getState();

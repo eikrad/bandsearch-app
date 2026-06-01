@@ -6,6 +6,7 @@ import { scoreSearchSources, ratioToSourceQuality } from "./searchSourceScorer.j
 import { checkEvidence } from "./evidenceChecker.js";
 
 export type EvalEventContext = {
+  eventId?: string;
   query: string;
   mode: string;
   sessionId?: string | null;
@@ -97,6 +98,7 @@ export function createEvalWorker({
       const recs = extractRecommendations(ctx.recommendations);
 
       const eventId = await evalRepository.logEvent({
+        id: ctx.eventId,
         query: ctx.query,
         mode: ctx.mode,
         sessionId: ctx.sessionId ?? null,
