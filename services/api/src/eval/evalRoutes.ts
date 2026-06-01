@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Express } from "express";
 import { sendError } from "../http/errors.js";
 import type { EvalRepository } from "./evalRepository.js";
@@ -7,10 +9,15 @@ import type { AggregatedMetrics } from "./evalAggregator.js";
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
   evalDashboardEnabled: boolean;
+  evalDashboardPassword?: string;
 };
 
 export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
-  const { evalRepository, evalDashboardEnabled } = ctx;
+  const { evalRepository, evalDashboardEnabled, evalDashboardPassword } = ctx;
+
+  const dashboardHtml = evalDashboardEnabled
+    ? readFileSync(join(__dirname, "dashboard", "index.html"), "utf8")
+    : null;
 
   app.get("/eval/events", async (req, res) => {
     if (!evalDashboardEnabled) {
@@ -80,5 +87,33 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
     });
+  });
+
+  app.get("/eval/dashboard", (req, res) => {
+    if (!evalDashboardEnabled) {
+      return sendError(res, 404, "not_found", "route not found: /eval/dashboard");
+    }
+
+    if (evalDashboardPassword) {
+      const authHeader = (req.headers["authorization"] as string | undefined) ?? "";
+      if (!authHeader.startsWith("Basic ")) {
+        res.setHeader("WWW-Authenticate", 'Basic realm="eval"');
+        return res.status(401).send("Unauthorized");
+      }
+      const credentials = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+      const colonIdx = credentials.indexOf(":");
+      const suppliedPassword = colonIdx >= 0 ? credentials.slice(colonIdx + 1) : credentials;
+      if (suppliedPassword !== evalDashboardPassword) {
+        res.setHeader("WWW-Authenticate", 'Basic realm="eval"');
+        return res.status(401).send("Unauthorized");
+      }
+    }
+
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'",
+    );
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(dashboardHtml);
   });
 }
