@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Express } from "express";
 import { sendError } from "../http/errors.js";
 import type { EvalRepository } from "./evalRepository.js";
@@ -7,10 +9,15 @@ import type { AggregatedMetrics } from "./evalAggregator.js";
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
   evalDashboardEnabled: boolean;
+  evalDashboardPassword?: string;
 };
 
 export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
-  const { evalRepository, evalDashboardEnabled } = ctx;
+  const { evalRepository, evalDashboardEnabled, evalDashboardPassword } = ctx;
+
+  const dashboardHtml = evalDashboardEnabled
+    ? readFileSync(join(__dirname, "dashboard", "index.html"), "utf8")
+    : null;
 
   app.get("/eval/events", async (req, res) => {
     if (!evalDashboardEnabled) {
@@ -18,12 +25,14 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     }
     const limit = Math.min(Number(req.query.limit ?? 50), 200);
     const events = await evalRepository.listEvents(isNaN(limit) ? 50 : limit);
-    const eventsWithScores = await Promise.all(
-      events.map(async (event) => {
-        const bandScores = await evalRepository.listBandEvalScores(event.id);
-        return { ...event, bandScores };
-      }),
-    );
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
+    const scoresByEventId = new Map<string, typeof allScores>();
+    for (const score of allScores) {
+      const arr = scoresByEventId.get(score.eventId) ?? [];
+      arr.push(score);
+      scoresByEventId.set(score.eventId, arr);
+    }
+    const eventsWithScores = events.map((event) => ({ ...event, bandScores: scoresByEventId.get(event.id) ?? [] }));
     return res.status(200).json({ events: eventsWithScores });
   });
 
@@ -35,9 +44,7 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
       evalRepository.listEvents(200),
       evalRepository.getLatestBaseline(),
     ]);
-    const allScores = (
-      await Promise.all(events.map((e) => evalRepository.listBandEvalScores(e.id)))
-    ).flat();
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
 
     const current: AggregatedMetrics = aggregateMetrics(events, allScores);
 
@@ -63,10 +70,8 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return sendError(res, 400, "validation_error", "label is required");
     }
-    const [events] = await Promise.all([evalRepository.listEvents(200)]);
-    const allScores = (
-      await Promise.all(events.map((e) => evalRepository.listBandEvalScores(e.id)))
-    ).flat();
+    const events = await evalRepository.listEvents(200);
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
     const metrics = aggregateMetrics(events, allScores);
     const baseline = await evalRepository.createBaseline(label.trim(), metrics);
     return res.status(201).json({ id: baseline.id, label: baseline.label, createdAt: baseline.createdAt });
@@ -80,5 +85,31 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
     });
+  });
+
+  app.get("/eval/dashboard", (req, res) => {
+    if (!evalDashboardEnabled) {
+      return sendError(res, 404, "not_found", "route not found: /eval/dashboard");
+    }
+
+    if (evalDashboardPassword) {
+      const reject401 = () => {
+        res.setHeader("WWW-Authenticate", 'Basic realm="eval"');
+        return res.status(401).send("Unauthorized");
+      };
+      const authHeader = (req.headers["authorization"] as string | undefined) ?? "";
+      if (!authHeader.startsWith("Basic ")) return reject401();
+      const credentials = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+      const colonIdx = credentials.indexOf(":");
+      const suppliedPassword = colonIdx >= 0 ? credentials.slice(colonIdx + 1) : credentials;
+      if (suppliedPassword !== evalDashboardPassword) return reject401();
+    }
+
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'",
+    );
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(dashboardHtml);
   });
 }

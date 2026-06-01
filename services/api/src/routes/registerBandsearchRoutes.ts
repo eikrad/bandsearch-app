@@ -63,6 +63,7 @@ export type BandsearchRouteContext = {
   evalWorker?: EvalWorker;
   evalRepository?: EvalRepository;
   evalDashboardEnabled?: boolean;
+  evalDashboardPassword?: string;
   resolvedAuthService?: {
     register: (input: { email: string; displayName: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; recoveryCode?: string; error?: string }>;
     login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
@@ -88,6 +89,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalWorker,
     evalRepository,
     evalDashboardEnabled = false,
+    evalDashboardPassword,
     resolvedAuthService,
     authMiddleware,
   } = ctx;
@@ -416,5 +418,6 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   registerEvalRoutes(app, {
     evalRepository: evalRepository ?? createNoOpEvalRepository(),
     evalDashboardEnabled,
+    evalDashboardPassword,
   });
 }

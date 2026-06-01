@@ -26,8 +26,8 @@ critical path.
 | 8.4 — Search source quality + evidence checks | ✓ Done |
 | 8.5 — LLM-as-judge (batched) | ✓ Done |
 | 8.5b — Judge calibration | ✓ Done |
-| 8.6 — Baseline snapshots + eval API | — |
-| 8.7 — Developer dashboard | — |
+| 8.6 — Baseline snapshots + eval API | ✓ Done |
+| 8.7 — Developer dashboard | ✓ Done |
 | 8.8 — User feedback reaction bar | — |
 | 8.9 — Golden dataset + regression runner | — |
 

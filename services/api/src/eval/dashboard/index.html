@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bandsearch Eval Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; padding: 1.5rem; min-height: 100vh; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: #f8fafc; letter-spacing: 0.02em; }
+    h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 0.75rem; }
+    section { margin-bottom: 2rem; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+    .tile { background: #1e2333; border: 1px solid #2d3748; border-radius: 8px; padding: 1rem; }
+    .tile-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.4rem; }
+    .tile-value { font-size: 1.6rem; font-weight: 700; color: #f8fafc; font-variant-numeric: tabular-nums; }
+    .tile-delta { font-size: 0.75rem; margin-top: 0.3rem; }
+    .delta-up { color: #4ade80; }
+    .delta-down { color: #f87171; }
+    .delta-neutral { color: #94a3b8; }
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; }
+    .chart-box { background: #1e2333; border: 1px solid #2d3748; border-radius: 8px; padding: 1rem; }
+    .chart-box canvas { max-height: 220px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    thead th { background: #1e2333; padding: 0.5rem 0.75rem; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #2d3748; }
+    tbody tr:nth-child(odd) { background: #161b27; }
+    tbody tr:nth-child(even) { background: #1a2030; }
+    tbody td { padding: 0.45rem 0.75rem; color: #cbd5e1; border-bottom: 1px solid #1e2333; }
+    .tag { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; }
+    .tag-cult { background: #1e3a5f; color: #93c5fd; }
+    .tag-underground { background: #1e3a2a; color: #86efac; }
+    .tag-obscure { background: #3b1a5f; color: #c4b5fd; }
+    .tag-fresh { background: #1a2a3a; color: #7dd3fc; }
+    .tag-pref { background: #2a1a1a; color: #fca5a5; }
+    .null-val { color: #475569; }
+    #status { font-size: 0.75rem; color: #64748b; margin-bottom: 1rem; }
+    .error-banner { background: #3b1212; border: 1px solid #7f1d1d; border-radius: 6px; padding: 0.75rem 1rem; color: #fca5a5; font-size: 0.85rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Eval Dashboard</h1>
+  <div id="status">Loading…</div>
+  <div id="error-container"></div>
+
+  <section>
+    <h2>Metrics</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section>
+    <h2>Trends &amp; Distributions</h2>
+    <div class="charts-row">
+      <div class="chart-box"><canvas id="chart-trends"></canvas></div>
+      <div class="chart-box"><canvas id="chart-obscurity"></canvas></div>
+      <div class="chart-box"><canvas id="chart-funnel"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Recent Events</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Query</th>
+          <th>Mode</th>
+          <th>Target</th>
+          <th>Bands</th>
+          <th>Relevance</th>
+          <th>Obs.Fit</th>
+          <th>Evidence</th>
+          <th>Discovery</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="events-tbody"></tbody>
+    </table>
+  </section>
+
+  <script>
+  (function () {
+    function fmt(val) {
+      if (val === null || val === undefined) return '<span class="null-val">—</span>';
+      if (typeof val === 'number') return val.toFixed(2);
+      return String(val);
+    }
+
+    function fmtDelta(val) {
+      if (val === null || val === undefined) return '';
+      const sign = val > 0 ? '+' : '';
+      const cls = val > 0.005 ? 'delta-up' : val < -0.005 ? 'delta-down' : 'delta-neutral';
+      return `<span class="${cls}">${sign}${val.toFixed(3)}</span>`;
+    }
+
+    function makeTile(label, value, delta) {
+      const displayVal = (value === null || value === undefined)
+        ? '<span class="null-val">—</span>'
+        : (typeof value === 'number' && value < 2 ? (value * 100).toFixed(1) + '%' : String(value));
+      return `<div class="tile">
+        <div class="tile-label">${label}</div>
+        <div class="tile-value">${displayVal}</div>
+        ${delta !== undefined && delta !== null ? `<div class="tile-delta">${fmtDelta(delta)}</div>` : ''}
+      </div>`;
+    }
+
+    function renderTiles(current, delta) {
+      const d = delta || {};
+      const tiles = [
+        { label: 'Events', value: current.eventCount, delta: null },
+        { label: 'Bands scored', value: current.bandCount, delta: null },
+        { label: 'Relevance', value: current.meanRelevance, delta: d.meanRelevance },
+        { label: 'Obscurity fit', value: current.meanObscurityFit, delta: d.meanObscurityFit },
+        { label: 'Evidence', value: current.meanEvidenceQuality, delta: d.meanEvidenceQuality },
+        { label: 'Discovery', value: current.meanDiscoveryValue, delta: d.meanDiscoveryValue },
+        { label: 'Citation rate', value: current.meanCitationSupportRate, delta: d.meanCitationSupportRate },
+        { label: 'Generic-why %', value: current.genericWhyRate, delta: d.genericWhyRate },
+      ];
+      document.getElementById('tiles').innerHTML = tiles
+        .map(t => makeTile(t.label, t.value, t.delta))
+        .join('');
+    }
+
+    function bucketByDay(events) {
+      const map = {};
+      for (const ev of events) {
+        const day = ev.createdAt.slice(0, 10);
+        if (!map[day]) map[day] = { relevance: [], obscurityFit: [], evidenceQuality: [], discoveryValue: [] };
+        for (const s of (ev.bandScores || [])) {
+          if (s.relevance !== null && s.relevance !== undefined) map[day].relevance.push(s.relevance);
+          if (s.obscurityFit !== null && s.obscurityFit !== undefined) map[day].obscurityFit.push(s.obscurityFit);
+          if (s.evidenceQuality !== null && s.evidenceQuality !== undefined) map[day].evidenceQuality.push(s.evidenceQuality);
+          if (s.discoveryValue !== null && s.discoveryValue !== undefined) map[day].discoveryValue.push(s.discoveryValue);
+        }
+      }
+      return map;
+    }
+
+    function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
+
+    function renderTrendChart(events) {
+      const buckets = bucketByDay(events);
+      const days = Object.keys(buckets).sort();
+      const datasets = [
+        { label: 'Relevance',     data: days.map(d => avg(buckets[d].relevance)),     borderColor: '#60a5fa', tension: 0.3, fill: false },
+        { label: 'Obscurity fit', data: days.map(d => avg(buckets[d].obscurityFit)),  borderColor: '#a78bfa', tension: 0.3, fill: false },
+        { label: 'Evidence',      data: days.map(d => avg(buckets[d].evidenceQuality)),borderColor: '#34d399', tension: 0.3, fill: false },
+        { label: 'Discovery',     data: days.map(d => avg(buckets[d].discoveryValue)), borderColor: '#fb923c', tension: 0.3, fill: false },
+      ];
+      new Chart(document.getElementById('chart-trends'), {
+        type: 'line',
+        data: { labels: days, datasets },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } }, title: { display: true, text: 'Judge scores over time', color: '#94a3b8' } },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#1e2333' } },
+            y: { min: 0, max: 1, ticks: { color: '#64748b' }, grid: { color: '#1e2333' } },
+          },
+        },
+      });
+    }
+
+    function renderObscurityChart(dist) {
+      new Chart(document.getElementById('chart-obscurity'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Cult', 'Underground', 'Obscure'],
+          datasets: [{ data: [dist.cult, dist.underground, dist.obscure], backgroundColor: ['#1d4ed8', '#15803d', '#7c3aed'] }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } }, title: { display: true, text: 'Obscurity tiers', color: '#94a3b8' } },
+        },
+      });
+    }
+
+    function renderFunnelChart(events) {
+      function med(arr) {
+        if (!arr.length) return 0;
+        const s = [...arr].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      }
+      const hits = events.map(e => e.pipelineDiagnostics?.braveHitCount ?? 0);
+      const extracted = events.map(e => e.pipelineDiagnostics?.extractedCandidateCount ?? 0);
+      const verified = events.map(e => e.pipelineDiagnostics?.verifiedCount ?? 0);
+      const recommended = events.map(e => e.recommendationCount ?? 0);
+      new Chart(document.getElementById('chart-funnel'), {
+        type: 'bar',
+        data: {
+          labels: ['Brave hits', 'Extracted', 'Verified', 'Recommended'],
+          datasets: [{ label: 'Median per event', data: [med(hits), med(extracted), med(verified), med(recommended)], backgroundColor: ['#1e40af', '#1e3a8a', '#1e2d6b', '#172554'] }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: { legend: { display: false }, title: { display: true, text: 'Pipeline funnel (median)', color: '#94a3b8' } },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#1e2333' } },
+            y: { ticks: { color: '#94a3b8' } },
+          },
+        },
+      });
+    }
+
+    function meanScores(bandScores) {
+      const r = [], o = [], e = [], d = [];
+      for (const s of bandScores) {
+        if (s.relevance !== null && s.relevance !== undefined) r.push(s.relevance);
+        if (s.obscurityFit !== null && s.obscurityFit !== undefined) o.push(s.obscurityFit);
+        if (s.evidenceQuality !== null && s.evidenceQuality !== undefined) e.push(s.evidenceQuality);
+        if (s.discoveryValue !== null && s.discoveryValue !== undefined) d.push(s.discoveryValue);
+      }
+      return { r: avg(r), o: avg(o), e: avg(e), d: avg(d) };
+    }
+
+    function targetTag(t) {
+      if (!t) return '<span class="null-val">—</span>';
+      const cls = t === 'cult' ? 'tag-cult' : t === 'underground' ? 'tag-underground' : 'tag-obscure';
+      return `<span class="tag ${cls}">${t}</span>`;
+    }
+
+    function modeTag(m) {
+      const cls = m === 'fresh' ? 'tag-fresh' : 'tag-pref';
+      return `<span class="tag ${cls}">${m}</span>`;
+    }
+
+    function renderEventLog(events) {
+      const tbody = document.getElementById('events-tbody');
+      if (!events.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="null-val" style="padding:1rem;text-align:center">No events yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = events.map(ev => {
+        const sc = meanScores(ev.bandScores || []);
+        const date = ev.createdAt ? ev.createdAt.slice(0, 16).replace('T', ' ') : '—';
+        return `<tr>
+          <td>${ev.query}</td>
+          <td>${modeTag(ev.mode)}</td>
+          <td>${targetTag(ev.obscurityTarget)}</td>
+          <td>${(ev.bandScores || []).length}</td>
+          <td>${fmt(sc.r)}</td>
+          <td>${fmt(sc.o)}</td>
+          <td>${fmt(sc.e)}</td>
+          <td>${fmt(sc.d)}</td>
+          <td style="white-space:nowrap;color:#64748b">${date}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function main() {
+      const statusEl = document.getElementById('status');
+      const errContainer = document.getElementById('error-container');
+      try {
+        const [metricsRes, eventsRes] = await Promise.all([
+          fetch('/eval/metrics'),
+          fetch('/eval/events?limit=50'),
+        ]);
+        if (!metricsRes.ok || !eventsRes.ok) throw new Error('API error');
+        const { current, delta } = await metricsRes.json();
+        const { events } = await eventsRes.json();
+
+        renderTiles(current, delta);
+        renderTrendChart(events);
+        renderObscurityChart(current.obscurityDistribution);
+        renderFunnelChart(events);
+        renderEventLog(events);
+
+        statusEl.textContent = `${current.eventCount} events · ${current.bandCount} band scores · updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        errContainer.innerHTML = `<div class="error-banner">Failed to load eval data: ${err.message}</div>`;
+        statusEl.textContent = '';
+      }
+    }
+
+    main();
+  })();
+  </script>
+</body>
+</html>

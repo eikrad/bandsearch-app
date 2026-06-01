@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
 import type { UserRepository } from "./auth/userRepository.js";
 import type { PreferenceRepository } from "./preferences/preferenceRepository.js";
-import { createNoOpEvalRepository, createInMemoryEvalRepository } from "./eval/evalRepository.js";
+import { createNoOpEvalRepository, createInMemoryEvalRepository, createSqliteEvalRepository } from "./eval/evalRepository.js";
 import type { EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
@@ -48,6 +48,7 @@ type AppRuntimeConfig = {
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
   anthropicApiKey?: string;
+  evalDashboardPassword?: string;
   jwtSecret?: string;
   evalDashboardEnabled?: boolean;
 };
@@ -177,7 +178,16 @@ export function createApp({
   // exactly what the worker writes. When no store is injected we keep events
   // in memory while the dashboard is enabled, otherwise everything is a no-op.
   const resolvedEvalRepository: EvalRepository =
-    evalRepository ?? (runtimeConfig.evalDashboardEnabled ? createInMemoryEvalRepository() : createNoOpEvalRepository());
+    evalRepository ??
+    (() => {
+      if (!runtimeConfig.evalDashboardEnabled) return createNoOpEvalRepository();
+      try {
+        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+        return createSqliteEvalRepository({ db });
+      } catch {
+        return createInMemoryEvalRepository();
+      }
+    })();
   const resolvedJudgeWorker = runtimeConfig.anthropicApiKey
     ? createJudgeWorker({
         anthropicApiKey: runtimeConfig.anthropicApiKey,
@@ -216,6 +226,7 @@ export function createApp({
     evalWorker: resolvedEvalWorker,
     evalRepository: resolvedEvalRepository,
     evalDashboardEnabled: runtimeConfig.evalDashboardEnabled ?? false,
+    evalDashboardPassword: runtimeConfig.evalDashboardPassword,
   });
 
   app.use((req: Request, res: Response) => sendError(res, 404, "not_found", `route not found: ${req.path}`));
