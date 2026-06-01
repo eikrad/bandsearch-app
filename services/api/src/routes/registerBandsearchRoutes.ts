@@ -231,6 +231,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         priorityContext: validation.priorityContext,
         messages: validation.messages,
         userId: req.userId,
+        obscurityTarget: validation.obscurityTarget,
       });
 
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
@@ -240,6 +241,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
           mode: validation.mode,
           sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
           userId: req.userId,
+          obscurityTarget: validation.obscurityTarget ?? null,
           pipelineVersion: appVersion,
           pipelineDiagnostics: (pipelineDiagnostics as PipelineDiagnostics | undefined) ?? {
             braveHitCount: 0,
