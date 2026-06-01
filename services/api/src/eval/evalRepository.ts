@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import type { AggregatedMetrics } from "./evalAggregator.js";
+import type { FeedbackType } from "../../../../shared/schemas/src/contracts.js";
+
+export type { FeedbackType };
 
 export type PipelineDiagnostics = {
   braveHitCount: number;
@@ -59,8 +62,6 @@ export type EvalBaseline = {
   createdAt: string;
 };
 
-export type FeedbackType = "good" | "too_mainstream" | "wrong_direction";
-
 export type FeedbackInput = {
   eventId: string;
   feedbackType: FeedbackType;
@@ -113,7 +114,6 @@ export function createInMemoryEvalRepository(): EvalRepository {
   const events: RecommendationEvent[] = [];
   const bandScores: BandEvalScore[] = [];
   const baselines: EvalBaseline[] = [];
-  const feedbackRows: (FeedbackInput & { id: string; createdAt: string })[] = [];
   return {
     async logEvent(input) {
       const id = input.id ?? randomUUID();
@@ -157,9 +157,7 @@ export function createInMemoryEvalRepository(): EvalRepository {
       if (baselines.length === 0) return null;
       return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     },
-    async logFeedback(input) {
-      feedbackRows.push({ ...input, id: randomUUID(), createdAt: new Date().toISOString() });
-    },
+    async logFeedback() {},
   };
 }
 
@@ -288,11 +286,12 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
     CREATE INDEX IF NOT EXISTS idx_band_eval_scores_event_id ON band_eval_scores (event_id);
     CREATE TABLE IF NOT EXISTS recommendation_feedback (
       id            TEXT PRIMARY KEY,
-      event_id      TEXT NOT NULL,
+      event_id      TEXT NOT NULL REFERENCES recommendation_events(id),
       user_id       TEXT NOT NULL DEFAULT 'anonymous',
       feedback_type TEXT NOT NULL,
       created_at    TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_event_id ON recommendation_feedback (event_id);
     CREATE TABLE IF NOT EXISTS eval_baselines (
       id           TEXT PRIMARY KEY,
       label        TEXT NOT NULL,

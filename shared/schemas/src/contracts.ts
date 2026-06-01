@@ -16,6 +16,17 @@ export function validateObscurityTarget(value: unknown): ObscurityTarget | undef
   return undefined;
 }
 
+export type FeedbackType = "good" | "too_mainstream" | "wrong_direction";
+
+const VALID_FEEDBACK_TYPES: ReadonlySet<string> = new Set(["good", "too_mainstream", "wrong_direction"]);
+
+export function validateFeedbackType(value: unknown): FeedbackType | undefined {
+  if (typeof value === "string" && VALID_FEEDBACK_TYPES.has(value)) {
+    return value as FeedbackType;
+  }
+  return undefined;
+}
+
 export type ChatTurnRole = "user" | "assistant";
 
 export type ChatMessage = { role: ChatTurnRole; content: string };

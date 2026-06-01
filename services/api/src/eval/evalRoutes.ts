@@ -1,12 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { sendError } from "../http/errors.js";
-import type { EvalRepository, FeedbackType } from "./evalRepository.js";
+import type { EvalRepository, FeedbackInput } from "./evalRepository.js";
+import { validateFeedbackType } from "../../../../shared/schemas/src/contracts.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
 import type { AggregatedMetrics } from "./evalAggregator.js";
-
-const VALID_FEEDBACK_TYPES = new Set<FeedbackType>(["good", "too_mainstream", "wrong_direction"]);
 
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
@@ -21,10 +20,13 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     ? readFileSync(join(__dirname, "dashboard", "index.html"), "utf8")
     : null;
 
+  // Gate all /eval/* routes — returns 404 when the dashboard is disabled.
+  app.use("/eval", (_req: Request, res: Response, next: NextFunction) => {
+    if (!evalDashboardEnabled) return sendError(res, 404, "not_found", "route not found");
+    next();
+  });
+
   app.get("/eval/events", async (req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/events");
-    }
     const limit = Math.min(Number(req.query.limit ?? 50), 200);
     const events = await evalRepository.listEvents(isNaN(limit) ? 50 : limit);
     const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
@@ -39,9 +41,6 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
   });
 
   app.get("/eval/metrics", async (_req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/metrics");
-    }
     const [events, latestBaseline] = await Promise.all([
       evalRepository.listEvents(200),
       evalRepository.getLatestBaseline(),
@@ -65,9 +64,6 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
   });
 
   app.post("/eval/baseline", async (req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/baseline");
-    }
     const { label } = req.body ?? {};
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return sendError(res, 400, "validation_error", "label is required");
@@ -80,9 +76,6 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
   });
 
   app.get("/eval/baselines", async (_req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/baselines");
-    }
     const baselines = await evalRepository.listBaselines();
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
@@ -90,29 +83,24 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
   });
 
   app.post("/eval/feedback", async (req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/feedback");
-    }
     const { eventId, feedbackType, userId } = req.body ?? {};
     if (!eventId || typeof eventId !== "string") {
       return sendError(res, 400, "validation_error", "eventId is required");
     }
-    if (!VALID_FEEDBACK_TYPES.has(feedbackType as FeedbackType)) {
+    const validatedType = validateFeedbackType(feedbackType);
+    if (!validatedType) {
       return sendError(res, 400, "validation_error", "feedbackType must be one of: good, too_mainstream, wrong_direction");
     }
-    await evalRepository.logFeedback({
+    const input: FeedbackInput = {
       eventId,
-      feedbackType: feedbackType as FeedbackType,
+      feedbackType: validatedType,
       userId: typeof userId === "string" ? userId : undefined,
-    });
+    };
+    await evalRepository.logFeedback(input);
     return res.status(200).json({ ok: true });
   });
 
   app.get("/eval/dashboard", (req, res) => {
-    if (!evalDashboardEnabled) {
-      return sendError(res, 404, "not_found", "route not found: /eval/dashboard");
-    }
-
     if (evalDashboardPassword) {
       const reject401 = () => {
         res.setHeader("WWW-Authenticate", 'Basic realm="eval"');

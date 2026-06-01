@@ -41,7 +41,9 @@ export function createChatAppModel({ app }: { app: any }) {
     modeUsed: "fresh",
     usedPreferenceContext: false,
   };
-  let showFeedbackBar = false;
+  // feedbackDismissed tracks user dismissal; cleared on next query so the bar
+  // re-appears after each new recommendation batch.
+  let feedbackDismissed = false;
 
   return {
     setMode(next: string) {
@@ -63,28 +65,25 @@ export function createChatAppModel({ app }: { app: any }) {
       return lastMeta;
     },
     isShowFeedbackBar() {
-      return showFeedbackBar;
+      return !!lastMeta.eventId && !feedbackDismissed;
     },
     dismissFeedbackBar() {
-      showFeedbackBar = false;
+      feedbackDismissed = true;
     },
     async submitQuery(query: string) {
-      showFeedbackBar = false;
+      feedbackDismissed = false;
       loadingState = true;
       try {
         const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
         lastMeta = response.meta ?? lastMeta;
-        if (Array.isArray(response.recommendations) && response.recommendations.length > 0) {
-          showFeedbackBar = true;
-        }
         return response;
       } finally {
         loadingState = false;
       }
     },
     async submitFeedback(feedbackType: string) {
-      showFeedbackBar = false;
-      const eventId = lastMeta?.eventId;
+      feedbackDismissed = true;
+      const eventId = lastMeta.eventId;
       if (!eventId) return;
       await app.sendFeedback(eventId, feedbackType);
     },

@@ -235,9 +235,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         obscurityTarget: validation.obscurityTarget,
       });
 
-      const eventId = randomUUID();
+      const eventId = evalWorker ? randomUUID() : undefined;
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
-      if (evalWorker) {
+      if (evalWorker && eventId) {
         void evalWorker.processEvent({
           eventId,
           query: validation.query,
@@ -260,7 +260,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: { ...publicMeta, eventId },
+        meta: eventId !== undefined ? { ...publicMeta, eventId } : publicMeta,
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";

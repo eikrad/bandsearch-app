@@ -71,7 +71,7 @@ function buildViewProps(desktopUi: DesktopChatUiStack) {
     queryPlaceholder: "Describe bands you like...",
     queryDisabled: loading,
     obscurityTarget: desktopUi.getObscurityTarget(),
-    showFeedbackBar: desktopUi.isShowFeedbackBar?.() ?? false,
+    showFeedbackBar: desktopUi.isShowFeedbackBar(),
     cards,
     messages: messageViewProps && messageViewProps.length > 0 ? messageViewProps : undefined,
   };
@@ -95,11 +95,11 @@ export function createChatRenderAdapter({ desktopUi }: { desktopUi: DesktopChatU
       return buildViewProps(desktopUi);
     },
     async onFeedback(feedbackType: string) {
-      await desktopUi.submitFeedback?.(feedbackType);
+      await desktopUi.submitFeedback(feedbackType);
       return buildViewProps(desktopUi);
     },
     onFeedbackDismiss() {
-      desktopUi.dismissFeedbackBar?.();
+      desktopUi.dismissFeedbackBar();
       return buildViewProps(desktopUi);
     },
   };

@@ -1,6 +1,7 @@
 import * as React from "react";
+import type { FeedbackType } from "../../../../shared/schemas/src/contracts.js";
 
-export type FeedbackType = "good" | "too_mainstream" | "wrong_direction";
+export type { FeedbackType };
 
 const BUTTONS: Array<{ value: FeedbackType; label: string }> = [
   { value: "good", label: "Spot on" },
@@ -16,7 +17,6 @@ export type FeedbackReactionBarProps = {
 
 export function FeedbackReactionBar({ visible, onFeedback, onDismiss }: FeedbackReactionBarProps) {
   React.useEffect(() => {
-    if (!visible) return;
     const timer = setTimeout(onDismiss, 12000);
     return () => clearTimeout(timer);
   }, [visible, onDismiss]);

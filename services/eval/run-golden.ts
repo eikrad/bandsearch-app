@@ -57,11 +57,19 @@ async function fetchRecommendations(
   const body: Record<string, unknown> = { query };
   if (obscurityTarget) body.obscurityTarget = obscurityTarget;
 
-  const response = await fetch(`${apiUrl}/recommendations`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/recommendations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     throw new Error(`API error ${response.status} for query "${query}"`);
