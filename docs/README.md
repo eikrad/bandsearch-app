@@ -23,3 +23,13 @@ Navigation guide for the `docs/` folder.
 - **Changing the UI?** Consult [UI_GUIDELINES.md](design/UI_GUIDELINES.md) before writing new components.
 - **Security or prompt design?** See [ADR 0001](adr/0001-prompt-injection-guardrails.md) for the injection defence rationale.
 - **Planning a new feature?** Check [ROADMAP.md](ROADMAP.md) for phase status and open steps before starting.
+
+## Historical planning docs
+
+The `superpowers/` folder contains implementation plans and design specs from earlier development phases. These are reference material, not actively maintained.
+
+| Path | What it covers |
+|------|----------------|
+| [superpowers/plans/2026-04-30-ui-redesign.md](superpowers/plans/2026-04-30-ui-redesign.md) | UI redesign plan (Phase 3 era) |
+| [superpowers/specs/2026-04-30-tauri-scaffold-design.md](superpowers/specs/2026-04-30-tauri-scaffold-design.md) | Tauri desktop scaffold design spec |
+| [superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md](superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md) | LLM + MusicBrainz query design spec |
