@@ -29,8 +29,8 @@ critical path.
 | 8.5b — Judge calibration | ✓ Done |
 | 8.6 — Baseline snapshots + eval API | ✓ Done (distribution gap — see Findings F4) |
 | 8.7 — Developer dashboard | ✓ Done |
-| 8.8 — User feedback reaction bar | — (needs eventId plumbing — see F5) |
-| 8.9 — Golden dataset + regression runner | — |
+| 8.8 — User feedback reaction bar | ✓ Done (F5 eventId plumbing included) |
+| 8.9 — Golden dataset + regression runner | ✓ Done |
 
 ---
 
