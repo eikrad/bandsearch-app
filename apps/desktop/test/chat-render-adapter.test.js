@@ -21,6 +21,7 @@ function makeCard(title, overrides = {}) {
 
 function makeDesktopUi(overrides = {}) {
   let mode = "fresh";
+  let obscurityTarget = "underground";
   let conversation = null;
   return {
     getViewport: () => "desktop",
@@ -28,6 +29,8 @@ function makeDesktopUi(overrides = {}) {
     isLoading: () => false,
     getConversation: () => conversation,
     setMode: (m) => { mode = m; },
+    setObscurityTarget: (t) => { obscurityTarget = t; },
+    getObscurityTarget: () => obscurityTarget,
     submitQuery: async () => {},
     _setConversation: (c) => { conversation = c; },
     _setMode: (m) => { mode = m; },
@@ -118,4 +121,21 @@ test("onSubmitQuery delegates to desktopUi and returns updated cards", async () 
   const afterSubmit = await adapter.onSubmitQuery("I like blackgaze");
 
   assert.equal(afterSubmit.cards[0].title, "Alcest");
+});
+
+// ─── Phase 8.3b: obscurityTarget in viewProps ────────────────────────────────
+
+test("render adapter includes obscurityTarget in viewProps (default: underground)", () => {
+  const ui = makeDesktopUi();
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const props = adapter.getViewProps();
+  assert.equal(props.obscurityTarget, "underground");
+});
+
+test("render adapter onObscurityTargetChange updates viewProps", () => {
+  const ui = makeDesktopUi();
+  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  adapter.onObscurityTargetChange("obscure");
+  const props = adapter.getViewProps();
+  assert.equal(props.obscurityTarget, "obscure");
 });

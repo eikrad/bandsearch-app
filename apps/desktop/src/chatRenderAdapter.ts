@@ -70,6 +70,7 @@ function buildViewProps(desktopUi: DesktopChatUiStack) {
     isLoading: loading,
     queryPlaceholder: "Describe bands you like...",
     queryDisabled: loading,
+    obscurityTarget: desktopUi.getObscurityTarget(),
     cards,
     messages: messageViewProps && messageViewProps.length > 0 ? messageViewProps : undefined,
   };
@@ -82,6 +83,10 @@ export function createChatRenderAdapter({ desktopUi }: { desktopUi: DesktopChatU
     },
     onModeChange(mode: string) {
       desktopUi.setMode(mode);
+      return buildViewProps(desktopUi);
+    },
+    onObscurityTargetChange(target: string | undefined) {
+      desktopUi.setObscurityTarget(target);
       return buildViewProps(desktopUi);
     },
     async onSubmitQuery(query: string) {

@@ -128,3 +128,30 @@ test("desktop react shell clears action status after timeout", async () => {
   scheduled();
   assert.equal(shell.getViewProps().actionStatus, null);
 });
+
+// ─── Phase 8.3b: ObscurityTargetPicker rendered in shell ─────────────────────
+
+test("desktop react shell renderHtml includes all three obscurity picker buttons", () => {
+  const shell = createDesktopReactShell({
+    renderAdapter: {
+      onModeChange: () => {},
+      onSubmitQuery: async () => {},
+      onObscurityTargetChange: () => {},
+      getViewProps: () => ({
+        headerTitle: "Bandsearch",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [],
+        isLoading: false,
+        queryPlaceholder: "...",
+        queryDisabled: false,
+        cards: [],
+        obscurityTarget: "underground",
+      }),
+    },
+  });
+  const html = shell.renderHtml();
+  assert.ok(html.includes("Cult Following"), "missing Cult Following button");
+  assert.ok(html.includes("Underground"), "missing Underground button");
+  assert.ok(html.includes("Truly Obscure"), "missing Truly Obscure button");
+});

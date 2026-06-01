@@ -1,4 +1,5 @@
 import * as React from "react";
+import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 
 function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
@@ -729,6 +730,10 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers:
         },
       },
       React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
+      React.createElement(ObscurityTargetPicker, {
+        target: viewProps.obscurityTarget,
+        onTargetChange: (target: string | undefined) => handlers.onObscurityTargetChange?.(target),
+      }),
       React.createElement(
         "form",
         {
