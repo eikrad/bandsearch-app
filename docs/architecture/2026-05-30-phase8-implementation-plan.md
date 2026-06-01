@@ -22,8 +22,8 @@ critical path.
 |-------|--------|
 | 8.1 — Event logging + evalWorker scaffold | ✓ Done |
 | 8.2 — Last.fm obscurity scoring | ✓ Done |
-| 8.3 — Obscurity target UI + API threading | ⚠ **Partial — not wired end-to-end (see Review Findings)** |
-| 8.3b — Obscurity target remediation | ← **next (new, blocking)** |
+| 8.3 — Obscurity target UI + API threading | ✓ Done (was partial — fixed by 8.3b) |
+| 8.3b — Obscurity target remediation | ✓ Done |
 | 8.4 — Search source quality + evidence checks | ✓ Done (heuristic tuning open — see Findings F8) |
 | 8.5 — LLM-as-judge (batched) | ✓ Done (threshold mismatch — see Findings F3) |
 | 8.5b — Judge calibration | ✓ Done |
@@ -579,7 +579,7 @@ _(can run in parallel with 8.3–8.8 immediately)_
 8.1  event logging + evalWorker scaffold       ✓ done
 8.2  Last.fm obscurity                         ✓ done
 8.3  obscurity target UI/API                   ⚠ partial (built, not wired)
-8.3b obscurity target remediation              ← next, blocking (closes F1, F2)
+8.3b obscurity target remediation              ✓ done (closes F1, F2)
 8.4  heuristics                                ✓ done (F8 tuning open)
 8.5  LLM judge (batched)                        ✓ done (F3 fix before re-calibration)
 8.5b calibration                               ✓ done (re-run after F3 fix)
