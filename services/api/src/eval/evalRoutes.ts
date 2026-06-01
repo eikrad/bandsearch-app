@@ -25,12 +25,14 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     }
     const limit = Math.min(Number(req.query.limit ?? 50), 200);
     const events = await evalRepository.listEvents(isNaN(limit) ? 50 : limit);
-    const eventsWithScores = await Promise.all(
-      events.map(async (event) => {
-        const bandScores = await evalRepository.listBandEvalScores(event.id);
-        return { ...event, bandScores };
-      }),
-    );
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
+    const scoresByEventId = new Map<string, typeof allScores>();
+    for (const score of allScores) {
+      const arr = scoresByEventId.get(score.eventId) ?? [];
+      arr.push(score);
+      scoresByEventId.set(score.eventId, arr);
+    }
+    const eventsWithScores = events.map((event) => ({ ...event, bandScores: scoresByEventId.get(event.id) ?? [] }));
     return res.status(200).json({ events: eventsWithScores });
   });
 
@@ -42,9 +44,7 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
       evalRepository.listEvents(200),
       evalRepository.getLatestBaseline(),
     ]);
-    const allScores = (
-      await Promise.all(events.map((e) => evalRepository.listBandEvalScores(e.id)))
-    ).flat();
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
 
     const current: AggregatedMetrics = aggregateMetrics(events, allScores);
 
@@ -70,10 +70,8 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return sendError(res, 400, "validation_error", "label is required");
     }
-    const [events] = await Promise.all([evalRepository.listEvents(200)]);
-    const allScores = (
-      await Promise.all(events.map((e) => evalRepository.listBandEvalScores(e.id)))
-    ).flat();
+    const events = await evalRepository.listEvents(200);
+    const allScores = await evalRepository.listBandEvalScoresByEventIds(events.map((e) => e.id));
     const metrics = aggregateMetrics(events, allScores);
     const baseline = await evalRepository.createBaseline(label.trim(), metrics);
     return res.status(201).json({ id: baseline.id, label: baseline.label, createdAt: baseline.createdAt });
@@ -95,18 +93,16 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     }
 
     if (evalDashboardPassword) {
-      const authHeader = (req.headers["authorization"] as string | undefined) ?? "";
-      if (!authHeader.startsWith("Basic ")) {
+      const reject401 = () => {
         res.setHeader("WWW-Authenticate", 'Basic realm="eval"');
         return res.status(401).send("Unauthorized");
-      }
+      };
+      const authHeader = (req.headers["authorization"] as string | undefined) ?? "";
+      if (!authHeader.startsWith("Basic ")) return reject401();
       const credentials = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
       const colonIdx = credentials.indexOf(":");
       const suppliedPassword = colonIdx >= 0 ? credentials.slice(colonIdx + 1) : credentials;
-      if (suppliedPassword !== evalDashboardPassword) {
-        res.setHeader("WWW-Authenticate", 'Basic realm="eval"');
-        return res.status(401).send("Unauthorized");
-      }
+      if (suppliedPassword !== evalDashboardPassword) return reject401();
     }
 
     res.setHeader(

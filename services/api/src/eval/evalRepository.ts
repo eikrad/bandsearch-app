@@ -63,6 +63,7 @@ export type EvalRepository = {
   listEvents(limit?: number): Promise<RecommendationEvent[]>;
   upsertBandEvalScore(input: BandEvalScoreInput): Promise<void>;
   listBandEvalScores(eventId: string): Promise<BandEvalScore[]>;
+  listBandEvalScoresByEventIds(eventIds: string[]): Promise<BandEvalScore[]>;
   createBaseline(label: string, metrics: AggregatedMetrics): Promise<EvalBaseline>;
   listBaselines(): Promise<EvalBaseline[]>;
   getLatestBaseline(): Promise<EvalBaseline | null>;
@@ -78,6 +79,9 @@ export function createNoOpEvalRepository(): EvalRepository {
     },
     async upsertBandEvalScore() {},
     async listBandEvalScores() {
+      return [];
+    },
+    async listBandEvalScoresByEventIds() {
       return [];
     },
     async createBaseline(label, metrics) {
@@ -122,6 +126,10 @@ export function createInMemoryEvalRepository(): EvalRepository {
     },
     async listBandEvalScores(eventId) {
       return bandScores.filter((s) => s.eventId === eventId);
+    },
+    async listBandEvalScoresByEventIds(eventIds) {
+      const set = new Set(eventIds);
+      return bandScores.filter((s) => set.has(s.eventId));
     },
     async createBaseline(label, metrics) {
       const id = randomUUID();
@@ -181,6 +189,10 @@ type BaselineRow = {
   metrics_json: string;
   created_at: string;
 };
+
+function mapBaselineRow(r: BaselineRow): EvalBaseline {
+  return { id: r.id, label: r.label, metricsJson: r.metrics_json, createdAt: r.created_at };
+}
 
 function mapEventRow(row: EventRow): RecommendationEvent {
   return {
@@ -296,11 +308,7 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
     },
 
     async upsertBandEvalScore(input) {
-      const existing = db.prepare(
-        `SELECT id FROM band_eval_scores WHERE event_id = ? AND band_name = ?`,
-      ).get(input.eventId, input.bandName) as { id: string } | undefined;
-
-      const id = existing?.id ?? randomUUID();
+      const id = randomUUID();
       const createdAt = new Date().toISOString();
 
       db.prepare(`
@@ -348,6 +356,15 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       return rows.map(mapScoreRow);
     },
 
+    async listBandEvalScoresByEventIds(eventIds) {
+      if (eventIds.length === 0) return [];
+      const placeholders = eventIds.map(() => "?").join(", ");
+      const rows = db.prepare(
+        `SELECT * FROM band_eval_scores WHERE event_id IN (${placeholders}) ORDER BY event_id, created_at ASC`,
+      ).all(...eventIds) as BandScoreRow[];
+      return rows.map(mapScoreRow);
+    },
+
     async createBaseline(label, metrics) {
       const id = randomUUID();
       const createdAt = new Date().toISOString();
@@ -362,15 +379,14 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       const rows = db.prepare(
         `SELECT * FROM eval_baselines ORDER BY created_at DESC`,
       ).all() as BaselineRow[];
-      return rows.map((r) => ({ id: r.id, label: r.label, metricsJson: r.metrics_json, createdAt: r.created_at }));
+      return rows.map(mapBaselineRow);
     },
 
     async getLatestBaseline() {
       const row = db.prepare(
         `SELECT * FROM eval_baselines ORDER BY created_at DESC LIMIT 1`,
       ).get() as BaselineRow | undefined;
-      if (!row) return null;
-      return { id: row.id, label: row.label, metricsJson: row.metrics_json, createdAt: row.created_at };
+      return row ? mapBaselineRow(row) : null;
     },
   };
 }
