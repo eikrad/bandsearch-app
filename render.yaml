@@ -4,8 +4,8 @@ services:
     env: node
     plan: free
     region: frankfurt
-    buildCommand: npm install --prefix services/api
-    startCommand: npm start --prefix services/api
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
