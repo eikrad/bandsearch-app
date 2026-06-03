@@ -180,6 +180,23 @@ Render auto-deploys on every push to the connected branch, so no separate deploy
 
 ---
 
+## Phase 10 — In-App Update-Notification
+
+**Spec:** [`docs/architecture/2026-06-03-auto-update-plan.md`](architecture/2026-06-03-auto-update-plan.md)
+
+Tester werden direkt in der App über neue Versionen informiert. Windows & Linux: vollautomatischer Ein-Klick-Update via `tauri-plugin-updater`. macOS: Banner mit Link zur GitHub-Releases-Seite (kein Code-Signing nötig).
+
+- [ ] `tauri-plugin-updater` einbinden, Version auf `0.4.0` synchronisieren
+- [ ] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben)
+- [ ] `install_update` Tauri-Command (Windows & Linux)
+- [ ] macOS: Frontend-seitiger GitHub-API-Check
+- [ ] Einheitlicher Update-Banner im Frontend (kein neues File)
+- [ ] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`)
+- [ ] Signing-Key generieren + GitHub Secrets konfigurieren
+- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf
+
+---
+
 ## Deferred / Under Review
 
 - PWA client on shared API.
