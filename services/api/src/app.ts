@@ -26,6 +26,7 @@ import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
 import { createWikidataImageClient } from "./integrations/wikidataImageClient.js";
 import { assertPreferenceRepository, createPreferenceRepository } from "./preferences/preferenceRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "./sessions/chatSessionRepository.js";
+import { createTursoChatSessionRepository } from "./sessions/tursoChatSessionRepository.js";
 import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
 import { createTursoUserRepository } from "./auth/tursoUserRepository.js";
 import { createAuthService } from "./auth/authService.js";
@@ -140,6 +141,13 @@ export function createApp({
   const resolvedChatSessionRepository =
     chatSessionRepository ||
     (() => {
+      if (runtimeConfig.preferenceStore === "turso") {
+        const client = createClient({
+          url: runtimeConfig.tursoDatabaseUrl ?? "",
+          authToken: runtimeConfig.tursoAuthToken,
+        });
+        return createTursoChatSessionRepository({ client });
+      }
       try {
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
         return createSqliteChatSessionRepository({ db });

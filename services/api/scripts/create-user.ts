@@ -1,17 +1,17 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 // Creates a user directly in the database (SQLite or Turso).
 // Usage:
-//   node scripts/create-user.js --email user@example.com --name "Max" --password "secret"
+//   tsx scripts/create-user.ts --email user@example.com --name "Max" --password "secret"
 // For Turso:
-//   PREFERENCE_STORE=turso TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node scripts/create-user.js ...
+//   PREFERENCE_STORE=turso TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... tsx scripts/create-user.ts ...
 
-require("dotenv").config();
-const { randomUUID, randomBytes } = require("node:crypto");
-const bcrypt = require("bcryptjs");
+import "dotenv/config";
+import { randomUUID, randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
 
-function parseArgs() {
+function parseArgs(): { email?: string; name?: string; password?: string } {
   const args = process.argv.slice(2);
-  const result = {};
+  const result: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--email") result.email = args[++i];
     else if (args[i] === "--name") result.name = args[++i];
@@ -20,14 +20,14 @@ function parseArgs() {
   return result;
 }
 
-function generateRecoveryCode() {
+function generateRecoveryCode(): string {
   const hex = randomBytes(20).toString("hex");
-  return hex.match(/.{1,5}/g).join("-");
+  return (hex.match(/.{1,5}/g) ?? []).join("-");
 }
 
-async function createUserSqlite({ email, name, password }) {
-  const Database = require("better-sqlite3");
-  const path = require("node:path");
+async function createUserSqlite({ email, name, password }: { email: string; name: string; password: string }) {
+  const Database = (await import("better-sqlite3")).default;
+  const path = await import("node:path");
   const dbPath = process.env.SQLITE_PATH ?? path.join(__dirname, "..", "bandsearch.db");
   const db = new Database(dbPath);
 
@@ -39,17 +39,17 @@ async function createUserSqlite({ email, name, password }) {
   const createdAt = new Date().toISOString();
 
   db.prepare(
-    "INSERT INTO users (id, email, display_name, password_hash, recovery_code_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO users (id, email, display_name, password_hash, recovery_code_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(id, normalizedEmail, name, passwordHash, recoveryCodeHash, createdAt);
 
   db.close();
   return { id, email: normalizedEmail, recoveryCode };
 }
 
-async function createUserTurso({ email, name, password }) {
-  const { createClient } = require("@libsql/client");
+async function createUserTurso({ email, name, password }: { email: string; name: string; password: string }) {
+  const { createClient } = await import("@libsql/client");
   const client = createClient({
-    url: process.env.TURSO_DATABASE_URL,
+    url: process.env.TURSO_DATABASE_URL ?? "",
     authToken: process.env.TURSO_AUTH_TOKEN ?? "",
   });
 
@@ -69,11 +69,11 @@ async function createUserTurso({ email, name, password }) {
   return { id, email: normalizedEmail, recoveryCode };
 }
 
-async function main() {
+async function main(): Promise<void> {
   const { email, name, password } = parseArgs();
 
   if (!email || !name || !password) {
-    console.error("Usage: node scripts/create-user.js --email <email> --name <name> --password <password>");
+    console.error("Usage: tsx scripts/create-user.ts --email <email> --name <name> --password <password>");
     process.exitCode = 1;
     return;
   }
@@ -89,7 +89,7 @@ async function main() {
     console.log(`\nRecovery code (save this — it won't be shown again):`);
     console.log(`  ${user.recoveryCode}\n`);
   } catch (err) {
-    console.error("Error:", err.message);
+    console.error("Error:", err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   }
 }
