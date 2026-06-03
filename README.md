@@ -315,6 +315,16 @@ docs/             — architecture docs, ADRs, design specs, roadmap
 
 In development (browser or embedded webview), the chat UI chooses **mobile vs desktop layout** from window width (`matchMedia`, max-width **767px**), so you do not need to pass a `viewport` option manually when resizing the window.
 
+---
+
+## Maintenance notes
+
+**2026-06-03 — Weekly maintenance**
+
+All CI checks pass on `ubuntu-latest` and `windows-latest`. No dependency updates required — all packages are at current versions (TypeScript 6, ESLint 10, Express 5, Zod 4, `@langchain/google-genai` 2.x, Tauri 2.x). No outstanding action required.
+
+---
+
 ## Acknowledgements
 
 - [MusicBrainz](https://musicbrainz.org) — open music encyclopedia providing artist and release metadata. Data used under the [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) licence.
