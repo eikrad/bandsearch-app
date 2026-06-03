@@ -166,6 +166,7 @@ PREFERENCE_STORE=turso
 TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your_turso_auth_token_here
 
+TURSO_DATABASE_URL=libsql://your-db.turso.io TURSO_AUTH_TOKEN=your_token npm run migrate:turso
 npm run dev
 ```
 
