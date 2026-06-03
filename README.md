@@ -192,7 +192,9 @@ Turso URL and auth token can also be saved through the **Settings** screen in th
 | `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the pipeline initializes |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
-| `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images |
+| `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images and obscurity scoring (listener counts) |
+| `ANTHROPIC_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Claude scores recommendations after the response is sent) |
+| `EVAL_DASHBOARD_ENABLED` | — | Set `true` to enable the developer eval dashboard at `/eval/dashboard` |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
 | `LANGSMITH_PROJECT` | — | LangSmith project name |
@@ -285,6 +287,15 @@ Response includes `recommendations`, optional `assistantReply` (conversational p
 | `GET` | `/artists/search?query=...` | Search artists via MusicBrainz |
 | `GET` | `/artists/image?name=...` | Resolve artist image URL (Wikidata + Last.fm fallback) |
 
+### Eval
+
+Requires `EVAL_DASHBOARD_ENABLED=true` in the environment.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/eval/dashboard` | Developer quality dashboard — pipeline funnel, obscurity distribution, LLM-judge alignment, trend charts, and event log |
+| `POST` | `/eval/baseline` | Save a named snapshot of current aggregated metrics for before/after comparison |
+
 ---
 
 ## Development
@@ -309,6 +320,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 ```
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
+services/eval/    — golden dataset and eval runner (anti-band gate, nugget coverage)
 shared/schemas/   — shared validation contracts (TypeScript contracts.ts + tests)
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
