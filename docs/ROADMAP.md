@@ -106,41 +106,41 @@ Deploy the Express API to Render so the desktop app can connect to a public endp
 
 Independent of Phase 8 — eval instrumentation can run against a local API first; cloud deployment unlocks shared hosting and cross-device access without a running desktop sidecar.
 
-### 9.1 — Turso chat session repository
+### 9.1 — Turso chat session repository ✓ Done
 
 **Files:** `services/api/src/sessions/chatSessionRepository.ts`
 
 The chat session repository currently has only SQLite (`better-sqlite3`) and in-memory implementations. Preferences and users already have Turso adapters, but sessions do not — this is the last piece blocking a fully Turso-backed deployment.
 
 **Action:**
-1. Create `services/api/src/sessions/tursoChatSessionRepository.ts` implementing the same interface as the existing SQLite variant, using `@libsql/client`.
-2. Wire it into the factory in `chatSessionRepository.ts` so that `PREFERENCE_STORE=turso` (or a dedicated `SESSION_STORE` env var) selects the Turso adapter.
-3. Add unit tests mirroring the existing SQLite session tests.
+1. Create `services/api/src/sessions/tursoChatSessionRepository.ts` implementing the same interface as the existing SQLite variant, using `@libsql/client`. ✓ Done
+2. Wire it into the factory in `chatSessionRepository.ts` so that `PREFERENCE_STORE=turso` (or a dedicated `SESSION_STORE` env var) selects the Turso adapter. ✓ Done (wired in `app.ts`)
+3. Add unit tests mirroring the existing SQLite session tests. ✓ Done (`test/turso-chat-session-repository.test.js`)
 
 ---
 
-### 9.2 — Turso migration script
+### 9.2 — Turso migration script ✓ Done
 
-**Files:** `services/api/scripts/migrate.js`
+**Files:** `services/api/scripts/migrate.ts`
 
 The existing migration script targets local SQLite and Postgres. It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
 
 **Action:**
-1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`.
-2. Include all tables from preferences, auth, and sessions.
-3. Document the migration command in the README: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso`.
+1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`. ✓ Done (`migrate.ts` handles `PREFERENCE_STORE=turso`)
+2. Include all tables from preferences, auth, and sessions. ✓ Done (`migrations/002_full_schema.sql`)
+3. Document the migration command in the README: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso`. ✓ Done
 
 ---
 
-### 9.3 — Render Web Service deployment
+### 9.3 — Render Web Service deployment ✓ Done
 
 Deploy the Express API as a Render Web Service.
 
 **Action:**
-1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install --prefix services/api`, start command `npm start --prefix services/api`, health check path `/`, and `region: frankfurt`.
-2. Configure required environment variables in `render.yaml` (non-secret keys) and via the Render dashboard (secrets): `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`. Render injects `PORT` automatically.
-3. Verify the `start` script in `services/api/package.json` works — it already uses `tsx`; confirm the installed Node.js version on Render matches local (specify `engines.node` in `package.json` if needed).
-4. Connect the GitHub repository to Render; auto-deploy triggers on push to `main`.
+1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install --prefix services/api`, start command `npm start --prefix services/api`, health check path `/`, and `region: frankfurt`. ✓ Done
+2. Configure required environment variables in `render.yaml` (non-secret keys) and via the Render dashboard (secrets): `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`. Render injects `PORT` automatically. ✓ Done
+3. Verify the `start` script in `services/api/package.json` works — it already uses `tsx`; confirm the installed Node.js version on Render matches local (specify `engines.node` in `package.json` if needed). ✓ Done (`"start": "tsx src/server.ts"` added; `engines.node: ">=22"` added to root `package.json`; `tsx` moved to `services/api` production deps)
+4. Connect the GitHub repository to Render; auto-deploy triggers on push to `main`. — manual step via Render dashboard
 
 ---
 

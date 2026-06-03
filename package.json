@@ -4,6 +4,9 @@
   "private": true,
   "description": "Bandsearch monorepo foundation",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "apps/*",
     "services/*",
