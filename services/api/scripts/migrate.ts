@@ -1,7 +1,7 @@
 import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Pool } from "pg";
+import { Client as PgClient } from "pg";
 import { createClient } from "@libsql/client";
 
 async function migratePostgres(): Promise<void> {
@@ -13,16 +13,17 @@ async function migratePostgres(): Promise<void> {
   const migrationPath = path.join(__dirname, "..", "migrations", "001_create_saved_bands.sql");
   const sql = await fs.readFile(migrationPath, "utf8");
 
-  const pool = new Pool({
+  const client = new PgClient({
     connectionString: databaseUrl,
     ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
   });
 
+  await client.connect();
   try {
-    await pool.query(sql);
+    await client.query(sql);
     console.log("Migration applied: 001_create_saved_bands.sql");
   } finally {
-    await pool.end();
+    await client.end();
   }
 }
 
@@ -49,8 +50,8 @@ async function migrateTurso(): Promise<void> {
 }
 
 async function runMigrations(): Promise<void> {
-  const store = process.env.PREFERENCE_STORE ?? "sqlite";
-  if (store === "turso") {
+  const useTurso = process.argv.includes("--turso") || process.env.PREFERENCE_STORE === "turso";
+  if (useTurso) {
     await migrateTurso();
   } else {
     await migratePostgres();

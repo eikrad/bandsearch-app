@@ -32,6 +32,6 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Preference repository** — the abstract storage interface for saved bands, artist groups, and user accounts. Concrete adapters: SQLite (`better-sqlite3`), Postgres, Turso/libSQL, and in-memory.
 
-- **Session store** — separate from the preference store; holds `chat_sessions` and `chat_messages`. Currently only has a SQLite and in-memory adapter (Turso adapter is planned in Phase 9).
+- **Session store** — separate from the preference store; holds `chat_sessions` and `chat_messages`. Adapters: SQLite (`better-sqlite3`), in-memory, and Turso/libSQL (`tursoChatSessionRepository`). Selected via `PREFERENCE_STORE` env var alongside the preference and user repositories.
 
 - **Sidecar** — the Node.js API process spawned as a child process by the Tauri desktop shell. In development, it uses the system `node`. In production bundles, a bundled Node binary named `node-<target-triple>[.exe]` is expected in `apps/desktop/src-tauri/binaries/`.

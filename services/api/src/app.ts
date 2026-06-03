@@ -138,16 +138,18 @@ export function createApp({
       lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
+  const sharedTursoClient =
+    !chatSessionRepository && !userRepository && runtimeConfig.preferenceStore === "turso"
+      ? createClient({
+          url: runtimeConfig.tursoDatabaseUrl ?? "",
+          authToken: runtimeConfig.tursoAuthToken,
+        })
+      : null;
+
   const resolvedChatSessionRepository =
     chatSessionRepository ||
     (() => {
-      if (runtimeConfig.preferenceStore === "turso") {
-        const client = createClient({
-          url: runtimeConfig.tursoDatabaseUrl ?? "",
-          authToken: runtimeConfig.tursoAuthToken,
-        });
-        return createTursoChatSessionRepository({ client });
-      }
+      if (sharedTursoClient) return createTursoChatSessionRepository({ client: sharedTursoClient });
       try {
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
         return createSqliteChatSessionRepository({ db });
@@ -159,13 +161,7 @@ export function createApp({
   const resolvedUserRepository =
     userRepository ||
     (() => {
-      if (runtimeConfig.preferenceStore === "turso") {
-        const client = createClient({
-          url: runtimeConfig.tursoDatabaseUrl ?? "",
-          authToken: runtimeConfig.tursoAuthToken,
-        });
-        return createTursoUserRepository({ client });
-      }
+      if (sharedTursoClient) return createTursoUserRepository({ client: sharedTursoClient });
       try {
         const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
         return createSqliteUserRepository({ db });

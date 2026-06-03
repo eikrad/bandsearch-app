@@ -2,11 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { Client as LibSQLClient } from "@libsql/client";
 
 const DEFAULT_USER = "anonymous";
-const DEFAULT_TITLE = "Untitled";
 
 export function createTursoChatSessionRepository({ client }: { client: LibSQLClient }) {
   return {
-    async createSession({ title = DEFAULT_TITLE } = {}, userId = DEFAULT_USER) {
+    async createSession({ title = "Untitled" } = {}, userId = DEFAULT_USER) {
       const id = randomUUID();
       const now = new Date().toISOString();
       const result = await client.execute({
@@ -31,23 +30,25 @@ export function createTursoChatSessionRepository({ client }: { client: LibSQLCli
         sql: "SELECT * FROM chat_sessions WHERE id = ? AND user_id = ?",
         args: [id, userId],
       });
-      return result.rows.length > 0 ? result.rows[0] : null;
+      return result.rows[0] ?? null;
     },
 
     async addMessage(sessionId: string, { role, content }: { role: string; content: string }) {
       const id = randomUUID();
       const now = new Date().toISOString();
-      const result = await client.execute({
-        sql: `INSERT INTO chat_messages (id, session_id, role, content, created_at)
-              VALUES (?, ?, ?, ?, ?)
-              RETURNING *`,
-        args: [id, sessionId, role, String(content), now],
-      });
-      await client.execute({
-        sql: "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
-        args: [now, sessionId],
-      });
-      return result.rows[0];
+      const results = await client.batch([
+        {
+          sql: `INSERT INTO chat_messages (id, session_id, role, content, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                RETURNING *`,
+          args: [id, sessionId, role, String(content), now],
+        },
+        {
+          sql: "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
+          args: [now, sessionId],
+        },
+      ], "write");
+      return results[0].rows[0];
     },
 
     async getMessages(sessionId: string) {

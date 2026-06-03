@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: bandsearch-api
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PREFERENCE_STORE
+        value: turso
+      - key: EVAL_DASHBOARD_ENABLED
+        value: false
+      # Secrets — set via the Render dashboard, not stored here:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
