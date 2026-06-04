@@ -100,6 +100,21 @@ test("aggregateMetrics: obscurity tier distribution counts correctly", () => {
   assert.equal(result.obscurityDistribution.obscure, 1);
 });
 
+test("aggregateMetrics: obscurity distribution counts mainstream and unknown (F4)", () => {
+  const events = [makeEvent({ id: "e1" })];
+  const scores = [
+    makeScore({ eventId: "e1", bandName: "A", obscurityTier: "mainstream" }),
+    makeScore({ eventId: "e1", bandName: "B", obscurityTier: "mainstream" }),
+    makeScore({ eventId: "e1", bandName: "C", obscurityTier: "unknown" }),
+    makeScore({ eventId: "e1", bandName: "D", obscurityTier: "obscure" }),
+  ];
+  const result = aggregateMetrics(events, scores);
+  assert.equal(result.obscurityDistribution.mainstream, 2, "mainstream bands must be visible");
+  assert.equal(result.obscurityDistribution.unknown, 1, "unknown (not on Last.fm) tracked as its own bucket");
+  assert.equal(result.obscurityDistribution.obscure, 1);
+  assert.equal(result.obscurityDistribution.cult, 0);
+});
+
 test("aggregateMetrics: source quality distribution counts correctly", () => {
   const events = [makeEvent({ id: "e1" })];
   const scores = [
