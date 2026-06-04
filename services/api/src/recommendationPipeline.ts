@@ -12,6 +12,7 @@ export type RecommendationRuntimeConfig = {
   musicBrainzRetries?: number;
   geminiApiKey?: string;
   braveApiKey?: string;
+  lastFmApiKey?: string;
   researchMaxInitialSearches?: number;
   researchMaxReflectionSearches?: number;
   researchTotalSearchBudget?: number;
@@ -81,6 +82,7 @@ export function createRecommendationPipeline({
           totalSearchBudget: cfg.researchTotalSearchBudget ?? 10,
           targetVerifiedCount: cfg.researchTargetVerifiedCandidates ?? 8,
           researchTimeoutMs: cfg.researchTimeoutMs ?? 25000,
+          lastFmApiKey: String(cfg.lastFmApiKey ?? "").trim(),
           musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
           musicBrainzRetries: cfg.musicBrainzRetries,
           onLog: (level, event, details) => {
