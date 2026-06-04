@@ -48,6 +48,7 @@ type AppRuntimeConfig = {
   musicBrainzRetries?: number;
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
+  mistralApiKey?: string;
   anthropicApiKey?: string;
   evalDashboardPassword?: string;
   jwtSecret?: string;
