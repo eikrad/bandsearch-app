@@ -193,7 +193,7 @@ CREATE TABLE eval_baselines (
 
 ## LLM-as-Judge
 
-**Model:** Claude (via Anthropic API, `ANTHROPIC_API_KEY`). Using a different model than Gemini avoids self-evaluation bias (MT-Bench self-enhancement pattern). If `ANTHROPIC_API_KEY` is not set, Layer 2 is silently skipped — it is never on the critical path.
+**Model:** Mistral (via Mistral API, `MISTRAL_API_KEY`). Using a different model family (Mistral) than Gemini avoids self-evaluation bias (MT-Bench self-enhancement pattern). If `MISTRAL_API_KEY` is not set, Layer 2 is silently skipped — it is never on the critical path.
 
 **Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 10 s, no retry on failure. Eval data loss is acceptable; a missing judge score is not a system error.
 

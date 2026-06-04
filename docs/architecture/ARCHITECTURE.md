@@ -100,15 +100,14 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 ---
 
 ## External Integrations
-
 | Integration | Used in | Purpose |
 |-------------|---------|---------|
-| **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
-| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
-| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
-| **Anthropic Claude** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
-| **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
+| **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists
+| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation
+| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations)
+| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback
+| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path
+| **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline
 
 ---
 

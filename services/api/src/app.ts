@@ -192,9 +192,9 @@ export function createApp({
         return createInMemoryEvalRepository();
       }
     })();
-  const resolvedJudgeWorker = runtimeConfig.anthropicApiKey
+  const resolvedJudgeWorker = runtimeConfig.mistralApiKey
     ? createJudgeWorker({
-        anthropicApiKey: runtimeConfig.anthropicApiKey,
+        anthropicApiKey: runtimeConfig.mistralApiKey, // Use Mistral API key
         evalRepository: resolvedEvalRepository,
       })
     : createNoOpJudgeWorker();

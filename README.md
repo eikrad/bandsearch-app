@@ -194,7 +194,7 @@ Turso URL and auth token can also be saved through the **Settings** screen in th
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
 | `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images and obscurity scoring (listener counts) |
-| `ANTHROPIC_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Claude scores recommendations after the response is sent) |
+| `MISTRAL_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Mistral scores recommendations after the response is sent)
 | `EVAL_DASHBOARD_ENABLED` | — | Set `true` to enable the developer eval dashboard at `/eval/dashboard` |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |

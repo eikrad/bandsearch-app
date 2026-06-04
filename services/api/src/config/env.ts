@@ -74,7 +74,7 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   return {
     geminiApiKey,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
-    anthropicApiKey: String(env.ANTHROPIC_API_KEY ?? "").trim(),
+    mistralApiKey: String(env.MISTRAL_API_KEY ?? "").trim(),
     evalDashboardPassword: String(env.EVAL_DASHBOARD_PASSWORD ?? "").trim(),
     braveApiKey,
     pipelineReadyTimeoutMs,

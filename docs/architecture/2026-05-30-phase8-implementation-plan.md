@@ -387,8 +387,8 @@ This is 8× cheaper, faster, and simpler than per-band calls.
      message = JSON array of all bands with query + obscurityTarget + why +
      sourceSignals + listeners + citationSupportRate + genericWhyFlag.
    - `createJudgeWorker({ anthropicApiKey, evalRepository, fetchImpl? })`.
-   - `judgeEvent(eventId, bands[])`: no-op when `anthropicApiKey` is empty.
-     One call to `claude-opus-4-8`. Parses response as `{ [bandName]: { relevance, obscurity_fit, evidence_quality, discovery_value, reasoning } }`.
+   - `judgeEvent(eventId, bands[])`: no-op when `mistralApiKey` is empty.
+     One call to `mistral`. Parses response as `{ [bandName]: { relevance, obscurity_fit, evidence_quality, discovery_value, reasoning } }`.
      10 s `AbortController` timeout. Upserts via `evalRepository.upsertBandEvalScore()`.
      Stores `judge_prompt_hash = sha256(system + user)` for calibration drift
      detection.
