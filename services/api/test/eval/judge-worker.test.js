@@ -74,6 +74,27 @@ test("buildJudgePrompt: includes all required fields per band", () => {
   assert.ok("generic_why_flag" in wittr);
 });
 
+// ─── F3: judge thresholds aligned with obscurityScorer ──────────────────────
+
+test("buildJudgePrompt: system prompt thresholds match OBSCURITY_THRESHOLDS", () => {
+  const { buildJudgePrompt } = require("../../src/eval/judgeWorker");
+  const { system } = buildJudgePrompt(sampleBands);
+  // Correct tier floors from obscurityScorer: cult 20k, underground 2k, mainstream 500k
+  assert.ok(system.includes("20,000"), "cult floor 20,000 should appear");
+  assert.ok(system.includes("2,000"), "underground floor 2,000 should appear");
+  assert.ok(system.includes("500,000"), "mainstream floor 500,000 should appear");
+  // The old, wrong numbers must be gone
+  assert.ok(!/100k|under 100,000|< 100,000/.test(system), "stale 100k underground threshold removed");
+  assert.ok(!/\b10k\b|under 10,000|< 10,000/.test(system), "stale 10k obscure threshold removed");
+});
+
+test("buildJudgePrompt: includes obscurity_tier per band when provided", () => {
+  const { buildJudgePrompt } = require("../../src/eval/judgeWorker");
+  const bands = [{ ...sampleBands[0], obscurityTier: "cult" }];
+  const parsed = JSON.parse(buildJudgePrompt(bands).user);
+  assert.equal(parsed[0].obscurity_tier, "cult");
+});
+
 test("createJudgeWorker: no-op when anthropicApiKey is empty", async () => {
   const { createJudgeWorker } = require("../../src/eval/judgeWorker");
   const { createInMemoryEvalRepository } = require("../../src/eval/evalRepository");
