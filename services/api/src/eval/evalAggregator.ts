@@ -7,7 +7,7 @@ export type AggregatedMetrics = {
   meanObscurityFit: number | null;
   meanEvidenceQuality: number | null;
   meanDiscoveryValue: number | null;
-  obscurityDistribution: { cult: number; underground: number; obscure: number };
+  obscurityDistribution: { mainstream: number; cult: number; underground: number; obscure: number; unknown: number };
   sourceQualityDistribution: { high: number; medium: number; low: number };
   meanCitationSupportRate: number | null;
   genericWhyRate: number | null;
@@ -36,7 +36,7 @@ export function aggregateMetrics(
   events: RecommendationEvent[],
   bandScores: BandEvalScore[],
 ): AggregatedMetrics {
-  const obscurityDistribution = { cult: 0, underground: 0, obscure: 0 };
+  const obscurityDistribution = { mainstream: 0, cult: 0, underground: 0, obscure: 0, unknown: 0 };
   const sourceQualityDistribution = { high: 0, medium: 0, low: 0 };
 
   const relevances: number[] = [];
@@ -48,7 +48,13 @@ export function aggregateMetrics(
   let genericWhyTotal = 0;
 
   for (const score of bandScores) {
-    if (score.obscurityTier === "cult" || score.obscurityTier === "underground" || score.obscurityTier === "obscure") {
+    if (
+      score.obscurityTier === "mainstream" ||
+      score.obscurityTier === "cult" ||
+      score.obscurityTier === "underground" ||
+      score.obscurityTier === "obscure" ||
+      score.obscurityTier === "unknown"
+    ) {
       obscurityDistribution[score.obscurityTier]++;
     }
     if (score.sourceQuality === "high" || score.sourceQuality === "medium" || score.sourceQuality === "low") {

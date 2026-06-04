@@ -43,11 +43,11 @@ effect on recommendations or on the logged data.
 
 | # | Severity | Finding | Where |
 |---|----------|---------|-------|
-| F1 | 🔴 Critical | `validation.obscurityTarget` is computed but **never passed** to `recommend()` **nor** to `evalWorker.processEvent()`. Planner never receives the constraint; `obscurity_target` column is always NULL. | `routes/registerBandsearchRoutes.ts` (`POST /recommendations`) |
-| F2 | 🔴 Critical | `ObscurityTargetPicker.ts` exists but is **never imported/rendered** in `ChatAppView`; no caller passes `obscurityTarget` into `chatClient`. The user cannot set a target. | `apps/desktop/src/ui/` |
-| F3 | 🟠 Medium | Judge system prompt states "cult < 500k, underground < 100k, obscure < 10k" — **contradicts** `obscurityScorer.ts` (cult 20k–500k, underground 2k–20k, obscure < 2k). Calibration measures the judge against a different definition than the deterministic tier. | `eval/judgeWorker.ts` vs `eval/obscurityScorer.ts` |
-| F4 | 🟠 Medium | `obscurityDistribution` counts only cult/underground/obscure — **drops `mainstream` and `unknown`**, hiding the "too mainstream" signal that justifies the whole layer. | `eval/evalAggregator.ts` |
-| F5 | 🟠 Medium (blocks 8.8) | `eventId` is generated inside `processEvent` (fire-and-forget) and **never reaches the HTTP response**, so feedback in 8.8 has nothing to bind to. | `eval/evalWorker.ts`, route |
+| F1 | ✅ Fixed (8.3b) | `validation.obscurityTarget` was computed but **never passed** to `recommend()` nor `processEvent()`. Now forwarded at both call sites. | `routes/registerBandsearchRoutes.ts` (`POST /recommendations`) |
+| F2 | ✅ Fixed (8.3b) | `ObscurityTargetPicker` is now imported/rendered in `ChatAppView`; the model holds the target (default `underground`) and passes it to `chatClient`. | `apps/desktop/src/ui/` |
+| F3 | ✅ Fixed | Judge prompt thresholds now derived from `OBSCURITY_THRESHOLDS` (single source of truth); `obscurityTier` passed into `JudgeInput`. Re-run `run-calibration.ts` (prompt hash changed). | `eval/judgeWorker.ts` |
+| F4 | ✅ Fixed | `obscurityDistribution` now counts all five tiers incl. `mainstream` + `unknown`; dashboard doughnut shows mainstream in red. | `eval/evalAggregator.ts`, dashboard |
+| F5 | ✅ Fixed (8.8) | `eventId` is pre-generated in the route and returned in response `meta`; `logEvent` accepts a supplied id. | `eval/evalWorker.ts`, route |
 | F6 | 🟡 Low | Integration point moved: `processEvent` is called from `registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Plan's Design Decision #2 is stale. | this doc |
 | F7 | 🟡 Low | Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`. Spec's "link to full recommendations" and prompt-hash filtering are not possible. | `eval/evalRepository.ts` |
 | F8 | 🟡 Low | `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that appears in legitimately good why-text → noisy `genericWhyFlag`. `citationSupportRate` also defaults to 1.0 when a why has no URLs, inflating evidence metrics. | `eval/evidenceChecker.ts` |

@@ -164,8 +164,11 @@
       new Chart(document.getElementById('chart-obscurity'), {
         type: 'doughnut',
         data: {
-          labels: ['Cult', 'Underground', 'Obscure'],
-          datasets: [{ data: [dist.cult, dist.underground, dist.obscure], backgroundColor: ['#1d4ed8', '#15803d', '#7c3aed'] }],
+          labels: ['Mainstream', 'Cult', 'Underground', 'Obscure', 'Unknown'],
+          datasets: [{
+            data: [dist.mainstream || 0, dist.cult, dist.underground, dist.obscure, dist.unknown || 0],
+            backgroundColor: ['#b91c1c', '#1d4ed8', '#15803d', '#7c3aed', '#475569'],
+          }],
         },
         options: {
           responsive: true,

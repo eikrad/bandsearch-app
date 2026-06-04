@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
+import { OBSCURITY_THRESHOLDS } from "./obscurityScorer.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 
 export type JudgeInput = {
@@ -9,6 +10,7 @@ export type JudgeInput = {
   why?: string;
   sourceSignals?: string[];
   listeners?: number | null;
+  obscurityTier?: string | null;
   citationSupportRate?: number;
   genericWhyFlag?: boolean;
 };
@@ -21,11 +23,25 @@ type JudgeScoreObject = {
   reasoning?: unknown;
 };
 
+// Derive the tier description from OBSCURITY_THRESHOLDS so the judge's notion of
+// each tier stays identical to the deterministic classifier (obscurityScorer).
+// Changing the thresholds in one place keeps the prompt — and calibration — in sync.
+const fmt = (n: number) => n.toLocaleString("en-US");
+const OBSCURITY_FIT_GUIDANCE =
+  `How well does the band match the requested obscurity target? ` +
+  `Tiers by Last.fm listeners — ` +
+  `cult = ${fmt(OBSCURITY_THRESHOLDS.cult)}–${fmt(OBSCURITY_THRESHOLDS.mainstream)}, ` +
+  `underground = ${fmt(OBSCURITY_THRESHOLDS.underground)}–${fmt(OBSCURITY_THRESHOLDS.cult)}, ` +
+  `obscure = under ${fmt(OBSCURITY_THRESHOLDS.underground)}, ` +
+  `mainstream = over ${fmt(OBSCURITY_THRESHOLDS.mainstream)}. ` +
+  `Each band includes its computed obscurity_tier; reward a tier at or below the target ` +
+  `and penalise bands more mainstream than requested. Ignore this if no target given.`;
+
 const JUDGE_SYSTEM_PROMPT = `You are an expert music recommendation quality judge. Your task is to evaluate a list of band recommendations against a user's query and produce a JSON object with one score entry per band.
 
 Scoring dimensions (each 0.0–1.0):
 - relevance: Does the band genuinely fit the requested genre/style/mood described in the query?
-- obscurity_fit: How well does the band match the requested obscurity target? (cult < 500k listeners, underground < 100k, obscure < 10k). Ignore this if no target given.
+- obscurity_fit: ${OBSCURITY_FIT_GUIDANCE}
 - evidence_quality: Is the why-text specific and grounded in cited sources, or generic boilerplate? Penalise generic_why_flag=true and uncited claims.
 - discovery_value: Would a curious music fan be genuinely surprised and pleased? Penalise extremely well-known mainstream bands for discovery-focused queries.
 
@@ -51,6 +67,7 @@ export function buildJudgePrompt(bands: JudgeInput[]): { system: string; user: s
       why: b.why ?? "",
       source_signals: b.sourceSignals ?? [],
       listeners: b.listeners ?? null,
+      obscurity_tier: b.obscurityTier ?? null,
       citation_support_rate: b.citationSupportRate ?? null,
       generic_why_flag: b.genericWhyFlag ?? null,
     })),
