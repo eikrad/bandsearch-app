@@ -3,6 +3,7 @@ import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
+import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
@@ -14,6 +15,7 @@ import { createWebSearchPlanner, type SearchPlan } from "./webSearchPlanner.js";
 export type ResearchGraphDeps = {
   geminiApiKey: string;
   braveApiKey: string;
+  lastFmApiKey?: string;
   maxInitialSearches: number;
   maxReflectionSearches: number;
   totalSearchBudget: number;
@@ -92,6 +94,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     retries: deps.musicBrainzRetries ?? 1,
   });
 
+  const lastFm: LastFmClient | null = deps.lastFmApiKey
+    ? createLastFmClient({ apiKey: deps.lastFmApiKey, timeoutMs: 5000 })
+    : null;
+
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
     runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget }, queries, budgetLeft, perQueryCount);
@@ -154,6 +160,44 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       return { verifiedCandidates: verified };
     })
     .addNode("reflect_if_needed", reflectionSubgraph)
+    .addNode("enrich_lastfm", async (state) => {
+      if (!lastFm) return {};
+      const anchors = state.searchPlan?.anchorArtists ?? [];
+      if (!anchors.length || !state.verifiedCandidates?.length) return {};
+
+      const similarMap = new Map<string, { anchor: string; match: number }>();
+      for (const anchor of anchors) {
+        const similar = await lastFm.getSimilarArtists(anchor);
+        for (const s of similar) {
+          const key = s.name.toLowerCase();
+          const existing = similarMap.get(key);
+          if (!existing || s.match > existing.match) {
+            similarMap.set(key, { anchor, match: s.match });
+          }
+        }
+      }
+
+      let matchCount = 0;
+      const enriched = state.verifiedCandidates.map((c) => {
+        const key = (c.canonicalName || c.name).trim().toLowerCase();
+        const hit = similarMap.get(key);
+        if (!hit) return c;
+        matchCount++;
+        const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
+        return {
+          ...c,
+          evidenceUrls: [...c.evidenceUrls, similarUrl],
+          evidenceSnippets: [...c.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
+        };
+      });
+
+      log("info", "research_lastfm_enrichment", {
+        anchorCount: anchors.length,
+        candidateCount: state.verifiedCandidates.length,
+        matchCount,
+      });
+      return { verifiedCandidates: enriched };
+    })
     .addNode("rank", async (state) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
@@ -176,7 +220,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addEdge("brave_initial", "extract")
     .addEdge("extract", "verify")
     .addEdge("verify", "reflect_if_needed")
-    .addEdge("reflect_if_needed", "rank")
+    .addEdge("reflect_if_needed", "enrich_lastfm")
+    .addEdge("enrich_lastfm", "rank")
     .addEdge("rank", END);
 
   return graph.compile();

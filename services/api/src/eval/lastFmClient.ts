@@ -13,12 +13,20 @@ export type LastFmClientConfig = {
   fetchImpl?: FetchLike;
 };
 
+export type SimilarArtist = { name: string; match: number };
+
 export type LastFmClient = {
   getListenerCount(artistName: string): Promise<number | null>;
+  getSimilarArtists(artistName: string, limit?: number): Promise<SimilarArtist[]>;
 };
 
 type LastFmInfoResponse = {
   artist?: { stats?: { listeners?: string } };
+  error?: number;
+};
+
+type LastFmSimilarResponse = {
+  similarartists?: { artist?: Array<{ name?: string; match?: string }> };
   error?: number;
 };
 
@@ -58,6 +66,37 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         return Number.isFinite(listeners) ? listeners : null;
       } catch {
         return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    async getSimilarArtists(artistName: string, limit = 50): Promise<SimilarArtist[]> {
+      const trimmed = artistName.trim();
+      if (!apiKey || !trimmed) return [];
+
+      const url =
+        `${LASTFM_API_ENDPOINT}?method=artist.getSimilar` +
+        `&artist=${encodeURIComponent(trimmed)}` +
+        `&limit=${limit}` +
+        `&api_key=${encodeURIComponent(apiKey)}&format=json`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl(url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
+        });
+        if (!response.ok) return [];
+        const body = (await response.json()) as LastFmSimilarResponse;
+        if (body.error) return [];
+        const raw = body.similarartists?.artist ?? [];
+        return raw
+          .filter((a) => a.name?.trim())
+          .map((a) => ({ name: a.name!.trim(), match: Number(a.match) || 0 }));
+      } catch {
+        return [];
       } finally {
         clearTimeout(timer);
       }
