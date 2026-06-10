@@ -23,6 +23,41 @@ bandsearch-app/
 
 ---
 
+## System topology
+
+How the pieces connect at runtime. Solid arrows are always active; dashed lines require their corresponding API key.
+
+```mermaid
+graph TD
+    USER([User]) --> DESKTOP
+
+    subgraph DESKTOP["Desktop App (apps/desktop)"]
+        direction LR
+        UI[React UI]
+        SHELL[Tauri Shell / Rust]
+    end
+
+    SHELL -->|spawns Node.js child process| API
+
+    subgraph BACKEND["API Server (services/api)"]
+        API[Express API]
+        PIPELINE[LangGraph Pipeline]
+        API --> PIPELINE
+    end
+
+    PIPELINE --> GEMINI[Google Gemini\nplan · extract · rank]
+    PIPELINE --> BRAVE[Brave Search API\ndiscovery queries]
+    PIPELINE --> MB[MusicBrainz\nartist verification]
+
+    API --> DB[("SQLite / Postgres / Turso\npreferences · sessions · auth")]
+
+    API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
+    PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
+    API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
+```
+
+---
+
 ## API Server (`services/api`)
 
 The API is an Express.js application structured as follows:
@@ -100,14 +135,15 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 ---
 
 ## External Integrations
+
 | Integration | Used in | Purpose |
-|-------------|---------|---------|
-| **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists
-| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation
-| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations)
-| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback
-| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path
-| **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline
+|-------------|---------|--------|
+| **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
+| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
+| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
+| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
+| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
 
@@ -116,10 +152,10 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 Defined in `docs/architecture/2026-05-29-eval-architecture.md`. An async, non-blocking quality-scoring system that runs after the HTTP response is sent.
 
 | Layer | Mechanism | Signals |
-|-------|-----------|---------|
+|-------|-----------|--------|
 | **1 — Automatic metrics** | Runs immediately | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | Claude scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `ANTHROPIC_API_KEY` is set |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `MISTRAL_API_KEY` is set |
 | **3 — Human feedback** | Event-driven | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
@@ -133,7 +169,7 @@ Two persistence domains, both backed by an abstract repository pattern to allow 
 ### Preferences Store (`PREFERENCE_STORE`)
 
 | Backend | Config | Use case |
-|---------|--------|---------|
+|---------|--------|----------|
 | `sqlite` (default) | `DATABASE_PATH` | Local, zero-config |
 | `memory` | — | Ephemeral / testing |
 | `postgres` | `DATABASE_URL` | Shared or hosted deployment |
@@ -156,7 +192,7 @@ Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with
 Three-tier progressive auth — determined by the number of registered users at runtime:
 
 | Users registered | Mode |
-|-----------------|------|
+|-----------------|
 | 0 | Pass-through — no auth checks |
 | 1 | Auto-attach — all requests associated with the single user |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
@@ -183,7 +219,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|-----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Claude as optional async judge only** | Keeps Claude off the critical response path; eval can be added/removed without touching the graph |
+| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
