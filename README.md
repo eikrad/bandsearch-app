@@ -4,10 +4,19 @@
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
 ![Version: 0.4.0--alpha.0](https://img.shields.io/badge/version-0.4.0--alpha.0-blue)
 
-AI-powered music recommendations for niche and lesser-known artists.
-Combines conversational AI with MusicBrainz metadata and preference memory.
+AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz, ranked by Gemini.
 
-**Recommendation pipeline:** Gemini plans Brave web searches (FFO/Bandcamp-style discovery), extracts candidate band names from snippets, verifies them via MusicBrainz (`lookupArtist` with tags/genres/URL relations), optionally runs up to two reflection rounds (each processes only the new hits from that round and accumulates candidates across rounds), then ranks picks with evidence-grounded `why` text. `BRAVE_API_KEY` is required at startup — there is no fallback.
+## Features
+
+- **Niche artist discovery** — Gemini plans targeted Brave searches (FFO/Bandcamp-style) to find obscure artists that match your taste
+- **MusicBrainz verified** — every suggestion is checked against real artist records (mbid, genres, tags, URL relations)
+- **Preference memory** — save and rate bands; future recommendations adapt to your listening history
+- **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
+- **Native desktop app** — Tauri shell for Linux, macOS, and Windows; API keys stored in the OS config directory
+- **Flexible storage** — SQLite by default, Postgres or Turso for shared/cloud deployments
+- **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config
+
+## How it works
 
 ```mermaid
 flowchart TD
@@ -194,7 +203,7 @@ Turso URL and auth token can also be saved through the **Settings** screen in th
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
 | `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images and obscurity scoring (listener counts) |
-| `MISTRAL_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Mistral scores recommendations after the response is sent)
+| `MISTRAL_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Mistral scores recommendations after the response is sent) |
 | `EVAL_DASHBOARD_ENABLED` | — | Set `true` to enable the developer eval dashboard at `/eval/dashboard` |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
