@@ -38,7 +38,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ## Quick Start
 
-**Prerequisites:** Node.js 20+
+**Prerequisites:** Node.js 22+
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
