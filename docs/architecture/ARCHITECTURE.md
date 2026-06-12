@@ -40,7 +40,42 @@ bandsearch-app/
 
 ---
 
-## API server (`services/api`)
+## System topology
+
+How the pieces connect at runtime. Solid arrows are always active; dashed lines require their corresponding API key.
+
+```mermaid
+graph TD
+    USER([User]) --> DESKTOP
+
+    subgraph DESKTOP["Desktop App (apps/desktop)"]
+        direction LR
+        UI[React UI]
+        SHELL[Tauri Shell / Rust]
+    end
+
+    SHELL -->|spawns Node.js child process| API
+
+    subgraph BACKEND["API Server (services/api)"]
+        API[Express API]
+        PIPELINE[LangGraph Pipeline]
+        API --> PIPELINE
+    end
+
+    PIPELINE --> GEMINI[Google Gemini\nplan · extract · rank]
+    PIPELINE --> BRAVE[Brave Search API\ndiscovery queries]
+    PIPELINE --> MB[MusicBrainz\nartist verification]
+
+    API --> DB[("SQLite / Postgres / Turso\npreferences · sessions · auth")]
+
+    API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
+    PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
+    API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
+```
+
+---
+
+## API Server (`services/api`)
 
 The API is an Express.js application structured as follows:
 
@@ -125,7 +160,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 
 ---
 
-## External integrations
+## External Integrations
 
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
@@ -183,7 +218,7 @@ Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with
 Three-tier progressive auth — determined by the number of registered users at runtime:
 
 | Users registered | Mode |
-|-----------------|------|
+|-----------------|
 | 0 | Pass-through — no auth checks |
 | 1 | Auto-attach — all requests associated with the single user |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
@@ -210,7 +245,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Mistral as optional async judge only** | Keeps eval off the critical response path; can be added/removed without touching the graph |
+| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
