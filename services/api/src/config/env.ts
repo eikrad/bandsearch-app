@@ -56,9 +56,9 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     throw new Error("TURSO_DATABASE_URL is required when PREFERENCE_STORE=turso");
   }
 
-  const braveApiKey = String(env.BRAVE_API_KEY ?? "").trim();
+  const braveApiKey = String(env.BRAVE_API_KEY ?? env.BRAVE_SEARCH_API_KEY ?? "").trim();
   if (!braveApiKey) {
-    throw new Error("BRAVE_API_KEY is required");
+    throw new Error("BRAVE_API_KEY (or BRAVE_SEARCH_API_KEY) is required");
   }
 
   const jwtSecret = String(env.JWT_SECRET ?? "").trim() || generateSecret();
@@ -68,7 +68,9 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   const researchMaxInitialSearches = parseNumber(env.RESEARCH_MAX_INITIAL_SEARCHES, 6);
   const researchMaxReflectionSearches = parseNumber(env.RESEARCH_MAX_REFLECTION_SEARCHES, 4);
   const researchTotalSearchBudget = parseNumber(env.RESEARCH_TOTAL_SEARCH_BUDGET, 10);
-  const researchTimeoutMs = parseNumber(env.RESEARCH_TIMEOUT_MS, 25000);
+  // Default budget is generous because the Brave Free plan throttles to 1 req/sec,
+  // so a multi-query research run spends several seconds just waiting between calls.
+  const researchTimeoutMs = parseNumber(env.RESEARCH_TIMEOUT_MS, 45000);
   const researchTargetVerifiedCandidates = parseNumber(env.RESEARCH_TARGET_VERIFIED_CANDIDATES, 8);
 
   return {

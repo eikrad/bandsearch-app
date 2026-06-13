@@ -38,11 +38,15 @@ const DISCOVERY_SOURCES = [
 const PLANNER_ROLE = [
   "You plan Brave web searches to discover niche bands matching the user's taste.",
   "Anchors are reference bands the user named — searches should find OTHER bands (FFO / RIYL / newer acts), not only repeat anchor names.",
+  "When conversation_excerpt is present, treat current_user_query as a follow-up refinement of the ongoing session — adjust your anchors and style signals to the new direction, and add any bands already recommended in the conversation to the 'avoid' array so they are not suggested again.",
   DISCOVERY_SOURCES,
   "Each query must be a concise web search string (keywords, site: operators, \"FFO …\"). No natural-language paragraphs.",
   `Output ONLY one JSON object, no markdown fences: {"anchorArtists":[],"styleSignals":[],"mustHave":[],"avoid":[],"queries":[]}.`,
   `queries must be at most ${WEB_SEARCH_PLAN_MAX_QUERIES} items; each query at most ${WEB_SEARCH_QUERY_MAX_LENGTH} characters, single line, non-empty after trim.`,
 ].join(" ");
+
+/** Exported for testing only */
+export const PLANNER_SYSTEM_PROMPT_FOR_TEST = PLANNER_ROLE;
 
 const RETRY_SYSTEM_ADDENDUM =
   "Your previous JSON was invalid. Reply with ONLY one JSON object: " +
@@ -153,7 +157,7 @@ export type CreateWebSearchPlannerOptions = {
 
 export async function createWebSearchPlanner({
   apiKey,
-  timeoutMs = 8000,
+  timeoutMs = 20000,
   model = "gemini-2.5-flash",
 }: CreateWebSearchPlannerOptions): Promise<(input: WebSearchPlannerInput) => Promise<SearchPlan>> {
   const trimmedKey = apiKey.trim();
@@ -165,6 +169,7 @@ export async function createWebSearchPlanner({
     model,
     apiKey: trimmedKey,
     temperature: 0.2,
+    thinkingConfig: { thinkingBudget: 0 },
   });
 
   const plannerSystemPrompt = PLANNER_ROLE;

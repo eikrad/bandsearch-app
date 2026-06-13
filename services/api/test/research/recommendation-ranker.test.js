@@ -51,6 +51,29 @@ test("createRecommendationRanker is imported", async () => {
   await assert.rejects(() => createRecommendationRanker({ apiKey: "  " }), /apiKey is required/);
 });
 
+test("buildRankUserPartsForTest includes obscurity constraint when obscurityTarget is 'underground'", () => {
+  const { buildRankUserPartsForTest } = require("../../src/agent/research/recommendationRanker");
+  const parts = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh", obscurityTarget: "underground" });
+  const joined = parts.join("\n");
+  assert.match(joined, /underground/i);
+  assert.match(joined, /lesser.known|niche|bandcamp|obscur/i);
+});
+
+test("buildRankUserPartsForTest includes obscurity constraint when obscurityTarget is 'obscure'", () => {
+  const { buildRankUserPartsForTest } = require("../../src/agent/research/recommendationRanker");
+  const parts = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh", obscurityTarget: "obscure" });
+  const joined = parts.join("\n");
+  assert.match(joined, /obscure/i);
+  assert.match(joined, /deep.cut|diy|bandcamp|niche/i);
+});
+
+test("buildRankUserPartsForTest omits obscurity constraint when no target", () => {
+  const { buildRankUserPartsForTest } = require("../../src/agent/research/recommendationRanker");
+  const parts = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh" });
+  const joined = parts.join("\n");
+  assert.doesNotMatch(joined, /obscurity_rank:/i);
+});
+
 test("formatEvidenceForPrompt deduplicates same mbid — artist block appears once", () => {
   const a = { name: "Capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://a.example"], evidenceSnippets: ["s1"], sourceQueries: ["q1"], mbTags: ["hardcore"], mbGenres: [] };
   const b = { name: "capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://b.example"], evidenceSnippets: ["s2"], sourceQueries: ["q2"], mbTags: ["hardcore"], mbGenres: [] };

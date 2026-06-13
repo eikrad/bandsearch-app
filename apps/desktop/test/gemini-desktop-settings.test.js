@@ -19,6 +19,42 @@ test("createGeminiSettingsController reports stored key when invoke returns true
   assert.equal(props.hasStoredKey, true);
 });
 
+// ── fromEnv flags ──────────────────────────────────────────────────────────
+
+test("getSettingsViewProps passes geminiKeyFromEnv true from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true, geminiKeyFromEnv: true }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.geminiKeyFromEnv, true);
+});
+
+test("getSettingsViewProps passes braveKeyFromEnv true from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasBraveKey: true, braveKeyFromEnv: true }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.braveKeyFromEnv, true);
+});
+
+test("getSettingsViewProps passes tursoFromEnv true from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasTursoConfig: true, tursoFromEnv: true }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.tursoFromEnv, true);
+});
+
+test("getSettingsViewProps defaults fromEnv flags to false when invoke omits them", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.geminiKeyFromEnv, false);
+  assert.equal(props.braveKeyFromEnv, false);
+  assert.equal(props.tursoFromEnv, false);
+});
+
 // ── Brave API key ──────────────────────────────────────────────────────────
 
 test("createGeminiSettingsController reports hasBraveKey from invoke", async () => {

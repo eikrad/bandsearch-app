@@ -26,6 +26,8 @@ struct BandsearchConfig {
     turso_database_url: String,
     #[serde(default)]
     turso_auth_token: String,
+    #[serde(default)]
+    jwt_secret: String,
 }
 
 #[derive(Serialize)]
@@ -35,6 +37,14 @@ struct GeminiConfigStatus {
     has_brave_key: bool,
     onboarding_complete: bool,
     has_turso_config: bool,
+    gemini_key_from_env: bool,
+    brave_key_from_env: bool,
+    turso_from_env: bool,
+}
+
+/// Returns true when the named environment variable is set to a non-blank value.
+fn env_non_empty(name: &str) -> bool {
+    std::env::var(name).map(|v| !v.trim().is_empty()).unwrap_or(false)
 }
 
 #[derive(Deserialize)]
@@ -89,7 +99,54 @@ fn gemini_key_for_spawn() -> Option<String> {
 fn brave_key_for_spawn() -> Option<String> {
     let cfg = load_config();
     let trimmed = cfg.brave_api_key.trim();
-    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    if !trimmed.is_empty() {
+        return Some(trimmed.to_string());
+    }
+    // Fall back to env aliases so BRAVE_SEARCH_API_KEY in .env also works
+    for name in &["BRAVE_API_KEY", "BRAVE_SEARCH_API_KEY"] {
+        if let Ok(v) = std::env::var(name) {
+            let v = v.trim().to_string();
+            if !v.is_empty() { return Some(v); }
+        }
+    }
+    None
+}
+
+/// Generates a 32-byte hex secret from /dev/urandom (Unix) or RandomState fallback.
+fn generate_jwt_secret() -> String {
+    #[cfg(unix)]
+    {
+        use std::io::Read;
+        if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+            let mut buf = [0u8; 32];
+            if f.read_exact(&mut buf).is_ok() {
+                return buf.iter().map(|b| format!("{:02x}", b)).collect();
+            }
+        }
+    }
+    // Fallback: combine multiple RandomState seeds (each seeded from OS entropy).
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    (0..4)
+        .map(|_| format!("{:016x}", RandomState::new().build_hasher().finish()))
+        .collect()
+}
+
+/// Returns a stable JWT secret for the API sidecar.
+/// Priority: JWT_SECRET env var → stored config value → generate + persist.
+fn ensure_jwt_secret() -> String {
+    if let Ok(v) = std::env::var("JWT_SECRET") {
+        let v = v.trim().to_string();
+        if !v.is_empty() { return v; }
+    }
+    let mut cfg = load_config();
+    if !cfg.jwt_secret.trim().is_empty() {
+        return cfg.jwt_secret.trim().to_string();
+    }
+    let secret = generate_jwt_secret();
+    cfg.jwt_secret = secret.clone();
+    let _ = persist_config(&cfg);
+    secret
 }
 
 fn turso_for_spawn() -> (Option<String>, Option<String>) {
@@ -154,7 +211,7 @@ fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
         .join("services")
         .join("api")
         .join("src")
-        .join("server.js");
+        .join("server.ts");
     (
         resolve_node_binary(),
         vec![
@@ -165,14 +222,31 @@ fn api_spawn_args(workspace_root: &Path) -> (String, Vec<String>) {
     )
 }
 
-/// Walk up from `start` until we find the repo root that contains `services/api/src/server.js`.
+/// Load a `.env` file into the current process environment without overriding existing vars.
+fn load_dotenv(workspace_root: &Path) {
+    let path = workspace_root.join(".env");
+    let Ok(contents) = std::fs::read_to_string(&path) else { return };
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') { continue; }
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim().trim_matches('"').trim_matches('\'');
+            if std::env::var(key).is_err() {
+                std::env::set_var(key, value);
+            }
+        }
+    }
+}
+
+/// Walk up from `start` until we find the repo root that contains `services/api/src/server.ts`.
 fn resolve_workspace_root_from(start: &Path) -> Option<PathBuf> {
     for ancestor in start.ancestors() {
         let server_js = ancestor
             .join("services")
             .join("api")
             .join("src")
-            .join("server.js");
+            .join("server.ts");
         if server_js.is_file() {
             return Some(ancestor.to_path_buf());
         }
@@ -205,11 +279,13 @@ fn spawn_api_child(
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
+    jwt_secret: &str,
 ) -> Result<Child, std::io::Error> {
     let (binary, args) = api_spawn_args(workspace_root);
     let mut cmd = Command::new(&binary);
     cmd.args(&args).current_dir(workspace_root);
     cmd.env("DATABASE_PATH", absolute_bandsearch_db_path(workspace_root));
+    cmd.env("JWT_SECRET", jwt_secret);
     if let Some(k) = gemini_key {
         let t = k.trim();
         if !t.is_empty() {
@@ -252,8 +328,9 @@ fn start_api_sidecar(
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
+    jwt_secret: &str,
 ) {
-    match spawn_api_child(workspace_root, gemini_key, brave_key, turso_url, turso_token) {
+    match spawn_api_child(workspace_root, gemini_key, brave_key, turso_url, turso_token, jwt_secret) {
         Ok(child) => {
             if let Ok(mut guard) = api.0.lock() {
                 *guard = Some(child);
@@ -276,13 +353,14 @@ fn restart_api_sidecar(
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
+    jwt_secret: &str,
 ) {
     if let Ok(mut guard) = api.0.lock() {
         if let Some(mut child) = guard.take() {
             let _ = child.kill();
         }
     }
-    start_api_sidecar(api, workspace_root, gemini_key, brave_key, turso_url, turso_token);
+    start_api_sidecar(api, workspace_root, gemini_key, brave_key, turso_url, turso_token, jwt_secret);
 }
 
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -296,11 +374,22 @@ fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 #[tauri::command]
 fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
     let cfg = load_config();
+    let gemini_in_config = !cfg.gemini_api_key.trim().is_empty();
+    let brave_in_config = !cfg.brave_api_key.trim().is_empty();
+    let turso_in_config = !cfg.turso_database_url.trim().is_empty();
+
+    let gemini_key_from_env = !gemini_in_config && env_non_empty("GEMINI_API_KEY");
+    let brave_key_from_env = !brave_in_config && (env_non_empty("BRAVE_API_KEY") || env_non_empty("BRAVE_SEARCH_API_KEY"));
+    let turso_from_env = !turso_in_config && env_non_empty("TURSO_DATABASE_URL");
+
     Ok(GeminiConfigStatus {
-        has_stored_key: !cfg.gemini_api_key.trim().is_empty(),
-        has_brave_key: !cfg.brave_api_key.trim().is_empty(),
+        has_stored_key: gemini_in_config || gemini_key_from_env,
+        has_brave_key: brave_in_config || brave_key_from_env,
         onboarding_complete: cfg.onboarding_completed,
-        has_turso_config: !cfg.turso_database_url.trim().is_empty(),
+        has_turso_config: turso_in_config || turso_from_env,
+        gemini_key_from_env,
+        brave_key_from_env,
+        turso_from_env,
     })
 }
 
@@ -320,7 +409,8 @@ fn save_gemini_api_key(
     persist_config(&cfg)?;
     let brave = brave_key_for_spawn();
     let (turso_url, turso_tok) = turso_for_spawn();
-    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref());
+    let jwt = ensure_jwt_secret();
+    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
     Ok(())
 }
 
@@ -339,7 +429,8 @@ fn save_brave_api_key(
     persist_config(&cfg)?;
     let gemini = gemini_key_for_spawn();
     let (turso_url, turso_tok) = turso_for_spawn();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed), turso_url.as_deref(), turso_tok.as_deref());
+    let jwt = ensure_jwt_secret();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
     Ok(())
 }
 
@@ -359,7 +450,24 @@ fn save_turso_config(
     persist_config(&cfg)?;
     let gemini = gemini_key_for_spawn();
     let brave = brave_key_for_spawn();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), Some(url), Some(cfg.turso_auth_token.as_str()));
+    let jwt = ensure_jwt_secret();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), Some(url), Some(cfg.turso_auth_token.as_str()), &jwt);
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_turso_config(
+    workspace: State<'_, WorkspaceRoot>,
+    api: State<'_, ApiProcess>,
+) -> Result<(), String> {
+    let mut cfg = load_config();
+    cfg.turso_database_url = String::new();
+    cfg.turso_auth_token = String::new();
+    persist_config(&cfg)?;
+    let gemini = gemini_key_for_spawn();
+    let brave = brave_key_for_spawn();
+    let jwt = ensure_jwt_secret();
+    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), None, None, &jwt);
     Ok(())
 }
 
@@ -373,12 +481,13 @@ fn complete_onboarding() -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, complete_onboarding])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
 
             let workspace_root = resolve_workspace_root();
+            load_dotenv(&workspace_root);
             eprintln!("[bandsearch] workspace_root: {}", workspace_root.display());
             eprintln!(
                 "[bandsearch] DATABASE_PATH: {}",
@@ -389,7 +498,8 @@ fn main() {
             let gemini = gemini_key_for_spawn();
             let brave = brave_key_for_spawn();
             let (turso_url, turso_tok) = turso_for_spawn();
-            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref());
+            let jwt = ensure_jwt_secret();
+            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));
@@ -446,8 +556,8 @@ mod tests {
         assert_eq!(args[0], "--import");
         assert_eq!(args[1], "tsx");
         assert!(
-            args[2].ends_with("services/api/src/server.js"),
-            "expected server.js path, got: {}",
+            args[2].ends_with("services/api/src/server.ts"),
+            "expected server.ts path, got: {}",
             args[2]
         );
     }
@@ -516,9 +626,32 @@ mod tests {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let root = resolve_workspace_root_from(&manifest_dir).expect("repo root next to this crate");
         assert!(
-            root.join("services").join("api").join("src").join("server.js").is_file(),
-            "expected services/api/src/server.js under {:?}",
+            root.join("services").join("api").join("src").join("server.ts").is_file(),
+            "expected services/api/src/server.ts under {:?}",
             root
         );
+    }
+
+    #[test]
+    fn env_non_empty_true_when_var_set() {
+        let key = "BANDSEARCH_TEST_ENV_NON_EMPTY_SET";
+        std::env::set_var(key, "value");
+        assert!(env_non_empty(key));
+        std::env::remove_var(key);
+    }
+
+    #[test]
+    fn env_non_empty_false_when_var_absent() {
+        let key = "BANDSEARCH_TEST_ENV_NON_EMPTY_ABSENT";
+        std::env::remove_var(key);
+        assert!(!env_non_empty(key));
+    }
+
+    #[test]
+    fn env_non_empty_false_when_var_whitespace() {
+        let key = "BANDSEARCH_TEST_ENV_NON_EMPTY_WS";
+        std::env::set_var(key, "   ");
+        assert!(!env_non_empty(key));
+        std::env::remove_var(key);
     }
 }

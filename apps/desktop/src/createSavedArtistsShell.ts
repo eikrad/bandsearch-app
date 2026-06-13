@@ -1,26 +1,32 @@
 export function createSavedArtistsShell({ app }: { app: any }) {
   let state: {
     savedArtists: any[];
+    groups: any[];
     selectedIds: any[];
     searchQuery: string;
     searchResults: any[];
     isSearching: boolean;
   } = {
     savedArtists: [],
+    groups: [],
     selectedIds: [],
     searchQuery: "",
     searchResults: [],
     isSearching: false,
   };
 
+  async function reloadAll() {
+    const [bands, groups] = await Promise.all([app.listSavedBands(), app.listGroups()]);
+    const appSelectedIds = app.getState().selectedArtistIds;
+    state = { ...state, savedArtists: bands, groups, selectedIds: appSelectedIds };
+  }
+
   return {
     getViewProps() {
       return { ...state };
     },
     async loadSavedArtists() {
-      const bands = await app.listSavedBands();
-      const appSelectedIds = app.getState().selectedArtistIds;
-      state = { ...state, savedArtists: bands, selectedIds: appSelectedIds };
+      await reloadAll();
     },
     toggleArtistSelection(id: string) {
       app.toggleArtistSelection(id);
@@ -43,8 +49,31 @@ export function createSavedArtistsShell({ app }: { app: any }) {
     },
     async addArtist(mbArtist: any) {
       await app.saveBand(mbArtist.name, { note: mbArtist.disambiguation || "Added via search." });
-      const bands = await app.listSavedBands();
-      state = { ...state, savedArtists: bands, searchResults: [] };
+      await reloadAll();
+    },
+    async deleteSavedArtist(id: string) {
+      await app.deleteSavedBand(id);
+      await reloadAll();
+    },
+    async exportArtists() {
+      return app.exportPreferences();
+    },
+    async importArtists(bands: unknown[]) {
+      const result = await app.importPreferences(bands);
+      await reloadAll();
+      return result;
+    },
+    async createGroup(name: string) {
+      await app.createGroup(name);
+      await reloadAll();
+    },
+    async deleteGroup(id: string) {
+      await app.deleteGroup(id);
+      await reloadAll();
+    },
+    async autoGroup() {
+      await app.autoGroup();
+      await reloadAll();
     },
   };
 }

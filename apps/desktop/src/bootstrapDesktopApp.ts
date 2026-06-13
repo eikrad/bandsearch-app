@@ -140,5 +140,23 @@ export function bootstrapDesktopApp({
       const result = await chatClient.searchArtists(query) as any;
       return result.artists || [];
     },
+    async exportPreferences() {
+      return chatClient.exportPreferences();
+    },
+    async importPreferences(bands: unknown[]) {
+      return chatClient.importPreferences(bands);
+    },
+    async listGroups() {
+      return chatClient.listGroups();
+    },
+    async createGroup(name: string) {
+      return chatClient.createGroup(name);
+    },
+    async deleteGroup(id: string) {
+      return chatClient.deleteGroup(id);
+    },
+    async autoGroup() {
+      return chatClient.autoGroup();
+    },
   };
 }

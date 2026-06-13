@@ -19,14 +19,19 @@ export type ExtractedCandidate = {
   sourceQueries: string[];
 };
 
-const SYSTEM = [
-  "You extract band or artist names from web search results for music discovery.",
-  "Only include names that appear to be musical artists or bands mentioned as recommendations, FFO, RIYL, similar artists, or scene lists.",
-  'Output ONLY JSON: {"candidates":[{"name":"","evidenceUrls":[],"evidenceSnippets":[],"sourceQueries":[]}]}',
-  "evidenceSnippets should quote short phrases from titles or descriptions (not full pages).",
-  "Do not include the anchor/reference bands listed by the user — only other acts.",
-  "Deduplicate band names case-insensitively in your output (merge evidence).",
-].join(" ");
+export const CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES = 25;
+
+export function buildExtractorSystemPrompt(maxCandidates: number): string {
+  return [
+    "You extract band or artist names from web search results for music discovery.",
+    "Only include names that appear to be musical artists or bands mentioned as recommendations, FFO, RIYL, similar artists, or scene lists.",
+    'Output ONLY JSON: {"candidates":[{"name":"","evidenceUrls":[],"evidenceSnippets":[],"sourceQueries":[]}]}',
+    "evidenceSnippets should quote short phrases from titles or descriptions (not full pages); at most 2 short snippets per candidate.",
+    "Do not include the anchor/reference bands listed by the user — only other acts.",
+    "Deduplicate band names case-insensitively in your output (merge evidence).",
+    `Return at most ${maxCandidates} candidates — prioritise the most frequently mentioned and most clearly relevant acts.`,
+  ].join(" ");
+}
 
 const RETRY_ADDENDUM =
   "Invalid JSON before. Reply with ONLY one JSON object: " +
@@ -130,12 +135,15 @@ export type CreateCandidateExtractorOptions = {
   apiKey: string;
   timeoutMs?: number;
   model?: string;
+  /** Upper bound on candidates the model should emit; smaller = faster generation. */
+  maxCandidates?: number;
 };
 
 export async function createCandidateExtractor({
   apiKey,
   timeoutMs = 12000,
   model = "gemini-2.5-flash",
+  maxCandidates = CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES,
 }: CreateCandidateExtractorOptions): Promise<
   (input: { hits: SearchHitInput[]; anchorArtists: string[] }) => Promise<ExtractedCandidate[]>
 > {
@@ -148,7 +156,10 @@ export async function createCandidateExtractor({
     model,
     apiKey: trimmedKey,
     temperature: 0.1,
+    thinkingConfig: { thinkingBudget: 0 },
   });
+
+  const systemPrompt = buildExtractorSystemPrompt(maxCandidates);
 
   async function invokeOnce(
     systemText: string,
@@ -162,7 +173,8 @@ export async function createCandidateExtractor({
     const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "candidate extractor timeout");
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
-    return extractFromParsed(parsed, anchors);
+    // Hard cap as a safety net in case the model exceeds the requested count.
+    return extractFromParsed(parsed, anchors).slice(0, maxCandidates);
   }
 
   return async function extractCandidates(input: {
@@ -181,9 +193,9 @@ export async function createCandidateExtractor({
 
     const userContent = `${anchorLine}\n\nsearch_results:\n${hitBlock}`;
 
-    const first = await invokeOnce(SYSTEM, userContent, anchors);
+    const first = await invokeOnce(systemPrompt, userContent, anchors);
     if (first.length > 0) return first;
 
-    return invokeOnce(`${SYSTEM} ${RETRY_ADDENDUM}`, userContent, anchors);
+    return invokeOnce(`${systemPrompt} ${RETRY_ADDENDUM}`, userContent, anchors);
   };
 }

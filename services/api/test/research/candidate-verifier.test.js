@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { verifyCandidatesWithMusicBrainz, mergeVerifiedCandidates } = require("../../src/agent/research/candidateVerifier");
+const { verifyCandidatesWithMusicBrainz, mergeVerifiedCandidates, filterCandidatesByObscurity } = require("../../src/agent/research/candidateVerifier");
 
 test("verifyCandidatesWithMusicBrainz attaches mbid and tags on lookup success", async () => {
   const mb = {
@@ -93,6 +93,58 @@ test("mergeVerifiedCandidates prefers verified:true entry on collision (same mbi
   assert.equal(result.length, 1);
   assert.equal(result[0].verified, true);
   assert.equal(result[0].mbid, "mbid-pog");
+});
+
+// ─── filterCandidatesByObscurity ──────────────────────────────────────────────
+
+function makeCandidate(name, listenerCount) {
+  return { name, listenerCount, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] };
+}
+
+test("filterCandidatesByObscurity returns all candidates when no obscurityTarget", () => {
+  const candidates = [makeCandidate("Band A", 1_000_000), makeCandidate("Band B", 100)];
+  assert.equal(filterCandidatesByObscurity(candidates).length, 2);
+  assert.equal(filterCandidatesByObscurity(candidates, undefined).length, 2);
+});
+
+test("filterCandidatesByObscurity filters above threshold for underground (50k)", () => {
+  const candidates = [
+    makeCandidate("Huge Band", 1_000_000),
+    makeCandidate("Mid Band", 30_000),
+    makeCandidate("Tiny Band", 500),
+  ];
+  const result = filterCandidatesByObscurity(candidates, "underground");
+  assert.equal(result.length, 2);
+  assert.ok(result.every(c => c.listenerCount == null || c.listenerCount <= 50_000));
+});
+
+test("filterCandidatesByObscurity keeps null listenerCount (no data = likely obscure)", () => {
+  const candidates = [makeCandidate("No Data Band", null), makeCandidate("Huge Band", 2_000_000)];
+  const result = filterCandidatesByObscurity(candidates, "obscure");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].name, "No Data Band");
+});
+
+test("filterCandidatesByObscurity falls back to all candidates when too few pass the filter", () => {
+  const candidates = [
+    makeCandidate("Band A", 500_000),
+    makeCandidate("Band B", 600_000),
+    makeCandidate("Band C", 700_000),
+  ];
+  // All above underground threshold (50k) — should fall back rather than return 0
+  const result = filterCandidatesByObscurity(candidates, "underground");
+  assert.equal(result.length, 3, "should fall back to all candidates rather than returning empty");
+});
+
+test("filterCandidatesByObscurity cult threshold is 500k", () => {
+  const candidates = [
+    makeCandidate("Pop Star", 2_000_000),
+    makeCandidate("Scene Band", 200_000),
+    makeCandidate("Niche Band", 10_000),
+  ];
+  const result = filterCandidatesByObscurity(candidates, "cult");
+  assert.equal(result.length, 2);
+  assert.ok(result.every(c => c.listenerCount == null || c.listenerCount <= 500_000));
 });
 
 test("mergeVerifiedCandidates preserves all distinct artists", () => {

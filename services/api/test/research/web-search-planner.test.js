@@ -48,3 +48,9 @@ test("buildPlannerUserContent omits obscurity constraint when obscurityTarget is
   const content = buildPlannerUserContentForTest({ userQuery: "blackgaze bands" });
   assert.doesNotMatch(content, /obscurity_target:/i);
 });
+
+test("PLANNER_SYSTEM_PROMPT_FOR_TEST instructs model to treat follow-ups as refinements and avoid already-seen bands", () => {
+  const { PLANNER_SYSTEM_PROMPT_FOR_TEST } = require("../../src/agent/research/webSearchPlanner");
+  assert.match(PLANNER_SYSTEM_PROMPT_FOR_TEST, /follow.up|refinement/i, "should mention follow-up refinement");
+  assert.match(PLANNER_SYSTEM_PROMPT_FOR_TEST, /avoid|already/i, "should instruct to avoid already-recommended bands");
+});

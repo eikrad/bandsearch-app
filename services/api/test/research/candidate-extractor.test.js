@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { tryParseExtractedCandidatesFromModelText, mergeExtractedCandidates } = require("../../src/agent/research/candidateExtractor");
+const { tryParseExtractedCandidatesFromModelText, mergeExtractedCandidates, buildExtractorSystemPrompt } = require("../../src/agent/research/candidateExtractor");
 
 test("tryParseExtractedCandidatesFromModelText merges duplicates case-insensitively", () => {
   const raw = JSON.stringify({
@@ -70,4 +70,10 @@ test("tryParseExtractedCandidatesFromModelText excludes anchors", () => {
   const rows = tryParseExtractedCandidatesFromModelText(raw, ["Grade"]);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, "Other Band");
+});
+
+test("buildExtractorSystemPrompt instructs the model to cap the candidate count", () => {
+  const prompt = buildExtractorSystemPrompt(25);
+  assert.ok(prompt.includes("25"), "prompt should mention the cap number");
+  assert.ok(/at most/i.test(prompt), "prompt should instruct an upper bound");
 });

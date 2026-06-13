@@ -116,13 +116,31 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       return { verifiedCandidates: merged, roundsCompleted: round };
     })
     .addEdge(START, "assess")
-    .addConditionalEdges("assess", (state) =>
-      (state.nextExtraQueries?.length ?? 0) === 0 || deps.budget.remaining() <= 0 ? END : "search",
-    )
+    .addConditionalEdges("assess", (state) => {
+      if ((state.nextExtraQueries?.length ?? 0) === 0) return END;
+      const MIN_REFLECTION_CYCLE_MS = 25_000;
+      if (deps.budget.remaining() < MIN_REFLECTION_CYCLE_MS) {
+        log("warn", "research_reflection_skipped_budget", {
+          remaining: deps.budget.remaining(),
+          threshold: MIN_REFLECTION_CYCLE_MS,
+        });
+        return END;
+      }
+      return "search";
+    })
     .addEdge("search", "extract_r")
     .addEdge("extract_r", "verify_r")
-    .addConditionalEdges("verify_r", (state) =>
-      (state.roundsCompleted ?? 0) >= deps.maxRounds || deps.budget.remaining() <= 0 ? END : "assess",
-    )
+    .addConditionalEdges("verify_r", (state) => {
+      if ((state.roundsCompleted ?? 0) >= deps.maxRounds) return END;
+      const MIN_REFLECTION_CYCLE_MS = 25_000;
+      if (deps.budget.remaining() < MIN_REFLECTION_CYCLE_MS) {
+        log("warn", "research_reflection_skipped_budget", {
+          remaining: deps.budget.remaining(),
+          threshold: MIN_REFLECTION_CYCLE_MS,
+        });
+        return END;
+      }
+      return "assess";
+    })
     .compile();
 }

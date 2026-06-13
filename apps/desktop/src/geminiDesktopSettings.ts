@@ -75,6 +75,9 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     let hasStoredKey = false;
     let hasBraveKey = false;
     let hasTursoConfig = false;
+    let geminiKeyFromEnv = false;
+    let braveKeyFromEnv = false;
+    let tursoFromEnv = false;
 
     if (typeof invokeTauri === "function") {
       try {
@@ -82,10 +85,16 @@ export function createGeminiSettingsController(options: GeminiSettingsController
           hasStoredKey?: boolean;
           hasBraveKey?: boolean;
           hasTursoConfig?: boolean;
+          geminiKeyFromEnv?: boolean;
+          braveKeyFromEnv?: boolean;
+          tursoFromEnv?: boolean;
         };
         hasStoredKey = Boolean(r?.hasStoredKey);
         hasBraveKey = Boolean(r?.hasBraveKey);
         hasTursoConfig = Boolean(r?.hasTursoConfig);
+        geminiKeyFromEnv = Boolean(r?.geminiKeyFromEnv);
+        braveKeyFromEnv = Boolean(r?.braveKeyFromEnv);
+        tursoFromEnv = Boolean(r?.tursoFromEnv);
       } catch {
         /* defaults */
       }
@@ -108,6 +117,9 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       hasStoredKey,
       hasBraveKey,
       hasTursoConfig,
+      geminiKeyFromEnv,
+      braveKeyFromEnv,
+      tursoFromEnv,
       statusMessage: geminiStatus ?? braveStatus,
       geminiStatusMessage: geminiStatus,
       braveStatusMessage: braveStatus,
@@ -224,11 +236,24 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     }
   }
 
+  async function clearTursoConfig() {
+    if (typeof invokeTauri === "function") {
+      try {
+        await invokeTauri("clear_turso_config");
+        tursoStatus = { type: "success", text: "Switched to local SQLite." };
+      } catch (e) {
+        const err = e as { message?: string };
+        tursoStatus = { type: "error", text: String(err?.message || e || "Could not clear config.") };
+      }
+    }
+  }
+
   return {
     getSettingsViewProps,
     saveGeminiApiKey,
     saveBraveApiKey,
     saveTursoConfig,
+    clearTursoConfig,
     getBootstrapGate,
     completeOnboarding,
   };

@@ -100,6 +100,7 @@ export async function createRecommendationReflector({
     model,
     apiKey: trimmedKey,
     temperature: 0.15,
+    thinkingConfig: { thinkingBudget: 0 },
   });
 
   async function invokeOnce(systemText: string, userContent: string): Promise<ReflectionResult | null> {

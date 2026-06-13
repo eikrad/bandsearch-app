@@ -61,6 +61,7 @@ export type BootstrapDesktopReactAppOptions = {
   saveGeminiApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
+  clearTursoConfig?: () => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
@@ -78,6 +79,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions = {})
     saveGeminiApiKey,
     saveBraveApiKey,
     saveTursoConfig,
+    clearTursoConfig,
     completeOnboarding,
     onLogin,
     onRegister,
@@ -92,6 +94,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions = {})
     saveGeminiApiKey,
     saveBraveApiKey,
     saveTursoConfig,
+    clearTursoConfig,
     completeOnboarding,
     onLogin,
     onRegister,

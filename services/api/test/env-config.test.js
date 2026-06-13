@@ -15,8 +15,13 @@ test("validateRuntimeEnv requires GEMINI_API_KEY", () => {
 test("validateRuntimeEnv requires BRAVE_API_KEY", () => {
   assert.throws(
     () => validateRuntimeEnv({ GEMINI_API_KEY: "key" }),
-    /BRAVE_API_KEY is required/,
+    /BRAVE_API_KEY .*is required/,
   );
+});
+
+test("validateRuntimeEnv accepts BRAVE_SEARCH_API_KEY as an alias", () => {
+  const config = validateRuntimeEnv({ GEMINI_API_KEY: "key", BRAVE_SEARCH_API_KEY: "alias-brave-key" });
+  assert.equal(config.braveApiKey, "alias-brave-key");
 });
 
 test("validateRuntimeEnv returns defaults for minimal env", () => {
@@ -27,7 +32,7 @@ test("validateRuntimeEnv returns defaults for minimal env", () => {
   assert.equal(config.researchMaxInitialSearches, 6);
   assert.equal(config.researchMaxReflectionSearches, 4);
   assert.equal(config.researchTotalSearchBudget, 10);
-  assert.equal(config.researchTimeoutMs, 25000);
+  assert.equal(config.researchTimeoutMs, 45000);
   assert.equal(config.researchTargetVerifiedCandidates, 8);
   assert.equal(config.port, 3001);
   assert.equal(config.musicBrainzTimeoutMs, 5000);

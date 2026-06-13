@@ -5,6 +5,7 @@ import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
+import { createAuthAwareFetch } from "./authAwareFetch.js";
 
 const VIEWPORT_BREAKPOINT_MAX_PX = 767;
 
@@ -70,13 +71,18 @@ export async function startDesktopBrowserApp({
 }: StartDesktopBrowserAppOptions = {}) {
   const resolvedInvoke = typeof invokeTauri === "function" ? invokeTauri : createDefaultTauriInvoke();
   const resolvedFetch = fetchImpl ?? fetch;
+  const router = createHashRouter();
+  const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => {
+    clearAuthToken();
+    router.navigate("login");
+  });
 
   const gemini = createGeminiSettingsController({
     invokeTauri: typeof resolvedInvoke === "function" ? resolvedInvoke : undefined,
     probeTursoConnection: async (url: string, token: string) => {
       const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
       try {
-        const response = await resolvedFetch(`${base}/preferences/turso/test`, {
+        const response = await authAwareFetch(`${base}/preferences/turso/test`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ databaseUrl: url, authToken: token }),
@@ -88,9 +94,8 @@ export async function startDesktopBrowserApp({
     },
   });
 
-  const authClient = createAuthApiClient({ apiBaseUrl, fetchImpl: resolvedFetch });
-  const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl, getToken: () => getAuthToken() });
-  const router = createHashRouter();
+  const authClient = createAuthApiClient({ apiBaseUrl, fetchImpl: authAwareFetch });
+  const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
   const savedArtistsShell = createSavedArtistsShell({ app });
   const initialViewport = resolveInitialViewport(viewport);
 
@@ -144,6 +149,7 @@ export async function startDesktopBrowserApp({
     saveGeminiApiKey: (key: string) => gemini.saveGeminiApiKey(key),
     saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
     saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),
+    clearTursoConfig: () => gemini.clearTursoConfig(),
     completeOnboarding: async () => { await gemini.completeOnboarding(); await runAuthGate(); },
     onLogin,
     onRegister,

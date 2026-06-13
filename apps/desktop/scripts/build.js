@@ -2,7 +2,7 @@ const esbuild = require("esbuild");
 const fs = require("node:fs");
 
 const config = {
-  entryPoints: ["src/browserEntry.js"],
+  entryPoints: ["./src/browserEntry.ts"],
   bundle: true,
   outfile: "dist/bundle.js",
   platform: "browser",

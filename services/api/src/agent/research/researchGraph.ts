@@ -6,7 +6,7 @@ import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
@@ -21,6 +21,8 @@ export type ResearchGraphDeps = {
   totalSearchBudget: number;
   targetVerifiedCount: number;
   researchTimeoutMs: number;
+  /** Cap on search hits fed into the candidate extractor; limits output size and latency. */
+  maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   onLog?: (
@@ -118,7 +120,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("plan", async (state) => {
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(8000),
+        timeoutMs: budget.allocate(20000),
       });
       const plan = await planWeb({
         userQuery: state.userQuery,
@@ -141,10 +143,13 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("extract", async (state) => {
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(12000),
+        timeoutMs: budget.allocate(18000),
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      const candidates = await extract({ hits: state.braveHits, anchorArtists: anchors });
+      // Cap hits so the model emits a manageable candidate list within the timeout.
+      const maxExtractHits = deps.maxExtractHits ?? 24;
+      const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
+      const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });
       return { extractedCandidates: candidates };
     })
@@ -163,52 +168,77 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("enrich_lastfm", async (state) => {
       if (!lastFm) return {};
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      if (!anchors.length || !state.verifiedCandidates?.length) return {};
+      if (!state.verifiedCandidates?.length) return {};
+
+      // Fetch similar-artist signals and listener counts in parallel.
+      const [similarResults, listenerResults] = await Promise.all([
+        anchors.length
+          ? Promise.all(anchors.map((a) => lastFm.getSimilarArtists(a)))
+          : Promise.resolve([]),
+        Promise.allSettled(
+          state.verifiedCandidates.map((c) =>
+            lastFm.getListenerCount(c.canonicalName || c.name),
+          ),
+        ),
+      ]);
 
       const similarMap = new Map<string, { anchor: string; match: number }>();
-      for (const anchor of anchors) {
-        const similar = await lastFm.getSimilarArtists(anchor);
-        for (const s of similar) {
+      for (let i = 0; i < anchors.length; i++) {
+        for (const s of similarResults[i] ?? []) {
           const key = s.name.toLowerCase();
           const existing = similarMap.get(key);
           if (!existing || s.match > existing.match) {
-            similarMap.set(key, { anchor, match: s.match });
+            similarMap.set(key, { anchor: anchors[i], match: s.match });
           }
         }
       }
 
       let matchCount = 0;
-      const enriched = state.verifiedCandidates.map((c) => {
+      const enriched = state.verifiedCandidates.map((c, idx) => {
         const key = (c.canonicalName || c.name).trim().toLowerCase();
         const hit = similarMap.get(key);
-        if (!hit) return c;
-        matchCount++;
-        const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
-        return {
-          ...c,
-          evidenceUrls: [...c.evidenceUrls, similarUrl],
-          evidenceSnippets: [...c.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
-        };
+        const listenerCount =
+          listenerResults[idx].status === "fulfilled" ? listenerResults[idx].value : null;
+
+        let next: VerifiedCandidate = { ...c, listenerCount };
+        if (hit) {
+          matchCount++;
+          const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
+          next = {
+            ...next,
+            evidenceUrls: [...next.evidenceUrls, similarUrl],
+            evidenceSnippets: [...next.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
+          };
+        }
+        return next;
       });
 
       log("info", "research_lastfm_enrichment", {
         anchorCount: anchors.length,
         candidateCount: state.verifiedCandidates.length,
         matchCount,
+        listenersFetched: listenerResults.filter((r) => r.status === "fulfilled" && r.value != null).length,
       });
       return { verifiedCandidates: enriched };
     })
     .addNode("rank", async (state) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(12000),
+        timeoutMs: Math.max(budget.allocate(12000), 12000),
+      });
+      const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
+      log("info", "research_obscurity_filter", {
+        obscurityTarget: state.obscurityTarget ?? "none",
+        before: state.verifiedCandidates.length,
+        after: filteredCandidates.length,
       });
       const { recommendations, assistantReply } = await ranker({
         query: state.userQuery,
         preferenceContext: state.preferenceContext,
         messages: state.messages,
         mode: state.mode,
-        candidates: state.verifiedCandidates,
+        candidates: filteredCandidates,
+        obscurityTarget: state.obscurityTarget,
       });
       log("info", "research_ranked", {
         finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
