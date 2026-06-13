@@ -250,8 +250,9 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: any; th
   );
 }
 
-function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnType<typeof getTheme> }) {
+function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme: ReturnType<typeof getTheme>; onStop?: () => void }) {
   const [showSlowHint, setShowSlowHint] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
 
   React.useEffect(() => {
     if (!visible) {
@@ -270,10 +271,12 @@ function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnT
       "aria-live": "polite",
       "aria-busy": true,
       className: "search-in-progress",
+      onMouseEnter: () => setHovered(true),
+      onMouseLeave: () => setHovered(false),
       style: {
         display: "flex",
-        alignItems: "center",
-        gap: "12px",
+        flexDirection: "column",
+        gap: "6px",
         marginBottom: "10px",
         padding: "11px 14px",
         backgroundColor: theme.cardBg,
@@ -284,30 +287,57 @@ function SearchInProgress({ visible, theme }: { visible: boolean; theme: ReturnT
         lineHeight: "1.4",
       },
     },
-    React.createElement("span", {
-      className: "bandsearch-spinner",
-      style: { ["--spinner-accent"]: theme.accent },
-      "aria-hidden": true,
-    }),
     React.createElement(
-      "span",
-      null,
-      "Finding niche recommendations…",
-      showSlowHint
-        ? React.createElement(
-            "span",
-            {
-              style: {
-                display: "block",
-                fontSize: "12px",
-                color: theme.textTertiary,
-                marginTop: "3px",
+      "div",
+      { style: { display: "flex", alignItems: "center", gap: "12px" } },
+      React.createElement("span", {
+        className: "bandsearch-spinner",
+        style: { ["--spinner-accent"]: theme.accent },
+        "aria-hidden": true,
+      }),
+      React.createElement(
+        "span",
+        null,
+        "Finding niche recommendations…",
+        showSlowHint
+          ? React.createElement(
+              "span",
+              {
+                style: {
+                  display: "block",
+                  fontSize: "12px",
+                  color: theme.textTertiary,
+                  marginTop: "3px",
+                },
               },
-            },
-            "The server may be waking up after a period of inactivity — first requests can take up to 60 s.",
-          )
-        : null,
+              "The server may be waking up after a period of inactivity — first requests can take up to 60 s.",
+            )
+          : null,
+      ),
     ),
+    onStop
+      ? React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: onStop,
+            style: {
+              alignSelf: "flex-start",
+              opacity: hovered ? 1 : 0,
+              transition: "opacity 0.15s",
+              background: "transparent",
+              border: `1px solid ${theme.border}`,
+              borderRadius: "4px",
+              color: theme.textSecondary,
+              fontSize: "11px",
+              cursor: "pointer",
+              padding: "3px 8px",
+              marginLeft: "2px",
+            },
+          },
+          "stop",
+        )
+      : null,
   );
 }
 
@@ -759,7 +789,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers:
           backgroundColor: theme.pageBg,
         },
       },
-      React.createElement(SearchInProgress, { visible: searchInFlight, theme }),
+      React.createElement(SearchInProgress, { visible: searchInFlight, theme, onStop: handlers.onStop }),
       React.createElement(FeedbackReactionBar, {
         visible: viewProps.showFeedbackBar === true,
         onFeedback: (type: string) => handlers.onFeedback?.(type),

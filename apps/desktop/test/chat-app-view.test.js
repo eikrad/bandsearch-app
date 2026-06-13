@@ -569,3 +569,61 @@ test("ChatAppView uses compact mobile layout and action density", () => {
   assert.equal(html.includes(">Save<"), false, "card Save action not rendered");
   assert.equal(html.includes("Rate"), false);
 });
+
+test("ChatAppView renders stop button inside SearchInProgress when isLoading", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: true,
+        isLoading: true,
+        cards: [],
+        actionStatus: null,
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onStop: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("stop"), true, "stop button renders while loading");
+});
+
+test("ChatAppView does not render stop button when not loading", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        isLoading: false,
+        cards: [],
+        actionStatus: null,
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onStop: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes(">stop<"), false, "stop button not rendered when idle");
+});
