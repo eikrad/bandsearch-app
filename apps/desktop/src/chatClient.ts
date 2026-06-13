@@ -57,6 +57,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       messages: unknown[] = [],
       selectedArtistIds: string[] = [],
       obscurityTarget?: string,
+      signal?: AbortSignal,
     ) {
       const body: Record<string, unknown> = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
@@ -69,6 +70,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         method: "POST",
         headers: jsonHeaders(),
         body: JSON.stringify(body),
+        signal,
       });
       await ensureOk(response);
       return response.json();

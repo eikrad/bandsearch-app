@@ -348,3 +348,22 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
   assert.equal(calls[0].method, "DELETE");
 });
 
+test("fetchRecommendations forwards AbortSignal to fetch", async () => {
+  let capturedSignal;
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      capturedSignal = init?.signal;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ recommendations: [], meta: {} }),
+      };
+    },
+  });
+
+  const controller = new AbortController();
+  await client.fetchRecommendations("post-metal", "fresh", "", [], [], undefined, controller.signal);
+  assert.equal(capturedSignal, controller.signal, "signal is forwarded to fetch");
+});
+
