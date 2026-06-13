@@ -143,6 +143,64 @@ test("bootstrapDesktopApp.cancelSearch aborts in-flight requestRecommendations a
   assert.equal(state.messages.length, 0, "optimistic user message removed after abort");
 });
 
+test("chatAppModel.retryLastSearch re-runs the last query with same mode and obscurityTarget", async () => {
+  const calls = [];
+  const vm = createChatAppModel({
+    app: {
+      requestRecommendations: async (query, mode, obscurityTarget) => {
+        calls.push({ query, mode, obscurityTarget });
+        return { recommendations: [], meta: { modeUsed: mode } };
+      },
+      getState: () => ({ messages: [], savedBands: [] }),
+      cancelSearch: () => {},
+    },
+  });
+
+  vm.setMode("preference-aware");
+  vm.setObscurityTarget("obscure");
+  await vm.submitQuery("doom jazz");
+  assert.equal(calls.length, 1);
+
+  await vm.retryLastSearch();
+  assert.equal(calls.length, 2, "retryLastSearch called requestRecommendations again");
+  assert.equal(calls[1].query, "doom jazz", "same query reused");
+  assert.equal(calls[1].mode, "preference-aware", "mode preserved");
+  assert.equal(calls[1].obscurityTarget, "obscure", "obscurityTarget preserved");
+});
+
+test("chatAppModel.retryLastSearch is a no-op when lastQuery is empty", async () => {
+  const calls = [];
+  const vm = createChatAppModel({
+    app: {
+      requestRecommendations: async () => { calls.push(1); return { recommendations: [], meta: {} }; },
+      getState: () => ({ messages: [], savedBands: [] }),
+      cancelSearch: () => {},
+    },
+  });
+
+  await vm.retryLastSearch();
+  assert.equal(calls.length, 0, "no-op when no previous query");
+});
+
+test("chatAppModel.submitQuery swallows AbortError and resets loadingState", async () => {
+  let rejectWithAbort;
+  const vm = createChatAppModel({
+    app: {
+      requestRecommendations: async () => {
+        return new Promise((_resolve, reject) => { rejectWithAbort = reject; });
+      },
+      getState: () => ({ messages: [], savedBands: [] }),
+      cancelSearch: () => {},
+    },
+  });
+
+  const pending = vm.submitQuery("drone");
+  assert.equal(vm.isLoading(), true, "loading while in-flight");
+  rejectWithAbort(new DOMException("Aborted", "AbortError"));
+  await pending; // should resolve, not reject
+  assert.equal(vm.isLoading(), false, "loading cleared after abort");
+});
+
 test("bootstrapDesktopApp.cancelSearch is a no-op when idle", () => {
   const app = bootstrapDesktopApp({
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ recommendations: [], meta: {} }) }),

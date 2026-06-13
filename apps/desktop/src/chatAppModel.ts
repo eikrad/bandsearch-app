@@ -37,6 +37,7 @@ export function createChatAppModel({ app }: { app: any }) {
   let mode = "fresh";
   let obscurityTarget: string | undefined = "underground";
   let loadingState = false;
+  let lastQuery = "";
   let lastMeta: { modeUsed: string; usedPreferenceContext: boolean; eventId?: string } = {
     modeUsed: "fresh",
     usedPreferenceContext: false,
@@ -44,6 +45,24 @@ export function createChatAppModel({ app }: { app: any }) {
   // feedbackDismissed tracks user dismissal; cleared on next query so the bar
   // re-appears after each new recommendation batch.
   let feedbackDismissed = false;
+
+  async function runSubmitQuery(query: string) {
+    lastQuery = query;
+    feedbackDismissed = false;
+    loadingState = true;
+    try {
+      const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
+      lastMeta = response.meta ?? lastMeta;
+      return response;
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        return; // silent cancel — loadingState reset by finally
+      }
+      throw error;
+    } finally {
+      loadingState = false;
+    }
+  }
 
   return {
     setMode(next: string) {
@@ -71,15 +90,11 @@ export function createChatAppModel({ app }: { app: any }) {
       feedbackDismissed = true;
     },
     async submitQuery(query: string) {
-      feedbackDismissed = false;
-      loadingState = true;
-      try {
-        const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
-        lastMeta = response.meta ?? lastMeta;
-        return response;
-      } finally {
-        loadingState = false;
-      }
+      return runSubmitQuery(query);
+    },
+    async retryLastSearch() {
+      if (!lastQuery || loadingState) return;
+      return runSubmitQuery(lastQuery);
     },
     async submitFeedback(feedbackType: string) {
       feedbackDismissed = true;
