@@ -433,41 +433,91 @@ function EmptyState({ modeValue, textSecondary, textTertiary }: { modeValue: str
   );
 }
 
-function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread" }: {
+function UserMessageBubble({ msg, isLastUser, isSearching, theme, onRetry }: {
+  msg: any;
+  isLastUser: boolean;
+  isSearching: boolean;
+  theme: ReturnType<typeof getTheme>;
+  onRetry?: () => void;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  const showRetry = isLastUser && !isSearching && !!onRetry;
+
+  return React.createElement(
+    "div",
+    {
+      onMouseEnter: () => setHovered(true),
+      onMouseLeave: () => setHovered(false),
+      style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" },
+    },
+    React.createElement(
+      "div",
+      {
+        className: "message-user",
+        style: {
+          backgroundColor: theme.accentDim,
+          border: `1px solid ${theme.border}`,
+          borderRadius: "8px",
+          padding: "10px 14px",
+          fontSize: "14px",
+          color: theme.textPrimary,
+          maxWidth: "80%",
+        },
+      },
+      msg.content,
+    ),
+    showRetry
+      ? React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: onRetry,
+            style: {
+              opacity: hovered ? 1 : 0,
+              transition: "opacity 0.15s",
+              background: "transparent",
+              border: `1px solid ${theme.border}`,
+              borderRadius: "4px",
+              color: theme.textSecondary,
+              fontSize: "11px",
+              cursor: "pointer",
+              padding: "3px 8px",
+            },
+          },
+          "retry",
+        )
+      : null,
+  );
+}
+
+function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread", isSearching = false }: {
   messages: any[] | null | undefined;
   theme: ReturnType<typeof getTheme>;
   isMobile: boolean;
   handlers: any;
   assistantCardsMode?: string;
+  isSearching?: boolean;
 }) {
   if (!messages?.length) return null;
   const railLatest = assistantCardsMode === "rail-latest";
   const lastAssistantCardsIdx = railLatest ? findLastAssistantWithCardsIndex(messages) : -1;
+  const lastUserIdx = messages
+    ? messages.reduce((last: number, msg: any, idx: number) => msg.role === "user" ? idx : last, -1)
+    : -1;
 
   return React.createElement(
     "section",
     { className: "message-thread", style: { display: "grid", gap: "16px", marginBottom: "12px", paddingBottom: "4px" } },
     messages.map((msg, idx) => {
       if (msg.role === "user") {
-        return React.createElement(
-          "div",
-          {
-            key: msg.id || `user-${idx}`,
-            className: "message-user",
-            style: {
-              backgroundColor: theme.accentDim,
-              border: `1px solid ${theme.border}`,
-              borderRadius: "8px",
-              padding: "10px 14px",
-              fontSize: "14px",
-              color: theme.textPrimary,
-              alignSelf: "flex-end",
-              maxWidth: "80%",
-              marginLeft: "auto",
-            },
-          },
-          msg.content,
-        );
+        return React.createElement(UserMessageBubble, {
+          key: msg.id || `user-${idx}`,
+          msg,
+          isLastUser: idx === lastUserIdx,
+          isSearching,
+          theme,
+          onRetry: handlers.onRetry,
+        });
       }
       if (msg.role === "assistant") {
         const assistantText = typeof msg.content === "string" ? msg.content.trim() : "";
@@ -708,6 +758,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers:
                 isMobile,
                 handlers,
                 assistantCardsMode: "rail-latest",
+                isSearching: searchInFlight,
               }),
               !viewProps.messages && viewProps.cards.length > 0
                 ? React.createElement(
@@ -752,6 +803,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: any; handlers:
               isMobile,
               handlers,
               assistantCardsMode: "thread",
+              isSearching: searchInFlight,
             }),
             viewProps.messages
               ? null

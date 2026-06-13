@@ -627,3 +627,70 @@ test("ChatAppView does not render stop button when not loading", () => {
 
   assert.equal(html.includes(">stop<"), false, "stop button not rendered when idle");
 });
+
+test("ChatAppView renders retry button on last user message when not loading", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: false,
+        isLoading: false,
+        cards: [],
+        actionStatus: null,
+        messages: [
+          { id: "u-0", role: "user", content: "post-metal" },
+          { id: "a-1", role: "assistant", content: "Here are picks", cards: [] },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onStop: () => {},
+        onRetry: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes("retry"), true, "retry button rendered on last user message");
+});
+
+test("ChatAppView does not render retry button when loading", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: {
+        headerTitle: "Bandsearch",
+        headerSubtitle: "",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [{ value: "fresh", label: "Fresh search" }],
+        queryPlaceholder: "Describe bands...",
+        queryDisabled: true,
+        isLoading: true,
+        cards: [],
+        actionStatus: null,
+        messages: [
+          { id: "u-0", role: "user", content: "post-metal" },
+        ],
+      },
+      handlers: {
+        onModeChange: () => {},
+        onQuerySubmit: () => {},
+        onSave: () => {},
+        onRate: () => {},
+        onMore: () => {},
+        onStop: () => {},
+        onRetry: () => {},
+      },
+    }),
+  );
+
+  assert.equal(html.includes(">retry<"), false, "retry button not shown while loading");
+});
