@@ -180,6 +180,20 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
+    onStop: () => {
+      shell.cancelSearch?.();
+      return renderCurrent();
+    },
+    onRetry: async () => {
+      try {
+        const pending = shell.retryLastSearch?.();
+        await renderCurrent();
+        if (pending) await pending;
+      } catch {
+        // error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
     onNavigate: async (view: string) => {
       await shell.navigate?.(view);
       return renderCurrent();

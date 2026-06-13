@@ -49,3 +49,41 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
   assert.equal(calls.some((item) => item.type === "save"), true);
   assert.equal(calls.some((item) => item.type === "rate"), true);
 });
+
+test("createDesktopReactMount exposes onStop handler that calls shell.cancelSearch", async () => {
+  let cancelled = false;
+  const mountApi = createDesktopReactMount({
+    shell: {
+      getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
+      getView: () => "chat",
+      submitQuery: async () => {},
+      updateMode: async () => {},
+      cancelSearch: () => { cancelled = true; },
+      retryLastSearch: async () => {},
+    },
+    createRootImpl: () => ({ render: () => {} }),
+    resolveContainer: () => ({ id: "root" }),
+  });
+
+  await mountApi.handlers.onStop?.();
+  assert.equal(cancelled, true, "onStop calls shell.cancelSearch");
+});
+
+test("createDesktopReactMount exposes onRetry handler that calls shell.retryLastSearch", async () => {
+  let retried = false;
+  const mountApi = createDesktopReactMount({
+    shell: {
+      getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
+      getView: () => "chat",
+      submitQuery: async () => {},
+      updateMode: async () => {},
+      cancelSearch: () => {},
+      retryLastSearch: async () => { retried = true; },
+    },
+    createRootImpl: () => ({ render: () => {} }),
+    resolveContainer: () => ({ id: "root" }),
+  });
+
+  await mountApi.handlers.onRetry?.();
+  assert.equal(retried, true, "onRetry calls shell.retryLastSearch");
+});
