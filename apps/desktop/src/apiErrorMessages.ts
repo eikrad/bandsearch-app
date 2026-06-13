@@ -12,6 +12,8 @@ export function formatRecommendationQueryError(error: unknown): string {
         return "Recommendations are still starting up. Wait a few seconds and try again.";
       case "recommendation_context_unavailable":
         return "Music lookup (MusicBrainz) is temporarily unavailable. Check your network connection and try again.";
+      case "search_unavailable":
+        return "Web search (Brave) is temporarily unavailable. Check your network connection and try again in a moment.";
       case "recommendation_unavailable":
         return "Gemini could not return recommendations. Open Settings and confirm your API key; if it is correct, Gemini may be busy or unreachable — try again in a moment.";
       case "validation_error":

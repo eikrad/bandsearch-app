@@ -3,6 +3,7 @@ import type { Express, RequestHandler } from "express";
 import { createClient as createLibsqlClient } from "@libsql/client";
 
 import { validateRecommendationRequest } from "../recommendations.js";
+import { BraveSearchError } from "../integrations/braveSearch.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
@@ -269,6 +270,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       }
       if (code === "recommendation_context_unavailable") {
         return sendError(res, 502, "recommendation_context_unavailable", "recommendation context unavailable");
+      }
+      if (error instanceof BraveSearchError) {
+        return sendError(res, 502, "search_unavailable", error.message);
       }
       return sendError(res, 502, "recommendation_unavailable", "recommendation service unavailable");
     }
