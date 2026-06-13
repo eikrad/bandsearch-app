@@ -13,6 +13,8 @@ export type DesktopChatUiStack = {
   getConversation(): ConversationMessage[] | null;
   submitQuery(query: string): Promise<unknown>;
   submitFeedback(feedbackType: string): Promise<void>;
+  cancelSearch(): void;
+  retryLastSearch(): Promise<unknown>;
 };
 
 function normalizeViewport(v: string): string {
@@ -65,6 +67,12 @@ export function createDesktopChatUiStack({
     },
     async submitFeedback(feedbackType: string) {
       return appModel.submitFeedback(feedbackType);
+    },
+    cancelSearch() {
+      (app as any).cancelSearch?.();
+    },
+    async retryLastSearch() {
+      return appModel.retryLastSearch();
     },
   };
 }
