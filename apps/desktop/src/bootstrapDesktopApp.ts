@@ -30,6 +30,7 @@ export function bootstrapDesktopApp({
   let state: any = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [], currentSessionId: null };
   let currentView = "chat";
   let pendingSelectedArtistIds: string[] = [];
+  let currentAbortController: AbortController | null = null;
 
   function findLatestRecommendationByName(artistName: string) {
     const messages = state.messages || [];
@@ -88,12 +89,28 @@ export function bootstrapDesktopApp({
         return [];
       });
       state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
-      const result = await chatClient.fetchRecommendations(query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget);
-      state = applyAssistantMessage(state, result as any);
-      return result;
+      const controller = new AbortController();
+      currentAbortController = controller;
+      try {
+        const result = await chatClient.fetchRecommendations(
+          query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget, controller.signal,
+        );
+        state = applyAssistantMessage(state, result as any);
+        return result;
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          state = { ...state, messages: (state.messages || []).slice(0, -1) };
+        }
+        throw error;
+      } finally {
+        currentAbortController = null;
+      }
     },
     async sendFeedback(eventId: string, feedbackType: string) {
       return chatClient.sendFeedback(eventId, feedbackType);
+    },
+    cancelSearch() {
+      currentAbortController?.abort();
     },
     toggleArtistSelection(id: string) {
       const ids: string[] = state.selectedArtistIds;

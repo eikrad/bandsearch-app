@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createChatAppModel } = require("../src/chatAppModel");
+const { bootstrapDesktopApp } = require("../src/bootstrapDesktopApp");
 
 test("chat app model tracks mode and sends queries through app interface", async () => {
   const calls = [];
@@ -120,4 +121,32 @@ test("chatAppModel passes obscurityTarget to requestRecommendations", async () =
   vm.setObscurityTarget("cult");
   await vm.submitQuery("dark drone");
   assert.equal(calls[0].obscurityTarget, "cult");
+});
+
+test("bootstrapDesktopApp.cancelSearch aborts in-flight requestRecommendations and rolls back user message", async () => {
+  const app = bootstrapDesktopApp({
+    fetchImpl: async (url, init) => {
+      // Simulate slow server — never resolves until aborted
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    },
+  });
+
+  const pending = app.requestRecommendations("drone metal", "fresh").catch(() => {});
+  // Give the fetch a tick to register
+  await new Promise((r) => setTimeout(r, 0));
+  app.cancelSearch();
+  await pending;
+
+  const state = app.getState();
+  assert.equal(state.messages.length, 0, "optimistic user message removed after abort");
+});
+
+test("bootstrapDesktopApp.cancelSearch is a no-op when idle", () => {
+  const app = bootstrapDesktopApp({
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ recommendations: [], meta: {} }) }),
+  });
+  // Should not throw
+  assert.doesNotThrow(() => app.cancelSearch());
 });
