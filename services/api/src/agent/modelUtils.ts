@@ -61,10 +61,9 @@ function extractBalancedSegment(s: string, startIdx: number, open: string, close
 }
 
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage = "recommendation model timeout"): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    }),
-  ]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer!)), timeout]);
 }

@@ -33,6 +33,7 @@ export interface DesktopReactMountOptions {
   saveGeminiApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
+  clearTursoConfig?: () => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
@@ -55,6 +56,7 @@ export function createDesktopReactMount({
   saveGeminiApiKey = async (apiKey) => { void apiKey; },
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
+  clearTursoConfig = async () => {},
   completeOnboarding = async () => {},
   onLogin,
   onRegister,
@@ -146,6 +148,10 @@ export function createDesktopReactMount({
     onMore: (artistName: string) => {
       void artistName;
     },
+    onObscurityTargetChange: (target: string | undefined) => {
+      shell.desktopUi?.setObscurityTarget?.(target);
+      return renderCurrent();
+    },
     onDelete: async (id: string) => {
       try {
         await shell.deleteSavedArtist?.(id);
@@ -171,6 +177,20 @@ export function createDesktopReactMount({
         await shell.saveBand?.(name);
       } catch {
         // Error surfaced via actionStatus
+      }
+      return renderCurrent();
+    },
+    onStop: () => {
+      shell.cancelSearch?.();
+      return renderCurrent();
+    },
+    onRetry: async () => {
+      try {
+        const pending = shell.retryLastSearch?.();
+        await renderCurrent();
+        if (pending) await pending;
+      } catch {
+        // error surfaced via actionStatus
       }
       return renderCurrent();
     },
@@ -206,6 +226,10 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onSaveTursoConfig: handlers.onSaveTursoConfig,
+    onClearTursoConfig: async () => {
+      await clearTursoConfig();
+      return renderCurrent();
+    },
   };
 
   const welcomeHandlers = {
@@ -265,10 +289,44 @@ export function createDesktopReactMount({
     onAddArtist: (artist: any) => {
       Promise.resolve(savedArtistsShell?.addArtist(artist)).then(() => renderCurrent());
     },
-    onDelete: async () => {
+    onDelete: async (id: string) => {
+      await savedArtistsShell?.deleteSavedArtist?.(id);
       renderCurrent();
     },
     onActivateStyleRef: async () => {},
+    onExport: async () => {
+      const bands = await savedArtistsShell?.exportArtists?.();
+      if (!bands) return;
+      const blob = new Blob([JSON.stringify(bands, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bandsearch-artists.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onImportFile: async (file: File) => {
+      try {
+        const text = await file.text();
+        const bands = JSON.parse(text);
+        await savedArtistsShell?.importArtists?.(bands);
+        renderCurrent();
+      } catch {
+        // file read or parse error — silently ignore for now
+      }
+    },
+    onCreateGroup: async (name: string) => {
+      await savedArtistsShell?.createGroup?.(name);
+      renderCurrent();
+    },
+    onDeleteGroup: async (id: string) => {
+      await savedArtistsShell?.deleteGroup?.(id);
+      renderCurrent();
+    },
+    onAutoGroup: async () => {
+      await savedArtistsShell?.autoGroup?.();
+      renderCurrent();
+    },
   };
 
   if (router) {

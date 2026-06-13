@@ -24,6 +24,8 @@ interface CreateDesktopReactShellOptions {
   deleteSavedArtistImpl?: (id: string) => Promise<void>;
   activateStyleRefImpl?: () => Promise<void>;
   getSavedArtistsViewPropsImpl?: () => Record<string, any>;
+  cancelSearchImpl?: () => void;
+  retryLastSearchImpl?: () => Promise<unknown> | void;
 }
 
 export function createDesktopReactShell({
@@ -46,6 +48,8 @@ export function createDesktopReactShell({
     searchResults: [],
     isSearching: false,
   }),
+  cancelSearchImpl,
+  retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
   let actionStatus: ActionStatus = null;
   let clearStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,6 +140,12 @@ export function createDesktopReactShell({
     },
     async activateStyleRef() {
       await activateStyleRefImpl();
+    },
+    cancelSearch() {
+      cancelSearchImpl?.();
+    },
+    async retryLastSearch() {
+      return retryLastSearchImpl?.();
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

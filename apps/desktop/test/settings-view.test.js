@@ -65,3 +65,101 @@ test("SettingsView renders Turso status message when present", () => {
   );
   assert.equal(html.includes("Turso connected!"), true, "should show turso status message");
 });
+
+// ── from-env presence states ────────────────────────────────────────────────
+
+test("SettingsView shows 'from .env' status for Gemini key when geminiKeyFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("loaded from .env"), true, "should announce env-loaded key");
+});
+
+test("SettingsView does not render gemini input when geminiKeyFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes('id="gemini-api-key"'), false, "gemini input should be hidden behind Override");
+});
+
+test("SettingsView shows Override button when geminiKeyFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("Override"), true, "should offer an Override button");
+});
+
+test("SettingsView shows 'from .env' status for Brave key when braveKeyFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasBraveKey: true, braveKeyFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("loaded from .env"), true, "should announce env-loaded brave key");
+});
+
+test("SettingsView does not render brave input when braveKeyFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasBraveKey: true, braveKeyFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes('id="brave-api-key"'), false, "brave input should be hidden behind Override");
+});
+
+test("SettingsView shows 'from .env' status for Turso when tursoFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasTursoConfig: true, tursoFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("loaded from .env"), true, "should announce env-loaded turso config");
+});
+
+test("SettingsView does not render turso inputs when tursoFromEnv is true", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasTursoConfig: true, tursoFromEnv: true },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes('id="turso-database-url"'), false, "turso inputs should be hidden behind Override");
+});
+
+test("SettingsView does not show missing-key banner when keys are from env", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: {
+        ...baseViewProps,
+        hasStoredKey: true,
+        hasBraveKey: true,
+        geminiKeyFromEnv: true,
+        braveKeyFromEnv: true,
+      },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("not configured yet"), false, "should not warn when keys come from env");
+});
+
+test("SettingsView shows Switch back to SQLite button when Turso is configured and not from env", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, hasTursoConfig: true },
+      handlers: { ...baseHandlers, onClearTursoConfig: () => {} },
+    }),
+  );
+  assert.equal(html.includes("Switch back"), true, "should show switch-back button when Turso is configured");
+});

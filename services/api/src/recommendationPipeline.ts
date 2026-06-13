@@ -81,7 +81,7 @@ export function createRecommendationPipeline({
           maxReflectionSearches: cfg.researchMaxReflectionSearches ?? 4,
           totalSearchBudget: cfg.researchTotalSearchBudget ?? 10,
           targetVerifiedCount: cfg.researchTargetVerifiedCandidates ?? 8,
-          researchTimeoutMs: cfg.researchTimeoutMs ?? 25000,
+          researchTimeoutMs: cfg.researchTimeoutMs ?? 45000,
           lastFmApiKey: String(cfg.lastFmApiKey ?? "").trim(),
           musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
           musicBrainzRetries: cfg.musicBrainzRetries,

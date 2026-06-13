@@ -128,6 +128,7 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string
     if (c.mbTags?.length) bits.push(`mb_tags: ${c.mbTags.join(", ")}`);
     if (c.mbGenres?.length) bits.push(`mb_genres: ${c.mbGenres.join(", ")}`);
     if (c.lifeSpan?.begin) bits.push(`active_from: ${c.lifeSpan.begin}, ended: ${c.lifeSpan.ended}`);
+    if (c.listenerCount != null) bits.push(`lastfm_listeners: ${c.listenerCount.toLocaleString("en-US")}`);
     lines.push(bits.join("\n"));
   }
   return lines.join("\n---\n");
@@ -142,24 +143,55 @@ const RANK_SYSTEM = [
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
 ].join(" ");
 
+const RANK_OBSCURITY: Record<string, string> = {
+  cult: "Prefer acts that feel like genuine discoveries — known within their scene but not household names. Deprioritise any band with major-label backing or heavy mainstream press.",
+  underground: "Strongly favour lesser-known artists. Evidence from Bandcamp, DIY labels, and niche blogs is a positive signal. If an act appears mainstream or heavily-streamed, skip them for more underground candidates.",
+  obscure: "Only pick truly obscure deep cuts — Bandcamp/DIY evidence and niche underground blog mentions only. Penalise any artist with mainstream exposure, major-label affiliation, or widespread streaming presence.",
+};
+
 export type CreateRecommendationRankerOptions = {
   apiKey: string;
   timeoutMs?: number;
   model?: string;
 };
 
+export type RankInput = {
+  query: string;
+  preferenceContext: string;
+  messages: ChatMessage[];
+  mode: RecommendationMode;
+  candidates: VerifiedCandidate[];
+  obscurityTarget?: string;
+};
+
+export function buildRankUserPartsForTest(input: {
+  query: string;
+  preferenceContext?: string;
+  mode: RecommendationMode;
+  candidates?: VerifiedCandidate[];
+  obscurityTarget?: string;
+}): string[] {
+  const wrappedQuery = wrapUserContent(input.query);
+  const prefBlock = wrapPreferenceContext(input.preferenceContext ?? "");
+  const parts = [`query: ${wrappedQuery}`, `mode: ${input.mode}`];
+  if (prefBlock) parts.push(prefBlock);
+  const obscurityConstraint = input.obscurityTarget ? RANK_OBSCURITY[input.obscurityTarget] : undefined;
+  if (obscurityConstraint) {
+    parts.push(`obscurity_rank (${input.obscurityTarget}): ${obscurityConstraint}`);
+  }
+  if (input.candidates) {
+    const evidence = formatEvidenceForPrompt(input.candidates);
+    parts.push(`evidence_candidates:\n${evidence}`, "limit: 3");
+  }
+  return parts;
+}
+
 export async function createRecommendationRanker({
   apiKey,
   timeoutMs = 12000,
   model = "gemini-2.5-flash",
 }: CreateRecommendationRankerOptions): Promise<
-  (input: {
-    query: string;
-    preferenceContext: string;
-    messages: ChatMessage[];
-    mode: RecommendationMode;
-    candidates: VerifiedCandidate[];
-  }) => Promise<{ recommendations: unknown[]; assistantReply: string }>
+  (input: RankInput) => Promise<{ recommendations: unknown[]; assistantReply: string }>
 > {
   const trimmedKey = apiKey.trim();
   if (!trimmedKey) {
@@ -170,13 +202,10 @@ export async function createRecommendationRanker({
     model,
     apiKey: trimmedKey,
     temperature: 0.35,
+    thinkingConfig: { thinkingBudget: 0 },
   });
 
   return async function rank(input) {
-    const evidence = formatEvidenceForPrompt(input.candidates);
-    const wrappedQuery = wrapUserContent(input.query);
-    const prefBlock = wrapPreferenceContext(input.preferenceContext);
-
     const prompt: Array<{ role: string; content: string }> = [
       { role: "system", content: RANK_SYSTEM },
     ];
@@ -190,9 +219,13 @@ export async function createRecommendationRanker({
       historyChars += content.length;
     }
 
-    const parts = [`query: ${wrappedQuery}`, `mode: ${input.mode}`];
-    if (prefBlock) parts.push(prefBlock);
-    parts.push(`evidence_candidates:\n${evidence}`, "limit: 3");
+    const parts = buildRankUserPartsForTest({
+      query: input.query,
+      preferenceContext: input.preferenceContext,
+      mode: input.mode,
+      candidates: input.candidates,
+      obscurityTarget: input.obscurityTarget,
+    });
     prompt.push({ role: "user", content: parts.join("\n") });
 
     const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "recommendation ranker timeout");

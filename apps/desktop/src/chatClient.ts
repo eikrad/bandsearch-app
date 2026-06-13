@@ -57,6 +57,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       messages: unknown[] = [],
       selectedArtistIds: string[] = [],
       obscurityTarget?: string,
+      signal?: AbortSignal,
     ) {
       const body: Record<string, unknown> = { query, mode };
       if (priorityContext) body.priorityContext = priorityContext;
@@ -69,6 +70,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         method: "POST",
         headers: jsonHeaders(),
         body: JSON.stringify(body),
+        signal,
       });
       await ensureOk(response);
       return response.json();
@@ -159,6 +161,58 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       });
       await ensureOk(response);
       return response.json();
+    },
+
+    async exportPreferences() {
+      const response = await fetchImpl(`${baseUrl}/preferences/export`, { method: "GET", headers: jsonHeaders() });
+      await ensureOk(response);
+      return response.json() as Promise<unknown[]>;
+    },
+
+    async importPreferences(bands: unknown[]) {
+      const response = await fetchImpl(`${baseUrl}/preferences/import`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify(bands),
+      });
+      await ensureOk(response);
+      return response.json() as Promise<{ imported: number; skipped: number; failed: number }>;
+    },
+
+    async listGroups() {
+      const response = await fetchImpl(`${baseUrl}/preferences/groups`, { method: "GET", headers: jsonHeaders() });
+      await ensureOk(response);
+      const data = await response.json() as { groups?: unknown[] };
+      return data.groups || [];
+    },
+
+    async createGroup(name: string) {
+      const response = await fetchImpl(`${baseUrl}/preferences/groups`, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ name }),
+      });
+      await ensureOk(response);
+      return response.json();
+    },
+
+    async deleteGroup(id: string) {
+      const response = await fetchImpl(`${baseUrl}/preferences/groups/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: jsonHeaders(),
+      });
+      await ensureOk(response);
+      return response.json();
+    },
+
+    async autoGroup() {
+      const response = await fetchImpl(`${baseUrl}/preferences/groups/auto`, {
+        method: "POST",
+        headers: jsonHeaders(),
+      });
+      await ensureOk(response);
+      const data = await response.json() as { groups?: unknown[] };
+      return data.groups || [];
     },
   };
 }

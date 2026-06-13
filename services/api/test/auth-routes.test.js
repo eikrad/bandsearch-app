@@ -136,10 +136,20 @@ test("protected route returns 401 when multiple users and no token", async () =>
   assert.equal(r.status, 401);
 });
 
-test("protected route returns 401 for invalid token", async () => {
+test("protected route auto-authenticates single user even when token is stale/invalid", async () => {
   const ur = createInMemoryUserRepository();
   const app = freshApp(ur);
   await req(app, "POST", "/auth/register", { email: "j@x.com", displayName: "J", password: "pw" });
+  // Stale token (e.g. signed with old secret after sidecar restart) — should be transparent for single-user installs.
+  const r = await req(app, "GET", "/preferences", undefined, "bad.token.here");
+  assert.equal(r.status, 200);
+});
+
+test("protected route returns 401 for invalid token when multiple users are registered", async () => {
+  const ur = createInMemoryUserRepository();
+  const app = freshApp(ur);
+  await req(app, "POST", "/auth/register", { email: "k@x.com", displayName: "K", password: "pw" });
+  await req(app, "POST", "/auth/register", { email: "l@x.com", displayName: "L", password: "pw2" });
   const r = await req(app, "GET", "/preferences", undefined, "bad.token.here");
   assert.equal(r.status, 401);
 });

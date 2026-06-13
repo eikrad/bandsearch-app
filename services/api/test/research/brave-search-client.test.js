@@ -97,10 +97,11 @@ test("dedupSet skips duplicate query network calls on second search", async () =
   assert.equal(calls, 1);
 });
 
-test("search throws when response not ok", async () => {
+test("search throws when response not ok (non-429)", async () => {
   const fetchImpl = async () => ({
     ok: false,
-    status: 429,
+    status: 500,
+    text: async () => "",
     json: async () => ({}),
   });
 
@@ -110,5 +111,83 @@ test("search throws when response not ok", async () => {
     retries: 0,
   });
 
-  await assert.rejects(() => client.search("x"), /brave search failed with status 429/);
+  await assert.rejects(() => client.search("x"), /brave search failed with status 500/);
+});
+
+test("search retries on 429 then succeeds", async () => {
+  let attempt = 0;
+  const fetchImpl = async () => {
+    attempt += 1;
+    if (attempt === 1) {
+      return { ok: false, status: 429, text: async () => "rate limited", json: async () => ({}) };
+    }
+    return {
+      ok: true,
+      json: async () => ({ web: { results: [{ title: "ok", url: "https://ok", description: "" }] } }),
+    };
+  };
+
+  const sleeps = [];
+  const client = createBraveSearchClient({
+    fetchImpl,
+    apiKey: "k",
+    retries: 0,
+    minRequestSpacingMs: 0,
+    rateLimitRetryMs: 1100,
+    sleepImpl: async (ms) => { sleeps.push(ms); },
+  });
+
+  const out = await client.search("q");
+  assert.equal(out.results.length, 1);
+  assert.equal(attempt, 2);
+  assert.ok(sleeps.includes(1100), "should wait the rate-limit interval before retrying");
+});
+
+test("search returns empty results when 429 persists after retries", async () => {
+  let attempt = 0;
+  const fetchImpl = async () => {
+    attempt += 1;
+    return { ok: false, status: 429, text: async () => "rate limited", json: async () => ({}) };
+  };
+
+  const client = createBraveSearchClient({
+    fetchImpl,
+    apiKey: "k",
+    retries: 0,
+    minRequestSpacingMs: 0,
+    rateLimitRetryMs: 1,
+    rateLimitMaxRetries: 2,
+    sleepImpl: async () => {},
+  });
+
+  const out = await client.search("q");
+  assert.deepEqual(out.results, []);
+  assert.equal(out.fromDuplicateCache, false);
+  assert.equal(attempt, 3, "initial attempt plus 2 retries");
+});
+
+test("search throttles sequential requests to the minimum spacing", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({ web: { results: [] } }),
+  });
+
+  const sleeps = [];
+  let fakeNow = 1_000_000;
+  const client = createBraveSearchClient({
+    fetchImpl,
+    apiKey: "k",
+    retries: 0,
+    minRequestSpacingMs: 1100,
+    sleepImpl: async (ms) => { sleeps.push(ms); fakeNow += ms; },
+    nowImpl: () => fakeNow,
+  });
+
+  await client.search("first");
+  await client.search("second");
+
+  assert.ok(
+    sleeps.some((ms) => ms >= 1000),
+    `second back-to-back request should be delayed ~1100ms, got sleeps=${JSON.stringify(sleeps)}`,
+  );
 });

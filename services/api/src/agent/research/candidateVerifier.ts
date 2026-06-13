@@ -12,7 +12,28 @@ export type VerifiedCandidate = {
   mbGenres?: string[];
   mbUrls?: string[];
   lifeSpan?: { begin?: string; end?: string; ended: boolean };
+  listenerCount?: number | null;
 };
+
+const OBSCURITY_THRESHOLDS: Record<string, number> = {
+  cult: 500_000,
+  underground: 50_000,
+  obscure: 5_000,
+};
+
+const OBSCURITY_FILTER_MIN = 1;
+
+export function filterCandidatesByObscurity(
+  candidates: VerifiedCandidate[],
+  obscurityTarget?: string,
+): VerifiedCandidate[] {
+  if (!obscurityTarget || !(obscurityTarget in OBSCURITY_THRESHOLDS)) return candidates;
+  const threshold = OBSCURITY_THRESHOLDS[obscurityTarget];
+  const filtered = candidates.filter(
+    (c) => c.listenerCount == null || c.listenerCount <= threshold,
+  );
+  return filtered.length >= OBSCURITY_FILTER_MIN ? filtered : candidates;
+}
 
 export type MusicBrainzVerifyClient = {
   searchArtists: (q: string) => Promise<Array<{ id?: string; name: string; score?: number }>>;

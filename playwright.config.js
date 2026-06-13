@@ -10,7 +10,7 @@ module.exports = defineConfig({
   },
   webServer: [
     {
-      command: "node --import tsx services/api/src/server.js",
+      command: "node --import tsx services/api/src/server.ts",
       port: 3001,
       reuseExistingServer: false,
       timeout: 15000,

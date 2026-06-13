@@ -24,10 +24,46 @@ interface ApiKeyCardProps {
   placeholder: string;
   onSave?: (key: string) => void;
   statusMessage: StatusMessage;
+  fromEnv?: boolean;
 }
 
-function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }: ApiKeyCardProps) {
+function EnvPresentState(label: string, onOverride: () => void) {
+  return [
+    React.createElement(
+      "p",
+      {
+        key: "env-status",
+        role: "status",
+        style: { fontSize: "13px", color: palette.accent, marginBottom: "12px" },
+      },
+      `✓ Present — loaded from .env`,
+    ),
+    React.createElement(
+      "button",
+      {
+        key: "env-override",
+        type: "button",
+        onClick: onOverride,
+        style: {
+          backgroundColor: palette.buttonBg,
+          color: palette.buttonText,
+          border: `1px solid ${palette.buttonBorder}`,
+          borderRadius: "8px",
+          padding: "10px 18px",
+          fontWeight: "600",
+          fontSize: "13px",
+          cursor: "pointer",
+        },
+      },
+      `Override`,
+    ),
+  ];
+}
+
+function ApiKeyCard({ id, label, placeholder, onSave, statusMessage, fromEnv }: ApiKeyCardProps) {
   const [draft, setDraft] = React.useState("");
+  const [showOverride, setShowOverride] = React.useState(false);
+  const showPresent = Boolean(fromEnv) && !showOverride;
   return React.createElement(
     "section",
     {
@@ -47,7 +83,9 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }: ApiKeyCar
       },
       label,
     ),
-    React.createElement("input", {
+    showPresent
+      ? EnvPresentState(label, () => setShowOverride(true))
+      : React.createElement("input", {
       id,
       name: id,
       type: "password",
@@ -82,25 +120,27 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage }: ApiKeyCar
           statusMessage.text,
         )
       : null,
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        className: "settings-save-key-btn",
-        onClick: () => onSave?.(draft.trim()),
-        style: {
-          backgroundColor: palette.accent,
-          color: "#0a0d14",
-          border: "none",
-          borderRadius: "8px",
-          padding: "10px 18px",
-          fontWeight: "600",
-          fontSize: "13px",
-          cursor: "pointer",
-        },
-      },
-      "Save key",
-    ),
+    showPresent
+      ? null
+      : React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "settings-save-key-btn",
+            onClick: () => onSave?.(draft.trim()),
+            style: {
+              backgroundColor: palette.accent,
+              color: "#0a0d14",
+              border: "none",
+              borderRadius: "8px",
+              padding: "10px 18px",
+              fontWeight: "600",
+              fontSize: "13px",
+              cursor: "pointer",
+            },
+          },
+          "Save key",
+        ),
   );
 }
 
@@ -108,11 +148,15 @@ interface TursoConfigCardProps {
   hasTursoConfig: boolean;
   statusMessage: StatusMessage;
   onSave?: (url: string, token: string) => void;
+  onClear?: () => void;
+  fromEnv?: boolean;
 }
 
-function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }: TursoConfigCardProps) {
+function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromEnv }: TursoConfigCardProps) {
   const [draftUrl, setDraftUrl] = React.useState("");
   const [draftToken, setDraftToken] = React.useState("");
+  const [showOverride, setShowOverride] = React.useState(false);
+  const showPresent = Boolean(fromEnv) && !showOverride;
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -142,49 +186,64 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }: TursoConfigC
       { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
       "Turso cross-device sync",
     ),
-    !hasTursoConfig
-      ? React.createElement(
-          "p",
-          { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
-          "Add a Turso database URL to sync your saved artists across devices.",
-        )
-      : null,
-    React.createElement(
-      "label",
-      {
-        htmlFor: "turso-database-url",
-        style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
-      },
-      "Database URL",
-    ),
-    React.createElement("input", {
-      id: "turso-database-url",
-      name: "turso-database-url",
-      type: "text",
-      autoComplete: "off",
-      value: draftUrl,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftUrl(e.target.value),
-      placeholder: hasTursoConfig ? "Enter a new URL to replace the saved URL" : "libsql://your-db.turso.io",
-      style: inputStyle,
-    }),
-    React.createElement(
-      "label",
-      {
-        htmlFor: "turso-auth-token",
-        style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
-      },
-      "Auth token",
-    ),
-    React.createElement("input", {
-      id: "turso-auth-token",
-      name: "turso-auth-token",
-      type: "password",
-      autoComplete: "off",
-      value: draftToken,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftToken(e.target.value),
-      placeholder: hasTursoConfig ? "Enter a new token to replace the saved token" : "Paste your Turso auth token",
-      style: inputStyle,
-    }),
+    showPresent ? EnvPresentState("Turso", () => setShowOverride(true)) : null,
+    showPresent
+      ? null
+      : !hasTursoConfig
+        ? React.createElement(
+            "p",
+            { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
+            "Add a Turso database URL to sync your saved artists across devices. Your local data won’t transfer automatically — export it first, then import after switching.",
+          )
+        : React.createElement(
+            "p",
+            { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
+            "Connected to Turso. Your local SQLite data is still on this device — switch back any time.",
+          ),
+    showPresent
+      ? null
+      : React.createElement(
+          "label",
+          {
+            htmlFor: "turso-database-url",
+            style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
+          },
+          "Database URL",
+        ),
+    showPresent
+      ? null
+      : React.createElement("input", {
+          id: "turso-database-url",
+          name: "turso-database-url",
+          type: "text",
+          autoComplete: "off",
+          value: draftUrl,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftUrl(e.target.value),
+          placeholder: hasTursoConfig ? "Enter a new URL to replace the saved URL" : "libsql://your-db.turso.io",
+          style: inputStyle,
+        }),
+    showPresent
+      ? null
+      : React.createElement(
+          "label",
+          {
+            htmlFor: "turso-auth-token",
+            style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
+          },
+          "Auth token",
+        ),
+    showPresent
+      ? null
+      : React.createElement("input", {
+          id: "turso-auth-token",
+          name: "turso-auth-token",
+          type: "password",
+          autoComplete: "off",
+          value: draftToken,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftToken(e.target.value),
+          placeholder: hasTursoConfig ? "Enter a new token to replace the saved token" : "Paste your Turso auth token",
+          style: inputStyle,
+        }),
     statusMessage
       ? React.createElement(
           "p",
@@ -199,24 +258,47 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave }: TursoConfigC
           statusMessage.text,
         )
       : null,
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        onClick: () => onSave?.(draftUrl.trim(), draftToken.trim()),
-        style: {
-          backgroundColor: palette.accent,
-          color: "#0a0d14",
-          border: "none",
-          borderRadius: "8px",
-          padding: "10px 18px",
-          fontWeight: "600",
-          fontSize: "13px",
-          cursor: "pointer",
-        },
-      },
-      "Save and connect",
-    ),
+    showPresent
+      ? null
+      : React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: () => onSave?.(draftUrl.trim(), draftToken.trim()),
+            style: {
+              backgroundColor: palette.accent,
+              color: "#0a0d14",
+              border: "none",
+              borderRadius: "8px",
+              padding: "10px 18px",
+              fontWeight: "600",
+              fontSize: "13px",
+              cursor: "pointer",
+            },
+          },
+          "Save and connect",
+        ),
+    !showPresent && hasTursoConfig
+      ? React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: () => onClear?.(),
+            style: {
+              backgroundColor: "transparent",
+              color: palette.textSecondary,
+              border: `1px solid ${palette.border}`,
+              borderRadius: "8px",
+              padding: "10px 18px",
+              fontWeight: "600",
+              fontSize: "13px",
+              cursor: "pointer",
+              marginTop: "8px",
+            },
+          },
+          "Switch back to local SQLite",
+        )
+      : null,
   );
 }
 
@@ -227,6 +309,9 @@ interface SettingsViewProps {
     hasStoredKey?: boolean;
     hasBraveKey?: boolean;
     hasTursoConfig?: boolean;
+    geminiKeyFromEnv?: boolean;
+    braveKeyFromEnv?: boolean;
+    tursoFromEnv?: boolean;
     geminiStatusMessage?: StatusMessage;
     braveStatusMessage?: StatusMessage;
     tursoStatusMessage?: StatusMessage;
@@ -236,6 +321,7 @@ interface SettingsViewProps {
     onSaveApiKey?: (key: string) => void;
     onSaveBraveApiKey?: (key: string) => void;
     onSaveTursoConfig?: (url: string, token: string) => void;
+    onClearTursoConfig?: () => void;
   };
 }
 
@@ -245,8 +331,8 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
     "Your keys are stored locally on this device and passed to the Bandsearch API process.";
 
   const missingKeys: string[] = [];
-  if (viewProps.hasStoredKey === false) missingKeys.push("Gemini");
-  if (viewProps.hasBraveKey === false) missingKeys.push("Brave Search");
+  if (viewProps.hasStoredKey === false && !viewProps.geminiKeyFromEnv) missingKeys.push("Gemini");
+  if (viewProps.hasBraveKey === false && !viewProps.braveKeyFromEnv) missingKeys.push("Brave Search");
 
   const banner =
     missingKeys.length > 0
@@ -333,6 +419,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your Gemini API key",
       onSave: (key) => handlers.onSaveApiKey?.(key),
       statusMessage: viewProps.geminiStatusMessage ?? null,
+      fromEnv: viewProps.geminiKeyFromEnv,
     }),
     React.createElement(ApiKeyCard, {
       id: "brave-api-key",
@@ -340,11 +427,14 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       placeholder: viewProps.hasBraveKey ? "Enter a new key to replace the saved key" : "Paste your Brave Search API key",
       onSave: (key) => handlers.onSaveBraveApiKey?.(key),
       statusMessage: viewProps.braveStatusMessage ?? null,
+      fromEnv: viewProps.braveKeyFromEnv,
     }),
     React.createElement(TursoConfigCard, {
       hasTursoConfig: Boolean(viewProps.hasTursoConfig),
       statusMessage: viewProps.tursoStatusMessage ?? null,
       onSave: (url, token) => handlers.onSaveTursoConfig?.(url, token),
+      onClear: () => handlers.onClearTursoConfig?.(),
+      fromEnv: viewProps.tursoFromEnv,
     }),
   );
 }
