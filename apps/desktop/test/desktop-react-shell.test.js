@@ -129,6 +129,26 @@ test("desktop react shell clears action status after timeout", async () => {
   assert.equal(shell.getViewProps().actionStatus, null);
 });
 
+test("createDesktopReactShell exposes cancelSearch and retryLastSearch from provided impls", async () => {
+  let cancelled = false;
+  let retried = false;
+  const shell = createDesktopReactShell({
+    renderAdapter: {
+      onModeChange: () => {},
+      onSubmitQuery: async () => {},
+      getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
+    },
+    cancelSearchImpl: () => { cancelled = true; },
+    retryLastSearchImpl: () => { retried = true; },
+  });
+
+  shell.cancelSearch();
+  assert.equal(cancelled, true, "cancelSearch delegates to impl");
+
+  await shell.retryLastSearch();
+  assert.equal(retried, true, "retryLastSearch delegates to impl");
+});
+
 // ─── Phase 8.3b: ObscurityTargetPicker rendered in shell ─────────────────────
 
 test("desktop react shell renderHtml includes all three obscurity picker buttons", () => {

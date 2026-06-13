@@ -46,6 +46,8 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
       app.navigate?.("chat");
     },
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
+    cancelSearchImpl: () => (renderAdapter.desktopUi as any).cancelSearch?.(),
+    retryLastSearchImpl: () => (renderAdapter.desktopUi as any).retryLastSearch?.(),
   }) as any;
   shell.desktopUi = renderAdapter.desktopUi;
   return shell;
