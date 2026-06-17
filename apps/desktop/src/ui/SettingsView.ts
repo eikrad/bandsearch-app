@@ -302,126 +302,6 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
   );
 }
 
-interface ApiEndpointCardProps {
-  apiEndpointUrl: string;
-  statusMessage: StatusMessage;
-  onSave?: (url: string) => void;
-}
-
-function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointCardProps) {
-  const isRemote = Boolean(apiEndpointUrl);
-  // Like TursoConfigCard, the input starts empty: the current endpoint is shown in
-  // the description, the field is only for entering a new value. This keeps the two
-  // cards consistent and avoids a stale value lingering after "Reset to local".
-  const [draft, setDraft] = React.useState("");
-
-  return React.createElement(
-    "section",
-    {
-      style: {
-        marginTop: "12px",
-        padding: "16px",
-        borderRadius: "10px",
-        border: `1px solid ${palette.border}`,
-        backgroundColor: palette.cardBg,
-      },
-    },
-    React.createElement(
-      "p",
-      { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
-      "API endpoint",
-    ),
-    React.createElement(
-      "p",
-      { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
-      isRemote
-        ? `Connected to a remote API at ${apiEndpointUrl}. The built-in local app is not started while a remote endpoint is set.`
-        : "Using the built-in local app. Enter a remote URL to connect to a hosted Bandsearch API instead.",
-    ),
-    React.createElement(
-      "label",
-      {
-        htmlFor: "api-endpoint-url",
-        style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
-      },
-      "Remote API URL",
-    ),
-    React.createElement("input", {
-      id: "api-endpoint-url",
-      name: "api-endpoint-url",
-      type: "text",
-      autoComplete: "off",
-      value: draft,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
-      placeholder: isRemote ? "Enter a new URL to replace the saved endpoint" : "https://bandsearch.onrender.com",
-      style: {
-        width: "100%",
-        boxSizing: "border-box",
-        backgroundColor: palette.inputBg,
-        color: palette.textPrimary,
-        border: `1px solid ${palette.border}`,
-        borderRadius: "8px",
-        padding: "10px 12px",
-        fontSize: "14px",
-        marginBottom: "12px",
-      },
-    }),
-    statusMessage
-      ? React.createElement(
-          "p",
-          {
-            role: "status",
-            style: {
-              fontSize: "13px",
-              color: statusMessage.type === "error" ? "#e57373" : palette.accent,
-              marginBottom: "12px",
-            },
-          },
-          statusMessage.text,
-        )
-      : null,
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        onClick: () => onSave?.(draft.trim()),
-        style: {
-          backgroundColor: palette.accent,
-          color: "#0a0d14",
-          border: "none",
-          borderRadius: "8px",
-          padding: "10px 18px",
-          fontWeight: "600",
-          fontSize: "13px",
-          cursor: "pointer",
-        },
-      },
-      "Save endpoint",
-    ),
-    isRemote
-      ? React.createElement(
-          "button",
-          {
-            type: "button",
-            onClick: () => onSave?.(""),
-            style: {
-              backgroundColor: "transparent",
-              color: palette.textSecondary,
-              border: `1px solid ${palette.border}`,
-              borderRadius: "8px",
-              padding: "10px 18px",
-              fontWeight: "600",
-              fontSize: "13px",
-              cursor: "pointer",
-              marginTop: "8px",
-            },
-          },
-          "Reset to local",
-        )
-      : null,
-  );
-}
-
 interface SettingsViewProps {
   viewProps: {
     headerTitle?: string;
@@ -432,11 +312,9 @@ interface SettingsViewProps {
     geminiKeyFromEnv?: boolean;
     braveKeyFromEnv?: boolean;
     tursoFromEnv?: boolean;
-    apiEndpointUrl?: string;
     geminiStatusMessage?: StatusMessage;
     braveStatusMessage?: StatusMessage;
     tursoStatusMessage?: StatusMessage;
-    apiEndpointStatusMessage?: StatusMessage;
   };
   handlers: {
     onNavigateChat?: () => void;
@@ -444,7 +322,6 @@ interface SettingsViewProps {
     onSaveBraveApiKey?: (key: string) => void;
     onSaveTursoConfig?: (url: string, token: string) => void;
     onClearTursoConfig?: () => void;
-    onSaveApiEndpointUrl?: (url: string) => void;
   };
 }
 
@@ -477,23 +354,6 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
           `${missingKeys.join(" and ")} API ${missingKeys.length === 1 ? "key is" : "keys are"} not configured yet. Add ${missingKeys.length === 1 ? "it" : "them"} below so recommendations can run.`,
         )
       : null;
-
-  const isRemote = Boolean(viewProps.apiEndpointUrl);
-  const serverManagedNote = isRemote
-    ? React.createElement(
-        "p",
-        {
-          role: "note",
-          style: {
-            marginTop: "12px",
-            fontSize: "12px",
-            color: palette.textTertiary,
-            lineHeight: 1.45,
-          },
-        },
-        "A remote endpoint is active — the keys below configure the built-in local app and apply only if you reset to local.",
-      )
-    : null;
 
   return React.createElement(
     "main",
@@ -553,12 +413,6 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${palette.border}`, margin: "0" } }),
     ),
     banner,
-    React.createElement(ApiEndpointCard, {
-      apiEndpointUrl: viewProps.apiEndpointUrl ?? "",
-      statusMessage: viewProps.apiEndpointStatusMessage ?? null,
-      onSave: (url) => handlers.onSaveApiEndpointUrl?.(url),
-    }),
-    serverManagedNote,
     React.createElement(ApiKeyCard, {
       id: "gemini-api-key",
       label: "Gemini API key",

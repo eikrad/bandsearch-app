@@ -77,16 +77,12 @@ export async function startDesktopBrowserApp({
     router.navigate("login");
   });
 
-  const normalizeBase = (url: string): string => (url.endsWith("/") ? url.slice(0, -1) : url);
-  // Resolved later from the stored config; the Turso probe reads it lazily so it
-  // always targets the same API the rest of the app talks to.
-  let resolvedBaseUrl = normalizeBase(apiBaseUrl);
-
   const gemini = createGeminiSettingsController({
     invokeTauri: typeof resolvedInvoke === "function" ? resolvedInvoke : undefined,
     probeTursoConnection: async (url: string, token: string) => {
+      const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
       try {
-        const response = await authAwareFetch(`${resolvedBaseUrl}/preferences/turso/test`, {
+        const response = await authAwareFetch(`${base}/preferences/turso/test`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ databaseUrl: url, authToken: token }),
@@ -98,13 +94,8 @@ export async function startDesktopBrowserApp({
     },
   });
 
-  // Read the persisted config before building API clients so a configured remote
-  // endpoint becomes the base URL for every caller (chat, auth, preferences).
-  const gate = await gemini.getBootstrapGate();
-  if (gate.apiEndpointUrl) resolvedBaseUrl = normalizeBase(gate.apiEndpointUrl);
-
-  const authClient = createAuthApiClient({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch });
-  const app = bootstrapDesktopApp({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
+  const authClient = createAuthApiClient({ apiBaseUrl, fetchImpl: authAwareFetch });
+  const app = bootstrapDesktopApp({ apiBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
   const savedArtistsShell = createSavedArtistsShell({ app });
   const initialViewport = resolveInitialViewport(viewport);
 
@@ -121,6 +112,7 @@ export async function startDesktopBrowserApp({
     }
   }
 
+  const gate = await gemini.getBootstrapGate();
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
     router.navigate("welcome");
   } else {
@@ -158,7 +150,6 @@ export async function startDesktopBrowserApp({
     saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
     saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),
     clearTursoConfig: () => gemini.clearTursoConfig(),
-    saveApiEndpointUrl: (url: string) => gemini.saveApiEndpointUrl(url),
     completeOnboarding: async () => { await gemini.completeOnboarding(); await runAuthGate(); },
     onLogin,
     onRegister,

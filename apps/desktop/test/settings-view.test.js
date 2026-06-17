@@ -22,7 +22,6 @@ const baseHandlers = {
   onSaveApiKey: () => {},
   onSaveBraveApiKey: () => {},
   onSaveTursoConfig: () => {},
-  onSaveApiEndpointUrl: () => {},
 };
 
 test("SettingsView renders Turso section heading", () => {
@@ -163,80 +162,4 @@ test("SettingsView shows Switch back to SQLite button when Turso is configured a
     }),
   );
   assert.equal(html.includes("Switch back"), true, "should show switch-back button when Turso is configured");
-});
-
-// ── API endpoint card ────────────────────────────────────────────────────────
-
-test("SettingsView renders API endpoint heading", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, { viewProps: baseViewProps, handlers: baseHandlers }),
-  );
-  assert.equal(html.includes("API endpoint"), true, "should render API endpoint heading");
-});
-
-test("SettingsView renders API endpoint URL input", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, { viewProps: baseViewProps, handlers: baseHandlers }),
-  );
-  assert.equal(html.includes("api-endpoint-url"), true, "should render API endpoint input id");
-});
-
-test("SettingsView shows the configured remote URL when set", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "https://bandsearch.onrender.com" },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("https://bandsearch.onrender.com"), true, "should display the configured endpoint");
-});
-
-test("SettingsView shows Reset to local button when a remote endpoint is configured", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "https://remote.example" },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("Reset to local"), true, "should offer a reset button in remote mode");
-});
-
-test("SettingsView does not show Reset to local button when using the local app", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "" },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("Reset to local"), false, "should not show reset button in local mode");
-});
-
-test("SettingsView renders API endpoint status message when present", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointStatusMessage: { type: "success", text: "Endpoint saved!" } },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("Endpoint saved!"), true, "should show endpoint status message");
-});
-
-test("SettingsView notes that keys are server-managed when a remote endpoint is active", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "https://remote.example" },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("remote endpoint is active"), true, "should hint keys apply to the local API only");
-});
-
-test("SettingsView does not show the server-managed note in local mode", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "" },
-      handlers: baseHandlers,
-    }),
-  );
-  assert.equal(html.includes("remote endpoint is active"), false, "no server-managed note when local");
 });
