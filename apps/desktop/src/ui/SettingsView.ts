@@ -310,7 +310,10 @@ interface ApiEndpointCardProps {
 
 function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointCardProps) {
   const isRemote = Boolean(apiEndpointUrl);
-  const [draft, setDraft] = React.useState(apiEndpointUrl);
+  // Like TursoConfigCard, the input starts empty: the current endpoint is shown in
+  // the description, the field is only for entering a new value. This keeps the two
+  // cards consistent and avoids a stale value lingering after "Reset to local".
+  const [draft, setDraft] = React.useState("");
 
   return React.createElement(
     "section",
@@ -350,7 +353,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
       autoComplete: "off",
       value: draft,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
-      placeholder: "https://bandsearch.onrender.com",
+      placeholder: isRemote ? "Enter a new URL to replace the saved endpoint" : "https://bandsearch.onrender.com",
       style: {
         width: "100%",
         boxSizing: "border-box",
