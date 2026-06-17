@@ -1,19 +1,7 @@
 import { FIRST_RUN_ONBOARDING_STORAGE_KEY } from "./firstRunOnboarding.js";
 
-export const API_ENDPOINT_STORAGE_KEY = "bandsearch_api_endpoint_url";
-
 type StatusMessage = { type: "success" | "error"; text: string };
 type ProbeResult = { ok: boolean; error?: string };
-
-/** True for a non-empty http(s) URL. Empty is handled separately (= reset to local). */
-function isHttpUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 async function defaultProbeTursoConnection(url: string, token: string): Promise<ProbeResult> {
   try {
@@ -39,7 +27,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
   let geminiStatus: StatusMessage | null = null;
   let braveStatus: StatusMessage | null = null;
   let tursoStatus: StatusMessage | null = null;
-  let apiEndpointStatus: StatusMessage | null = null;
 
   async function getBootstrapGate() {
     if (typeof invokeTauri === "function") {
@@ -47,27 +34,24 @@ export function createGeminiSettingsController(options: GeminiSettingsController
         const r = (await invokeTauri("gemini_config_status")) as {
           hasStoredKey?: boolean;
           onboardingComplete?: boolean;
-          apiEndpointUrl?: string;
         };
         return {
           hasStoredKey: Boolean(r?.hasStoredKey),
           onboardingComplete: Boolean(r?.onboardingComplete),
-          apiEndpointUrl: String(r?.apiEndpointUrl ?? "").trim(),
         };
       } catch {
-        return { hasStoredKey: false, onboardingComplete: false, apiEndpointUrl: "" };
+        return { hasStoredKey: false, onboardingComplete: false };
       }
     }
     try {
       const ls = globalThis.localStorage;
-      if (!ls) return { hasStoredKey: false, onboardingComplete: false, apiEndpointUrl: "" };
+      if (!ls) return { hasStoredKey: false, onboardingComplete: false };
       return {
         hasStoredKey: Boolean(ls.getItem("bandsearch_gemini_api_key")?.trim()),
         onboardingComplete: ls.getItem(FIRST_RUN_ONBOARDING_STORAGE_KEY) === "1",
-        apiEndpointUrl: String(ls.getItem(API_ENDPOINT_STORAGE_KEY) ?? "").trim(),
       };
     } catch {
-      return { hasStoredKey: false, onboardingComplete: false, apiEndpointUrl: "" };
+      return { hasStoredKey: false, onboardingComplete: false };
     }
   }
 
@@ -94,7 +78,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     let geminiKeyFromEnv = false;
     let braveKeyFromEnv = false;
     let tursoFromEnv = false;
-    let apiEndpointUrl = "";
 
     if (typeof invokeTauri === "function") {
       try {
@@ -105,7 +88,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
           geminiKeyFromEnv?: boolean;
           braveKeyFromEnv?: boolean;
           tursoFromEnv?: boolean;
-          apiEndpointUrl?: string;
         };
         hasStoredKey = Boolean(r?.hasStoredKey);
         hasBraveKey = Boolean(r?.hasBraveKey);
@@ -113,7 +95,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
         geminiKeyFromEnv = Boolean(r?.geminiKeyFromEnv);
         braveKeyFromEnv = Boolean(r?.braveKeyFromEnv);
         tursoFromEnv = Boolean(r?.tursoFromEnv);
-        apiEndpointUrl = String(r?.apiEndpointUrl ?? "").trim();
       } catch {
         /* defaults */
       }
@@ -124,7 +105,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
           hasStoredKey = Boolean(ls.getItem("bandsearch_gemini_api_key")?.trim());
           hasBraveKey = Boolean(ls.getItem("bandsearch_brave_api_key")?.trim());
           hasTursoConfig = Boolean(ls.getItem("bandsearch_turso_database_url")?.trim());
-          apiEndpointUrl = String(ls.getItem(API_ENDPOINT_STORAGE_KEY) ?? "").trim();
         }
       } catch {
         /* defaults */
@@ -140,12 +120,10 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       geminiKeyFromEnv,
       braveKeyFromEnv,
       tursoFromEnv,
-      apiEndpointUrl,
       statusMessage: geminiStatus ?? braveStatus,
       geminiStatusMessage: geminiStatus,
       braveStatusMessage: braveStatus,
       tursoStatusMessage: tursoStatus,
-      apiEndpointStatusMessage: apiEndpointStatus,
     };
   }
 
@@ -258,43 +236,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     }
   }
 
-  async function saveApiEndpointUrl(endpointUrl: string) {
-    const trimmed = String(endpointUrl || "").trim();
-    // A blank value resets to the local sidecar; any non-blank value must be a URL.
-    if (trimmed && !isHttpUrl(trimmed)) {
-      apiEndpointStatus = {
-        type: "error",
-        text: "Enter a valid http(s) URL, or leave blank to use the built-in local app.",
-      };
-      return;
-    }
-
-    const successText = trimmed
-      ? "Saved. The app will use the remote API from the next restart."
-      : "Reset. The app will use the built-in local API from the next restart.";
-
-    if (typeof invokeTauri === "function") {
-      try {
-        await invokeTauri("save_api_endpoint_url", { url: trimmed });
-        apiEndpointStatus = { type: "success", text: successText };
-      } catch (e) {
-        const err = e as { message?: string };
-        apiEndpointStatus = { type: "error", text: String(err?.message || e || "Could not save endpoint.") };
-      }
-      return;
-    }
-
-    try {
-      const ls = globalThis.localStorage;
-      if (trimmed) ls?.setItem(API_ENDPOINT_STORAGE_KEY, trimmed);
-      else ls?.removeItem(API_ENDPOINT_STORAGE_KEY);
-      apiEndpointStatus = { type: "success", text: successText };
-    } catch (e) {
-      const err = e as { message?: string };
-      apiEndpointStatus = { type: "error", text: String(err?.message || e || "Could not save endpoint.") };
-    }
-  }
-
   async function clearTursoConfig() {
     if (typeof invokeTauri === "function") {
       try {
@@ -313,7 +254,6 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     saveBraveApiKey,
     saveTursoConfig,
     clearTursoConfig,
-    saveApiEndpointUrl,
     getBootstrapGate,
     completeOnboarding,
   };
