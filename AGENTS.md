@@ -30,6 +30,17 @@ Implement TypeScript as a parallel, non-blocking track: migrate incrementally in
 
 **Sequentiell arbeiten, nicht parallel.**
 
+### Branching workflow
+
+```
+feature branch  →  staging  →  main
+```
+
+- All PRs target `staging`, never `main` directly
+- `main` is only updated by merging `staging` → `main` after validation
+- When creating a feature branch or fixing a bug, set `base = staging` in the PR
+- `staging` acts as the integration/QA gate before production (`main`)
+
 ## Testing
 
 TDD-Ansatz: erst Tests schreiben (rot), dann implementieren (grün), dann refactoren.
