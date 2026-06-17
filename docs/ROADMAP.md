@@ -149,17 +149,19 @@ Deploy the Express API as a Render Web Service.
 
 ---
 
-### 9.4 — Desktop app: configurable API endpoint
+### 9.4 — Desktop app: configurable API endpoint ✓ Done
 
 **Files:** `apps/desktop/src/`, `apps/desktop/src-tauri/`
 
 The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
 
 **Action:**
-1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`).
-2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials.
-3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend.
-4. Update `chatClient.ts` and all API callers to use the configured endpoint.
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`)
+2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials. ✓ Done (`api_endpoint_url` in `bandsearch/config.json`; localStorage fallback for browser dev)
+3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend. ✓ Done (single `reconcile_sidecar()` invariant: local sidecar runs iff no remote endpoint)
+4. Update `chatClient.ts` and all API callers to use the configured endpoint. ✓ Done (`startDesktopBrowserApp` resolves the endpoint before building the auth/chat clients; `chatClient` already took `apiBaseUrl`, so no change needed there)
+
+Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini_config_status`; controller `saveApiEndpointUrl` with http(s) format validation (no reachability probe — Render cold starts would make one falsely fail); settings card with "Reset to local"; Gemini/Brave/Turso cards stay visible in remote mode with a "managed locally" note. Note: applies on next app restart (the frontend resolves the base URL at startup).
 
 ---
 
