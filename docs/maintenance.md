@@ -4,6 +4,28 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-06-17
+
+### Checks performed
+- Reviewed all CI workflows — all passing (last successful run: 2026-06-17T13:42:21Z, branch: chore/branch-protection-workflow)
+- Reviewed root `package.json`, `apps/desktop/package.json`, `services/api/package.json`
+- Reviewed `apps/desktop/src-tauri/Cargo.toml`
+- Compared versions against current ecosystem state
+
+### Fixes applied
+No fixes needed this cycle.
+
+### Dependency status
+No changes to any dependency constraints since 2026-06-10. All packages remain on current major versions.
+
+**Persistent note (dual lock files):**
+`package-lock.json` and `pnpm-lock.yaml` still coexist at the repo root. CI uses `npm ci` so resolved versions may drift if contributors use pnpm locally. Consider consolidating to a single package manager when convenient.
+
+### No major upgrades pending
+All packages are on current major versions this cycle.
+
+---
+
 ## 2026-06-10
 
 ### Checks performed
