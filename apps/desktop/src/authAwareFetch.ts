@@ -1,3 +1,6 @@
+// Tokens are sent to apiBaseUrl only. apiBaseUrl originates from either the default
+// localhost sidecar or the URL the user explicitly saved in Settings — never from a
+// deep-link, QR code, or other external source. Revisit if that ever changes.
 export function createAuthAwareFetch(
   baseFetch: typeof fetch,
   onInvalidToken: () => void,
