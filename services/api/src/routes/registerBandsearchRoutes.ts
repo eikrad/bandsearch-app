@@ -333,10 +333,10 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.post("/preferences/groups/auto", async (req, res) => {
-    const savedBands = (await resolvedPreferenceRepository.listSavedBands(req.userId)) as Array<Record<string, unknown>>;
+    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
     const existingGroups = await resolvedPreferenceRepository.listGroups(req.userId);
     await inferAndApplyGroupAssignments(
-      savedBands,
+      savedBands as unknown as import("../preferences/bandGroupInference.js").BandLike[],
       existingGroups,
       {
         lookupArtist: (mbid) => resolvedMusicBrainzClient.lookupArtist!(mbid),
