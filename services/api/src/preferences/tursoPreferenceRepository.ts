@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Client as LibSQLClient, Row } from "@libsql/client";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
+import type { PreferenceRepository } from "./preferenceRepository.js";
 
 const DEFAULT_USER = "anonymous";
 
@@ -28,7 +29,7 @@ function mapRowToSavedBand(row: Row) {
   };
 }
 
-export function createTursoPreferenceRepository({ client }: { client: LibSQLClient }) {
+export function createTursoPreferenceRepository({ client }: { client: LibSQLClient }): PreferenceRepository {
   return {
     async addSavedBand(input: unknown, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
