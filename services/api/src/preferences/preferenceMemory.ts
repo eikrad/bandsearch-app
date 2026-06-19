@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
+import type { PreferenceRepository } from "./preferenceRepository.js";
 
 export { validateSavedBandInput };
 
@@ -212,6 +213,6 @@ export function createPreferenceMemory() {
   };
 }
 
-export function createInMemoryPreferenceRepository() {
+export function createInMemoryPreferenceRepository(): PreferenceRepository {
   return createPreferenceMemory();
 }

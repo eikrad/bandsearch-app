@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
+import type { PreferenceRepository } from "./preferenceRepository.js";
 
 const DEFAULT_USER = "anonymous";
 
@@ -44,7 +45,7 @@ function mapRowToSavedBand(row: SavedBandRow) {
   };
 }
 
-export function createSqlitePreferenceRepository({ db }: { db: Database }) {
+export function createSqlitePreferenceRepository({ db }: { db: Database }): PreferenceRepository {
   return {
     async addSavedBand(input: unknown, userId = DEFAULT_USER) {
       const validation = validateSavedBandInput(input);
