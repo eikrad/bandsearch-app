@@ -41,22 +41,34 @@ export function createGeminiSettingsController(options: GeminiSettingsController
   let tursoStatus: StatusMessage | null = null;
   let apiEndpointStatus: StatusMessage | null = null;
 
-  async function getBootstrapGate() {
+  async function readStatus() {
     if (typeof invokeTauri === "function") {
       try {
-        const r = (await invokeTauri("gemini_config_status")) as {
+        return (await invokeTauri("gemini_config_status")) as {
           hasStoredKey?: boolean;
+          hasBraveKey?: boolean;
+          hasTursoConfig?: boolean;
+          geminiKeyFromEnv?: boolean;
+          braveKeyFromEnv?: boolean;
+          tursoFromEnv?: boolean;
           onboardingComplete?: boolean;
           apiEndpointUrl?: string;
         };
-        return {
-          hasStoredKey: Boolean(r?.hasStoredKey),
-          onboardingComplete: Boolean(r?.onboardingComplete),
-          apiEndpointUrl: String(r?.apiEndpointUrl ?? "").trim(),
-        };
       } catch {
-        return { hasStoredKey: false, onboardingComplete: false, apiEndpointUrl: "" };
+        return {};
       }
+    }
+    return null;
+  }
+
+  async function getBootstrapGate() {
+    const r = await readStatus();
+    if (r !== null) {
+      return {
+        hasStoredKey: Boolean(r?.hasStoredKey),
+        onboardingComplete: Boolean(r?.onboardingComplete),
+        apiEndpointUrl: String(r?.apiEndpointUrl ?? "").trim(),
+      };
     }
     try {
       const ls = globalThis.localStorage;
@@ -96,27 +108,15 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     let tursoFromEnv = false;
     let apiEndpointUrl = "";
 
-    if (typeof invokeTauri === "function") {
-      try {
-        const r = (await invokeTauri("gemini_config_status")) as {
-          hasStoredKey?: boolean;
-          hasBraveKey?: boolean;
-          hasTursoConfig?: boolean;
-          geminiKeyFromEnv?: boolean;
-          braveKeyFromEnv?: boolean;
-          tursoFromEnv?: boolean;
-          apiEndpointUrl?: string;
-        };
-        hasStoredKey = Boolean(r?.hasStoredKey);
-        hasBraveKey = Boolean(r?.hasBraveKey);
-        hasTursoConfig = Boolean(r?.hasTursoConfig);
-        geminiKeyFromEnv = Boolean(r?.geminiKeyFromEnv);
-        braveKeyFromEnv = Boolean(r?.braveKeyFromEnv);
-        tursoFromEnv = Boolean(r?.tursoFromEnv);
-        apiEndpointUrl = String(r?.apiEndpointUrl ?? "").trim();
-      } catch {
-        /* defaults */
-      }
+    const r = await readStatus();
+    if (r !== null) {
+      hasStoredKey = Boolean(r?.hasStoredKey);
+      hasBraveKey = Boolean(r?.hasBraveKey);
+      hasTursoConfig = Boolean(r?.hasTursoConfig);
+      geminiKeyFromEnv = Boolean(r?.geminiKeyFromEnv);
+      braveKeyFromEnv = Boolean(r?.braveKeyFromEnv);
+      tursoFromEnv = Boolean(r?.tursoFromEnv);
+      apiEndpointUrl = String(r?.apiEndpointUrl ?? "").trim();
     } else {
       try {
         const ls = globalThis.localStorage;
