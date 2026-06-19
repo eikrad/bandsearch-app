@@ -323,3 +323,29 @@ test("saveApiEndpointUrl records error when invoke fails", async () => {
   assert.equal(props.apiEndpointStatusMessage?.type, "error");
   assert.match(props.apiEndpointStatusMessage?.text || "", /disk full/);
 });
+
+test("gemini_config_status is invoked exactly once per getSettingsViewProps call", async () => {
+  let callCount = 0;
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => {
+      if (cmd === "gemini_config_status") callCount++;
+      return { hasStoredKey: true };
+    },
+  });
+  callCount = 0;
+  await ctrl.getSettingsViewProps();
+  assert.equal(callCount, 1, "invokeTauri should be called exactly once");
+});
+
+test("gemini_config_status is invoked exactly once per getBootstrapGate call", async () => {
+  let callCount = 0;
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => {
+      if (cmd === "gemini_config_status") callCount++;
+      return { hasStoredKey: false };
+    },
+  });
+  callCount = 0;
+  await ctrl.getBootstrapGate();
+  assert.equal(callCount, 1, "invokeTauri should be called exactly once");
+});
