@@ -123,7 +123,7 @@ test("createGeminiSettingsController getBootstrapGate reads onboarding flag from
     invokeTauri: async () => ({ hasStoredKey: false, onboardingComplete: true }),
   });
   const gate = await ctrl.getBootstrapGate();
-  assert.deepEqual(gate, { hasStoredKey: false, onboardingComplete: true });
+  assert.deepEqual(gate, { hasStoredKey: false, onboardingComplete: true, apiEndpointUrl: "" });
 });
 
 test("createGeminiSettingsController completeOnboarding invokes Tauri command", async () => {
@@ -237,4 +237,89 @@ test("createGeminiSettingsController saveTursoConfig rejects empty databaseUrl",
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.tursoStatusMessage?.type, "error");
   assert.equal(tauriCalls.includes("save_turso_config"), false);
+});
+
+// ── API endpoint (remote vs local sidecar) ───────────────────────────────────
+
+test("getSettingsViewProps passes apiEndpointUrl from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true, apiEndpointUrl: "https://bandsearch.onrender.com" }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointUrl, "https://bandsearch.onrender.com");
+});
+
+test("getSettingsViewProps apiEndpointUrl defaults to empty string when invoke omits it", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true }),
+  });
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointUrl, "");
+});
+
+test("getBootstrapGate includes apiEndpointUrl from invoke", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true, onboardingComplete: true, apiEndpointUrl: "https://remote.example" }),
+  });
+  const gate = await ctrl.getBootstrapGate();
+  assert.equal(gate.apiEndpointUrl, "https://remote.example");
+});
+
+test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async () => {
+  const calls = [];
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
+  });
+  await ctrl.saveApiEndpointUrl("  https://bandsearch.onrender.com  ");
+  const saveCall = calls.find((c) => c.cmd === "save_api_endpoint_url");
+  assert.ok(saveCall, "should call save_api_endpoint_url");
+  assert.equal(saveCall.args.url, "https://bandsearch.onrender.com");
+});
+
+test("saveApiEndpointUrl accepts empty string to reset to local and reports success", async () => {
+  const calls = [];
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
+  });
+  await ctrl.saveApiEndpointUrl("   ");
+  const saveCall = calls.find((c) => c.cmd === "save_api_endpoint_url");
+  assert.ok(saveCall, "should call save_api_endpoint_url with empty url");
+  assert.equal(saveCall.args.url, "");
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointStatusMessage?.type, "success");
+});
+
+test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => {
+  const calls = [];
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
+  });
+  await ctrl.saveApiEndpointUrl("bandsearch.onrender.com");
+  assert.equal(calls.includes("save_api_endpoint_url"), false, "should not invoke for a malformed URL");
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointStatusMessage?.type, "error");
+});
+
+test("saveApiEndpointUrl rejects a non-http protocol without invoking", async () => {
+  const calls = [];
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
+  });
+  await ctrl.saveApiEndpointUrl("javascript:alert(1)");
+  assert.equal(calls.includes("save_api_endpoint_url"), false, "should not invoke for a non-http protocol");
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointStatusMessage?.type, "error");
+});
+
+test("saveApiEndpointUrl records error when invoke fails", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async (cmd) => {
+      if (cmd === "save_api_endpoint_url") throw new Error("disk full");
+      return { hasStoredKey: false };
+    },
+  });
+  await ctrl.saveApiEndpointUrl("https://remote.example");
+  const props = await ctrl.getSettingsViewProps();
+  assert.equal(props.apiEndpointStatusMessage?.type, "error");
+  assert.match(props.apiEndpointStatusMessage?.text || "", /disk full/);
 });

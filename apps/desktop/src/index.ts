@@ -64,6 +64,7 @@ export type BootstrapDesktopReactAppOptions = {
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
   clearTursoConfig?: () => Promise<void>;
+  saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
@@ -82,6 +83,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions = {})
     saveBraveApiKey,
     saveTursoConfig,
     clearTursoConfig,
+    saveApiEndpointUrl,
     completeOnboarding,
     onLogin,
     onRegister,
@@ -97,6 +99,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions = {})
     saveBraveApiKey,
     saveTursoConfig,
     clearTursoConfig,
+    saveApiEndpointUrl,
     completeOnboarding,
     onLogin,
     onRegister,
