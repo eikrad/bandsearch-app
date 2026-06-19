@@ -11,6 +11,7 @@ import { registerEvalRoutes } from "../eval/evalRoutes.js";
 import { createNoOpEvalRepository } from "../eval/evalRepository.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
+import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -332,35 +333,18 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.post("/preferences/groups/auto", async (req, res) => {
-    const savedBands = (await resolvedPreferenceRepository.listSavedBands(req.userId)) as Array<Record<string, unknown>>;
+    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
     const existingGroups = await resolvedPreferenceRepository.listGroups(req.userId);
-    const groupByName = new Map(existingGroups.map((g) => [g.name, g]));
-
-    for (const band of savedBands) {
-      const mbid = typeof band.musicbrainzArtistId === "string" ? band.musicbrainzArtistId : null;
-      if (!mbid) continue;
-      let artistData: { genres: string[] } = { genres: [] };
-      try {
-        if (resolvedMusicBrainzClient.lookupArtist) {
-          artistData = await resolvedMusicBrainzClient.lookupArtist(mbid);
-        }
-      } catch {
-        continue;
-      }
-      for (const genre of artistData.genres ?? []) {
-        if (!groupByName.has(genre)) {
-          const createResult = await resolvedPreferenceRepository.createGroup(genre, req.userId);
-          if (createResult.ok && createResult.group) {
-            groupByName.set(genre, createResult.group);
-          }
-        }
-        const group = groupByName.get(genre);
-        if (group && typeof band.id === "string") {
-          await resolvedPreferenceRepository.addArtistToGroup(group.id, band.id, req.userId);
-        }
-      }
-    }
-
+    await inferAndApplyGroupAssignments(
+      savedBands as unknown as import("../preferences/bandGroupInference.js").BandLike[],
+      existingGroups,
+      {
+        lookupArtist: (mbid) => resolvedMusicBrainzClient.lookupArtist!(mbid),
+        createGroup: (name, uid) => resolvedPreferenceRepository.createGroup(name, uid),
+        addArtistToGroup: (gid, bid, uid) => resolvedPreferenceRepository.addArtistToGroup(gid, bid, uid),
+      },
+      req.userId,
+    );
     const groups = await resolvedPreferenceRepository.listGroups(req.userId);
     return res.status(200).json({ groups });
   });
