@@ -31,6 +31,7 @@ bandsearch-app/
 │   └── desktop/         — Tauri + React desktop application (Rust + TypeScript)
 ├── services/
 │   └── api/             — Express.js API server (TypeScript, Node.js 20+)
+│   └── eval/            — Golden dataset and eval runner
 ├── shared/
 │   └── schemas/         — Shared TypeScript validation contracts
 ├── docs/                — Architecture docs, ADRs, design specs, roadmap
@@ -175,14 +176,31 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 
 ## Evaluation layer
 
-Full design in [2026-05-29-eval-architecture.md](2026-05-29-eval-architecture.md). An async, non-blocking quality-scoring system that runs after the HTTP response is sent.
+An async, non-blocking quality-scoring system that runs after the HTTP response is sent. Full design in [2026-05-29-eval-architecture.md](2026-05-29-eval-architecture.md).
 
-| Layer | Mechanism | Signals |
-|-------|-----------|--------|
-| **1 — Automatic metrics** | Runs immediately | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
-| **1.5 — Deterministic checks** | Runs immediately | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `MISTRAL_API_KEY` is set |
-| **3 — Human feedback** | Event-driven | Implicit saves + explicit one-tap batch reactions |
+```mermaid
+flowchart LR
+    RESPONSE[HTTP Response\nsent to user] -->|async · non-blocking| EVAL
+
+    subgraph EVAL [Evaluation Pipeline]
+        direction TB
+        T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
+        T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
+        T2["Tier 2 — LLM-as-Judge\nMistral scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
+        T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
+        T1 --> T15 --> T2
+    end
+
+    EVAL --> DB[(recommendation_events\nllm_eval_scores\nrecommendation_feedback\neval_baselines)]
+    T3 --> DB
+```
+
+| Tier | Mechanism | When | Signals |
+|-------|-----------|------|---------|
+| **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
+| **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
+| **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
 
