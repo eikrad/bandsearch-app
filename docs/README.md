@@ -7,6 +7,7 @@ Navigation guide for the `docs/` folder.
 | Path | What it covers |
 |------|----------------|
 | [ROADMAP.md](ROADMAP.md) | Phase-by-phase feature roadmap with completion status |
+| [maintenance.md](maintenance.md) | Weekly dependency audit — package versions, applied fixes, and pending upgrades |
 | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | System architecture — graph pipeline, state fields, integrations, storage, auth |
 | [architecture/2026-05-29-eval-architecture.md](architecture/2026-05-29-eval-architecture.md) | Evaluation layer design — three-tier scoring, LLM-as-judge, feedback loop |
 | [architecture/2026-05-30-phase8-implementation-plan.md](architecture/2026-05-30-phase8-implementation-plan.md) | Phase 8 step-by-step implementation plan (eval & quality observability) |
@@ -24,6 +25,7 @@ Navigation guide for the `docs/` folder.
 - **Changing the UI?** Consult [UI_GUIDELINES.md](design/UI_GUIDELINES.md) before writing new components.
 - **Security or prompt design?** See [ADR 0001](adr/0001-prompt-injection-guardrails.md) for the injection defence rationale.
 - **Planning a new feature?** Check [ROADMAP.md](ROADMAP.md) for phase status and open steps before starting.
+- **Checking dependencies or build health?** See [maintenance.md](maintenance.md) for the latest dependency audit and pending upgrades.
 
 ## Historical planning docs
 
