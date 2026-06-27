@@ -11,6 +11,7 @@ Navigation guide for the `docs/` folder.
 | [architecture/2026-05-29-eval-architecture.md](architecture/2026-05-29-eval-architecture.md) | Evaluation layer design — three-tier scoring, LLM-as-judge, feedback loop |
 | [architecture/2026-05-30-phase8-implementation-plan.md](architecture/2026-05-30-phase8-implementation-plan.md) | Phase 8 step-by-step implementation plan (eval & quality observability) |
 | [architecture/2026-06-03-auto-update-plan.md](architecture/2026-06-03-auto-update-plan.md) | Auto-update plan — Tauri updater integration and release pipeline |
+| [maintenance.md](maintenance.md) | Dependency upgrade notes, tooling versions, and periodic maintenance tasks |
 | [adr/0001-prompt-injection-guardrails.md](adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence — bracket-marker envelope and length caps |
 | [design/UI_GUIDELINES.md](design/UI_GUIDELINES.md) | UI design guidelines — layout, components, responsive behaviour |
 | [design/UI_EXAMPLES.md](design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
@@ -24,6 +25,7 @@ Navigation guide for the `docs/` folder.
 - **Changing the UI?** Consult [UI_GUIDELINES.md](design/UI_GUIDELINES.md) before writing new components.
 - **Security or prompt design?** See [ADR 0001](adr/0001-prompt-injection-guardrails.md) for the injection defence rationale.
 - **Planning a new feature?** Check [ROADMAP.md](ROADMAP.md) for phase status and open steps before starting.
+- **Maintaining dependencies?** See [maintenance.md](maintenance.md) for upgrade notes and tooling versions.
 
 ## Historical planning docs
 
