@@ -37,7 +37,8 @@ flowchart TD
         verify_r -- "loop" --> assess
     end
 
-    reflect_if_needed --> rank["rank\nRecommendationRanker · Gemini"]
+    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional)"]
+    enrich_lastfm --> rank["rank\nRecommendationRanker · Gemini"]
     rank --> END(["END"])
 ```
 
@@ -171,8 +172,8 @@ Common optional variables:
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
-| `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring |
+| `LASTFM_API_KEY` | — | Last.fm fallback for artist images, listener-count obscurity scoring, and similar-artist enrichment (`enrich_lastfm` node) |
+| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring — despite the name, this key is sent to **Anthropic Claude**, not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
@@ -209,6 +210,8 @@ docs/             — architecture docs, ADRs, design specs, roadmap
 - [LangChain](https://www.langchain.com) — framework for structuring Gemini model calls
 - [Tauri](https://tauri.app) — framework for the native desktop wrapper
 - [Brave Search](https://brave.com/search/api/) — web search API for niche artist discovery
+- [Last.fm](https://www.last.fm) — optional artist images, listener-count obscurity scoring, and similar-artist signals
+- [Anthropic Claude](https://www.anthropic.com) — optional async LLM-as-judge scoring for the eval layer
 
 ---
 
