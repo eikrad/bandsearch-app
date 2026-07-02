@@ -204,6 +204,19 @@ flowchart LR
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
 
+### Eval HTTP surface (`eval/evalRoutes.ts`)
+
+All `/eval/*` routes are mounted only when `EVAL_DASHBOARD_ENABLED=true`; they return `404` otherwise.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /eval/events` | Recent recommendation events with their per-band scores |
+| `GET /eval/metrics` | Aggregated metrics, plus the delta against the latest saved baseline |
+| `POST /eval/baseline` | Snapshot current aggregated metrics under a label |
+| `GET /eval/baselines` | List saved baseline snapshots |
+| `POST /eval/feedback` | Record a batch-level user reaction (`good` / `too_mainstream` / `wrong_direction`) |
+| `GET /eval/dashboard` | Standalone HTML+Chart.js dashboard; gated behind HTTP Basic Auth when `EVAL_DASHBOARD_PASSWORD` is set |
+
 ---
 
 ## Storage
