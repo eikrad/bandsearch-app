@@ -30,7 +30,7 @@ bandsearch-app/
 ├── apps/
 │   └── desktop/         — Tauri + React desktop application (Rust + TypeScript)
 ├── services/
-│   └── api/             — Express.js API server (TypeScript, Node.js 20+)
+│   └── api/             — Express.js API server (TypeScript, Node.js 22+)
 │   └── eval/            — Golden dataset and eval runner
 ├── shared/
 │   └── schemas/         — Shared TypeScript validation contracts
@@ -70,6 +70,7 @@ graph TD
     API --> DB[("SQLite / Postgres / Turso\npreferences · sessions · auth")]
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
+    PIPELINE -.->|optional| LASTFM
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
     API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
 ```
@@ -120,7 +121,8 @@ flowchart TD
     brave_initial --> extract["extract\nGemini — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
-    reflect_if_needed --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
+    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm — listener counts +\nsimilar-artist evidence (optional)"]
+    enrich_lastfm --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
 ```
 
@@ -131,6 +133,7 @@ flowchart TD
 | `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
 | `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
+| `enrich_lastfm` | Last.fm (optional) | No-op unless `LASTFM_API_KEY` is set; adds `listenerCount` and similar-artist evidence URLs to verified candidates |
 | `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
@@ -157,7 +160,7 @@ flowchart TD
 
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 25 s). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 45 s — generous because the Brave Free plan throttles to 1 req/sec). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
 
 ---
 
@@ -168,7 +171,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
-| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
+| **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution (Wikidata + Last.fm fallback); in-graph listener counts and similar-artist evidence |
 | **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 

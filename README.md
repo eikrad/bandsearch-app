@@ -37,7 +37,8 @@ flowchart TD
         verify_r -- "loop" --> assess
     end
 
-    reflect_if_needed --> rank["rank\nRecommendationRanker · Gemini"]
+    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional)"]
+    enrich_lastfm --> rank["rank\nRecommendationRanker · Gemini"]
     rank --> END(["END"])
 ```
 
