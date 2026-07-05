@@ -71,7 +71,7 @@ graph TD
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
+    API -.->|optional async eval, gated by MISTRAL_API_KEY| JUDGE[Claude / Anthropic\nLLM-as-Judge]
 ```
 
 ---
@@ -169,8 +169,10 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
-| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **Claude / Anthropic** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path; gated by the `MISTRAL_API_KEY` env var (legacy name — see note below) |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
+
+> **Naming note:** the LLM-as-judge worker (`services/api/src/eval/judgeWorker.ts`) calls Anthropic's API (`https://api.anthropic.com`, model `claude-opus-4-8`), but activation is currently gated by the `MISTRAL_API_KEY` environment variable — `app.ts` reads `runtimeConfig.mistralApiKey` and passes it straight through as the Anthropic API key. This is inherited naming from an earlier Mistral-based design that was never fully renamed; set `MISTRAL_API_KEY` to activate the judge until the config is renamed.
 
 ---
 
@@ -186,7 +188,7 @@ flowchart LR
         direction TB
         T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
         T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
-        T2["Tier 2 — LLM-as-Judge\nMistral scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
+        T2["Tier 2 — LLM-as-Judge\nClaude scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
         T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
         T1 --> T15 --> T2
     end
@@ -199,7 +201,7 @@ flowchart LR
 |-------|-----------|------|---------|
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Claude scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
 | **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
@@ -228,6 +230,10 @@ SQLite (`bandsearch.db`) with in-memory fallback. Tables: `chat_sessions`, `chat
 ### Auth store
 
 Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with 30-day expiry; password recovery via single-use recovery codes.
+
+### Production deployment (Render + Turso)
+
+`render.yaml` at the repo root declares a Render Web Service for `services/api` (Node, Frankfurt region, health check on `/`), intended to run with `PREFERENCE_STORE=turso` so every client (desktop or browser) shares one remote database. Run `npm run migrate:turso --workspace @bandsearch/api` against the Turso database before first use. See [ROADMAP.md](../ROADMAP.md) Phase 9 for the full rollout plan.
 
 ---
 
@@ -263,7 +269,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
+| **Claude as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph. Currently activated via `MISTRAL_API_KEY` (see naming note above) |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |

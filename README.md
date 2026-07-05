@@ -149,9 +149,21 @@ Bandsearch uses two persistence domains:
 | `sqlite` (default) | Local file, zero-config, data survives restarts |
 | `memory` | In-process only, data lost on restart |
 | `postgres` | PostgreSQL / Supabase; run `npm run migrate` after setup |
-| `turso` | Turso cloud SQLite — enables cross-device sync |
+| `turso` | Turso cloud SQLite — enables cross-device sync; run `npm run migrate:turso --workspace @bandsearch/api` (with `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` set) after creating the database |
 
 See `.env.example` for the connection variables needed for each backend (`DATABASE_URL`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`).
+
+---
+
+## Deployment
+
+The API can run as a standalone Render Web Service instead of (or alongside) the desktop sidecar. `render.yaml` in the repo root declares the service (Node, Frankfurt region, health check on `/`) with `PREFERENCE_STORE=turso` so data is shared across every client that points at it.
+
+1. Create a Turso database and run `npm run migrate:turso --workspace @bandsearch/api` against it.
+2. Connect the repository in the Render dashboard — it reads `render.yaml` automatically — and set the secret env vars it lists (`GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`).
+3. In the desktop app, open **Settings** and point the API endpoint at the deployed URL instead of the local sidecar.
+
+The free Render plan spins down after 15 minutes of inactivity, so the first request after idle can take 30–60 seconds.
 
 ---
 
@@ -172,7 +184,7 @@ Common optional variables:
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring |
+| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring — despite the name, the key is currently forwarded to Anthropic's Claude API (see `services/api/src/eval/judgeWorker.ts`) |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
@@ -197,6 +209,8 @@ apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
 services/eval/    — golden dataset and eval runner (anti-band gate, nugget coverage)
 shared/schemas/   — shared TypeScript validation contracts
+tests/e2e/        — Playwright browser smoke tests
+scripts/          — repo-wide build and lint utilities
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
 
