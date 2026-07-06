@@ -43,3 +43,4 @@ Implementation plans and design specs from earlier development phases. Kept for 
 | [superpowers/plans/2026-04-30-ui-redesign.md](superpowers/plans/2026-04-30-ui-redesign.md) | UI redesign plan (Phase 3 era) |
 | [superpowers/specs/2026-04-30-tauri-scaffold-design.md](superpowers/specs/2026-04-30-tauri-scaffold-design.md) | Tauri desktop scaffold design spec |
 | [superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md](superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md) | LLM + MusicBrainz query design spec |
+| [superpowers/specs/2026-06-13-stop-retry-buttons-design.md](superpowers/specs/2026-06-13-stop-retry-buttons-design.md) | Stop/retry buttons in the chat UI — design spec |
