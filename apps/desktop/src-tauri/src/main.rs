@@ -28,6 +28,8 @@ struct BandsearchConfig {
     turso_auth_token: String,
     #[serde(default)]
     jwt_secret: String,
+    #[serde(default)]
+    api_endpoint_url: String,
 }
 
 #[derive(Serialize)]
@@ -40,6 +42,7 @@ struct GeminiConfigStatus {
     gemini_key_from_env: bool,
     brave_key_from_env: bool,
     turso_from_env: bool,
+    api_endpoint_url: String,
 }
 
 /// Returns true when the named environment variable is set to a non-blank value.
@@ -64,6 +67,27 @@ struct SaveBraveApiKeyRequest {
 struct SaveTursoConfigRequest {
     database_url: String,
     auth_token: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveApiEndpointUrlRequest {
+    url: String,
+}
+
+/// The local API sidecar runs only when no remote endpoint is configured.
+/// A blank (or whitespace-only) endpoint means "use the local sidecar".
+fn should_run_local_sidecar(api_endpoint_url: &str) -> bool {
+    api_endpoint_url.trim().is_empty()
+}
+
+/// Defensive http(s) URL check for the configured remote endpoint. The friendly,
+/// user-facing validation lives in the settings controller (`new URL(...)`); this
+/// is a last-resort guard so a malformed value never reaches the spawn logic.
+fn is_valid_http_url(value: &str) -> bool {
+    let v = value.trim();
+    (v.starts_with("http://") && v.len() > "http://".len())
+        || (v.starts_with("https://") && v.len() > "https://".len())
 }
 
 fn config_file_path() -> Result<PathBuf, String> {
@@ -346,6 +370,15 @@ fn start_api_sidecar(
     }
 }
 
+/// Kills the running API sidecar child, if any, and clears the slot.
+fn stop_api_sidecar(api: &ApiProcess) {
+    if let Ok(mut guard) = api.0.lock() {
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill();
+        }
+    }
+}
+
 fn restart_api_sidecar(
     api: &ApiProcess,
     workspace_root: &Path,
@@ -355,12 +388,26 @@ fn restart_api_sidecar(
     turso_token: Option<&str>,
     jwt_secret: &str,
 ) {
-    if let Ok(mut guard) = api.0.lock() {
-        if let Some(mut child) = guard.take() {
-            let _ = child.kill();
-        }
-    }
+    stop_api_sidecar(api);
     start_api_sidecar(api, workspace_root, gemini_key, brave_key, turso_url, turso_token, jwt_secret);
+}
+
+/// Single source of truth for the local-sidecar lifecycle. Reads the current config
+/// and reconciles the running process with it: (re)start the sidecar when no remote
+/// endpoint is set, otherwise stop it. Every settings change funnels through here so
+/// the invariant "local sidecar runs iff no remote endpoint" holds in one place.
+fn reconcile_sidecar(api: &ApiProcess, workspace_root: &Path) {
+    let cfg = load_config();
+    if should_run_local_sidecar(&cfg.api_endpoint_url) {
+        let gemini = gemini_key_for_spawn();
+        let brave = brave_key_for_spawn();
+        let (turso_url, turso_tok) = turso_for_spawn();
+        let jwt = ensure_jwt_secret();
+        restart_api_sidecar(api, workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
+    } else {
+        eprintln!("[bandsearch] remote API endpoint configured — stopping local sidecar");
+        stop_api_sidecar(api);
+    }
 }
 
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -390,6 +437,7 @@ fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
         gemini_key_from_env,
         brave_key_from_env,
         turso_from_env,
+        api_endpoint_url: cfg.api_endpoint_url.trim().to_string(),
     })
 }
 
@@ -407,10 +455,7 @@ fn save_gemini_api_key(
     cfg.gemini_api_key = trimmed.to_string();
     cfg.onboarding_completed = true;
     persist_config(&cfg)?;
-    let brave = brave_key_for_spawn();
-    let (turso_url, turso_tok) = turso_for_spawn();
-    let jwt = ensure_jwt_secret();
-    restart_api_sidecar(api.inner(), &workspace.0, Some(trimmed), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
+    reconcile_sidecar(api.inner(), &workspace.0);
     Ok(())
 }
 
@@ -427,10 +472,7 @@ fn save_brave_api_key(
     let mut cfg = load_config();
     cfg.brave_api_key = trimmed.to_string();
     persist_config(&cfg)?;
-    let gemini = gemini_key_for_spawn();
-    let (turso_url, turso_tok) = turso_for_spawn();
-    let jwt = ensure_jwt_secret();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), Some(trimmed), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
+    reconcile_sidecar(api.inner(), &workspace.0);
     Ok(())
 }
 
@@ -448,10 +490,7 @@ fn save_turso_config(
     cfg.turso_database_url = url.to_string();
     cfg.turso_auth_token = req.auth_token.trim().to_string();
     persist_config(&cfg)?;
-    let gemini = gemini_key_for_spawn();
-    let brave = brave_key_for_spawn();
-    let jwt = ensure_jwt_secret();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), Some(url), Some(cfg.turso_auth_token.as_str()), &jwt);
+    reconcile_sidecar(api.inner(), &workspace.0);
     Ok(())
 }
 
@@ -464,10 +503,26 @@ fn clear_turso_config(
     cfg.turso_database_url = String::new();
     cfg.turso_auth_token = String::new();
     persist_config(&cfg)?;
-    let gemini = gemini_key_for_spawn();
-    let brave = brave_key_for_spawn();
-    let jwt = ensure_jwt_secret();
-    restart_api_sidecar(api.inner(), &workspace.0, gemini.as_deref(), brave.as_deref(), None, None, &jwt);
+    reconcile_sidecar(api.inner(), &workspace.0);
+    Ok(())
+}
+
+#[tauri::command]
+fn save_api_endpoint_url(
+    workspace: State<'_, WorkspaceRoot>,
+    api: State<'_, ApiProcess>,
+    req: SaveApiEndpointUrlRequest,
+) -> Result<(), String> {
+    let trimmed = req.url.trim();
+    if !trimmed.is_empty() && !is_valid_http_url(trimmed) {
+        return Err("API endpoint must be an http(s) URL".into());
+    }
+    let mut cfg = load_config();
+    cfg.api_endpoint_url = trimmed.to_string();
+    persist_config(&cfg)?;
+    // Reconcile the sidecar: a remote endpoint stops the local one; clearing it
+    // (blank URL) restarts the local sidecar with the stored keys.
+    reconcile_sidecar(api.inner(), &workspace.0);
     Ok(())
 }
 
@@ -481,7 +536,7 @@ fn complete_onboarding() -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, complete_onboarding])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
@@ -495,11 +550,8 @@ fn main() {
             );
 
             let api = ApiProcess(Mutex::new(None));
-            let gemini = gemini_key_for_spawn();
-            let brave = brave_key_for_spawn();
-            let (turso_url, turso_tok) = turso_for_spawn();
-            let jwt = ensure_jwt_secret();
-            start_api_sidecar(&api, &workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
+            // Start the local sidecar only when no remote endpoint is configured.
+            reconcile_sidecar(&api, &workspace_root);
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));
@@ -510,11 +562,7 @@ fn main() {
             if let WindowEvent::Destroyed = event {
                 if window.label() == "main" {
                     if let Some(state) = window.try_state::<ApiProcess>() {
-                        if let Ok(mut guard) = state.0.lock() {
-                            if let Some(mut child) = guard.take() {
-                                let _ = child.kill();
-                            }
-                        }
+                        stop_api_sidecar(&state);
                     }
                 }
             }
@@ -653,5 +701,72 @@ mod tests {
         std::env::set_var(key, "   ");
         assert!(!env_non_empty(key));
         std::env::remove_var(key);
+    }
+
+    #[test]
+    fn should_run_local_sidecar_true_when_endpoint_blank() {
+        assert!(should_run_local_sidecar(""));
+    }
+
+    #[test]
+    fn should_run_local_sidecar_true_when_endpoint_whitespace() {
+        assert!(should_run_local_sidecar("   "));
+    }
+
+    #[test]
+    fn should_run_local_sidecar_false_when_endpoint_set() {
+        assert!(!should_run_local_sidecar("https://bandsearch.onrender.com"));
+    }
+
+    #[test]
+    fn is_valid_http_url_accepts_http_and_https() {
+        assert!(is_valid_http_url("http://localhost:3001"));
+        assert!(is_valid_http_url("https://bandsearch.onrender.com"));
+        assert!(is_valid_http_url("  https://example.com  "));
+    }
+
+    #[test]
+    fn is_valid_http_url_rejects_non_http_and_empty() {
+        assert!(!is_valid_http_url(""));
+        assert!(!is_valid_http_url("   "));
+        assert!(!is_valid_http_url("ftp://example.com"));
+        assert!(!is_valid_http_url("javascript:alert(1)"));
+        assert!(!is_valid_http_url("http://"));
+        assert!(!is_valid_http_url("https://"));
+        assert!(!is_valid_http_url("bandsearch.onrender.com"));
+    }
+
+    #[test]
+    fn config_defaults_api_endpoint_url_to_empty_when_absent() {
+        // Older config.json files predate the field; serde(default) must keep them valid.
+        let cfg: BandsearchConfig = serde_json::from_str(r#"{"gemini_api_key":"k"}"#)
+            .expect("config without api_endpoint_url must still parse");
+        assert_eq!(cfg.api_endpoint_url, "");
+        assert!(should_run_local_sidecar(&cfg.api_endpoint_url));
+    }
+
+    #[test]
+    fn config_round_trips_api_endpoint_url() {
+        let cfg: BandsearchConfig =
+            serde_json::from_str(r#"{"api_endpoint_url":"https://remote.example"}"#)
+                .expect("config with api_endpoint_url must parse");
+        assert_eq!(cfg.api_endpoint_url, "https://remote.example");
+        assert!(!should_run_local_sidecar(&cfg.api_endpoint_url));
+    }
+
+    #[test]
+    fn gemini_config_status_serializes_api_endpoint_url_camel_case() {
+        let status = GeminiConfigStatus {
+            has_stored_key: false,
+            has_brave_key: false,
+            onboarding_complete: false,
+            has_turso_config: false,
+            gemini_key_from_env: false,
+            brave_key_from_env: false,
+            turso_from_env: false,
+            api_endpoint_url: "https://remote.example".to_string(),
+        };
+        let value = serde_json::to_value(&status).expect("status must serialize");
+        assert_eq!(value["apiEndpointUrl"], "https://remote.example");
     }
 }

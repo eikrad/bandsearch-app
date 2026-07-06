@@ -34,6 +34,7 @@ export interface DesktopReactMountOptions {
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
   clearTursoConfig?: () => Promise<void>;
+  saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
@@ -57,6 +58,7 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
+  saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
   onRegister,
@@ -228,6 +230,10 @@ export function createDesktopReactMount({
     onSaveTursoConfig: handlers.onSaveTursoConfig,
     onClearTursoConfig: async () => {
       await clearTursoConfig();
+      return renderCurrent();
+    },
+    onSaveApiEndpointUrl: async (url: string) => {
+      await saveApiEndpointUrl(url);
       return renderCurrent();
     },
   };

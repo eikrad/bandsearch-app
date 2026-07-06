@@ -1,28 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client as LibSQLClient } from "@libsql/client";
-import type { UserRepository, User, PublicUser } from "./userRepository";
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-function rowToUser(row: Record<string, unknown>): User {
-  return {
-    id: row.id as string,
-    email: row.email as string,
-    displayName: row.display_name as string,
-    passwordHash: row.password_hash as string,
-    recoveryCodeHash: row.recovery_code_hash as string,
-    createdAt: row.created_at as string,
-  };
-}
-
-function publicUser(user: User): PublicUser {
-  const { passwordHash: _ph, recoveryCodeHash: _rc, ...pub } = user;
-  void _ph;
-  void _rc;
-  return pub;
-}
+import type { UserRepository } from "./userRepository";
+import { normalizeEmail, publicUser, rowToUser } from "./userModel.js";
 
 export function createTursoUserRepository({ client }: { client: LibSQLClient }): UserRepository {
   return {

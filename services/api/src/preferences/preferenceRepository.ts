@@ -17,13 +17,16 @@ function addColumnIfMissing(db: import("better-sqlite3").Database, table: string
 
 type Group = { id: string; name: string; memberIds: string[] };
 
-export type PreferenceRepository = {
+export type BandRepository = {
   addSavedBand: (input: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown }>;
   listSavedBands: (userId?: string) => Promise<unknown[]>;
   updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
   deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
   buildContext: (userId?: string) => Promise<string>;
   buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
+};
+
+export type BandGroupRepository = {
   importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number; failed: number }>;
   listGroups: (userId?: string) => Promise<Group[]>;
   createGroup: (name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
@@ -33,29 +36,48 @@ export type PreferenceRepository = {
   removeArtistFromGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
 };
 
-export function assertPreferenceRepository(repository: unknown): PreferenceRepository {
-  const requiredMethods = [
-    "addSavedBand",
-    "listSavedBands",
-    "updateSavedBand",
-    "deleteSavedBand",
-    "buildContext",
-    "buildContextForIds",
-    "importSavedBands",
-    "listGroups",
-    "createGroup",
-    "renameGroup",
-    "deleteGroup",
-    "addArtistToGroup",
-    "removeArtistFromGroup",
-  ];
+// Keep for backwards compatibility during transition — all existing adapters implement both
+export type PreferenceRepository = BandRepository & BandGroupRepository;
 
-  for (const methodName of requiredMethods) {
+const BAND_REPOSITORY_METHODS = [
+  "addSavedBand",
+  "listSavedBands",
+  "updateSavedBand",
+  "deleteSavedBand",
+  "buildContext",
+  "buildContextForIds",
+] as const;
+
+const BAND_GROUP_REPOSITORY_METHODS = [
+  "importSavedBands",
+  "listGroups",
+  "createGroup",
+  "renameGroup",
+  "deleteGroup",
+  "addArtistToGroup",
+  "removeArtistFromGroup",
+] as const;
+
+function assertMethods(repository: unknown, methodNames: readonly string[]) {
+  for (const methodName of methodNames) {
     if (typeof (repository as Record<string, unknown>)?.[methodName] !== "function") {
       throw new Error(`invalid preference repository: missing method ${methodName}`);
     }
   }
+}
 
+export function assertBandRepository(repository: unknown): BandRepository {
+  assertMethods(repository, BAND_REPOSITORY_METHODS);
+  return repository as BandRepository;
+}
+
+export function assertBandGroupRepository(repository: unknown): BandGroupRepository {
+  assertMethods(repository, BAND_GROUP_REPOSITORY_METHODS);
+  return repository as BandGroupRepository;
+}
+
+export function assertPreferenceRepository(repository: unknown): PreferenceRepository {
+  assertMethods(repository, [...BAND_REPOSITORY_METHODS, ...BAND_GROUP_REPOSITORY_METHODS]);
   return repository as PreferenceRepository;
 }
 
@@ -68,7 +90,7 @@ type PreferenceConfig = {
   tursoAuthToken?: string;
 };
 
-export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {}) {
+export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {}): PreferenceRepository {
   if (runtimeConfig.preferenceStore === "postgres") {
     const pool = new Pool({
       connectionString: runtimeConfig.databaseUrl,
