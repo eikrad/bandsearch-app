@@ -37,12 +37,23 @@ flowchart TD
         verify_r -- "loop" --> assess
     end
 
-    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional)"]
-    enrich_lastfm --> rank["rank\nRecommendationRanker · Gemini"]
+    reflect_if_needed --> rank["rank\nRecommendationRanker · Gemini"]
     rank --> END(["END"])
 ```
 
 See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for a full description of all nodes, state fields, and design decisions.
+
+---
+
+## Documentation
+
+| Path | What it covers |
+|------|----------------|
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
+| [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
 ---
 
@@ -172,8 +183,8 @@ Common optional variables:
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
-| `LASTFM_API_KEY` | — | Last.fm fallback for artist images, listener-count obscurity scoring, and similar-artist enrichment (`enrich_lastfm` node) |
-| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring — despite the name, this key is sent to **Anthropic Claude**, not Mistral |
+| `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
+| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
@@ -210,8 +221,6 @@ docs/             — architecture docs, ADRs, design specs, roadmap
 - [LangChain](https://www.langchain.com) — framework for structuring Gemini model calls
 - [Tauri](https://tauri.app) — framework for the native desktop wrapper
 - [Brave Search](https://brave.com/search/api/) — web search API for niche artist discovery
-- [Last.fm](https://www.last.fm) — optional artist images, listener-count obscurity scoring, and similar-artist signals
-- [Anthropic Claude](https://www.anthropic.com) — optional async LLM-as-judge scoring for the eval layer
 
 ---
 
