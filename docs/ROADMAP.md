@@ -88,7 +88,7 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [x] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log ✓ Done
 - [x] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed ✓ Done
-- [x] Step 5: LLM-as-judge worker — async LLM-as-judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY`; silently skipped if absent ✓ Done
+- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY` (env var name is a known mismatch — the key is actually sent to Anthropic's API, not Mistral's); silently skipped if absent ✓ Done
 - [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
@@ -215,13 +215,9 @@ Tester werden direkt in der App über neue Versionen informiert. Windows & Linux
 
 The following refactors were identified during architecture review but not yet implemented. Each has a clear action and known files.
 
-### 1. Extract auto-group inference out of the route handler
+### 1. Extract auto-group inference out of the route handler ✓ Done
 
-**Files:** `services/api/src/routes/registerBandsearchRoutes.ts` (lines 290–322)
-
-The logic that fetches saved bands, calls MusicBrainz for each artist's genre, and creates/updates groups lives inline in the `POST /preferences/auto-group` HTTP handler. It is untested, has a race condition when two concurrent requests try to create the same genre group, and cannot be reused by non-HTTP callers (e.g. the import flow).
-
-**Action:** Extract a `bandGroupInference` module (or similar name grounded in domain vocabulary) with one function: given a band name and MusicBrainz metadata, return zero or more group assignments. The route handler calls this and applies the result. Move the MusicBrainz I/O, deduplication, and group upsert logic inside the new module. Add unit tests for at least the race condition and the silent-MusicBrainz-failure path.
+Resolved — the inference logic now lives in `services/api/src/preferences/bandGroupInference.ts`, with its own tests in `services/api/test/band-group-inference.test.js`. `POST /preferences/groups/auto` in `registerBandsearchRoutes.ts` just calls into it.
 
 ---
 
@@ -235,13 +231,9 @@ All four implementations carry 13 methods covering three distinct concerns: band
 
 ---
 
-### 3. Consolidate the HTTP retry seam shared by integration clients
+### 3. Consolidate the HTTP retry seam shared by integration clients ✓ Done
 
-**Files:** `services/api/src/integrations/musicbrainz.ts`, `braveSearch.ts`
-
-`fetchWithTimeoutAndRetry` is copied verbatim in both files — same function, same signature, same AbortController pattern. A bug fix or timeout policy change must be applied in two places.
-
-**Action:** Extract `fetchWithTimeoutAndRetry` into a shared `services/api/src/integrations/httpClient.ts` module. Both `musicbrainz.ts` and `braveSearch.ts` import from it. Add a focused test for the retry and timeout behaviour in the new shared module; remove the duplicated copies from both clients.
+Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrations/httpClient.ts`, imported by both `musicbrainz.ts` and `braveSearch.ts`, with its own test in `services/api/test/http-client.test.js`.
 
 ---
 

@@ -70,9 +70,8 @@ graph TD
     API --> DB[("SQLite / Postgres / Turso\npreferences · sessions · auth")]
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
-    PIPELINE -.->|optional| LASTFM
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
+    API -.->|optional async eval| CLAUDE[Anthropic Claude\nLLM-as-Judge]
 ```
 
 ---
@@ -121,8 +120,7 @@ flowchart TD
     brave_initial --> extract["extract\nGemini — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
-    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm — listener counts +\nsimilar-artist evidence (optional)"]
-    enrich_lastfm --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
+    reflect_if_needed --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
 ```
 
@@ -133,7 +131,6 @@ flowchart TD
 | `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
 | `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
-| `enrich_lastfm` | Last.fm (optional) | No-op unless `LASTFM_API_KEY` is set; adds `listenerCount` and similar-artist evidence URLs to verified candidates |
 | `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
@@ -160,7 +157,7 @@ flowchart TD
 
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 45 s — generous because the Brave Free plan throttles to 1 req/sec). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 45 s — generous because the Brave Search free plan throttles to 1 request/second). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
 
 ---
 
@@ -171,8 +168,8 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
-| **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution (Wikidata + Last.fm fallback); in-graph listener counts and similar-artist evidence |
-| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
+| **Anthropic Claude** (optional, key supplied via `MISTRAL_API_KEY` — see note below) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
@@ -189,7 +186,7 @@ flowchart LR
         direction TB
         T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
         T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
-        T2["Tier 2 — LLM-as-Judge\nMistral scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
+        T2["Tier 2 — LLM-as-Judge\nClaude scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
         T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
         T1 --> T15 --> T2
     end
@@ -202,10 +199,12 @@ flowchart LR
 |-------|-----------|------|---------|
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Claude scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
 | **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
+
+> **Note on `MISTRAL_API_KEY`:** despite the variable name, the judge worker (`eval/judgeWorker.ts`) sends this key to Anthropic's API (`claude-opus-4-8`), not Mistral's. The naming is a known mismatch in the code — worth renaming to `ANTHROPIC_API_KEY` in a follow-up, but documented here as the current, actual behavior.
 
 ---
 
@@ -266,7 +265,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
+| **Claude as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |

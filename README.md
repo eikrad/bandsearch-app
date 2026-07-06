@@ -46,6 +46,18 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ---
 
+## Documentation
+
+| Path | What it covers |
+|------|----------------|
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
+| [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -173,10 +185,27 @@ Common optional variables:
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring |
+| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
+
+---
+
+## Deployment
+
+The API is a standalone Express service and can run anywhere Node.js 22+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option.
+
+Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays stateless and all data (preferences, sessions, auth) lives in Turso/libSQL:
+
+1. Create a Turso database, then run the migration once against it:
+   ```bash
+   TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso --workspace @bandsearch/api
+   ```
+2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`.
+3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
+
+Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds.
 
 ---
 
@@ -185,6 +214,7 @@ See `.env.example` for all options including storage backends, timeouts, search 
 ```bash
 npm test          # run all workspace tests
 npm run ci        # lint + typecheck + test
+npm run test:e2e  # Playwright end-to-end smoke tests (spins up the API and a static frontend)
 ```
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
@@ -200,6 +230,12 @@ services/eval/    — golden dataset and eval runner (anti-band gate, nugget cov
 shared/schemas/   — shared TypeScript validation contracts
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the expected workflow, required checks, and commit style, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines. Please report security issues as described in [SECURITY.md](SECURITY.md) rather than filing a public issue.
 
 ---
 
