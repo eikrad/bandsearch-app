@@ -30,7 +30,7 @@ bandsearch-app/
 ├── apps/
 │   └── desktop/         — Tauri + React desktop application (Rust + TypeScript)
 ├── services/
-│   └── api/             — Express.js API server (TypeScript, Node.js 20+)
+│   └── api/             — Express.js API server (TypeScript, Node.js 22+)
 │   └── eval/            — Golden dataset and eval runner
 ├── shared/
 │   └── schemas/         — Shared TypeScript validation contracts
@@ -71,7 +71,7 @@ graph TD
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval, gated by MISTRAL_API_KEY| JUDGE[Claude / Anthropic\nLLM-as-Judge]
+    API -.->|optional async eval| CLAUDE[Anthropic Claude\nLLM-as-Judge]
 ```
 
 ---
@@ -157,7 +157,7 @@ flowchart TD
 
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 25 s). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 45 s — generous because the Brave Search free plan throttles to 1 request/second). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
 
 ---
 
@@ -169,10 +169,8 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
-| **Claude / Anthropic** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path; gated by the `MISTRAL_API_KEY` env var (legacy name — see note below) |
+| **Anthropic Claude** (optional, key supplied via `MISTRAL_API_KEY` — see note below) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
-
-> **Naming note:** the LLM-as-judge worker (`services/api/src/eval/judgeWorker.ts`) calls Anthropic's API (`https://api.anthropic.com`, model `claude-opus-4-8`), but activation is currently gated by the `MISTRAL_API_KEY` environment variable — `app.ts` reads `runtimeConfig.mistralApiKey` and passes it straight through as the Anthropic API key. This is inherited naming from an earlier Mistral-based design that was never fully renamed; set `MISTRAL_API_KEY` to activate the judge until the config is renamed.
 
 ---
 
@@ -206,6 +204,8 @@ flowchart LR
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
 
+> **Note on `MISTRAL_API_KEY`:** despite the variable name, the judge worker (`eval/judgeWorker.ts`) sends this key to Anthropic's API (`claude-opus-4-8`), not Mistral's. The naming is a known mismatch in the code — worth renaming to `ANTHROPIC_API_KEY` in a follow-up, but documented here as the current, actual behavior.
+
 ---
 
 ## Storage
@@ -230,10 +230,6 @@ SQLite (`bandsearch.db`) with in-memory fallback. Tables: `chat_sessions`, `chat
 ### Auth store
 
 Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with 30-day expiry; password recovery via single-use recovery codes.
-
-### Production deployment (Render + Turso)
-
-`render.yaml` at the repo root declares a Render Web Service for `services/api` (Node, Frankfurt region, health check on `/`), intended to run with `PREFERENCE_STORE=turso` so every client (desktop or browser) shares one remote database. Run `npm run migrate:turso --workspace @bandsearch/api` against the Turso database before first use. See [ROADMAP.md](../ROADMAP.md) Phase 9 for the full rollout plan.
 
 ---
 
@@ -269,7 +265,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Claude as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph. Currently activated via `MISTRAL_API_KEY` (see naming note above) |
+| **Claude as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
