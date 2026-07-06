@@ -45,6 +45,18 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ---
 
+## Documentation
+
+| Path | What it covers |
+|------|----------------|
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
+| [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -172,7 +184,7 @@ Common optional variables:
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates async LLM-as-judge eval scoring |
+| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
