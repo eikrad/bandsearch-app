@@ -45,6 +45,18 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ---
 
+## Documentation
+
+| Path | What it covers |
+|------|----------------|
+| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
+| [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
