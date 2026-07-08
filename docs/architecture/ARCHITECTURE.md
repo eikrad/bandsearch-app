@@ -39,6 +39,8 @@ bandsearch-app/
 └── tests/               — End-to-end tests (Playwright)
 ```
 
+Root `main.py` / `pyproject.toml` / `uv.lock` are an unused placeholder scaffold, kept only so `npm run lint:py` (ruff + black) has something to check — they're not part of the running application.
+
 ---
 
 ## System topology
@@ -87,6 +89,21 @@ The API is an Express.js application structured as follows:
 | `routes/registerBandsearchRoutes.ts` | Mounts all route handlers (auth, recommendations, preferences, sessions, artist search) |
 | `recommendationPipeline.ts` | Lifecycle manager for the research graph — exposes `recommend()` and `whenReady()` |
 | `agent/research/researchService.ts` | Thin wrapper around `invokeResearchGraph()` with error handling |
+
+### REST routes
+
+Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessions, preferences, artist search) and `eval/evalRoutes.ts` (eval dashboard and data).
+
+| Group | Routes |
+|-------|--------|
+| Health / version | `GET /health`, `GET /version` |
+| Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
+| Recommendations | `POST /recommendations` |
+| Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
+| Artists | `GET /artists/search`, `GET /artists/image` |
+| Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
+| Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
+| Eval | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `POST /eval/feedback`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
 
 ---
 
@@ -204,6 +221,10 @@ flowchart LR
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
 
+A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
+
+The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
+
 > **Note on `MISTRAL_API_KEY`:** despite the variable name, the judge worker (`eval/judgeWorker.ts`) sends this key to Anthropic's API (`claude-opus-4-8`), not Mistral's. The naming is a known mismatch in the code — worth renaming to `ANTHROPIC_API_KEY` in a follow-up, but documented here as the current, actual behavior.
 
 ---
@@ -249,7 +270,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 
 - **Stack:** Tauri (Rust shell) + React (TypeScript)
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
-- **Screens:** Welcome, Settings, Chat (responsive layout via `matchMedia`, breakpoint 767 px)
+- **Screens:** Welcome, Login, Register, Reset Password, Settings, Chat, Saved Artists (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback) and `ObscurityTargetPicker`
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
 
 ---
