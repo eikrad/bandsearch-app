@@ -15,8 +15,13 @@ Weekly dependency and health checks for the Bandsearch application.
   `services/eval`, `shared/schemas`).
 - Reviewed `apps/desktop/src-tauri/Cargo.toml` / `Cargo.lock` for outstanding Rust advisories.
 - Checked recent CI runs on `staging` via GitHub Actions API.
-- Confirmed root `pyproject.toml` still declares `dependencies = []` — no Python runtime deps,
-  `pip-audit` skipped as not applicable.
+- Confirmed root `pyproject.toml` still declares `dependencies = []` — no Python runtime deps.
+  `uv.lock` exists but only resolves the virtual root package itself (no third-party entries).
+  Ran `uv export --no-hashes` → `pip-audit -r <exported requirements>` anyway for completeness:
+  clean, as expected (nothing to audit). Note: running bare `pip-audit` with no scope in this
+  sandbox instead audits the *ambient* system Python environment's site-packages (unrelated to
+  this project) and surfaces unrelated findings (e.g. `pyjwt`, `setuptools`, `urllib3`, `wheel`)
+  — those are sandbox/system noise, not project findings, and are irrelevant here.
 - Re-ran the full baseline suite after applying updates.
 
 ### CI health (staging)
@@ -71,7 +76,7 @@ Most recent runs on `staging` (`CI` and `Protect main`) both `completed` / `succ
 |---|---|
 | `npm audit` (all workspaces, before fix) | 0 vulnerabilities |
 | `npm audit` (all workspaces, after fix) | 0 vulnerabilities |
-| `pip-audit` | Skipped — no Python runtime deps declared (`dependencies = []`) |
+| `pip-audit` | Clean — 0 vulnerabilities. No Python runtime deps declared (`dependencies = []`); `uv.lock` has no third-party entries, so there was nothing to find. |
 | `cargo audit` | Could not run the `cargo-audit` binary in this environment — attempting `cargo install cargo-audit` failed to compile here due to a pre-existing sandbox toolchain limitation (see Notes). Cross-checked the known advisory manually instead, against the RustSec advisory database and crates.io dependency metadata (see Fixes applied above). No other RUSTSEC advisories were identified for crates in `Cargo.lock` during this manual pass, but this is **not** as exhaustive as a real `cargo audit` run — flagging as a residual verification gap for next cycle or for CI to close (see Notes). |
 
 ### Notes
