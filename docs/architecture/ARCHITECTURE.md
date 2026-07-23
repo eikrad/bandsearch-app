@@ -119,6 +119,7 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 | `preferenceContext` | `string` | Formatted saved-band context |
 | `messages` | `ChatMessage[]` | Conversation history |
 | `mode` | `RecommendationMode` | `fresh` or `preference-aware` |
+| `obscurityTarget` | `string` (optional) | User-selected obscurity target (`Cult Following` / `Underground` / `Truly Obscure`); filters candidates before ranking |
 | `searchPlan` | `SearchPlan` | Planner output (anchor artists, style signals, queries) |
 | `braveHits` | `SearchHitInput[]` | Raw web search results |
 | `extractedCandidates` | `ExtractedCandidate[]` | Band names extracted from snippets |
@@ -137,7 +138,8 @@ flowchart TD
     brave_initial --> extract["extract\nGemini — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
-    reflect_if_needed --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
+    reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
+    enrich_lastfm --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
 ```
 
@@ -148,6 +150,7 @@ flowchart TD
 | `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
 | `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
+| `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
 | `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
@@ -185,7 +188,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
-| **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
+| **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **Anthropic Claude** (optional, key supplied via `MISTRAL_API_KEY` — see note below) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
@@ -270,7 +273,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 
 - **Stack:** Tauri (Rust shell) + React (TypeScript)
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
-- **Screens:** Welcome, Login, Register, Reset Password, Settings, Chat, Saved Artists (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback) and `ObscurityTargetPicker`
+- **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback) and `ObscurityTargetPicker`
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
 
 ---
