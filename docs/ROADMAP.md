@@ -142,7 +142,7 @@ The existing migration script targets local SQLite and Postgres. It needs to als
 Deploy the Express API as a Render Web Service.
 
 **Action:**
-1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install --prefix services/api`, start command `npm start --prefix services/api`, health check path `/`, and `region: frankfurt`. ✓ Done
+1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install`, start command `npm start` (run at the repo root — the root `package.json` scripts delegate to the API workspace), health check path `/`, and `region: frankfurt`. ✓ Done
 2. Configure required environment variables in `render.yaml` (non-secret keys) and via the Render dashboard (secrets): `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`. Render injects `PORT` automatically. ✓ Done
 3. Verify the `start` script in `services/api/package.json` works — it already uses `tsx`; confirm the installed Node.js version on Render matches local (specify `engines.node` in `package.json` if needed). ✓ Done (`"start": "tsx src/server.ts"` added; `engines.node: ">=22"` added to root `package.json`; `tsx` moved to `services/api` production deps)
 4. Connect the GitHub repository to Render; auto-deploy triggers on push to `main`. — manual step via Render dashboard
