@@ -13,7 +13,18 @@ updates:
 
   # Rust (Tauri desktop app)
   - package-ecosystem: "cargo"
-    directory: "/apps/desktop"
+    directory: "/apps/desktop/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    target-branch: "staging"
+    labels:
+      - "dependencies"
+
+  # Python tooling (uv-managed, project root)
+  - package-ecosystem: "uv"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
