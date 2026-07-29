@@ -4,6 +4,155 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-07-29
+
+### ⚠️ Backlog status correction — please read first
+
+The working branch for this cycle was seeded assuming four prior maintenance PRs (#92, #93, #94,
+#95) were still open/unmerged against `staging`, stacked behind the still-open #96. **That is no
+longer true.** Checked directly via `mcp__github__pull_request_read` before doing anything else:
+
+| PR | State | Merged at |
+|---|---|---|
+| #92 | **merged** | 2026-07-22T19:21:42Z |
+| #93 | **merged** | 2026-07-22T19:23:05Z |
+| #94 | **merged** | 2026-07-23T12:09:57Z |
+| #95 | **merged** | 2026-07-23T12:18:43Z |
+| #96 | still **open** | — (2026-07-22 cycle, not yet merged) |
+
+All four were merged in the ~17 hours immediately after #96 was opened (visible in `git log`
+on `staging` as explicit `Merge pull request #92/#93/#94/#95` commits ancestors of the tip this
+cycle branched from). **#96 is now the only outstanding maintenance PR** — recommend reviewing
+and merging (or superseding with this one, since the two overlap) rather than treating this as a
+5-PR pile-up. Flagging the correction prominently since propagating a stale "4 unmerged PRs"
+claim forward would have been actively misleading in this PR body.
+
+One consequence: because #94 (2026-07-15 cycle) already landed its `plist`/`quick-xml` fix on
+`staging`, **this cycle's baseline `Cargo.lock` already resolves `plist 1.10.0` / `quick-xml
+0.41.0`** (verified directly — `grep -A1 'name = "plist"' Cargo.lock`). No RUSTSEC-2026-0194/0195
+re-fix was needed this time; see Security audit results below. This is a good sign the backlog
+clearing actually stopped the fix from being reproduced a 4th time.
+
+### Checks performed
+- Reset working branch to `staging`'s current tip (`dee443f`, the merge of #95) before starting —
+  branch had been seeded from an older `main`/`staging` snapshot.
+- Verified `#92`–`#96` state directly via the GitHub API rather than assuming (see correction
+  above) before writing anything into this log or the PR body.
+- Baseline: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm --workspace
+  @bandsearch/desktop run build`, `npm audit` — all before any changes.
+- `npm outdated` per workspace (root, `apps/desktop`, `services/api`, `services/eval`,
+  `shared/schemas`).
+- Rust: `cargo update --dry-run` (`apps/desktop/src-tauri`) to see what's available; installed
+  `cargo-audit` (0.22.2, from source — first attempt hit a transient parallel-build process
+  error, succeeded on retry with `-j 2`); ran `cargo audit`.
+- Confirmed root `pyproject.toml` still declares `dependencies = []` — nothing to audit for
+  Python. `uv.lock` still resolves only the virtual root package.
+- Checked recent CI runs on `staging` via the Actions API — see CI health below.
+- Re-ran the full baseline suite after applying updates.
+
+### CI health (staging)
+Most recent recorded runs on `staging` (`CI` and `Protect main`) are still both `completed` /
+`success` from run `27791377341` / `27791377321`, 2026-06-18 — identical to what the last two
+cycles reported. No newer runs are showing against `staging` in the Actions API despite #92–#96
+merging since; not investigated further as it doesn't block this cycle (this branch's own CI run
+is checked separately after pushing, per the usual gate before opening a PR).
+
+### Fixes applied
+
+- **Security (Rust) — none needed this cycle.** `cargo audit` against the current `staging` tip
+  found **0 vulnerabilities** — only the same 18 informational "unmaintained"/"unsound" warnings
+  seen in every prior cycle (GTK3 `gtk-rs` bindings RUSTSEC-2024-041x series, `proc-macro-error`,
+  the `unic-*` crates, `anyhow` RUSTSEC-2026-0190, `glib` RUSTSEC-2024-0429 — all transitive
+  through `tauri`, no independently-updatable fix upstream). The RUSTSEC-2026-0194/0195
+  `quick-xml` advisories that required a fresh `cargo update -p plist --precise 1.10.0` in each of
+  the last three cycles (#92, #94, this branch's would-be #97) are **already resolved** on this
+  tip via #94 — confirmed `plist 1.10.0` / `quick-xml 0.41.0` in `Cargo.lock` before touching
+  anything. Nothing to fix, so nothing was changed here.
+
+- **Safe npm updates** — `npm update` at root picked up in-range patch/minor bumps across
+  workspaces (no `package.json` range changes required):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `eslint` | 10.6.0 | 10.8.0 |
+  | root | `@playwright/test` (+ `playwright`, `playwright-core`) | 1.61.1 | 1.62.0 |
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.63.0 | 8.65.0 |
+  | root | `tsx` | 4.23.0 | 4.23.1 |
+  | root | `globals` | 17.7.0 | 17.8.0 |
+  | `apps/desktop` | `react` / `react-dom` | 19.2.7 | 19.2.8 |
+  | `services/api` | `@langchain/langgraph` (+ `@langchain/core`, `@langchain/langgraph-sdk`) | 1.4.7 | 1.4.8 |
+  | `services/api` | `express-rate-limit` | 8.5.2 | 8.6.1 |
+  | `services/api` | `helmet` | 8.2.0 | 8.3.0 |
+  | (transitive, security) | `brace-expansion` | 5.0.7 | 5.0.8 |
+  | (transitive, various) | `@eslint-community/eslint-utils`, `acorn`, `flatted`, `ip-address`, `js-base64`, `langsmith`, `media-typer`, `minimatch`, `ws`, `p-queue` | — | patch bumps only |
+
+  `services/eval` and `shared/schemas` had nothing outdated within range this cycle. The
+  `brace-expansion` bump (transitive, pulled in by `eslint`'s dependency tree) incidentally
+  cleared the one `npm audit` finding present at baseline (see below) — no direct action needed
+  beyond the routine `npm update`.
+
+### Rust dependency audit (informational, not applied)
+`cargo update --dry-run` in `apps/desktop/src-tauri` shows ~114 available non-advisory patch/minor
+bumps across the `tauri` 2.x family and its transitive graph (e.g. `tauri 2.11.0 → 2.11.5`,
+`tauri-utils 2.9.0 → 2.9.3`, `wry 0.55.0 → 0.55.1`, `tao 0.35.0 → 0.35.3`, `serde 1.0.228 →
+1.0.229`, `tokio 1.52.1 → 1.53.1`, plus many more). None are security-driven (`cargo audit` is
+clean), so — consistent with the #96 precedent of keeping security-driven PRs minimal — none were
+applied this cycle. Flagging as available for a future dedicated Rust-dependency-refresh cycle.
+
+### Security audit results
+
+| Check | Result |
+|---|---|
+| `npm audit` (before) | 1 high (`brace-expansion` <=5.0.7 — DoS via unbounded expansion length) |
+| `npm audit` (after) | 0 vulnerabilities |
+| `pip-audit` (manual, scoped) | Clean — `dependencies = []`, no Python runtime deps to audit |
+| `cargo audit` | **0 vulnerabilities** (ran successfully this cycle, `cargo-audit 0.22.2`); 18 informational unmaintained/unsound warnings, same set as every prior cycle, no independent fix available |
+
+### Rust build/test — fully verifiable this cycle (with a caveat)
+Unlike the last three cycles, `cargo check`/`cargo test` were verifiable end-to-end here:
+- **GTK3 dev headers are present in this sandbox this cycle** (`libgtk-3-dev` /
+  `libwebkit2gtk-4.1-dev` were already installed; `pkg-config --exists gdk-3.0` succeeds,
+  `gdk-3.0.pc` resolves at `3.24.41`) — the mirror-blocked/missing-pkgconfig issue noted in the
+  2026-07-22 cycle did not reproduce.
+- Hitting `cargo check` cold still failed, but on a **different, already-documented** issue: the
+  tracked `apps/desktop/src-tauri/binaries/node-x86_64-unknown-linux-gnu` sidecar symlink points
+  at `/usr/bin/node`, which doesn't exist in this sandbox (node lives at `/opt/node22/bin/node`
+  here) — same root cause called out in the 2026-07-08 cycle's Notes.
+- To confirm there was no *other* blocker, temporarily repointed the symlink locally (never
+  staged/committed — reverted with `git checkout -- binaries/node-x86_64-unknown-linux-gnu`
+  immediately after) and re-ran: `cargo check` finished cleanly in ~14s, and `cargo test` passed
+  **20/20** unit tests — identical count to the last cycle that could run it (2026-07-08). This
+  confirms the dependency changes here don't break the Rust build; the sidecar-symlink gap
+  remains a sandbox-only artifact, not a code defect, and was **not** changed in the committed
+  tree.
+- Re-ran `npm run lint`, `npm run typecheck`, `npm run test` (all workspaces), and `apps/desktop`'s
+  `npm run build` after every dependency change — all still green, identical pass counts to
+  baseline (desktop 221/222 + 1 skip unchanged, api 423/423, eval 16/16, schemas 17/17; lint and
+  typecheck clean).
+
+### Notes
+
+- **Lock file drift (pre-existing, not fixed this cycle, call for repo owner)** —
+  `package-lock.json` and `pnpm-lock.yaml` still coexist at the root. CI only reads
+  `package-lock.json` (`npm ci`). `pnpm-lock.yaml` was last modified 2026-05-31;
+  `package-lock.json` was just updated today (2026-07-29). The gap is now **~8.5 weeks and
+  growing every cycle** the pnpm file isn't touched. Not resolved this cycle — dropping one
+  lockfile (or wiring CI/Dependabot to keep both in sync) remains the repo owner's call, not an
+  agent's.
+
+### Major upgrades pending (manual review — not applied)
+
+| Package | Current | Latest | Risk notes |
+|---|---|---|---|
+| `typescript` (root) | `6.0.3` | `7.0.2` | Major rewrite, flagged every cycle since 07-08; needs a dedicated compatibility pass across all 4 npm workspaces + `typescript-eslint`, not a drive-by bump. |
+| `@types/node` (root) | `25.9.5` | `26.1.2` | Type-defs major ahead of `engines: ">=22"` / CI's pinned Node 22 — low risk but flagged per policy; re-evaluate alongside any future Node engine bump. |
+| `better-sqlite3` (services/api) | `12.11.1` | `13.0.2` | Native-addon major — first flagged by #96 (2026-07-22 cycle) and still pending; needs its own rebuild/verification pass across platforms before adopting, not a routine `npm update`. |
+
+No other workspace has a pending major this cycle — `@tauri-apps/*`, `react`/`react-dom`,
+`express`, `zod`, `@langchain/*`, `pg`, etc. are all on current majors.
+
+---
+
 ## 2026-07-15
 
 ### Checks performed
