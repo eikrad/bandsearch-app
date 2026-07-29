@@ -70,7 +70,7 @@ graph TD
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval| MISTRAL[Mistral\nLLM-as-Judge]
+    API -.->|optional async eval| CLAUDE[Anthropic Claude\nLLM-as-Judge]
 ```
 
 ---
@@ -168,7 +168,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint | Artist image resolution with Last.fm fallback |
-| **Mistral** (optional) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **Anthropic Claude** (optional) | Eval layer (`judgeWorker.ts`) | Async LLM-as-Judge scoring — never on the critical path. Activated by `MISTRAL_API_KEY` (naming leftover from an incomplete provider migration — see note below) |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
@@ -181,10 +181,12 @@ Full design in [2026-05-29-eval-architecture.md](2026-05-29-eval-architecture.md
 |-------|-----------|--------|
 | **1 — Automatic metrics** | Runs immediately | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `MISTRAL_API_KEY` is set |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | Anthropic Claude (`claude-opus-4-8`) scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` — only when `MISTRAL_API_KEY` is set |
 | **3 — Human feedback** | Event-driven | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
+
+**Known inconsistency:** the eval worker's config field and env var are both named for Mistral (`mistralApiKey` / `MISTRAL_API_KEY`), but `services/api/src/eval/judgeWorker.ts` calls the Anthropic Messages API (`https://api.anthropic.com/v1/messages`, model `claude-opus-4-8`) with that key. This is a leftover from a provider-rename commit that updated the config/docs but not the actual HTTP call. Functionally: set `MISTRAL_API_KEY` to a valid **Anthropic** API key to enable this layer.
 
 ---
 
@@ -205,7 +207,7 @@ Tables: `saved_bands` (rating, categories, notes), `artist_groups`
 
 ### Session store
 
-SQLite (`bandsearch.db`) with in-memory fallback. Tables: `chat_sessions`, `chat_messages`.
+SQLite (`bandsearch.db`) with in-memory fallback, or Turso/libSQL when `PREFERENCE_STORE=turso` (`tursoChatSessionRepository`). Tables: `chat_sessions`, `chat_messages`.
 
 ### Auth store
 
@@ -245,7 +247,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | Decision | Rationale |
 |----------|----------|
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
+| **Optional async LLM judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph (currently wired to Anthropic Claude — see Evaluation layer note) |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |

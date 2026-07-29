@@ -133,16 +133,18 @@ Bandsearch uses optional local multi-user auth (bcrypt + 30-day JWT).
 
 **JWT secret:** Set `JWT_SECRET` in your environment for persistent sessions. Without it, a random secret is generated on startup and all tokens are invalidated on restart.
 
+**Creating a user without the app:** `npm run create-user --workspace @bandsearch/api -- --email you@example.com --name "Your Name" --password "secret"` creates a user directly against the configured database (SQLite or Turso).
+
 The desktop client persists the token in browser storage and injects it as `Authorization: Bearer` on every API call. The login/register/reset-password screens are shown automatically on startup when the API requires authentication.
 
 ---
 
 ## Storage
 
-Bandsearch uses two persistence domains:
+Bandsearch uses two persistence domains, both selected by the same `PREFERENCE_STORE` variable:
 
-- **Preferences store** (`saved_bands`, groups) — configurable via `PREFERENCE_STORE`.
-- **Session store** (`chat_sessions`, `chat_messages`) — local SQLite in `DATABASE_PATH` (default `bandsearch.db`), with in-memory fallback if SQLite is unavailable.
+- **Preferences store** (`saved_bands`, groups) and **auth store** (`users`).
+- **Session store** (`chat_sessions`, `chat_messages`) — SQLite by default (`DATABASE_PATH`, in-memory fallback if SQLite is unavailable), or Turso/libSQL when `PREFERENCE_STORE=turso`.
 
 | `PREFERENCE_STORE` | Description |
 |--------------------|-------------|
@@ -198,20 +200,20 @@ Turso URL and auth token can also be saved through the **Settings** screen in th
 | `TURSO_DATABASE_URL` | — | Required when `PREFERENCE_STORE=turso` |
 | `TURSO_AUTH_TOKEN` | — | Turso auth token (omit for local libSQL) |
 | `CORS_ORIGIN` | `*` | Allowed browser origin |
-| `RECOMMENDATION_TIMEOUT_MS` | `8000` | Gemini request timeout |
 | `RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS` | `45000` | Max wait before HTTP listen while the pipeline initializes |
 | `MUSICBRAINZ_TIMEOUT_MS` | `5000` | MusicBrainz request timeout |
 | `MUSICBRAINZ_RETRIES` | `1` | MusicBrainz retry attempts |
 | `LASTFM_API_KEY` | — | Optional — Last.fm fallback for artist images and obscurity scoring (listener counts) |
-| `MISTRAL_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker (Mistral scores recommendations after the response is sent) |
-| `EVAL_DASHBOARD_ENABLED` | — | Set `true` to enable the developer eval dashboard at `/eval/dashboard` |
+| `MISTRAL_API_KEY` | — | Optional — activates the async LLM-as-judge eval worker after the response is sent. Despite the name, the current implementation calls Anthropic's Claude API (`claude-opus-4-8`) with this key, a leftover from an incomplete Mistral migration — see [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md#evaluation-layer) |
+| `EVAL_DASHBOARD_ENABLED` | — | Set `true` to enable the developer eval dashboard and `/eval/*` routes (404 otherwise) |
+| `EVAL_DASHBOARD_PASSWORD` | — | Optional — HTTP Basic Auth password for `/eval/dashboard` |
 | `LANGSMITH_API_KEY` | — | Optional LangSmith tracing |
 | `LANGSMITH_TRACING` | — | Set `true` to enable tracing |
 | `LANGSMITH_PROJECT` | — | LangSmith project name |
 | `RESEARCH_MAX_INITIAL_SEARCHES` | `6` | Max Brave queries on first pass |
 | `RESEARCH_MAX_REFLECTION_SEARCHES` | `4` | Cap on extra queries after reflection |
 | `RESEARCH_TOTAL_SEARCH_BUDGET` | `10` | Max Brave calls per recommendation request |
-| `RESEARCH_TIMEOUT_MS` | `25000` | Upper bound for the multi-step research workflow |
+| `RESEARCH_TIMEOUT_MS` | `45000` | Upper bound (ms) for the multi-step research workflow — generous by default because the Brave free plan throttles to 1 req/sec |
 | `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified MusicBrainz hits before skipping reflection |
 
 ---
@@ -290,6 +292,12 @@ Response includes `recommendations`, optional `assistantReply` (conversational p
 | `GET` | `/sessions/:id` | Get one session with messages |
 | `POST` | `/sessions/:id/messages` | Add message to session |
 
+### Storage diagnostics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/preferences/turso/test` | Test a Turso connection string + auth token before saving (used by the Settings screen) |
+
 ### Artist Discovery
 
 | Method | Path | Description |
@@ -299,12 +307,16 @@ Response includes `recommendations`, optional `assistantReply` (conversational p
 
 ### Eval
 
-Requires `EVAL_DASHBOARD_ENABLED=true` in the environment.
+All `/eval/*` routes return 404 unless `EVAL_DASHBOARD_ENABLED=true`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/eval/dashboard` | Developer quality dashboard — pipeline funnel, obscurity distribution, LLM-judge alignment, trend charts, and event log |
+| `GET` | `/eval/dashboard` | Developer quality dashboard (HTML) — pipeline funnel, obscurity distribution, LLM-judge alignment, trend charts, and event log. Protected by HTTP Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set |
+| `GET` | `/eval/events` | List recent recommendation events with their per-band eval scores (`?limit=`, max 200) |
+| `GET` | `/eval/metrics` | Aggregated metrics for current events, plus delta vs. the latest baseline |
+| `GET` | `/eval/baselines` | List saved baseline snapshots |
 | `POST` | `/eval/baseline` | Save a named snapshot of current aggregated metrics for before/after comparison |
+| `POST` | `/eval/feedback` | Log user feedback (`good`, `too_mainstream`, `wrong_direction`) for a recommendation event |
 
 ---
 
@@ -312,6 +324,7 @@ Requires `EVAL_DASHBOARD_ENABLED=true` in the environment.
 
 ```bash
 npm test          # run all workspace tests
+npm run test:e2e  # Playwright end-to-end tests (spins up the API + a static frontend build)
 npm run ci        # lint + typecheck + test
 ```
 
@@ -332,6 +345,8 @@ apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
 services/eval/    — golden dataset and eval runner (anti-band gate, nugget coverage)
 shared/schemas/   — shared validation contracts (TypeScript contracts.ts + tests)
+tests/e2e/        — Playwright end-to-end tests
+scripts/          — repo-wide build/lint utilities (e.g. Python lint wrapper)
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
 
@@ -346,6 +361,14 @@ In development (browser or embedded webview), the chat UI chooses **mobile vs de
 - [Brave Search](https://brave.com/search/api/) — web search API used for niche artist discovery.
 
 ---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch/PR workflow and commit conventions. This project also has a [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
 ## License
 
