@@ -4,6 +4,167 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-08-05
+
+### Correction / backlog note — please read first
+
+The task framing for this cycle carried forward two stale assumptions from before the session
+started; both were checked directly against the GitHub API and the repo tree before anything was
+touched, rather than propagated:
+
+1. **Open-PR backlog.** Framing assumed #96 (2026-07-22) and #97 (2026-07-29) were still open —
+   that part held up (verified via `list_pull_requests`, state=open): both are indeed still open
+   against `staging`, alongside #98 (docs, base `main`, unrelated). But #96's mergeable state is
+   now `dirty` (conflicts — `staging` has moved on to `dee443f` since #96's base `617d586`, 76
+   commits behind), while #97's is `clean` (still same tip as `staging`'s current head, since no
+   other maintenance PR has merged since). **Recommend closing #96 in favor of #97** (their
+   contents are near-duplicate weekly-maintenance diffs, and #96 would need a manual rebase to
+   even apply) **and merging #97**, then reviewing #98 separately.
+2. **"No Dependabot config and no weekly-audit workflow."** This is **no longer true** — both
+   `.github/dependabot.yml` (npm + cargo + uv + github-actions, all targeting `staging`) and
+   `.github/workflows/weekly-audit.yml` (npm audit + pip-audit + cargo-audit, opens/updates a
+   `security-audit`-labeled issue on findings) already exist on `staging`, added by the merged
+   PR #92 (2026-07-08 cycle) and referenced in the 2026-06-24/07-08/07-15 log entries below. Per
+   this cycle's instructions not to add Dependabot config: nothing was added — it's already
+   there — but the instructions' premise ("this manual PR cycle is the entire mechanism") is
+   stale and worth flagging so it isn't repeated again next week.
+
+### Checks performed
+- Verified the working branch (`claude/eloquent-volta-f8vh9h`) had zero unique commits versus
+  `origin/staging` (`git log claude/eloquent-volta-f8vh9h..origin/staging` showed 76 commits
+  behind; the reverse showed 0 ahead), then reset it to `origin/staging`'s tip (`dee443f`, the
+  merge of #95) before starting — the branch had been seeded stale, same situation as the
+  2026-07-15 cycle.
+- Baseline: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`,
+  `npm --workspace @bandsearch/desktop run build` — all green before any changes.
+- `npm outdated` / `npm audit` across all workspaces (root, `apps/desktop`, `services/api`,
+  `services/eval`, `shared/schemas`).
+- Confirmed root `pyproject.toml` still declares `dependencies = []` and `uv.lock` resolves only
+  the `bandsearch` root package itself (`grep -c "^\[\[package\]\]" uv.lock` → 1) — nothing to
+  audit on the Python side, reconfirmed rather than assumed.
+- Installed `cargo-audit` (not cached in this sandbox) via `cargo install cargo-audit --locked`
+  in `apps/desktop/src-tauri` and ran `cargo audit`.
+- Inspected `apps/desktop/src-tauri/Cargo.lock` directly for `plist`/`quick-xml` versions before
+  touching anything.
+- `cargo update --dry-run` in `apps/desktop/src-tauri` for informational (non-security) Rust
+  bumps.
+- Attempted `cargo check` in `apps/desktop/src-tauri` (see Notes for the sandbox blocker hit).
+- Checked recent CI runs on `staging`-targeting PRs via the GitHub Actions API.
+- Re-ran the full baseline suite after applying updates.
+
+### CI health (staging)
+Most recent CI runs for PRs against `staging`/`main` are all `completed` / `success`, including
+#97's own run (`30484908285`, 2026-07-29) and #98's (`30493384140`, 2026-07-29). No red runs
+found in the recent history. GitHub's check-status API for #96 and #97's head commits currently
+reports no check-run contexts registered against the *commit itself* (`pending`/`total_count: 0`
+via `get_status`) — this is a quirk of how `get_status` reports GitHub Actions check-runs (as
+opposed to legacy commit statuses) rather than a sign CI didn't run; the Actions run history above
+confirms both PRs' CI completed successfully at the time they were opened.
+
+### Fixes applied
+
+- **Security fix — npm, high severity, applied.** Baseline `npm audit` found 2 high-severity
+  findings:
+  - `brace-expansion` `4.0.0 - 5.0.8` — DoS via unbounded expansion length / unbounded
+    intermediate arrays (transitive, via `eslint` → `minimatch`).
+  - `ip-address` `<=10.3.0` — leading-zero octet decoding mismatch (decimal vs. octal) and CIDR
+    suffix / IPv4-mapped IPv6 misclassification, enabling SSRF / trust-boundary bypass
+    (transitive, via `services/api`'s `express-rate-limit`).
+
+  `npm audit fix` resolved both cleanly — `brace-expansion` 5.0.7 → 5.0.9, `ip-address` 10.2.0 →
+  10.4.0 (via `express-rate-limit`'s own patch bump, see table below). Only `package-lock.json`
+  changed; no `package.json` edits needed anywhere. `npm audit` after: **0 vulnerabilities**.
+
+- **Rust — no security fix needed this cycle.** Inspected `Cargo.lock` before touching anything:
+  `plist 1.10.0` / `quick-xml 0.41.0` are already resolved (fixed via merged #94, 2026-07-15
+  cycle) — RUSTSEC-2026-0194/0195 remain fixed, confirmed not regressed. `cargo audit` found
+  **0 vulnerabilities**; only informational unmaintained/unsound warnings remain (see security
+  audit table below), same category as every prior cycle, no independent fix upstream.
+
+- **Safe npm updates** — `npm update` at root picked up in-range patch/minor bumps across all
+  workspaces (no `package.json` range changes required):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `eslint` | 10.6.0 | 10.8.0 |
+  | root | `@playwright/test` (+ `playwright`, `playwright-core`) | 1.61.1 | 1.62.1 |
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.63.0 | 8.66.0 |
+  | root | `tsx` | 4.23.0 | 4.23.8 |
+  | root | `globals` | 17.7.0 | 17.9.0 |
+  | `apps/desktop` | `react` / `react-dom` | 19.2.7 | 19.2.8 |
+  | `services/api` | `@langchain/langgraph` (+ `-sdk`, `p-queue`) | 1.4.7 | 1.4.9 |
+  | `services/api` | `express-rate-limit` | 8.5.2 | 8.6.2 |
+  | `services/api` | `helmet` | 8.2.0 | 8.3.0 |
+  | transitive (security, see above) | `brace-expansion` | 5.0.7 | 5.0.9 |
+  | transitive (security, see above) | `ip-address` | 10.2.0 | 10.4.0 |
+  | transitive (various) | `@eslint/config-helpers`, `ignore` | — | patch bumps only |
+
+  `shared/schemas` had nothing outdated within range. `services/eval` had nothing outdated.
+  `apps/desktop` (beyond react/react-dom) had nothing else outdated.
+
+  **Rust**: `cargo update --dry-run` shows ~150 lines of available non-advisory patch/minor
+  bumps across the `tauri` 2.x family (`tauri 2.11.0→2.11.5`, `tauri-build`/`-codegen`/`-macros`/
+  `-plugin` `2.6.0→2.6.3`, `tauri-runtime 2.11.0→2.11.3`, `tauri-runtime-wry 2.11.0→2.11.4`,
+  `tauri-utils 2.9.0→2.9.3`, `wry 0.55.0→0.55.1`, `hyper 1.9.0→1.11.0`, `regex 1.12.3→1.13.1`,
+  etc., plus several crate additions/removals from transitive resolution churn). None are
+  security-driven, so — consistent with every prior cycle's "keep security-driven PRs minimal"
+  precedent — none applied; flagged for a future dedicated Rust-refresh cycle.
+
+### Majors — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 07-08; needs a dedicated compatibility pass across all 4 npm workspaces + `typescript-eslint`. |
+| `@types/node` (root) | 25.9.5 | 26.1.2 | Type-defs major ahead of `engines: ">=22"` / CI's pinned Node 22 — low risk but flagged per policy, unchanged from prior cycles. |
+| `better-sqlite3` (`services/api`) | 12.11.1 | 13.0.3 | Native-addon major, first flagged by #96 (12.11.1 → 13.0.1) and still pending — needs its own rebuild/verification pass, not a routine bump. |
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | 2 high (`brace-expansion`, `ip-address`) → **0 after `npm audit fix`** |
+| Python | manual (`dependencies = []`, `uv.lock` has no third-party entries) | Nothing to audit, reconfirmed |
+| Rust | `cargo audit` (0.22.2, 493 crate deps scanned) | **0 vulnerabilities**. 19 informational unmaintained/unsound warnings (GTK3 `gtk-rs` bindings, `proc-macro-error`, `unic-char-*`/`unic-common`/`unic-ucd-*`, `anyhow` `Error::downcast_mut()` unsoundness, `event-listener` `!Send` unsoundness — new this cycle, `glib` iterator unsoundness) — one more than the 18 seen in prior cycles (`event-listener` RUSTSEC-2026-0221, dated 2026-07-13); no independent fix available, same "informational only, no advisory" category as every prior cycle. |
+
+### Rust dependency audit (informational, not applied)
+
+`cargo update --dry-run` in `apps/desktop/src-tauri` shows dozens of available non-security
+patch/minor bumps across the `tauri` 2.x crate family and its transitive dependencies (see Fixes
+applied above for representative examples). None correspond to a `cargo audit` finding, so none
+were applied this cycle — flagged for a future dedicated "Rust dependency refresh" cycle rather
+than folded into this security-focused pass, consistent with #96/#97's precedent.
+
+### Notes
+
+- **Lock file drift (pre-existing, not fixed this cycle, call for repo owner)** —
+  `package-lock.json` and `pnpm-lock.yaml` still coexist at the root. CI only reads
+  `package-lock.json` (`npm ci`). Not independently re-measured this cycle beyond confirming both
+  files still exist and diverge — per standing guidance this remains the repo owner's call, not
+  an agent's, and is flagged again rather than fixed.
+- **Rust build/test not verifiable in this sandbox this cycle** — `cargo check` in
+  `apps/desktop/src-tauri` fails here for a reason unrelated to today's dependency changes:
+  `gdk-sys`'s build script requires `gdk-3.0.pc` via pkg-config, and this sandbox has GTK3
+  runtime libraries but not the `-dev`/pkg-config files (`pkg-config --exists gdk-3.0` fails).
+  Attempted `apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev` to close the gap — blocked by
+  404s from the Ubuntu package mirrors on several transitive packages (`libjavascriptcoregtk-4.1-dev`,
+  `libwebkit2gtk-4.1-0/-dev`, `libnghttp2-dev`, `libgdk-pixbuf-2.0-dev`, etc.), same category of
+  environment limitation as the 2026-07-22 cycle (mirror-blocked), not the 2026-07-29 cycle's
+  (that cycle had the dev headers already present and hit the sidecar-symlink issue instead — see
+  below). Also confirmed the tracked `apps/desktop/src-tauri/binaries/node-x86_64-unknown-linux-gnu`
+  sidecar symlink is still broken in this sandbox (`-> /usr/bin/node`, which doesn't exist here;
+  real node is at `/opt/node22/bin/node`) — but since the GTK3 pkg-config gap fails the build
+  before the sidecar step is ever reached, there was nothing to gain from temporarily repointing
+  it this cycle, so it was left untouched (not staged, not modified). CI has no `cargo check`/
+  `cargo test` step currently (Rust coverage is `cargo-audit`-via-`weekly-audit.yml` plus
+  Dependabot only) — recommend a real `cargo check`/`cargo test` pass outside this sandbox (or in
+  CI, if a Rust job is ever added) before merging, same recommendation as 2026-07-22.
+- Re-ran `npm run lint`, `npm run typecheck`, `npm run test` (all workspaces), and
+  `apps/desktop`'s `npm --workspace @bandsearch/desktop run build` after every dependency change
+  — all still green, identical pass counts to baseline: **678/678 tests** (desktop 221/222 pass +
+  1 pre-existing skip, api 423/423, eval 16/16, schemas 17/17); lint and typecheck clean.
+
+---
+
 ## 2026-07-15
 
 ### Checks performed
