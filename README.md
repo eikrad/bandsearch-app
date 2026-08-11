@@ -105,6 +105,17 @@ curl -X POST http://localhost:3001/recommendations \
 npm run desktop             # opens native window, starts API automatically
 ```
 
+Tauri expects a Node sidecar next to the Rust crate (`bundle.externalBin`). For local
+dev, symlink your system Node once (the file is gitignored):
+
+```bash
+# Linux / macOS — use the host triple from: rustc -vV | grep ^host
+ln -sf "$(which node)" apps/desktop/src-tauri/binaries/node-$(rustc -vV | sed -n 's/^host: //p')
+```
+
+On Windows, copy `node.exe` to
+`apps/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe` instead.
+
 ### Platform prerequisites
 
 **Linux:**

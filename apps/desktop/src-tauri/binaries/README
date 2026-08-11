@@ -1,4 +1,5 @@
-Place the platform-specific Node.js binary here before running `tauri build`.
+Place the platform-specific Node.js binary here before running `tauri build`
+or `tauri dev`.
 
 Tauri bundles whichever file matches `node-<target-triple>[.exe]` declared in
 `tauri.conf.json` `bundle.externalBin`. Examples:
@@ -7,9 +8,13 @@ Tauri bundles whichever file matches `node-<target-triple>[.exe]` declared in
   binaries/node-aarch64-apple-darwin       (macOS Apple Silicon)
   binaries/node-x86_64-pc-windows-msvc.exe (Windows x86_64)
 
-Fetch the official Node.js binary for each target from https://nodejs.org/dist/,
-strip the archive, rename the executable to match the pattern above, and make it
-executable. Release CI (`.github/workflows/release.yml` on `v*` tags) automates
-this for Linux x64, Windows x64, and macOS ARM.
+**Local development:** symlink the system Node (do not commit this file):
+
+```bash
+ln -sf "$(which node)" apps/desktop/src-tauri/binaries/node-$(rustc -vV | sed -n 's/^host: //p')
+```
+
+**Release CI:** `.github/workflows/release.yml` on `v*` tags downloads the
+official Node.js binary for Linux x64, Windows x64, and macOS ARM.
 
 These binaries are NOT committed to the repository.
