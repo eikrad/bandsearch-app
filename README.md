@@ -209,6 +209,25 @@ Render's free tier spins down after 15 minutes of inactivity, so the first reque
 
 ---
 
+## Desktop releases
+
+Tagged pushes matching `v*` run [`.github/workflows/release.yml`](.github/workflows/release.yml): each OS downloads the matching Node sidecar into `apps/desktop/src-tauri/binaries/`, then `tauri-apps/tauri-action` builds installers and opens a **draft prerelease**.
+
+One-time signing setup (required before the first tag):
+
+1. Generate keys (private key stays outside the repo):
+   ```bash
+   npx --workspace @bandsearch/desktop tauri signer generate -w ~/.tauri/bandsearch.key
+   ```
+2. Put the **public** key string into `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey` (already set for the current keypair).
+3. Add GitHub Actions secrets:
+   - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/bandsearch.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password used at generation (empty string if none)
+
+In-app update UI is still Phase 10; this pipeline already produces signed updater artifacts (`createUpdaterArtifacts`) and `latest.json` for that work.
+
+---
+
 ## Development
 
 ```bash

@@ -9,6 +9,7 @@ Tauri bundles whichever file matches `node-<target-triple>[.exe]` declared in
 
 Fetch the official Node.js binary for each target from https://nodejs.org/dist/,
 strip the archive, rename the executable to match the pattern above, and make it
-executable. A release CI step or Makefile target should automate this.
+executable. Release CI (`.github/workflows/release.yml` on `v*` tags) automates
+this for Linux x64, Windows x64, and macOS ARM.
 
 These binaries are NOT committed to the repository.
