@@ -57,6 +57,20 @@ test("release workflow uses tauri-action with desktop projectPath", () => {
   );
 });
 
+test("desktop package.json exposes tauri script for tauri-action", () => {
+  const pkg = JSON.parse(
+    readFileSync(
+      resolve(__dirname, "../../../apps/desktop/package.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    pkg.scripts?.tauri,
+    "tauri",
+    'Expected apps/desktop package.json scripts.tauri = "tauri"',
+  );
+});
+
 test("release workflow signs updater artifacts via secrets", () => {
   assert.ok(
     releaseYml.includes("TAURI_SIGNING_PRIVATE_KEY"),

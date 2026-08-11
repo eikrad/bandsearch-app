@@ -1,1 +1,6 @@
 target/
+
+# Platform Node sidecars (downloaded by release CI / local tauri build prep)
+binaries/node-*
+!binaries/README
+!binaries/.gitkeep
