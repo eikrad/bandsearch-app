@@ -1,27 +1,50 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
-const { createPreferenceRepository } = require("../src/preferences/preferenceRepository");
+import { createApp } from "../src/app.js";
+import { createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 
-function freshApp(musicBrainzClient) {
+type Group = { id: string; name: string; memberIds: string[] };
+type ApiData = {
+  groups: Group[];
+  group: Group;
+  savedBand: { id: string };
+  deletedId: string;
+  error: { code: string };
+};
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+type CreateAppOptions = NonNullable<Parameters<typeof createApp>[0]>;
+
+function freshApp(musicBrainzClient?: CreateAppOptions["musicBrainzClient"]) {
   return createApp({
     preferenceRepository: createPreferenceRepository({ preferenceStore: "memory" }),
     ...(musicBrainzClient ? { musicBrainzClient } : {}),
   });
 }
 
-async function req(app, method, path, payload) {
+async function req(
+  app: ReturnType<typeof createApp>,
+  method: string,
+  path: string,
+  payload?: unknown,
+) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
       method,
       headers: { "content-type": "application/json" },
       body: payload !== undefined ? JSON.stringify(payload) : undefined,
     });
-    const data = await response.json();
+    const data = parseApiData(await response.json());
     return { status: response.status, data };
   } finally {
     server.close();
@@ -120,7 +143,7 @@ test("POST /preferences/groups/:id/artists adds saved band to group", async () =
   assert.equal(result.status, 200);
 
   const list = await req(app, "GET", "/preferences/groups");
-  const g = list.data.groups.find((g) => g.id === groupId);
+  const g = list.data.groups.find((group) => group.id === groupId);
   assert.equal(g.memberIds.includes(bandId), true);
 });
 
@@ -144,15 +167,15 @@ test("DELETE /preferences/groups/:id/artists/:savedBandId removes band from grou
   assert.equal(removal.status, 200);
 
   const list = await req(app, "GET", "/preferences/groups");
-  const g = list.data.groups.find((g) => g.id === groupId);
+  const g = list.data.groups.find((group) => group.id === groupId);
   assert.deepEqual(g.memberIds, []);
 });
 
 test("POST /preferences/groups/auto creates genre-based groups from saved bands", async () => {
   const mbClient = {
     searchArtists: async () => [],
-    lookupArtist: async (mbid) => {
-      const genreMap = {
+    lookupArtist: async (mbid: string) => {
+      const genreMap: Record<string, string[]> = {
         "mb-alcest": ["blackgaze", "shoegaze"],
         "mb-fen": ["post-metal", "atmospheric black metal"],
         "mb-wolves": ["black metal"],
@@ -171,10 +194,10 @@ test("POST /preferences/groups/auto creates genre-based groups from saved bands"
   assert.equal(result.status, 200);
   assert.ok(Array.isArray(result.data.groups), "should return groups array");
 
-  const groupNames = result.data.groups.map((g) => g.name);
+  const groupNames = result.data.groups.map((group) => group.name);
   assert.ok(groupNames.includes("blackgaze"), "should create blackgaze group");
   assert.ok(groupNames.includes("post-metal"), "should create post-metal group");
 
-  const blackgazeGroup = result.data.groups.find((g) => g.name === "blackgaze");
+  const blackgazeGroup = result.data.groups.find((group) => group.name === "blackgaze");
   assert.ok(blackgazeGroup.memberIds.length > 0, "blackgaze group should have members");
 });

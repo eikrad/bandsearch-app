@@ -1,18 +1,19 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { inferAndApplyGroupAssignments } = require("../src/preferences/bandGroupInference");
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { inferAndApplyGroupAssignments } from "../src/preferences/bandGroupInference.js";
+import type { InferenceContext } from "../src/preferences/bandGroupInference.js";
 
-function makeContext({ lookupArtist, createGroup, addArtistToGroup } = {}) {
+function makeContext(overrides: Partial<InferenceContext> = {}): InferenceContext {
   return {
-    lookupArtist: lookupArtist ?? (async () => ({ genres: [] })),
-    createGroup: createGroup ?? (async (name) => ({ ok: true, group: { id: `id-${name}`, name } })),
-    addArtistToGroup: addArtistToGroup ?? (async () => ({ ok: true })),
+    lookupArtist: overrides.lookupArtist ?? (async () => ({ genres: [] })),
+    createGroup: overrides.createGroup ?? (async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } })),
+    addArtistToGroup: overrides.addArtistToGroup ?? (async () => ({ ok: true })),
   };
 }
 
 test("happy path: band with MBID creates group and adds member", async () => {
-  const addArtistToGroup = test.mock.fn(async () => ({ ok: true }));
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const addArtistToGroup = test.mock.fn<InferenceContext["addArtistToGroup"]>(async () => ({ ok: true }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],
@@ -33,7 +34,7 @@ test("happy path: band with MBID creates group and adds member", async () => {
 });
 
 test("silent MusicBrainz failure: band is skipped, createGroup not called", async () => {
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],
@@ -48,8 +49,8 @@ test("silent MusicBrainz failure: band is skipped, createGroup not called", asyn
 });
 
 test("no MBID: band is skipped entirely", async () => {
-  const lookupArtist = test.mock.fn(async () => ({ genres: ["metal"] }));
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const lookupArtist = test.mock.fn<InferenceContext["lookupArtist"]>(async () => ({ genres: ["metal"] }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: null }],
@@ -63,8 +64,8 @@ test("no MBID: band is skipped entirely", async () => {
 
 test("existing group reuse: no createGroup call, addArtistToGroup still called", async () => {
   const existingGroup = { id: "existing-id", name: "metal" };
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
-  const addArtistToGroup = test.mock.fn(async () => ({ ok: true }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const addArtistToGroup = test.mock.fn<InferenceContext["addArtistToGroup"]>(async () => ({ ok: true }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],
@@ -82,7 +83,7 @@ test("existing group reuse: no createGroup call, addArtistToGroup still called",
 });
 
 test("race condition: createGroup returns ok:false, genre is skipped (no addArtistToGroup)", async () => {
-  const addArtistToGroup = test.mock.fn(async () => ({ ok: true }));
+  const addArtistToGroup = test.mock.fn<InferenceContext["addArtistToGroup"]>(async () => ({ ok: true }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],
@@ -98,8 +99,8 @@ test("race condition: createGroup returns ok:false, genre is skipped (no addArti
 });
 
 test("multiple genres: creates two groups and two memberships", async () => {
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
-  const addArtistToGroup = test.mock.fn(async () => ({ ok: true }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const addArtistToGroup = test.mock.fn<InferenceContext["addArtistToGroup"]>(async () => ({ ok: true }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],
@@ -116,8 +117,8 @@ test("multiple genres: creates two groups and two memberships", async () => {
 });
 
 test("no genres: lookupArtist returns empty array, no groups created", async () => {
-  const createGroup = test.mock.fn(async (name) => ({ ok: true, group: { id: `id-${name}`, name } }));
-  const addArtistToGroup = test.mock.fn(async () => ({ ok: true }));
+  const createGroup = test.mock.fn<InferenceContext["createGroup"]>(async (name: string) => ({ ok: true, group: { id: `id-${name}`, name } }));
+  const addArtistToGroup = test.mock.fn<InferenceContext["addArtistToGroup"]>(async () => ({ ok: true }));
 
   await inferAndApplyGroupAssignments(
     [{ id: "band-1", musicbrainzArtistId: "mb-1" }],

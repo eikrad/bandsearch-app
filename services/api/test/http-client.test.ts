@@ -1,9 +1,9 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { fetchWithTimeoutAndRetry } = require("../src/integrations/httpClient");
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { fetchWithTimeoutAndRetry } from "../src/integrations/httpClient.js";
 
 test("succeeds on first attempt and returns response", async () => {
-  const mockResponse = { ok: true, status: 200 };
+  const mockResponse = new Response(null, { status: 200 });
   const fetchImpl = async () => mockResponse;
 
   const result = await fetchWithTimeoutAndRetry({
@@ -19,7 +19,7 @@ test("succeeds on first attempt and returns response", async () => {
 
 test("retries on failure and succeeds on second attempt", async () => {
   let callCount = 0;
-  const mockResponse = { ok: true, status: 200 };
+  const mockResponse = new Response(null, { status: 200 });
   const fetchImpl = async () => {
     callCount += 1;
     if (callCount === 1) {
@@ -54,7 +54,8 @@ test("throws after exhausting all retries when retries=0", async () => {
         retries: 0,
         headers: {},
       }),
-    (err) => {
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
       assert.equal(err.message, "always fails");
       return true;
     }
@@ -82,7 +83,7 @@ test("calls fetchImpl retries+1 times on full failure", async () => {
 });
 
 test("returns response when fetch succeeds (no dangling timer)", async () => {
-  const mockResponse = { ok: true, status: 200 };
+  const mockResponse = new Response(null, { status: 200 });
   const fetchImpl = async () => mockResponse;
 
   const result = await fetchWithTimeoutAndRetry({

@@ -1,16 +1,18 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const {
+import {
   resolveRecommendationFacadeInput,
   enrichRecommendationsWithMbIds,
-} = require("../src/recommendations");
+} from "../src/recommendations.js";
 
 test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
   const items = [{ artist: "Fen", why: "x", sourceSignals: ["a"] }];
   const artists = [{ id: "mbid-fen", name: "Fen", score: 99, disambiguation: "" }];
   const out = enrichRecommendationsWithMbIds(items, artists);
-  assert.equal(out[0].musicbrainzArtistId, "mbid-fen");
+  const first = out[0];
+  assert.ok(first && typeof first === "object");
+  assert.equal((first as Record<string, unknown>).musicbrainzArtistId, "mbid-fen");
 });
 
 test("resolveRecommendationFacadeInput fresh mode does not call repository", async () => {
@@ -57,7 +59,7 @@ test("resolveRecommendationFacadeInput preference-aware uses buildContextForIds 
     async buildContext() {
       return "full";
     },
-    async buildContextForIds(ids) {
+    async buildContextForIds(ids: string[]) {
       return `ids:${ids.join(",")}`;
     },
   };

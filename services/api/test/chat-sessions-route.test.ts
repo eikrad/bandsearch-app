@@ -1,17 +1,32 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
+import { createApp } from "../src/app.js";
 
-async function makeRequest(app, path, { method = "GET", body } = {}) {
+type Session = { id: string; title: string; createdAt: string };
+type Message = { id: string; role: string; content: string };
+type ApiData = { session: Session; sessions: Session[]; message: Message; messages: Message[] };
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+async function makeRequest(
+  app: ReturnType<typeof createApp>,
+  path: string,
+  { method = "GET", body }: { method?: string; body?: unknown } = {},
+) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   try {
-    const options = { method, headers: { "content-type": "application/json" } };
+    const options: RequestInit = { method, headers: { "content-type": "application/json" } };
     if (body !== undefined) options.body = JSON.stringify(body);
     const response = await fetch(`http://127.0.0.1:${port}${path}`, options);
-    const data = await response.json();
+    const data = parseApiData(await response.json());
     return { status: response.status, data };
   } finally {
     server.close();

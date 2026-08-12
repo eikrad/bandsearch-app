@@ -1,24 +1,36 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
+import { createApp } from "../src/app.js";
 
-async function makeGetRequest(app, path) {
+type ApiData = {
+  imageUrl: string | null;
+  error: { code: string };
+};
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+async function makeGetRequest(app: ReturnType<typeof createApp>, path: string) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);
-    const data = await response.json();
+    const data = parseApiData(await response.json());
     return { status: response.status, data };
   } finally {
     server.close();
   }
 }
 
-function createImageClientStub(imageUrl) {
+function createImageClientStub(imageUrl: string | null) {
   return {
-    getArtistImageUrl: async (name) => (name ? imageUrl : null),
+    getArtistImageUrl: async (name: string) => (name ? imageUrl : null),
   };
 }
 

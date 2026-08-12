@@ -1,23 +1,37 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
+import { createApp } from "../src/app.js";
 
-function createMusicBrainzStub(results) {
+type ApiData = {
+  artists: ArtistResult[];
+  error: { code: string; message: string };
+};
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+type ArtistResult = { id: string; name: string; score: number; disambiguation: string };
+
+function createMusicBrainzStub(results: ArtistResult[]) {
   return {
-    searchArtists: async (query) => {
-      return results.map((r) => ({ ...r, queryUsed: query }));
+    searchArtists: async (query: string) => {
+      return results.map((r: ArtistResult) => ({ ...r, queryUsed: query }));
     },
   };
 }
 
-async function makeGetRequest(app, path) {
+async function makeGetRequest(app: ReturnType<typeof createApp>, path: string) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);
-    const data = await response.json();
+    const data = parseApiData(await response.json());
     return { status: response.status, data };
   } finally {
     server.close();
@@ -65,10 +79,10 @@ test("GET /search/artists is removed (404)", async () => {
 });
 
 test("GET /artists/search passes query to MusicBrainz client", async () => {
-  const queries = [];
+  const queries: string[] = [];
   const app = createApp({
     musicBrainzClient: {
-      searchArtists: async (q) => {
+      searchArtists: async (q: string) => {
         queries.push(q);
         return [];
       },

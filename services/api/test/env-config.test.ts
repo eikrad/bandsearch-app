@@ -1,7 +1,7 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { validateRuntimeEnv } = require("../src/config/env");
+import { validateRuntimeEnv } from "../src/config/env.js";
 
 const REQUIRED = { GEMINI_API_KEY: "test-gemini-key", BRAVE_API_KEY: "test-brave-key" };
 

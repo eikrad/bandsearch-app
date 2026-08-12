@@ -1,18 +1,20 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createMusicBrainzClient } = require("../src/integrations/musicbrainz");
+import { createMusicBrainzClient } from "../src/integrations/musicbrainz.js";
+
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+}
 
 test("MusicBrainz client maps artist search results", async () => {
-  const fakeFetch = async () => ({
-    ok: true,
-    json: async () => ({
+  const fakeFetch = async () =>
+    jsonResponse({
       artists: [
         { id: "a1", name: "Alcest", score: 98, disambiguation: "FR" },
         { id: "a2", name: "Agalloch", score: 95 },
       ],
-    }),
-  });
+    });
 
   const client = createMusicBrainzClient({ fetchImpl: fakeFetch });
   const artists = await client.searchArtists("alcest");
@@ -24,10 +26,7 @@ test("MusicBrainz client maps artist search results", async () => {
 });
 
 test("MusicBrainz client throws on non-OK responses", async () => {
-  const fakeFetch = async () => ({
-    ok: false,
-    status: 503,
-  });
+  const fakeFetch = async () => new Response(null, { status: 503 });
 
   const client = createMusicBrainzClient({ fetchImpl: fakeFetch });
 
@@ -39,11 +38,9 @@ test("MusicBrainz client throws on non-OK responses", async () => {
 
 test("lookupArtist maps tags genres urls and life-span", async () => {
   let requestedUrl = "";
-  const fakeFetch = async (url) => {
-    requestedUrl = url;
-    return {
-      ok: true,
-      json: async () => ({
+  const fakeFetch = async (url: string | URL | Request) => {
+    requestedUrl = String(url);
+    return jsonResponse({
         id: "mbid-1",
         name: "Grade",
         tags: [{ name: "hardcore", count: 2 }],
@@ -55,8 +52,7 @@ test("lookupArtist maps tags genres urls and life-span", async () => {
             url: { resource: "https://grade.bandcamp.com" },
           },
         ],
-      }),
-    };
+      });
   };
 
   const client = createMusicBrainzClient({ fetchImpl: fakeFetch, retries: 0 });
@@ -74,7 +70,7 @@ test("lookupArtist maps tags genres urls and life-span", async () => {
 
 test("lookupArtist rejects empty mbid", async () => {
   const client = createMusicBrainzClient({
-    fetchImpl: async () => ({ ok: true, json: async () => ({}) }),
+    fetchImpl: async () => jsonResponse({}),
   });
   await assert.rejects(() => client.lookupArtist(""), /mbid is required/);
 });

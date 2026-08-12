@@ -1,13 +1,25 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
-const { createInMemoryUserRepository } = require("../src/auth/userRepository");
-const { createPreferenceRepository } = require("../src/preferences/preferenceRepository");
+import { createApp } from "../src/app.js";
+import { createInMemoryUserRepository } from "../src/auth/userRepository.js";
+import { createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 
 const JWT_SECRET = "test-secret-at-least-32-chars-long!!";
 
-function freshApp(userRepository = createInMemoryUserRepository()) {
+type ApiData = {
+  token: string;
+  recoveryCode: string;
+  newRecoveryCode: string;
+  user: { email: string };
+};
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+function freshApp(userRepository: ReturnType<typeof createInMemoryUserRepository> = createInMemoryUserRepository()) {
   return createApp({
     userRepository,
     preferenceRepository: createPreferenceRepository({ preferenceStore: "memory" }),
@@ -15,19 +27,27 @@ function freshApp(userRepository = createInMemoryUserRepository()) {
   });
 }
 
-async function req(app, method, path, payload, token) {
+async function req(
+  app: ReturnType<typeof createApp>,
+  method: string,
+  path: string,
+  payload?: unknown,
+  token?: string,
+) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   try {
-    const headers = { "content-type": "application/json" };
+    const headers: Record<string, string> = { "content-type": "application/json" };
     if (token) headers["authorization"] = `Bearer ${token}`;
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
       method,
       headers,
       body: payload ? JSON.stringify(payload) : undefined,
     });
-    return { status: response.status, data: await response.json() };
+    return { status: response.status, data: parseApiData(await response.json()) };
   } finally {
     server.close();
   }

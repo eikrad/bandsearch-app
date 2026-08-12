@@ -1,9 +1,24 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
+import { createApp } from "../src/app.js";
+import type { PreferenceRepository } from "../src/preferences/preferenceRepository.js";
+import type { RecommendationError } from "../src/recommendations.js";
 
-function createPreferenceRepositoryStub(buildContext) {
+type Recommendation = { artist: string; why: string; sourceSignals: string[] };
+type ApiData = {
+  recommendations: Recommendation[];
+  assistantReply: string;
+  meta: { modeUsed: string; usedPreferenceContext: boolean; eventId: string };
+  error: { code: string; message: string };
+};
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+function createPreferenceRepositoryStub(buildContext: () => string): PreferenceRepository {
   return {
     addSavedBand: async () => ({ ok: true, savedBand: null }),
     listSavedBands: async () => [],
@@ -11,7 +26,7 @@ function createPreferenceRepositoryStub(buildContext) {
     deleteSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
     buildContext: async () => buildContext(),
     buildContextForIds: async () => "",
-    importSavedBands: async () => ({ imported: 0, skipped: 0 }),
+    importSavedBands: async () => ({ imported: 0, skipped: 0, failed: 0 }),
     listGroups: async () => [],
     createGroup: async () => ({ ok: false, status: 400, error: "stub" }),
     renameGroup: async () => ({ ok: false, status: 404, error: "stub" }),
@@ -21,10 +36,12 @@ function createPreferenceRepositoryStub(buildContext) {
   };
 }
 
-async function makeRequest(app, path, payload) {
+async function makeRequest(app: ReturnType<typeof createApp>, path: string, payload: unknown) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
 
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
@@ -32,7 +49,7 @@ async function makeRequest(app, path, payload) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = parseApiData(await response.json());
     return { status: response.status, data };
   } finally {
     server.close();
@@ -91,7 +108,7 @@ test("POST /recommendations returns recommendation results", async () => {
 });
 
 test("POST /recommendations uses injected recommendation pipeline", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -131,7 +148,7 @@ test("POST /recommendations returns 503 when pipeline is initializing", async ()
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => {
-        const error = new Error("booting");
+        const error = new Error("booting") as RecommendationError;
         error.code = "recommendation_initializing";
         throw error;
       },
@@ -166,7 +183,7 @@ test("POST /recommendations returns 502 on recommendation service error", async 
 
 test("POST /recommendations logs prompt_safety_truncate when priorityContext is over limit", async () => {
   const PRIORITY_CONTEXT_MAX_LEN = 2000;
-  const logEvents = [];
+  const logEvents: Array<{ event?: string; fields?: string[] }> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => ({
@@ -175,7 +192,7 @@ test("POST /recommendations logs prompt_safety_truncate when priorityContext is 
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
     },
-    logger: { warn: (obj) => logEvents.push(obj) },
+    logger: { warn: (obj: { event?: string; fields?: string[] }) => logEvents.push(obj) },
   });
 
   await makeRequest(app, "/recommendations", {
@@ -189,7 +206,7 @@ test("POST /recommendations logs prompt_safety_truncate when priorityContext is 
 });
 
 test("POST /recommendations does not log truncate when priorityContext is within limit", async () => {
-  const logEvents = [];
+  const logEvents: Array<{ event?: string; fields?: string[] }> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => ({
@@ -198,7 +215,7 @@ test("POST /recommendations does not log truncate when priorityContext is within
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
     },
-    logger: { warn: (obj) => logEvents.push(obj) },
+    logger: { warn: (obj: { event?: string; fields?: string[] }) => logEvents.push(obj) },
   });
 
   await makeRequest(app, "/recommendations", {
@@ -211,7 +228,7 @@ test("POST /recommendations does not log truncate when priorityContext is within
 });
 
 test("POST /recommendations forwards selectedArtistIds to the pipeline", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -238,7 +255,7 @@ test("POST /recommendations forwards selectedArtistIds to the pipeline", async (
 });
 
 test("POST /recommendations forwards messages to the pipeline", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -268,7 +285,7 @@ test("POST /recommendations forwards messages to the pipeline", async () => {
 });
 
 test("POST /recommendations forwards priorityContext to the pipeline", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -297,7 +314,7 @@ test("POST /recommendations forwards priorityContext to the pipeline", async () 
 // ─── Phase 8.3b: obscurityTarget threading ───────────────────────────────────
 
 test("POST /recommendations forwards obscurityTarget to the pipeline", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -321,7 +338,7 @@ test("POST /recommendations forwards obscurityTarget to the pipeline", async () 
 });
 
 test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", async () => {
-  const processedContexts = [];
+  const processedContexts: Array<Record<string, unknown>> = [];
   const evalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
@@ -348,11 +365,11 @@ test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", 
 });
 
 test("POST /recommendations passes undefined obscurityTarget when not set", async () => {
-  const processedContexts = [];
+  const processedContexts: Array<Record<string, unknown>> = [];
   const evalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
-  const pipelineCalls = [];
+  const pipelineCalls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -376,7 +393,7 @@ test("POST /recommendations passes undefined obscurityTarget when not set", asyn
 });
 
 test("POST /recommendations defaults to fresh mode", async () => {
-  const calls = [];
+  const calls: Array<Record<string, unknown>> = [];
   const app = createApp({
     recommendationPipeline: {
       recommend: async (input) => {
@@ -409,7 +426,7 @@ test("POST /recommendations defaults to fresh mode", async () => {
 });
 
 test("POST /recommendations includes eventId in meta when evalWorker is set", async () => {
-  const processedContexts = [];
+  const processedContexts: Array<Record<string, unknown>> = [];
   const evalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
@@ -432,7 +449,7 @@ test("POST /recommendations includes eventId in meta when evalWorker is set", as
 });
 
 test("POST /recommendations passes pre-generated eventId to processEvent", async () => {
-  const processedContexts = [];
+  const processedContexts: Array<Record<string, unknown>> = [];
   const evalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };

@@ -1,33 +1,50 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { test } from "node:test";
+import assert from "node:assert/strict";
 
-const { createApp } = require("../src/app");
-const { createPreferenceRepository } = require("../src/preferences/preferenceRepository");
+import { createApp } from "../src/app.js";
+import { createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 
-async function withServer(app, fn) {
+type ApiData = { meta: { modeUsed: string; usedPreferenceContext: boolean } };
+
+function parseApiData(value: unknown): ApiData {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  return value as ApiData;
+}
+
+type RequestOptions = { method?: string; body?: unknown };
+type RequestResult = { status: number; data: ApiData };
+type RequestFn = (path: string, options?: RequestOptions) => Promise<RequestResult>;
+
+async function withServer<T>(app: ReturnType<typeof createApp>, fn: (request: RequestFn) => Promise<T>): Promise<T> {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
   const base = `http://127.0.0.1:${port}`;
 
   try {
-    return await fn(async (path, { method = "GET", body } = {}) => {
+    return await fn(async (path: string, { method = "GET", body }: RequestOptions = {}) => {
       const res = await fetch(`${base}${path}`, {
         method,
         headers: body ? { "content-type": "application/json" } : {},
         body: body ? JSON.stringify(body) : undefined,
       });
-      return { status: res.status, data: await res.json() };
+      return { status: res.status, data: parseApiData(await res.json()) };
     });
   } finally {
     server.close();
   }
 }
 
-function buildStack({ onRunModel }) {
+type ModelArgs = { query: string; preferenceContext: string };
+
+function buildStack({ onRunModel }: { onRunModel: (args: ModelArgs) => void }) {
   const preferenceRepository = createPreferenceRepository();
   const recommendationPipeline = {
-    recommend: async ({ query, mode }) => {
+    recommend: async (input: Record<string, unknown>) => {
+      const query = typeof input.query === "string" ? input.query : "";
+      const mode = input.mode;
       const modeUsed = mode === "preference-aware" ? "preference-aware" : "fresh";
       const preferenceContext = modeUsed === "preference-aware" ? await preferenceRepository.buildContext() : "";
       onRunModel({
@@ -44,7 +61,7 @@ function buildStack({ onRunModel }) {
 }
 
 test("smoke: preference-aware mode routes saved band context to the agent", async () => {
-  const captured = [];
+  const captured: ModelArgs[] = [];
   const app = buildStack({ onRunModel: (args) => captured.push(args) });
 
   await withServer(app, async (req) => {
@@ -77,7 +94,7 @@ test("smoke: preference-aware mode routes saved band context to the agent", asyn
 });
 
 test("smoke: fresh mode passes empty preferenceContext to the agent", async () => {
-  const captured = [];
+  const captured: ModelArgs[] = [];
   const app = buildStack({ onRunModel: (args) => captured.push(args) });
 
   await withServer(app, async (req) => {
