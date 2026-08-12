@@ -77,6 +77,23 @@ function makeSavedArtistsShell(overrides: Partial<SavedArtistsShell> = {}): Save
   };
 }
 
+test("routed mount requires a route change listener", () => {
+  const routerWithoutListener = {
+    getRoute: () => "home",
+    navigate: () => {},
+  } as unknown as MountRouter;
+
+  assert.throws(
+    () => createDesktopReactMount({
+      shell: makeShell(),
+      router: routerWithoutListener,
+      createRootImpl: () => fakeReactRoot(),
+      resolveContainer: () => fakeContainer(),
+    }),
+    /onRouteChange/,
+  );
+});
+
 test("routed mount calls render with SavedArtistsView when route is saved", async () => {
   const renders: ReactElement[] = [];
   const shell = makeShell();

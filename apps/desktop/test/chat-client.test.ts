@@ -99,6 +99,42 @@ test("chat client creates and updates preferences", async () => {
   assert.equal(updated.savedBand.rating, 4);
 });
 
+test("chat client rejects malformed create preference responses", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => jsonResponse({ savedBand: { id: "pref-1" } }),
+  });
+
+  await assert.rejects(
+    client.createPreference({ name: "Fen" }),
+    /invalid create preference response: savedBand must be a valid saved band/,
+  );
+});
+
+test("chat client rejects malformed update preference responses", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => jsonResponse({ savedBand: null }),
+  });
+
+  await assert.rejects(
+    client.updatePreference("pref-1", { rating: 4 }),
+    /invalid update preference response: savedBand must be a valid saved band/,
+  );
+});
+
+test("chat client rejects malformed preference lists", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => jsonResponse({ savedBands: [{ id: "pref-1", name: 42 }] }),
+  });
+
+  await assert.rejects(
+    client.listPreferences(),
+    /invalid list preferences response: savedBands must be an array of valid saved bands/,
+  );
+});
+
 test("chat client fetches saved bands from preferences endpoint", async () => {
   const calls: FetchCall[] = [];
   const client = createChatClient({

@@ -33,7 +33,7 @@ type ViewComponentLike = React.ComponentType<Record<string, unknown>>;
 type MountRouter = {
   getRoute(): string;
   navigate(route: string): void;
-  onRouteChange?(listener: () => void): unknown;
+  onRouteChange(listener: () => void): unknown;
 };
 type MountSavedShell = {
   getViewProps(): unknown;
@@ -372,7 +372,7 @@ export function createDesktopReactMount({
   };
 
   if (router) {
-    router.onRouteChange?.(() => renderCurrent());
+    router.onRouteChange(() => renderCurrent());
   }
 
   return {
