@@ -1,7 +1,7 @@
-const { defineConfig } = require("@playwright/test");
-const { E2E_FRONTEND_PORT } = require("./tests/e2e/constants");
+import { defineConfig } from "@playwright/test";
+import { E2E_FRONTEND_PORT } from "./tests/e2e/constants.js";
 
-module.exports = defineConfig({
+export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 40000,
   use: {
@@ -17,7 +17,7 @@ module.exports = defineConfig({
       env: { PORT: "3001" },
     },
     {
-      command: "node tests/e2e/serve-frontend.js",
+      command: "npx tsx tests/e2e/serve-frontend.ts",
       port: E2E_FRONTEND_PORT,
       reuseExistingServer: false,
       timeout: 5000,

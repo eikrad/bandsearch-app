@@ -1,12 +1,15 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const {
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  MESSAGE_CONTENT_MAX_LEN,
+  MESSAGES_MAX_COUNT,
+  PRIORITY_CONTEXT_MAX_LEN,
+  QUERY_MAX_LENGTH,
   validateRecommendationItem,
-  validateSavedBand,
-  validateRecommendationMode,
   validateRecommendationHttpBody,
-} = require("../src/contracts");
+  validateRecommendationMode,
+  validateSavedBand,
+} from "../src/contracts.js";
 
 test("validateRecommendationItem accepts expected shape", () => {
   const result = validateRecommendationItem({
@@ -81,14 +84,12 @@ test("validateRecommendationHttpBody rejects invalid messages", () => {
 });
 
 test("validateRecommendationHttpBody rejects query longer than QUERY_MAX_LENGTH", () => {
-  const { QUERY_MAX_LENGTH } = require("../src/contracts");
   const v = validateRecommendationHttpBody({ query: "a".repeat(QUERY_MAX_LENGTH + 1) });
   assert.equal(v.ok, false);
   assert.equal(v.error, "query too long");
 });
 
 test("validateRecommendationHttpBody rejects message content longer than MESSAGE_CONTENT_MAX_LEN", () => {
-  const { MESSAGE_CONTENT_MAX_LEN } = require("../src/contracts");
   const v = validateRecommendationHttpBody({
     query: "dark ambient",
     messages: [{ role: "user", content: "x".repeat(MESSAGE_CONTENT_MAX_LEN + 1) }],
@@ -98,7 +99,6 @@ test("validateRecommendationHttpBody rejects message content longer than MESSAGE
 });
 
 test("validateRecommendationHttpBody rejects messages array over MESSAGES_MAX_COUNT", () => {
-  const { MESSAGES_MAX_COUNT } = require("../src/contracts");
   const msgs = Array.from({ length: MESSAGES_MAX_COUNT + 1 }, (_, i) => ({
     role: i % 2 === 0 ? "user" : "assistant",
     content: "hi",
@@ -109,7 +109,6 @@ test("validateRecommendationHttpBody rejects messages array over MESSAGES_MAX_CO
 });
 
 test("validateRecommendationHttpBody silently truncates priorityContext over PRIORITY_CONTEXT_MAX_LEN", () => {
-  const { PRIORITY_CONTEXT_MAX_LEN } = require("../src/contracts");
   const v = validateRecommendationHttpBody({
     query: "dark ambient",
     priorityContext: "b".repeat(PRIORITY_CONTEXT_MAX_LEN + 100),

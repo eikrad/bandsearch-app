@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+import { expect, test } from "@playwright/test";
 
 test.describe("Bandsearch UI", () => {
   test("renders the app with mode toggle and input", async ({ page }) => {
