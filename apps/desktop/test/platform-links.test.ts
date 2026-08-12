@@ -1,7 +1,6 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const { buildPlatformLinks } = require("../src/platformLinks");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildPlatformLinks } from "../src/platformLinks.js";
 
 test("buildPlatformLinks returns Bandcamp, SoundCloud, Spotify search links for any artist", () => {
   const links = buildPlatformLinks("Wolves in the Throne Room");

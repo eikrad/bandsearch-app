@@ -1,17 +1,16 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const { createHashRouter } = require("../src/createHashRouter");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHashRouter } from "../src/createHashRouter.js";
 
 function createTestRouter(initialHash = "") {
   let currentHash = initialHash;
-  const listeners = [];
+  const listeners: Array<() => void> = [];
 
   const router = createHashRouter({
     getHash: () => currentHash,
     setHash: (hash) => {
       currentHash = hash;
-      listeners.forEach((fn) => fn({ newURL: `http://x${hash}` }));
+      listeners.forEach((fn) => fn());
     },
     addListener: (fn) => listeners.push(fn),
     removeListener: (fn) => {
@@ -74,7 +73,7 @@ test("createHashRouter navigate changes route to welcome", () => {
 
 test("createHashRouter fires onRouteChange when navigating to welcome", () => {
   const { router } = createTestRouter("");
-  const changes = [];
+  const changes: string[] = [];
   router.onRouteChange((route) => changes.push(route));
   router.navigate("welcome");
   assert.deepEqual(changes, ["welcome"]);
@@ -82,7 +81,7 @@ test("createHashRouter fires onRouteChange when navigating to welcome", () => {
 
 test("createHashRouter fires onRouteChange callback when navigating", () => {
   const { router } = createTestRouter("");
-  const changes = [];
+  const changes: string[] = [];
   router.onRouteChange((route) => changes.push(route));
 
   router.navigate("saved");

@@ -1,21 +1,34 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const { execSync } = require("node:child_process");
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { execSync } from "node:child_process";
 
-const root = path.resolve(__dirname, "..");
+const root = process.cwd();
 
-function hostTriple() {
+type TauriConfig = {
+  bundle?: {
+    externalBin?: string[];
+    createUpdaterArtifacts?: boolean;
+  };
+  plugins?: {
+    updater?: {
+      pubkey?: string;
+      endpoints?: string[];
+    };
+  };
+};
+
+function hostTriple(): string {
   const output = execSync("rustc -vV", { encoding: "utf8" });
   const match = output.match(/^host:\s+(\S+)/m);
   assert.ok(match, "could not determine host triple from rustc -vV");
   return match[1];
 }
 
-function readTauriConf() {
+function readTauriConf(): TauriConfig {
   const confPath = path.join(root, "src-tauri/tauri.conf.json");
-  return JSON.parse(fs.readFileSync(confPath, "utf8"));
+  return JSON.parse(fs.readFileSync(confPath, "utf8")) as TauriConfig;
 }
 
 test("tauri.conf.json externalBin entries all have a matching binary file", (t) => {

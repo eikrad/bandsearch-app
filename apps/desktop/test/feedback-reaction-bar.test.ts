@@ -1,10 +1,10 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { FeedbackReactionBar } from "../src/ui/FeedbackReactionBar.js";
 
 test("FeedbackReactionBar renders 3 buttons when visible", () => {
-  const { FeedbackReactionBar } = require("../src/ui/FeedbackReactionBar");
   const html = renderToStaticMarkup(
     React.createElement(FeedbackReactionBar, {
       visible: true,
@@ -18,7 +18,6 @@ test("FeedbackReactionBar renders 3 buttons when visible", () => {
 });
 
 test("FeedbackReactionBar is hidden when visible=false", () => {
-  const { FeedbackReactionBar } = require("../src/ui/FeedbackReactionBar");
   const html = renderToStaticMarkup(
     React.createElement(FeedbackReactionBar, {
       visible: false,
@@ -30,7 +29,6 @@ test("FeedbackReactionBar is hidden when visible=false", () => {
 });
 
 test("FeedbackReactionBar renders label text", () => {
-  const { FeedbackReactionBar } = require("../src/ui/FeedbackReactionBar");
   const html = renderToStaticMarkup(
     React.createElement(FeedbackReactionBar, {
       visible: true,

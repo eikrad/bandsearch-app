@@ -1,9 +1,16 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createChatRenderAdapter } from "../src/chatRenderAdapter.js";
+import type {
+  ConversationMessage,
+  RenderableRecommendation,
+} from "../src/chatAppModel.js";
+import type { DesktopChatUiStack } from "../src/desktopChatUiStack.js";
 
-const { createChatRenderAdapter } = require("../src/chatRenderAdapter");
-
-function makeCard(title, overrides = {}) {
+function makeCard(
+  title: string,
+  overrides: Partial<RenderableRecommendation> = {},
+): RenderableRecommendation {
   return {
     title,
     why: "Some reason",
@@ -19,13 +26,18 @@ function makeCard(title, overrides = {}) {
   };
 }
 
-function makeDesktopUi(overrides = {}) {
+type TestDesktopUi = DesktopChatUiStack & {
+  _setConversation(conversation: ConversationMessage[] | null): void;
+  _setMode(mode: string): void;
+};
+
+function makeDesktopUi(overrides: Partial<TestDesktopUi> = {}): TestDesktopUi {
   let mode = "fresh";
-  let obscurityTarget = "underground";
-  let conversation = null;
+  let obscurityTarget: string | undefined = "underground";
+  let conversation: ConversationMessage[] | null = null;
   let viewport = "desktop";
   return {
-    setViewport: (v) => { viewport = v; },
+    setViewport: (v: string) => { viewport = v; },
     getViewport: () => viewport,
     cancelSearch: () => {},
     retryLastSearch: async () => {},
@@ -35,12 +47,12 @@ function makeDesktopUi(overrides = {}) {
     dismissFeedbackBar: () => {},
     submitFeedback: async () => {},
     getConversation: () => conversation,
-    setMode: (m) => { mode = m; },
-    setObscurityTarget: (t) => { obscurityTarget = t; },
+    setMode: (m: string) => { mode = m; },
+    setObscurityTarget: (t: string | undefined) => { obscurityTarget = t; },
     getObscurityTarget: () => obscurityTarget,
     submitQuery: async () => {},
-    _setConversation: (c) => { conversation = c; },
-    _setMode: (m) => { mode = m; },
+    _setConversation: (c: ConversationMessage[] | null) => { conversation = c; },
+    _setMode: (m: string) => { mode = m; },
     ...overrides,
   };
 }

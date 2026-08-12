@@ -1,16 +1,18 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const {
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
   createChatClient,
   createInitialChatState,
   applyAssistantMessage,
   normalizeArtistId,
-} = require("../src/chatClient");
-const { jsonResponse } = require("./helpers/fakeResponse");
+} from "../src/chatClient.js";
+import type { ChatMessage } from "../src/chatClient.js";
+import { jsonResponse } from "./helpers/fakeResponse.js";
+
+type FetchCall = { url: RequestInfo | URL; init?: RequestInit };
 
 test("chat client sends recommendation request and returns response payload", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -43,13 +45,13 @@ test("chat state appends assistant message from recommendation response", () => 
   assert.equal(next.messages.length, 1);
   assert.equal(next.messages[0].role, "assistant");
   assert.equal(next.messages[0].content.includes("shoegaze"), true);
-  assert.equal(/** @type {{ artist: string }} */ (next.messages[0].recommendations[0]).artist, "Alcest");
+  assert.equal(next.messages[0].recommendations?.[0].artist, "Alcest");
 });
 
 test("chat state synthesizes dialogue when API omits assistantReply", () => {
   const afterUser = {
     ...createInitialChatState(),
-    messages: /** @type {{ role: "user", content: string }[]} */ ([{ role: "user", content: "I like grunge" }]),
+    messages: [{ role: "user", content: "I like grunge" }] satisfies ChatMessage[],
   };
   const next = applyAssistantMessage(afterUser, {
     recommendations: [{ artist: "Mudhoney", why: "Proto-grunge", sourceSignals: ["agent_reasoning"] }],
@@ -63,7 +65,7 @@ test("chat state synthesizes dialogue when API omits assistantReply", () => {
 });
 
 test("chat client creates and updates preferences", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -88,7 +90,7 @@ test("chat client creates and updates preferences", async () => {
 });
 
 test("chat client fetches saved bands from preferences endpoint", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -109,7 +111,7 @@ test("chat client fetches saved bands from preferences endpoint", async () => {
 });
 
 test("chat client searches artists via artist search endpoint", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -129,7 +131,7 @@ test("chat client searches artists via artist search endpoint", async () => {
 });
 
 test("chat client creates a new session", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -157,7 +159,7 @@ test("chat client lists sessions", async () => {
 });
 
 test("chat client appends a message to a session", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -172,7 +174,7 @@ test("chat client appends a message to a session", async () => {
 });
 
 test("chat client sends selectedArtistIds when provided", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -182,12 +184,12 @@ test("chat client sends selectedArtistIds when provided", async () => {
   });
 
   await client.fetchRecommendations("q", "preference-aware", "", [], ["pref-a", "pref-b"]);
-  const body = JSON.parse(calls[0].init.body);
+  const body = JSON.parse(String(calls[0].init?.body)) as { selectedArtistIds: string[] };
   assert.deepEqual(body.selectedArtistIds, ["pref-a", "pref-b"]);
 });
 
 test("chat client sends priorityContext in recommendations when provided", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -200,13 +202,13 @@ test("chat client sends priorityContext in recommendations when provided", async
   });
 
   await client.fetchRecommendations("I like Alcest", "fresh", "Priority references: Fen");
-  const body = JSON.parse(calls[0].init.body);
+  const body = JSON.parse(String(calls[0].init?.body)) as { priorityContext: string };
 
   assert.equal(body.priorityContext, "Priority references: Fen");
 });
 
 test("chat client sends conversation messages in recommendations request", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -220,7 +222,7 @@ test("chat client sends conversation messages in recommendations request", async
     { role: "assistant", content: "Recommended Fen" },
   ];
   await client.fetchRecommendations("More like that", "fresh", "", history);
-  const body = JSON.parse(calls[0].init.body);
+  const body = JSON.parse(String(calls[0].init?.body)) as { messages: unknown[] };
 
   assert.ok(Array.isArray(body.messages), "messages in request body");
   assert.equal(body.messages.length, 2);
@@ -229,7 +231,7 @@ test("chat client sends conversation messages in recommendations request", async
 // ─── Phase 8.3: obscurityTarget ────────────────────────────────────────────
 
 test("chat client includes obscurityTarget in recommendations request body when provided", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -242,12 +244,12 @@ test("chat client includes obscurityTarget in recommendations request body when 
   });
 
   await client.fetchRecommendations("dark ambient", "fresh", "", [], [], "underground");
-  const body = JSON.parse(calls[0].init.body);
+  const body = JSON.parse(String(calls[0].init?.body)) as { obscurityTarget: string };
   assert.equal(body.obscurityTarget, "underground");
 });
 
 test("chat client omits obscurityTarget from request body when not provided", async () => {
-  const calls = [];
+  const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -257,7 +259,7 @@ test("chat client omits obscurityTarget from request body when not provided", as
   });
 
   await client.fetchRecommendations("dark ambient");
-  const body = JSON.parse(calls[0].init.body);
+  const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
   assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
 });
 
@@ -267,7 +269,7 @@ test("normalizeArtistId creates stable local fallback id", () => {
 });
 
 test("chat client fetches saved bands from GET /preferences", async () => {
-  const calls = [];
+  const calls: Array<{ url: RequestInfo | URL; method?: string }> = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -281,11 +283,11 @@ test("chat client fetches saved bands from GET /preferences", async () => {
   assert.equal(calls[0].url, "http://localhost:3001/preferences");
   assert.equal(calls[0].method, "GET");
   assert.equal(bands.length, 1);
-  assert.equal(/** @type {{ name: string }} */ (bands[0]).name, "Fen");
+  assert.equal(bands[0].name, "Fen");
 });
 
 test("chat client deletes a preference via DELETE /preferences/:id", async () => {
-  const calls = [];
+  const calls: Array<{ url: RequestInfo | URL; method?: string }> = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
@@ -301,7 +303,7 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
 });
 
 test("fetchRecommendations forwards AbortSignal to fetch", async () => {
-  let capturedSignal;
+  let capturedSignal: AbortSignal | null | undefined;
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {

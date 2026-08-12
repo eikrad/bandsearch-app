@@ -1,8 +1,7 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const { jsonResponse } = require("./helpers/fakeResponse");
-const { bootstrapDesktopApp } = require("../src");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { bootstrapDesktopApp } from "../src/index.js";
+import { jsonResponse } from "./helpers/fakeResponse.js";
 
 function makeApp() {
   return bootstrapDesktopApp({ apiBaseUrl: "http://localhost:3001", fetchImpl: async () => jsonResponse({}) });

@@ -1,10 +1,10 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ObscurityTargetPicker } from "../src/ui/ObscurityTargetPicker.js";
 
 test("ObscurityTargetPicker renders three buttons", () => {
-  const { ObscurityTargetPicker } = require("../src/ui/ObscurityTargetPicker");
   const html = renderToStaticMarkup(
     React.createElement(ObscurityTargetPicker, {
       target: undefined,
@@ -17,7 +17,6 @@ test("ObscurityTargetPicker renders three buttons", () => {
 });
 
 test("ObscurityTargetPicker marks the active target with 'active' class", () => {
-  const { ObscurityTargetPicker } = require("../src/ui/ObscurityTargetPicker");
   const html = renderToStaticMarkup(
     React.createElement(ObscurityTargetPicker, {
       target: "underground",
@@ -29,7 +28,6 @@ test("ObscurityTargetPicker marks the active target with 'active' class", () => 
 });
 
 test("ObscurityTargetPicker renders without active class when target is undefined", () => {
-  const { ObscurityTargetPicker } = require("../src/ui/ObscurityTargetPicker");
   const html = renderToStaticMarkup(
     React.createElement(ObscurityTargetPicker, {
       target: undefined,

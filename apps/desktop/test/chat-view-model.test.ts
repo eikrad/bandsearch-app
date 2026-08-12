@@ -1,12 +1,20 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  createChatAppModel,
+  type ChatAppCollaborator,
+} from "../src/chatAppModel.js";
+import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
+import { jsonResponse } from "./helpers/fakeResponse.js";
 
-const { createChatAppModel } = require("../src/chatAppModel");
-const { bootstrapDesktopApp } = require("../src/bootstrapDesktopApp");
-const { jsonResponse } = require("./helpers/fakeResponse");
+type QueryCall = {
+  query: string;
+  mode: string;
+  obscurityTarget?: string;
+};
 
 test("chat app model tracks mode and sends queries through app interface", async () => {
-  const calls = [];
+  const calls: QueryCall[] = [];
   const vm = createChatAppModel({
     app: {
       requestRecommendations: async (query, mode) => {
@@ -35,7 +43,7 @@ test("chat app model tracks mode and sends queries through app interface", async
 });
 
 test("chat app model formats recommendation list for rendering", () => {
-  const appState = {
+  const appState: ReturnType<ChatAppCollaborator["getState"]> = {
     savedBands: [{ id: "pref-1", name: "Fen", rating: 4 }],
     messages: [
       {
@@ -111,7 +119,7 @@ test("chatAppModel setObscurityTarget updates the target", () => {
 });
 
 test("chatAppModel passes obscurityTarget to requestRecommendations", async () => {
-  const calls = [];
+  const calls: QueryCall[] = [];
   const vm = createChatAppModel({
     app: {
       requestRecommendations: async (query, mode, obscurityTarget) => {
@@ -130,7 +138,7 @@ test("bootstrapDesktopApp.cancelSearch aborts in-flight requestRecommendations a
   const app = bootstrapDesktopApp({
     fetchImpl: async (url, init) => {
       // Simulate slow server — never resolves until aborted
-      return new Promise((_resolve, reject) => {
+      return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
       });
     },
@@ -147,7 +155,7 @@ test("bootstrapDesktopApp.cancelSearch aborts in-flight requestRecommendations a
 });
 
 test("chatAppModel.retryLastSearch re-runs the last query with same mode and obscurityTarget", async () => {
-  const calls = [];
+  const calls: QueryCall[] = [];
   const vm = createChatAppModel({
     app: {
       requestRecommendations: async (query, mode, obscurityTarget) => {
@@ -186,14 +194,15 @@ test("chatAppModel.retryLastSearch is a no-op when lastQuery is empty", async ()
 });
 
 test("chatAppModel.submitQuery swallows AbortError and resets loadingState", async () => {
-  /** @type {(reason?: unknown) => void} */
-  let rejectWithAbort = () => {
+  let rejectWithAbort: (reason?: unknown) => void = () => {
     throw new Error("rejectWithAbort called before the search promise was created");
   };
   const vm = createChatAppModel({
     app: {
       requestRecommendations: async () => {
-        return new Promise((_resolve, reject) => { rejectWithAbort = reject; });
+        return new Promise<{ meta?: Record<string, never> }>((_resolve, reject) => {
+          rejectWithAbort = reject;
+        });
       },
       getState: () => ({ messages: [], savedBands: [] }),
       cancelSearch: () => {},
