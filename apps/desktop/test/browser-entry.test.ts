@@ -1,17 +1,39 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 type BrowserEntryProbe = {
   result: { ok: boolean };
   calls: Array<{ apiBaseUrl?: string }>;
 };
 
+const root = path.resolve(path.dirname(process.argv[1]), "..");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function assertBrowserEntryProbe(value: unknown): asserts value is BrowserEntryProbe {
+  assert.ok(isRecord(value), "probe output must be an object");
+  assert.ok(isRecord(value.result), "probe result must be an object");
+  assert.equal(typeof value.result.ok, "boolean", "probe result.ok must be boolean");
+  assert.ok(Array.isArray(value.calls), "probe calls must be an array");
+  assert.ok(
+    value.calls.every(
+      (call) =>
+        isRecord(call) &&
+        (call.apiBaseUrl === undefined || typeof call.apiBaseUrl === "string"),
+    ),
+    "probe calls must contain valid options",
+  );
+}
+
 test("bootBrowserDesktopApp forwards options to browser starter", () => {
   const probeScript = `
     import { mock } from "node:test";
     const calls = [];
-    mock.module(new URL("./src/startDesktopBrowserApp.ts", import.meta.url), {
+    mock.module(new URL("./src/startDesktopBrowserApp.js", import.meta.url), {
       exports: {
         startDesktopBrowserApp: (options) => {
           calls.push(options);
@@ -19,7 +41,7 @@ test("bootBrowserDesktopApp forwards options to browser starter", () => {
         },
       },
     });
-    const { bootBrowserDesktopApp } = await import("./src/browserEntry.ts");
+    const { bootBrowserDesktopApp } = await import("./src/browserEntry.js");
     const result = await bootBrowserDesktopApp({ apiBaseUrl: "http://localhost:3001" });
     process.stdout.write(JSON.stringify({ result, calls }));
   `;
@@ -34,9 +56,11 @@ test("bootBrowserDesktopApp forwards options to browser starter", () => {
       "--eval",
       probeScript,
     ],
-    { cwd: process.cwd(), encoding: "utf8" },
+    { cwd: root, encoding: "utf8" },
   );
-  const { result, calls } = JSON.parse(output) as BrowserEntryProbe;
+  const parsed: unknown = JSON.parse(output);
+  assertBrowserEntryProbe(parsed);
+  const { result, calls } = parsed;
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);

@@ -51,7 +51,14 @@ test("createAuthAwareFetch still returns the original response body after 401 ch
   const mockFetch: typeof fetch = async () => makeResponse(401, body);
   const f = createAuthAwareFetch(mockFetch, () => {});
   const res = await f("http://localhost/api");
-  const data = (await res.json()) as { error: { message: string } };
+  const data: unknown = await res.json();
+  assert.ok(typeof data === "object" && data !== null && "error" in data);
+  assert.ok(
+    typeof data.error === "object" &&
+      data.error !== null &&
+      "message" in data.error &&
+      typeof data.error.message === "string",
+  );
   assert.equal(data.error.message, "invalid token");
 });
 

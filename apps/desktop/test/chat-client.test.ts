@@ -11,6 +11,16 @@ import { jsonResponse } from "./helpers/fakeResponse.js";
 
 type FetchCall = { url: RequestInfo | URL; init?: RequestInit };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonObject(input: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(input);
+  assert.ok(isRecord(parsed));
+  return parsed;
+}
+
 test("chat client sends recommendation request and returns response payload", async () => {
   const calls: FetchCall[] = [];
   const client = createChatClient({
@@ -184,7 +194,11 @@ test("chat client sends selectedArtistIds when provided", async () => {
   });
 
   await client.fetchRecommendations("q", "preference-aware", "", [], ["pref-a", "pref-b"]);
-  const body = JSON.parse(String(calls[0].init?.body)) as { selectedArtistIds: string[] };
+  const body = parseJsonObject(String(calls[0].init?.body));
+  assert.ok(
+    Array.isArray(body.selectedArtistIds) &&
+      body.selectedArtistIds.every((id) => typeof id === "string"),
+  );
   assert.deepEqual(body.selectedArtistIds, ["pref-a", "pref-b"]);
 });
 
@@ -202,7 +216,8 @@ test("chat client sends priorityContext in recommendations when provided", async
   });
 
   await client.fetchRecommendations("I like Alcest", "fresh", "Priority references: Fen");
-  const body = JSON.parse(String(calls[0].init?.body)) as { priorityContext: string };
+  const body = parseJsonObject(String(calls[0].init?.body));
+  assert.equal(typeof body.priorityContext, "string");
 
   assert.equal(body.priorityContext, "Priority references: Fen");
 });
@@ -222,7 +237,7 @@ test("chat client sends conversation messages in recommendations request", async
     { role: "assistant", content: "Recommended Fen" },
   ];
   await client.fetchRecommendations("More like that", "fresh", "", history);
-  const body = JSON.parse(String(calls[0].init?.body)) as { messages: unknown[] };
+  const body = parseJsonObject(String(calls[0].init?.body));
 
   assert.ok(Array.isArray(body.messages), "messages in request body");
   assert.equal(body.messages.length, 2);
@@ -244,7 +259,8 @@ test("chat client includes obscurityTarget in recommendations request body when 
   });
 
   await client.fetchRecommendations("dark ambient", "fresh", "", [], [], "underground");
-  const body = JSON.parse(String(calls[0].init?.body)) as { obscurityTarget: string };
+  const body = parseJsonObject(String(calls[0].init?.body));
+  assert.equal(typeof body.obscurityTarget, "string");
   assert.equal(body.obscurityTarget, "underground");
 });
 
@@ -259,7 +275,7 @@ test("chat client omits obscurityTarget from request body when not provided", as
   });
 
   await client.fetchRecommendations("dark ambient");
-  const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+  const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
 });
 

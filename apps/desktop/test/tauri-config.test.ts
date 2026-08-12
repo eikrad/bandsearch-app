@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
-const root = process.cwd();
+const root = path.resolve(path.dirname(process.argv[1]), "..");
 
 type TauriConfig = {
   bundle?: {
@@ -19,6 +19,51 @@ type TauriConfig = {
   };
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function assertOptionalStringArray(
+  value: unknown,
+  propertyName: string,
+): asserts value is string[] | undefined {
+  assert.ok(
+    value === undefined ||
+      (Array.isArray(value) && value.every((item) => typeof item === "string")),
+    `${propertyName} must be an array of strings when present`,
+  );
+}
+
+function assertTauriConfig(value: unknown): asserts value is TauriConfig {
+  assert.ok(isRecord(value), "tauri config must be an object");
+
+  if (value.bundle !== undefined) {
+    assert.ok(isRecord(value.bundle), "bundle must be an object");
+    assertOptionalStringArray(value.bundle.externalBin, "bundle.externalBin");
+    assert.ok(
+      value.bundle.createUpdaterArtifacts === undefined ||
+        typeof value.bundle.createUpdaterArtifacts === "boolean",
+      "bundle.createUpdaterArtifacts must be boolean when present",
+    );
+  }
+
+  if (value.plugins !== undefined) {
+    assert.ok(isRecord(value.plugins), "plugins must be an object");
+    if (value.plugins.updater !== undefined) {
+      assert.ok(isRecord(value.plugins.updater), "plugins.updater must be an object");
+      assert.ok(
+        value.plugins.updater.pubkey === undefined ||
+          typeof value.plugins.updater.pubkey === "string",
+        "plugins.updater.pubkey must be a string when present",
+      );
+      assertOptionalStringArray(
+        value.plugins.updater.endpoints,
+        "plugins.updater.endpoints",
+      );
+    }
+  }
+}
+
 function hostTriple(): string {
   const output = execSync("rustc -vV", { encoding: "utf8" });
   const match = output.match(/^host:\s+(\S+)/m);
@@ -28,7 +73,9 @@ function hostTriple(): string {
 
 function readTauriConf(): TauriConfig {
   const confPath = path.join(root, "src-tauri/tauri.conf.json");
-  return JSON.parse(fs.readFileSync(confPath, "utf8")) as TauriConfig;
+  const parsed: unknown = JSON.parse(fs.readFileSync(confPath, "utf8"));
+  assertTauriConfig(parsed);
+  return parsed;
 }
 
 test("tauri.conf.json externalBin entries all have a matching binary file", (t) => {

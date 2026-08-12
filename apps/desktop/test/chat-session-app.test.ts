@@ -4,6 +4,16 @@ import { bootstrapDesktopApp } from "../src/index.js";
 import type { RecommendationItem } from "../src/domain.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonObject(input: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(input);
+  assert.ok(isRecord(parsed));
+  return parsed;
+}
+
 function createStubFetch({
   sessionId = "sess-1",
   recommendations = [],
@@ -18,7 +28,7 @@ function createStubFetch({
       return jsonResponse({ session: { id: sessionId, title: "Test", createdAt: "2026-01-01T00:00:00Z" } });
     }
     if (requestUrl.match(/sessions\/[^/]+\/messages/) && method === "POST") {
-      const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+      const body = parseJsonObject(String(init?.body || "{}"));
       return jsonResponse({ message: { id: `msg-${Date.now()}`, ...body } });
     }
     if (requestUrl.includes("/sessions") && method === "GET") {
