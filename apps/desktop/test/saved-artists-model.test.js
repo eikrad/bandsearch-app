@@ -8,12 +8,8 @@ function makeApp(savedBands = []) {
   return {
     listSavedBands: async () => bands,
     deleteSavedBand: async (id) => { const i = bands.findIndex((b) => b.id === id); if (i >= 0) bands.splice(i, 1); },
-    // Defaults so each test only states the collaborator calls it cares about.
+    // Default so each test only states the collaborator calls it cares about.
     searchArtists: async () => [],
-    importArtists: async () => ({ imported: 0, skipped: 0, failed: 0 }),
-    listGroups: async () => [],
-    createGroup: async () => ({}),
-    autoGroupByGenre: async () => ({}),
   };
 }
 
@@ -198,93 +194,4 @@ test("saved artists model clears search results for empty query", async () => {
   assert.equal(model.getScreenState().searchResults.length, 1);
   await model.searchArtists("");
   assert.equal(model.getScreenState().searchResults.length, 0);
-});
-
-test("saved artists model exportArtists returns raw saved bands from app", async () => {
-  const bands = [{ id: "b1", name: "Fen", rating: 4, categories: ["post-metal"], note: "" }];
-  const model = createSavedArtistsModel({ app: makeApp(bands) });
-  await model.loadSavedArtists();
-
-  const exported = await model.exportArtists();
-
-  assert.equal(Array.isArray(exported), true);
-  assert.equal(exported.length, 1);
-  assert.equal(exported[0].name, "Fen");
-});
-
-test("saved artists model loadGroups stores groups in screen state", async () => {
-  const model = createSavedArtistsModel({
-    app: {
-      ...makeApp(),
-      listGroups: async () => [{ id: "g1", name: "Blackgaze", memberIds: [] }],
-    },
-  });
-
-  await model.loadGroups();
-
-  const state = model.getScreenState();
-  assert.equal(Array.isArray(state.groups), true);
-  assert.equal(state.groups.length, 1);
-  assert.equal(state.groups[0].name, "Blackgaze");
-});
-
-test("saved artists model createGroup calls app and reloads groups", async () => {
-  const created = [];
-  const model = createSavedArtistsModel({
-    app: {
-      ...makeApp(),
-      listGroups: async () => created.map((n, i) => ({ id: `g${i}`, name: n, memberIds: [] })),
-      createGroup: async (name) => { created.push(name); return { ok: true, group: { id: "g0", name, memberIds: [] } }; },
-    },
-  });
-
-  await model.createGroup("Post-metal");
-
-  const state = model.getScreenState();
-  assert.equal(state.groups.length, 1);
-  assert.equal(state.groups[0].name, "Post-metal");
-});
-
-test("saved artists model autoGroupByGenre calls app and reloads groups", async () => {
-  let autoCalled = false;
-  const model = createSavedArtistsModel({
-    app: {
-      ...makeApp(),
-      listGroups: async () => autoCalled ? [{ id: "g1", name: "blackgaze", memberIds: [] }] : [],
-      autoGroupByGenre: async () => { autoCalled = true; return { groups: [] }; },
-    },
-  });
-
-  await model.autoGroupByGenre();
-
-  assert.equal(autoCalled, true);
-  const state = model.getScreenState();
-  assert.equal(Array.isArray(state.groups), true);
-});
-
-test("saved artists model importArtists calls app importArtists and reloads", async () => {
-  let importCalled = false;
-  let importedBands = null;
-  const store = [];
-  const app = {
-    ...makeApp(),
-    listSavedBands: async () => [...store],
-    deleteSavedBand: async (id) => { const i = store.findIndex((b) => b.id === id); if (i >= 0) store.splice(i, 1); },
-    importArtists: async (toImport) => {
-      importCalled = true;
-      importedBands = toImport;
-      store.push(...toImport.map((b, i) => ({ ...b, id: `imported-${i}` })));
-      return { imported: toImport.length, skipped: 0 };
-    },
-  };
-
-  const model = createSavedArtistsModel({ app });
-  const payload = [{ musicbrainzArtistId: "x1", name: "Alcest", rating: 5, categories: [], note: "" }];
-  const result = await model.importArtists(payload);
-
-  assert.equal(importCalled, true);
-  assert.deepEqual(importedBands, payload);
-  assert.equal(result.imported, 1);
-  assert.equal(result.skipped, 0);
-  assert.equal(model.getScreenState().artists.length, 1);
 });

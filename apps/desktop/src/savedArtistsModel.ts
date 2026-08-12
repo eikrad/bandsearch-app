@@ -5,12 +5,6 @@ export type SavedArtistsCollaborator = {
   listSavedBands(): Promise<SavedBand[]>;
   deleteSavedBand(id: string): Promise<unknown>;
   searchArtists(query: string): Promise<ArtistSearchResult[]>;
-  // NOTE: bootstrapDesktopApp exposes importPreferences/autoGroup, not these.
-  // Optional here so the mismatch is visible rather than a runtime TypeError.
-  importArtists?(bands: unknown[]): Promise<{ imported: number; skipped: number; failed?: number }>;
-  listGroups(): Promise<ArtistGroup[]>;
-  createGroup(name: string): Promise<unknown>;
-  autoGroupByGenre?(): Promise<unknown>;
 };
 
 export function createSavedArtistsModel({ app }: { app: SavedArtistsCollaborator }) {
@@ -20,6 +14,10 @@ export function createSavedArtistsModel({ app }: { app: SavedArtistsCollaborator
     searchResults: ArtistSearchResult[];
     isSearching: boolean;
     isLoading: boolean;
+    // Never written here: grouping lives in createSavedArtistsShell, and the
+    // saved-artists screen is served from that shell in the running app. Kept
+    // so the screen-state shape stays whole — see ROADMAP "Saved-Artists:
+    // Modell und Shell zusammenführen".
     groups: ArtistGroup[];
   } = {
     savedArtists: [],
@@ -92,33 +90,6 @@ export function createSavedArtistsModel({ app }: { app: SavedArtistsCollaborator
       } finally {
         state.isSearching = false;
       }
-    },
-
-    async exportArtists() {
-      return [...state.savedArtists];
-    },
-
-    async importArtists(bands: unknown[]) {
-      if (!app.importArtists) throw new Error("app does not implement importArtists");
-      const result = await app.importArtists(bands);
-      state.savedArtists = await app.listSavedBands();
-      return result;
-    },
-
-    async loadGroups() {
-      state.groups = await app.listGroups();
-    },
-
-    async createGroup(name: string) {
-      const result = await app.createGroup(name);
-      state.groups = await app.listGroups();
-      return result;
-    },
-
-    async autoGroupByGenre() {
-      if (!app.autoGroupByGenre) throw new Error("app does not implement autoGroupByGenre");
-      await app.autoGroupByGenre();
-      state.groups = await app.listGroups();
     },
   };
 }

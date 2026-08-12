@@ -264,3 +264,20 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 `authAwareFetch` injects `Authorization: Bearer <token>` on every request. Once a user overrides the API endpoint in Settings, all requests — including auth API calls — go to the user-supplied URL carrying the JWT. In a self-hosted scenario with a trusted operator-supplied URL this is correct behaviour; if the URL were somehow corrupted (e.g. a stored config tampered on disk) the token could be sent to an unintended host.
 
 **Note (low priority, no immediate action):** The desktop is a local trust boundary, so this risk is low. Document the invariant in `authAwareFetch.ts`: tokens are sent to `apiBaseUrl` only, and `apiBaseUrl` originates from either the default localhost or the URL the user explicitly saved in Settings. Revisit if the app ever accepts the endpoint from a non-user source (e.g. a deep-link or QR code).
+
+---
+
+### 7. Saved artists: one screen served by two competing implementations ← **next up**
+
+**Files:** `apps/desktop/src/savedArtistsModel.ts`, `apps/desktop/src/createSavedArtistsShell.ts`, `apps/desktop/src/ui/mountDesktopReactApp.ts`, `apps/desktop/src/index.ts`, `apps/desktop/src/ui/createDesktopReactShell.ts`
+
+Two modules hold saved-artists state and talk to the same app object, and which one serves the screen depends on how the app was assembled:
+
+- **Live path:** `startDesktopBrowserApp.ts:108` builds `createSavedArtistsShell({ app })` and hands it to the mount; `mountDesktopReactApp` renders `SavedArtistsView` from `savedArtistsShell.getViewProps()`.
+- **Second path:** `index.ts` wires `savedArtistsModel.getScreenState()` into `createDesktopReactShell` as `getSavedArtistsViewPropsImpl`, which serves the same screen when `shell.getView() === "saved-artists"` and no `savedArtistsShell` was supplied.
+
+The duplication had already rotted. Five `savedArtistsModel` methods (`exportArtists`, `importArtists`, `loadGroups`, `createGroup`, `autoGroupByGenre`) were unreachable from production code, and two of them called `app.importArtists` / `app.autoGroupByGenre` — which `bootstrapDesktopApp` never implemented; it exposes `importPreferences` / `autoGroup`. They would have thrown on first use. **The tests kept them alive** by supplying fakes that implemented the non-existent methods, so a green suite was asserting a contract the real app never fulfilled. Those five methods and their tests were deleted together with this entry; the two implementations themselves remain.
+
+Leftover symptom to expect: `savedArtistsModel`'s state still declares a `groups` field that nothing writes, because grouping lives only in the shell. It is kept deliberately so that `SavedArtistsScreenState` — the type `SavedArtistsView` renders against — stays whole. That is the thread to pull.
+
+**Action:** Give the screen a single owner. `createSavedArtistsShell` is the better candidate: it is the path the running app uses, it owns grouping, and it reloads after mutations. Move over the two things only the model still has — selection state (`toggleSelection` / `clearSelection` / `getSelectedIds`, consumed by `activateStyleRefImpl` in `index.ts`) and the `isLoading` / `isSearching` flags — then delete `savedArtistsModel.ts` along with the `getSavedArtistsViewPropsImpl` seam in `createDesktopReactShell`. Give `SavedArtistsView` an explicit props type rather than one derived from whichever module survives, so the view stops being coupled to the winner. Verify by driving the screen end to end — search, add, select, activate style ref, create/auto group, import, export — since the two paths differ precisely in the mutation-and-reload behaviour that unit tests with fakes do not exercise.

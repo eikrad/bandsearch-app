@@ -20,8 +20,6 @@ export function fakeDesktopApp(overrides: Partial<DesktopApp> = {}): DesktopApp 
     listSavedBands: async () => [],
     deleteSavedBand: async () => undefined,
     searchArtists: async () => [],
-    listGroups: async () => [],
-    createGroup: async () => undefined,
     ...overrides,
   };
 }
