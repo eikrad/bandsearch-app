@@ -1,4 +1,6 @@
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "./index.js";
+import type { BootstrapDesktopReactAppOptions } from "./index.js";
+import type { BootstrapDesktopAppOptions } from "./bootstrapDesktopApp.js";
 import { createHashRouter } from "./createHashRouter.js";
 import { createSavedArtistsShell } from "./createSavedArtistsShell.js";
 import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
@@ -54,12 +56,29 @@ export type ActionHandlers = {
   onMore?: () => void;
 };
 
+/** The slice of a bootstrapped React app this module drives after mounting. */
+type MountedReactApp = {
+  mount(): Promise<unknown>;
+  desktopUi?: ViewportController;
+};
+
+/**
+ * Bootstrapping collaborators. Production callers omit these and get the
+ * implementations from `./index.js`; tests inject doubles instead of patching
+ * the module loader.
+ */
+export type StartDesktopBrowserAppDeps = {
+  bootstrapDesktopApp?: (options: BootstrapDesktopAppOptions) => ReturnType<typeof bootstrapDesktopApp>;
+  bootstrapDesktopReactApp?: (options: BootstrapDesktopReactAppOptions) => MountedReactApp;
+};
+
 export type StartDesktopBrowserAppOptions = {
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
   viewport?: string;
   actionHandlers?: ActionHandlers;
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+  deps?: StartDesktopBrowserAppDeps;
 };
 
 export async function startDesktopBrowserApp({
@@ -68,7 +87,12 @@ export async function startDesktopBrowserApp({
   viewport = "desktop",
   actionHandlers = {},
   invokeTauri,
+  deps = {},
 }: StartDesktopBrowserAppOptions = {}) {
+  const {
+    bootstrapDesktopApp: bootstrapApp = bootstrapDesktopApp,
+    bootstrapDesktopReactApp: bootstrapReactApp = bootstrapDesktopReactApp,
+  } = deps;
   const resolvedInvoke = typeof invokeTauri === "function" ? invokeTauri : createDefaultTauriInvoke();
   const resolvedFetch = fetchImpl ?? fetch;
   const router = createHashRouter();
@@ -104,7 +128,7 @@ export async function startDesktopBrowserApp({
   if (gate.apiEndpointUrl) resolvedBaseUrl = normalizeBase(gate.apiEndpointUrl);
 
   const authClient = createAuthApiClient({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch });
-  const app = bootstrapDesktopApp({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
+  const app = bootstrapApp({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
   const savedArtistsShell = createSavedArtistsShell({ app });
   const initialViewport = resolveInitialViewport(viewport);
 
@@ -147,7 +171,7 @@ export async function startDesktopBrowserApp({
     return { newRecoveryCode: result.newRecoveryCode };
   }
 
-  const reactApp = bootstrapDesktopReactApp({
+  const reactApp = bootstrapReactApp({
     app,
     viewport: initialViewport,
     actionHandlers,
@@ -166,7 +190,7 @@ export async function startDesktopBrowserApp({
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
-    subscribeViewportChanges(reactApp.desktopUi as ViewportController, () => void reactApp.mount());
+    subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
   }
   return reactApp;
 }
