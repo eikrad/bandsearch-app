@@ -1,6 +1,4 @@
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "./index.js";
-import type { BootstrapDesktopReactAppOptions } from "./index.js";
-import type { BootstrapDesktopAppOptions } from "./bootstrapDesktopApp.js";
 import { createHashRouter } from "./createHashRouter.js";
 import { createSavedArtistsShell } from "./createSavedArtistsShell.js";
 import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
@@ -56,20 +54,14 @@ export type ActionHandlers = {
   onMore?: () => void;
 };
 
-/** The slice of a bootstrapped React app this module drives after mounting. */
-type MountedReactApp = {
-  mount(): Promise<unknown>;
-  desktopUi?: ViewportController;
-};
-
 /**
  * Bootstrapping collaborators. Production callers omit these and get the
  * implementations from `./index.js`; tests inject doubles instead of patching
  * the module loader.
  */
 export type StartDesktopBrowserAppDeps = {
-  bootstrapDesktopApp?: (options: BootstrapDesktopAppOptions) => ReturnType<typeof bootstrapDesktopApp>;
-  bootstrapDesktopReactApp?: (options: BootstrapDesktopReactAppOptions) => MountedReactApp;
+  bootstrapDesktopApp?: typeof bootstrapDesktopApp;
+  bootstrapDesktopReactApp?: typeof bootstrapDesktopReactApp;
 };
 
 export type StartDesktopBrowserAppOptions = {
@@ -88,7 +80,7 @@ export async function startDesktopBrowserApp({
   actionHandlers = {},
   invokeTauri,
   deps = {},
-}: StartDesktopBrowserAppOptions = {}) {
+}: StartDesktopBrowserAppOptions = {}): Promise<ReturnType<typeof bootstrapDesktopReactApp>> {
   const {
     bootstrapDesktopApp: bootstrapApp = bootstrapDesktopApp,
     bootstrapDesktopReactApp: bootstrapReactApp = bootstrapDesktopReactApp,

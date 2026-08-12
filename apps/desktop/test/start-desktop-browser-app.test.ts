@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startDesktopBrowserApp } from "../src/startDesktopBrowserApp.js";
-import { bootstrapDesktopApp } from "../src/index.js";
+import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "../src/index.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
-import { fakeMediaQueryList } from "./helpers/fakeDom.js";
+import { fakeMediaQueryList, fakeWindow } from "./helpers/fakeDom.js";
 
 // One flat record instead of a discriminated union: the assertions read a single
 // field per call and stay free of narrowing noise.
@@ -13,6 +13,18 @@ type BootstrapCall = {
   viewport?: string;
   saveApiEndpointUrl?: unknown;
 };
+
+type BootstrappedReactApp = ReturnType<typeof bootstrapDesktopReactApp>;
+
+// The real bootstrap hands back a full mount API and UI stack; these tests only
+// drive `mount` and the viewport hook, so the rest is narrowed away here.
+type ReactAppDouble = Partial<Omit<BootstrappedReactApp, "desktopUi">> & {
+  desktopUi?: { setViewport: (viewport: string) => void };
+};
+
+function fakeReactApp(overrides: ReactAppDouble): BootstrappedReactApp {
+  return overrides as BootstrappedReactApp;
+}
 
 test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
   const calls: BootstrapCall[] = [];
@@ -25,16 +37,17 @@ test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
       // Delegating to the real bootstrap keeps a genuine app object in play, so
       // only the construction call is observed.
       bootstrapDesktopApp: (options) => {
-        calls.push({ type: "bootstrapApp", apiBaseUrl: options.apiBaseUrl });
+        calls.push({ type: "bootstrapApp", apiBaseUrl: options?.apiBaseUrl });
         return bootstrapDesktopApp(options);
       },
-      bootstrapDesktopReactApp: ({ viewport }) => {
+      bootstrapDesktopReactApp: ({ viewport } = {}) => {
         calls.push({ type: "bootstrapReact", viewport });
-        return {
+        return fakeReactApp({
           mount: async () => {
             calls.push({ type: "mount" });
+            return {};
           },
-        };
+        });
       },
     },
   });
@@ -62,16 +75,17 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
     },
     deps: {
       bootstrapDesktopApp: (options) => {
-        calls.push({ type: "bootstrapApp", apiBaseUrl: options.apiBaseUrl });
+        calls.push({ type: "bootstrapApp", apiBaseUrl: options?.apiBaseUrl });
         return bootstrapDesktopApp(options);
       },
-      bootstrapDesktopReactApp: ({ saveApiEndpointUrl }) => {
+      bootstrapDesktopReactApp: ({ saveApiEndpointUrl } = {}) => {
         calls.push({ type: "bootstrapReact", saveApiEndpointUrl });
-        return {
+        return fakeReactApp({
           mount: async () => {
             calls.push({ type: "mount" });
+            return {};
           },
-        };
+        });
       },
     },
   });
@@ -86,23 +100,24 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
 test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narrow width", async () => {
   const calls: BootstrapCall[] = [];
   const prevWindow = globalThis.window;
-  globalThis.window = {
+  globalThis.window = fakeWindow({
     matchMedia: (query: string) => fakeMediaQueryList(query.includes("max-width")),
-  } as unknown as typeof globalThis.window;
+  });
 
   try {
     await startDesktopBrowserApp({
       viewport: "desktop",
       deps: {
         bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
-        bootstrapDesktopReactApp: ({ viewport }) => {
+        bootstrapDesktopReactApp: ({ viewport } = {}) => {
           calls.push({ type: "bootstrapReact", viewport });
-          return {
+          return fakeReactApp({
             mount: async () => {
               calls.push({ type: "mount" });
+              return {};
             },
             desktopUi: { setViewport: () => {} },
-          };
+          });
         },
       },
     });
