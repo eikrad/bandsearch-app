@@ -39,5 +39,9 @@
     "husky": "^9.1.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.1": true
   }
 }
