@@ -2,6 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { aggregateMetrics, computeDelta } from "../../src/eval/evalAggregator.js";
 
+// Aggregated metrics are nullable when there is no judge data, so every
+// numeric assertion has to rule that out first.
+function assertCloseTo(actual: number | null, expected: number, label: string) {
+  assert.ok(actual !== null, `${label} should not be null`);
+  assert.ok(Math.abs(actual - expected) < 0.001, `${label}: expected ~${expected}, got ${actual}`);
+}
+
 const sampleDiagnostics = {
   braveHitCount: 5,
   extractedCandidateCount: 3,
@@ -67,10 +74,10 @@ test("aggregateMetrics: computes mean judge scores across all bands", () => {
     makeScore({ eventId: "e1", bandName: "B", relevance: 0.4, obscurityFit: 1.0, evidenceQuality: 0.5, discoveryValue: 0.3 }),
   ];
   const result = aggregateMetrics(events, scores);
-  assert.ok(Math.abs(result.meanRelevance - 0.6) < 0.001);
-  assert.ok(Math.abs(result.meanObscurityFit - 0.8) < 0.001);
-  assert.ok(Math.abs(result.meanEvidenceQuality - 0.6) < 0.001);
-  assert.ok(Math.abs(result.meanDiscoveryValue - 0.6) < 0.001);
+  assertCloseTo(result.meanRelevance, 0.6, "meanRelevance");
+  assertCloseTo(result.meanObscurityFit, 0.8, "meanObscurityFit");
+  assertCloseTo(result.meanEvidenceQuality, 0.6, "meanEvidenceQuality");
+  assertCloseTo(result.meanDiscoveryValue, 0.6, "meanDiscoveryValue");
 });
 
 test("aggregateMetrics: mean scores are null when no judge data exists", () => {
@@ -132,7 +139,7 @@ test("aggregateMetrics: meanCitationSupportRate computed correctly", () => {
     makeScore({ eventId: "e1", bandName: "B", citationSupportRate: 1.0 }),
   ];
   const result = aggregateMetrics(events, scores);
-  assert.ok(Math.abs(result.meanCitationSupportRate - 0.75) < 0.001);
+  assertCloseTo(result.meanCitationSupportRate, 0.75, "meanCitationSupportRate");
 });
 
 test("aggregateMetrics: genericWhyRate = proportion of bands with flag set", () => {
@@ -144,7 +151,7 @@ test("aggregateMetrics: genericWhyRate = proportion of bands with flag set", () 
     makeScore({ eventId: "e1", bandName: "D", genericWhyFlag: false }),
   ];
   const result = aggregateMetrics(events, scores);
-  assert.ok(Math.abs(result.genericWhyRate - 0.5) < 0.001);
+  assertCloseTo(result.genericWhyRate, 0.5, "genericWhyRate");
 });
 
 test("computeDelta: returns correct difference between two metrics", () => {
@@ -173,12 +180,12 @@ test("computeDelta: returns correct difference between two metrics", () => {
     genericWhyRate: 0.2,
   };
   const delta = computeDelta(current, baseline);
-  assert.ok(Math.abs(delta.meanRelevance - 0.1) < 0.001);
-  assert.ok(Math.abs(delta.meanObscurityFit - 0.1) < 0.001);
-  assert.ok(Math.abs(delta.meanEvidenceQuality - 0.1) < 0.001);
-  assert.ok(Math.abs(delta.meanDiscoveryValue - 0.1) < 0.001);
-  assert.ok(Math.abs(delta.meanCitationSupportRate - 0.1) < 0.001);
-  assert.ok(Math.abs(delta.genericWhyRate - (-0.1)) < 0.001);
+  assertCloseTo(delta.meanRelevance, 0.1, "meanRelevance");
+  assertCloseTo(delta.meanObscurityFit, 0.1, "meanObscurityFit");
+  assertCloseTo(delta.meanEvidenceQuality, 0.1, "meanEvidenceQuality");
+  assertCloseTo(delta.meanDiscoveryValue, 0.1, "meanDiscoveryValue");
+  assertCloseTo(delta.meanCitationSupportRate, 0.1, "meanCitationSupportRate");
+  assertCloseTo(delta.genericWhyRate, -0.1, "genericWhyRate");
 });
 
 test("computeDelta: returns null for dimensions where either value is null", () => {
@@ -211,5 +218,5 @@ test("computeDelta: returns null for dimensions where either value is null", () 
   assert.equal(delta.meanObscurityFit, null);
   assert.equal(delta.meanEvidenceQuality, null);
   assert.equal(delta.meanCitationSupportRate, null);
-  assert.ok(Math.abs(delta.meanDiscoveryValue - 0) < 0.001);
+  assertCloseTo(delta.meanDiscoveryValue, 0, "meanDiscoveryValue");
 });

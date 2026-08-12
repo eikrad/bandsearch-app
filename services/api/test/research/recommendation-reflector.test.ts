@@ -9,6 +9,7 @@ test("tryParseReflectionFromModelText caps extraQueries", () => {
     extraQueries: ["a", "b", "c", "d", "e"],
   });
   const out = tryParseReflectionFromModelText(raw, 2);
+  assert.ok(out, "reflection should parse");
   assert.equal(out.extraQueries.length, 2);
   assert.deepEqual(out.extraQueries, ["a", "b"]);
 });

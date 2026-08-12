@@ -32,28 +32,28 @@ test("checkEvidence: partial citationSupportRate when only some why URLs appear 
 
 test("checkEvidence: genericWhyFlag = true when why contains a known generic phrase", () => {
   const why = "This band is known for their unique sound and wide influences.";
-  const signals = [];
+  const signals: string[] = [];
   const report = checkEvidence(why, signals);
   assert.equal(report.genericWhyFlag, true);
 });
 
 test("checkEvidence: genericWhyFlag = false when why is specific and descriptive", () => {
   const why = "Recorded their 2019 debut in a Finnish cabin on analog tape; WIRE magazine gave them 4 stars.";
-  const signals = [];
+  const signals: string[] = [];
   const report = checkEvidence(why, signals);
   assert.equal(report.genericWhyFlag, false);
 });
 
 test("checkEvidence: genericWhyFlag = true for 'similar to' phrasing", () => {
   const why = "If you enjoy Deafheaven you will love this band, similar to their blackgaze style.";
-  const signals = [];
+  const signals: string[] = [];
   const report = checkEvidence(why, signals);
   assert.equal(report.genericWhyFlag, true);
 });
 
 test("checkEvidence: genericWhyFlag is case-insensitive", () => {
   const why = "KNOWN FOR THEIR heavy riffs.";
-  const signals = [];
+  const signals: string[] = [];
   const report = checkEvidence(why, signals);
   assert.equal(report.genericWhyFlag, true);
 });

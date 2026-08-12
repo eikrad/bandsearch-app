@@ -26,12 +26,14 @@ function makeUserRow(overrides = {}) {
   };
 }
 
-function mockClient(rows = [], rowsAffected = 1) {
-  const calls = [];
+type ExecutedStatement = { sql: string; args?: unknown[] };
+
+function mockClient(rows: Record<string, unknown>[] = [], rowsAffected = 1) {
+  const calls: ExecutedStatement[] = [];
   return {
     calls,
     client: {
-      execute: async (stmt) => {
+      execute: async (stmt: ExecutedStatement) => {
         calls.push(stmt);
         return { rows, rowsAffected };
       },
@@ -58,6 +60,7 @@ test("turso user repository: findByEmail returns mapped user with hashes", async
   const { client } = mockClient([makeUserRow()]);
   const repo = createTursoUserRepository({ client });
   const user = await repo.findByEmail("alice@x.com");
+  assert.ok(user, "findByEmail should return the row");
   assert.equal(user.email, "alice@x.com");
   assert.equal(user.passwordHash, "hashed");
   assert.equal(user.recoveryCodeHash, "rchash");
@@ -74,6 +77,7 @@ test("turso user repository: findById returns mapped user", async () => {
   const { client } = mockClient([makeUserRow()]);
   const repo = createTursoUserRepository({ client });
   const user = await repo.findById("u-1");
+  assert.ok(user, "findById should return the row");
   assert.equal(user.id, "u-1");
   assert.equal(user.displayName, "Alice");
 });
@@ -94,6 +98,7 @@ test("turso user repository: getFirstUser returns first row or null", async () =
   const { client: c1 } = mockClient([makeUserRow()]);
   const r1 = createTursoUserRepository({ client: c1 });
   const user = await r1.getFirstUser();
+  assert.ok(user, "getFirstUser should return the row");
   assert.equal(user.email, "alice@x.com");
 
   const { client: c2 } = mockClient([]);

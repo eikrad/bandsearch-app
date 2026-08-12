@@ -81,6 +81,7 @@ test("createInMemoryEvalRepository: upsertBandEvalScore stores and lists scores 
   const scores = await repo.listBandEvalScores(eventId);
   assert.equal(scores.length, 2);
   const lustmord = scores.find((s) => s.bandName === "Lustmord");
+  assert.ok(lustmord, "Lustmord score should exist");
   assert.equal(lustmord.listeners, 30000);
   assert.equal(lustmord.obscurityTier, "cult");
 });

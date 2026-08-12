@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createApp } from "../src/app.js";
 import type { PreferenceRepository } from "../src/preferences/preferenceRepository.js";
 import type { RecommendationError } from "../src/recommendations.js";
+import type { EvalEventContext, EvalWorker } from "../src/eval/evalWorker.js";
 
 function asRecord(value: unknown): asserts value is Record<string, unknown> {
   assert.equal(typeof value, "object");
@@ -357,8 +358,8 @@ test("POST /recommendations forwards obscurityTarget to the pipeline", async () 
 });
 
 test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", async () => {
-  const processedContexts: Array<Record<string, unknown>> = [];
-  const evalWorker = {
+  const processedContexts: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
   const app = createApp({
@@ -384,8 +385,8 @@ test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", 
 });
 
 test("POST /recommendations passes undefined obscurityTarget when not set", async () => {
-  const processedContexts: Array<Record<string, unknown>> = [];
-  const evalWorker = {
+  const processedContexts: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
   const pipelineCalls: Array<Record<string, unknown>> = [];
@@ -446,8 +447,8 @@ test("POST /recommendations defaults to fresh mode", async () => {
 });
 
 test("POST /recommendations includes eventId in meta when evalWorker is set", async () => {
-  const processedContexts: Array<Record<string, unknown>> = [];
-  const evalWorker = {
+  const processedContexts: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
   const app = createApp({
@@ -469,8 +470,8 @@ test("POST /recommendations includes eventId in meta when evalWorker is set", as
 });
 
 test("POST /recommendations passes pre-generated eventId to processEvent", async () => {
-  const processedContexts: Array<Record<string, unknown>> = [];
-  const evalWorker = {
+  const processedContexts: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = {
     processEvent: async (ctx) => { processedContexts.push(ctx); },
   };
   const app = createApp({

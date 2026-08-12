@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { Express } from "express";
 import { createApp } from "../src/app.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
 
@@ -40,7 +41,7 @@ async function makeRequest(app: ReturnType<typeof createApp>, method: string, pa
   }
 }
 
-async function makeGetRequest(app, path) {
+async function makeGetRequest(app: Express, path: string) {
   return makeRequest(app, "GET", path);
 }
 

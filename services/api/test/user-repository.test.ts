@@ -46,6 +46,7 @@ test("findByEmail returns user for known email", async () => {
   const r = repo();
   await r.create({ email: "bob@example.com", displayName: "Bob", passwordHash: "h2", recoveryCodeHash: "r2" });
   const found = await r.findByEmail("bob@example.com");
+  assert.ok(found, "user should be found");
   assert.equal(found.email, "bob@example.com");
   assert.equal(found.passwordHash, "h2");
   assert.equal(found.recoveryCodeHash, "r2");
@@ -67,6 +68,7 @@ test("findById returns user for known id", async () => {
   const r = repo();
   const created = await r.create({ email: "d@x.com", displayName: "D", passwordHash: "h4", recoveryCodeHash: "r4" });
   const found = await r.findById(created.id);
+  assert.ok(found, "user should be found");
   assert.equal(found.id, created.id);
 });
 
@@ -89,6 +91,7 @@ test("updatePassword changes passwordHash and recoveryCodeHash", async () => {
   const result = await r.updatePassword(user.id, { passwordHash: "new", recoveryCodeHash: "newr" });
   assert.equal(result.ok, true);
   const found = await r.findByEmail("e@x.com");
+  assert.ok(found, "user should be found");
   assert.equal(found.passwordHash, "new");
   assert.equal(found.recoveryCodeHash, "newr");
 });
@@ -105,6 +108,7 @@ test("sqlite: create and findByEmail round-trips correctly", async () => {
   const r = sqliteRepo();
   await r.create({ email: "sqlite@x.com", displayName: "SQLite", passwordHash: "sh", recoveryCodeHash: "sr" });
   const found = await r.findByEmail("sqlite@x.com");
+  assert.ok(found, "user should be found");
   assert.equal(found.displayName, "SQLite");
   assert.equal(found.passwordHash, "sh");
 });
@@ -130,5 +134,6 @@ test("sqlite: updatePassword persists change", async () => {
   const user = await r.create({ email: "up@x.com", displayName: "U", passwordHash: "old", recoveryCodeHash: "oldr" });
   await r.updatePassword(user.id, { passwordHash: "new", recoveryCodeHash: "newr" });
   const found = await r.findByEmail("up@x.com");
+  assert.ok(found, "user should be found");
   assert.equal(found.passwordHash, "new");
 });

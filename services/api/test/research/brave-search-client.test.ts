@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createBraveSearchClient as createClient } from "../../src/integrations/braveSearch.js";
 
 type BraveClientOptions = Parameters<typeof createClient>[0];
+type FetchCall = { url: string; headers: Headers };
 
 function createBraveSearchClient(options: BraveClientOptions) {
   return createClient(options);
@@ -16,11 +17,12 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 test("search maps Brave web.results to title url description", async () => {
-  const calls = [];
-  const fetchImpl = async (url, opts) => {
-    calls.push({ url, headers: opts.headers });
+  const calls: FetchCall[] = [];
+  const fetchImpl: typeof fetch = async (url, opts) => {
+    const headers = new Headers(opts?.headers);
+    calls.push({ url: String(url), headers });
     assert.ok(String(url).includes("api.search.brave.com/res/v1/web/search"));
-    assert.ok(opts.headers["x-subscription-token"]);
+    assert.ok(headers.get("x-subscription-token"));
     return jsonResponse({
       web: {
         results: [
@@ -122,7 +124,7 @@ test("search retries on 429 then succeeds", async () => {
     return jsonResponse({ web: { results: [{ title: "ok", url: "https://ok", description: "" }] } });
   };
 
-  const sleeps = [];
+  const sleeps: number[] = [];
   const client = createBraveSearchClient({
     fetchImpl,
     apiKey: "k",
@@ -164,7 +166,7 @@ test("search returns empty results when 429 persists after retries", async () =>
 test("search throttles sequential requests to the minimum spacing", async () => {
   const fetchImpl = async () => jsonResponse({ web: { results: [] } });
 
-  const sleeps = [];
+  const sleeps: number[] = [];
   let fakeNow = 1_000_000;
   const client = createBraveSearchClient({
     fetchImpl,

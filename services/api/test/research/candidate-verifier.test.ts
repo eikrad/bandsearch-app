@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { verifyCandidatesWithMusicBrainz, mergeVerifiedCandidates, filterCandidatesByObscurity } from "../../src/agent/research/candidateVerifier.js";
+import type { MusicBrainzVerifyClient, VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
 
 test("verifyCandidatesWithMusicBrainz attaches mbid and tags on lookup success", async () => {
-  const mb = {
+  const mb: MusicBrainzVerifyClient = {
     async searchArtists(q) {
       assert.equal(q, "Capra");
       return [{ id: "mbid-capra", name: "Capra", score: 95 }];
@@ -38,7 +39,7 @@ test("verifyCandidatesWithMusicBrainz attaches mbid and tags on lookup success",
   assert.equal(out[0].verified, true);
   assert.equal(out[0].mbid, "mbid-capra");
   assert.deepEqual(out[0].mbTags, ["hardcore"]);
-  assert.ok(out[0].mbUrls.some((u) => u.includes("bandcamp")));
+  assert.ok(out[0].mbUrls?.some((u) => u.includes("bandcamp")));
 });
 
 test("verifyCandidatesWithMusicBrainz marks unresolvable as verified false", async () => {
@@ -96,7 +97,7 @@ test("mergeVerifiedCandidates prefers verified:true entry on collision (same mbi
 
 // ─── filterCandidatesByObscurity ──────────────────────────────────────────────
 
-function makeCandidate(name, listenerCount) {
+function makeCandidate(name: string, listenerCount: number | null): VerifiedCandidate {
   return { name, listenerCount, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] };
 }
 

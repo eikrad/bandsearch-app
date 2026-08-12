@@ -2,9 +2,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildJudgePrompt, createJudgeWorker as createWorker } from "../../src/eval/judgeWorker.js";
 import { createInMemoryEvalRepository, createNoOpEvalRepository } from "../../src/eval/evalRepository.js";
+import type { BandEvalScoreInput, EvalRepository } from "../../src/eval/evalRepository.js";
 import { assertArray, assertRecord } from "../helpers/typeAssertions.js";
 
 type JudgeWorkerOptions = Parameters<typeof createWorker>[0];
+type FetchCall = { url: string; init: RequestInit };
+
+// A fetch stub matching the real signature, so the worker's call is type-checked
+// the same way production is.
+function recordingFetch(calls: FetchCall[], body: unknown): typeof globalThis.fetch {
+  return async (input, init) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return jsonResponse(body);
+  };
+}
+
+function requestBody(call: FetchCall): Record<string, unknown> {
+  assert.ok(typeof call.init.body === "string", "request body should be a JSON string");
+  const parsed: unknown = JSON.parse(call.init.body);
+  assertRecord(parsed);
+  return parsed;
+}
 
 function createJudgeWorker(options: JudgeWorkerOptions) {
   return createWorker(options);
@@ -121,11 +139,8 @@ test("buildJudgePrompt: includes obscurity_tier per band when provided", () => {
 });
 
 test("createJudgeWorker: no-op when anthropicApiKey is empty", async () => {
-  const fetchCalls = [];
-  const fetchStub = async (...args) => {
-    fetchCalls.push(args);
-    return jsonResponse(successResponseBody);
-  };
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "", evalRepository: repo, fetchImpl: fetchStub });
@@ -135,22 +150,20 @@ test("createJudgeWorker: no-op when anthropicApiKey is empty", async () => {
 });
 
 test("createJudgeWorker: sends all bands in one batched request (not per-band)", async () => {
-  const fetchCalls = [];
-  const fetchStub = async (url: unknown, options: { body: string }) => {
-    const body: unknown = JSON.parse(options.body);
-    assertRecord(body);
-    fetchCalls.push({ url, body });
-    return jsonResponse(successResponseBody);
-  };
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
   assert.equal(fetchCalls.length, 1, "exactly one API call for all bands");
-  const body = fetchCalls[0].body;
+  const body = requestBody(fetchCalls[0]);
   assert.equal(body.model, "claude-opus-4-8");
+  assertArray(body.messages);
+  assertRecord(body.messages[0]);
   const userContent = body.messages[0].content;
+  assert.ok(typeof userContent === "string", "user message content should be a string");
   assert.ok(userContent.includes("Wolves in the Throne Room"), "user message should contain WITTR");
   assert.ok(userContent.includes("Deafheaven"), "user message should contain Deafheaven");
 });
@@ -193,8 +206,8 @@ test("createJudgeWorker: parses batch response and upserts scores per band", asy
 });
 
 test("createJudgeWorker: upsertBandEvalScore called once per band with parsed scores", async () => {
-  const upsertCalls = [];
-  const repoStub = {
+  const upsertCalls: BandEvalScoreInput[] = [];
+  const repoStub: EvalRepository = {
     ...createNoOpEvalRepository(),
     upsertBandEvalScore: async (input) => { upsertCalls.push(input); },
   };
@@ -240,11 +253,8 @@ test("createJudgeWorker: does not throw on non-ok API response", async () => {
 });
 
 test("createJudgeWorker: does not call fetch when bands array is empty", async () => {
-  const fetchCalls = [];
-  const fetchStub = async (...args) => {
-    fetchCalls.push(args);
-    return jsonResponse({});
-  };
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, {});
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
@@ -254,35 +264,32 @@ test("createJudgeWorker: does not call fetch when bands array is empty", async (
 });
 
 test("createJudgeWorker: prompt caching header is sent with request", async () => {
-  const capturedHeaders = [];
-  const fetchStub = async (_url, options) => {
-    capturedHeaders.push(options.headers);
-    return jsonResponse(successResponseBody);
-  };
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
-  assert.equal(capturedHeaders.length, 1);
-  assert.ok(capturedHeaders[0]["anthropic-beta"]?.includes("prompt-caching"), "prompt-caching beta header should be sent");
+  assert.equal(fetchCalls.length, 1);
+  const headers = new Headers(fetchCalls[0].init.headers);
+  assert.ok(headers.get("anthropic-beta")?.includes("prompt-caching"), "prompt-caching beta header should be sent");
 });
 
 test("createJudgeWorker: system message has cache_control ephemeral", async () => {
-  const capturedBodies = [];
-  const fetchStub = async (_url: unknown, options: { body: string }) => {
-    const body: unknown = JSON.parse(options.body);
-    assertRecord(body);
-    capturedBodies.push(body);
-    return jsonResponse(successResponseBody);
-  };
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
-  const body = capturedBodies[0];
-  const systemBlocks = Array.isArray(body.system) ? body.system : [];
-  const cacheBlock = systemBlocks.find((b) => b.cache_control?.type === "ephemeral");
+  const body = requestBody(fetchCalls[0]);
+  const systemBlocks: unknown[] = Array.isArray(body.system) ? body.system : [];
+  const cacheBlock = systemBlocks.find((block) => {
+    if (typeof block !== "object" || block === null) return false;
+    const { cache_control: cacheControl } = block as { cache_control?: { type?: unknown } };
+    return cacheControl?.type === "ephemeral";
+  });
   assert.ok(cacheBlock, "system prompt should have cache_control: ephemeral block");
 });

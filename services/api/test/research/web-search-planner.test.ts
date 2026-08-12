@@ -5,6 +5,7 @@ import { tryParseSearchPlanFromModelText, fallbackSearchPlan, createWebSearchPla
 test("tryParseSearchPlanFromModelText reads queries array", () => {
   const raw = '{"anchorArtists":["Grade"],"styleSignals":["hardcore"],"mustHave":[],"avoid":[],"queries":["a","b"]}';
   const plan = tryParseSearchPlanFromModelText(raw);
+  assert.ok(plan, "search plan should parse");
   assert.equal(plan.queries.length, 2);
   assert.deepEqual(plan.anchorArtists, ["Grade"]);
 });

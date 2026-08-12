@@ -4,6 +4,8 @@ import type { Client as LibSQLClient } from "@libsql/client";
 import { createTursoPreferenceRepository as createRepository } from "../src/preferences/tursoPreferenceRepository.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
 
+type ExecutedStatement = { sql: string; args?: unknown[] };
+
 function createTursoPreferenceRepository(options: { client: unknown }) {
   return createRepository({ client: options.client as LibSQLClient });
 }
@@ -23,10 +25,10 @@ function makeRow(overrides = {}) {
 }
 
 test("turso repository adds and maps a saved band", async () => {
-  const calls = [];
+  const calls: ExecutedStatement[] = [];
   const repo = createTursoPreferenceRepository({
     client: {
-      execute: async (stmt) => {
+      execute: async (stmt: ExecutedStatement) => {
         calls.push(stmt);
         return { rows: [makeRow()], rowsAffected: 1 };
       },

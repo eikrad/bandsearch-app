@@ -17,9 +17,20 @@ function addColumnIfMissing(db: import("better-sqlite3").Database, table: string
 
 type Group = { id: string; name: string; memberIds: string[] };
 
+export type SavedBand = {
+  id: string;
+  musicbrainzArtistId: string;
+  name: string;
+  rating: number;
+  categories: string[];
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BandRepository = {
   addSavedBand: (input: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown }>;
-  listSavedBands: (userId?: string) => Promise<unknown[]>;
+  listSavedBands: (userId?: string) => Promise<SavedBand[]>;
   updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
   deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
   buildContext: (userId?: string) => Promise<string>;

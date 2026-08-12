@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createLastFmClient } from "../../src/eval/lastFmClient.js";
+import type { LastFmClientConfig } from "../../src/eval/lastFmClient.js";
 
-function fetchReturning(body, { ok = true, status = 200 } = {}) {
+type FetchLike = NonNullable<LastFmClientConfig["fetchImpl"]>;
+
+function fetchReturning(body: unknown, { ok = true, status = 200 } = {}): FetchLike {
   return async () => ({ ok, status, json: async () => body });
 }
 

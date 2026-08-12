@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createApp } from "../../src/app.js";
 import { createInMemoryEvalRepository } from "../../src/eval/evalRepository.js";
 import { assertRecord } from "../helpers/typeAssertions.js";
+import type { EvalEventContext, EvalWorker } from "../../src/eval/evalWorker.js";
 
 function makePreferenceRepoStub() {
   return {
@@ -78,8 +79,8 @@ const stubPipeline = {
 };
 
 test("POST /recommendations fires evalWorker.processEvent on success", async () => {
-  const calls = [];
-  const evalWorker = { processEvent: async (ctx) => { calls.push(ctx); } };
+  const calls: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = { processEvent: async (ctx) => { calls.push(ctx); } };
   const app = createApp({
     recommendationPipeline: stubPipeline,
     preferenceRepository: makePreferenceRepoStub(),
@@ -97,8 +98,8 @@ test("POST /recommendations fires evalWorker.processEvent on success", async () 
 });
 
 test("POST /recommendations does NOT fire evalWorker.processEvent on validation error", async () => {
-  const calls = [];
-  const evalWorker = { processEvent: async (ctx) => { calls.push(ctx); } };
+  const calls: EvalEventContext[] = [];
+  const evalWorker: EvalWorker = { processEvent: async (ctx) => { calls.push(ctx); } };
   const app = createApp({
     preferenceRepository: makePreferenceRepoStub(),
     evalWorker,

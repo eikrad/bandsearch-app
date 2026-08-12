@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
+import type { Database as DatabaseType } from "better-sqlite3";
 import { createInMemoryPreferenceRepository } from "../src/preferences/preferenceMemory.js";
 import { createSqlitePreferenceRepository } from "../src/preferences/sqlitePreferenceRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "../src/sessions/chatSessionRepository.js";
@@ -10,7 +11,7 @@ const BAND = { musicbrainzArtistId: "mb-1", name: "Alcest", rating: 5, categorie
 const USER_A = "user-a";
 const USER_B = "user-b";
 
-function makeSchema(db) {
+function makeSchema(db: DatabaseType) {
   db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS saved_bands (

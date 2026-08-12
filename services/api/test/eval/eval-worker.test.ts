@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { createEvalWorker, createNoOpEvalWorker } from "../../src/eval/evalWorker.js";
 import { createInMemoryEvalRepository } from "../../src/eval/evalRepository.js";
 import type { LastFmClient } from "../../src/eval/lastFmClient.js";
+import type { JudgeInput, JudgeWorker } from "../../src/eval/judgeWorker.js";
+
+type JudgeEventCall = { eventId: string; bands: JudgeInput[] };
 
 function makeLastFmClient(getListenerCount: LastFmClient["getListenerCount"]): LastFmClient {
   return {
@@ -63,9 +66,11 @@ test("createEvalWorker: processEvent enriches each band with obscurity scores", 
   const scores = await repo.listBandEvalScores(events[0].id);
   assert.equal(scores.length, 2);
   const wittr = scores.find((s) => s.bandName === "Wolves in the Throne Room");
+  assert.ok(wittr, "WITTR should be scored");
   assert.equal(wittr.listeners, 80000);
   assert.equal(wittr.obscurityTier, "cult");
   const deafheaven = scores.find((s) => s.bandName === "Deafheaven");
+  assert.ok(deafheaven, "Deafheaven should be scored");
   assert.equal(deafheaven.listeners, 600000);
   assert.equal(deafheaven.obscurityTier, "mainstream");
 });
@@ -100,6 +105,7 @@ test("createEvalWorker: processEvent does not throw when one band's lookup fails
   const scores = await repo.listBandEvalScores(events[0].id);
   // The successful band is still recorded; the failed one is tolerated.
   const wittr = scores.find((s) => s.bandName === "Wolves in the Throne Room");
+  assert.ok(wittr, "WITTR should be scored");
   assert.equal(wittr.obscurityTier, "underground");
 });
 
@@ -116,6 +122,7 @@ test("createEvalWorker: processEvent without lastFmClient still stores heuristic
   for (const score of scores) {
     assert.equal(score.listeners, undefined, "no listener data without Last.fm client");
     assert.equal(score.obscurityTier, undefined, "no obscurity tier without Last.fm client");
+    assert.ok(score.sourceQuality, "heuristics always sets sourceQuality");
     assert.ok(["high", "medium", "low"].includes(score.sourceQuality));
   }
 });
@@ -162,6 +169,7 @@ test("createEvalWorker: scoreHeuristics stores source_quality per band", async (
   const scores = await repo.listBandEvalScores(events[0].id);
   assert.equal(scores.length, 2);
   const wittr = scores.find((s) => s.bandName === "Wolves in the Throne Room");
+  assert.ok(wittr?.sourceQuality, "WITTR should have a sourceQuality");
   assert.ok(["high", "medium", "low"].includes(wittr.sourceQuality), `unexpected sourceQuality: ${wittr.sourceQuality}`);
 });
 
@@ -175,10 +183,12 @@ test("createEvalWorker: scoreHeuristics stores citationSupportRate and genericWh
   const scores = await repo.listBandEvalScores(events[0].id);
 
   const wittr = scores.find((s) => s.bandName === "Wolves in the Throne Room");
+  assert.ok(wittr, "WITTR should be scored");
   assert.ok(typeof wittr.citationSupportRate === "number", "citationSupportRate should be a number");
   assert.ok(typeof wittr.genericWhyFlag === "boolean", "genericWhyFlag should be a boolean");
 
   const deafheaven = scores.find((s) => s.bandName === "Deafheaven");
+  assert.ok(deafheaven, "Deafheaven should be scored");
   assert.equal(deafheaven.genericWhyFlag, true, "Deafheaven why is generic ('Known for their')");
 });
 
@@ -198,8 +208,8 @@ test("createEvalWorker: scoreHeuristics does not throw when why/sourceSignals ar
 
 test("createEvalWorker: processEvent calls judgeWorker.judgeEvent with enriched band data", async () => {
   const repo = createInMemoryEvalRepository();
-  const judgeEventCalls = [];
-  const judgeWorker = {
+  const judgeEventCalls: JudgeEventCall[] = [];
+  const judgeWorker: JudgeWorker = {
     judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
   };
 
@@ -227,8 +237,8 @@ test("createEvalWorker: processEvent passes listener and heuristic data to judge
   const lastFmClient = makeLastFmClient(
     async (name) => (name === "Wolves in the Throne Room" ? 80000 : 600000),
   );
-  const judgeEventCalls = [];
-  const judgeWorker = {
+  const judgeEventCalls: JudgeEventCall[] = [];
+  const judgeWorker: JudgeWorker = {
     judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
   };
 

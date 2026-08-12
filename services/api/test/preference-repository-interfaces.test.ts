@@ -5,6 +5,14 @@ import { createInMemoryPreferenceRepository } from "../src/preferences/preferenc
 
 const noop = async () => {};
 
+// These tests prove the runtime guards catch an incomplete repository, so they
+// need a stub with one method removed — something the static types forbid.
+function without<T extends Record<string, unknown>>(stub: T, method: keyof T & string): unknown {
+  const copy: Record<string, unknown> = { ...stub };
+  delete copy[method];
+  return copy;
+}
+
 function bandRepositoryStub() {
   return {
     addSavedBand: noop,
@@ -34,14 +42,12 @@ test("assertBandRepository accepts an object with all 6 BandRepository methods",
 });
 
 test("assertBandRepository throws when addSavedBand is missing", () => {
-  const repo = bandRepositoryStub();
-  delete repo.addSavedBand;
+  const repo = without(bandRepositoryStub(), "addSavedBand");
   assert.throws(() => assertBandRepository(repo), /missing method addSavedBand/);
 });
 
 test("assertBandRepository throws when buildContext is missing", () => {
-  const repo = bandRepositoryStub();
-  delete repo.buildContext;
+  const repo = without(bandRepositoryStub(), "buildContext");
   assert.throws(() => assertBandRepository(repo), /missing method buildContext/);
 });
 
@@ -51,14 +57,12 @@ test("assertBandGroupRepository accepts an object with all 7 BandGroupRepository
 });
 
 test("assertBandGroupRepository throws when listGroups is missing", () => {
-  const repo = bandGroupRepositoryStub();
-  delete repo.listGroups;
+  const repo = without(bandGroupRepositoryStub(), "listGroups");
   assert.throws(() => assertBandGroupRepository(repo), /missing method listGroups/);
 });
 
 test("assertBandGroupRepository throws when importSavedBands is missing", () => {
-  const repo = bandGroupRepositoryStub();
-  delete repo.importSavedBands;
+  const repo = without(bandGroupRepositoryStub(), "importSavedBands");
   assert.throws(() => assertBandGroupRepository(repo), /missing method importSavedBands/);
 });
 
@@ -70,8 +74,7 @@ test("assertPreferenceRepository still accepts a full 13-method object", () => {
 });
 
 test("assertPreferenceRepository throws when any method is missing", () => {
-  const repo = { ...bandRepositoryStub(), ...bandGroupRepositoryStub() };
-  delete repo.removeArtistFromGroup;
+  const repo = without({ ...bandRepositoryStub(), ...bandGroupRepositoryStub() }, "removeArtistFromGroup");
   assert.throws(() => assertPreferenceRepository(repo), /missing method removeArtistFromGroup/);
 });
 
