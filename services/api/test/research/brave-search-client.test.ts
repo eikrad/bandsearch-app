@@ -4,8 +4,15 @@ import { createBraveSearchClient as createClient } from "../../src/integrations/
 
 type BraveClientOptions = Parameters<typeof createClient>[0];
 
-function createBraveSearchClient(options: Omit<BraveClientOptions, "fetchImpl"> & { fetchImpl?: unknown }) {
-  return createClient({ ...options, fetchImpl: options.fetchImpl as typeof fetch });
+function createBraveSearchClient(options: BraveClientOptions) {
+  return createClient(options);
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 test("search maps Brave web.results to title url description", async () => {
@@ -14,17 +21,14 @@ test("search maps Brave web.results to title url description", async () => {
     calls.push({ url, headers: opts.headers });
     assert.ok(String(url).includes("api.search.brave.com/res/v1/web/search"));
     assert.ok(opts.headers["x-subscription-token"]);
-    return {
-      ok: true,
-      json: async () => ({
-        web: {
-          results: [
-            { title: "A", url: "https://a.example", description: "snippet a" },
-            { title: "B", url: "https://b.example", description: "snippet b" },
-          ],
-        },
-      }),
-    };
+    return jsonResponse({
+      web: {
+        results: [
+          { title: "A", url: "https://a.example", description: "snippet a" },
+          { title: "B", url: "https://b.example", description: "snippet b" },
+        ],
+      },
+    });
   };
 
   const client = createBraveSearchClient({
@@ -54,10 +58,7 @@ test("search retries once on abort failure then succeeds", async () => {
       err.name = "AbortError";
       throw err;
     }
-    return {
-      ok: true,
-      json: async () => ({ web: { results: [{ title: "x", url: "https://x", description: "" }] } }),
-    };
+    return jsonResponse({ web: { results: [{ title: "x", url: "https://x", description: "" }] } });
   };
 
   const client = createBraveSearchClient({
@@ -76,12 +77,9 @@ test("dedupSet skips duplicate query network calls on second search", async () =
   let calls = 0;
   const fetchImpl = async () => {
     calls += 1;
-    return {
-      ok: true,
-      json: async () => ({
-        web: { results: [{ title: "only", url: "https://only", description: "d" }] },
-      }),
-    };
+    return jsonResponse({
+      web: { results: [{ title: "only", url: "https://only", description: "d" }] },
+    });
   };
 
   const dedupSet = new Map();
@@ -103,12 +101,7 @@ test("dedupSet skips duplicate query network calls on second search", async () =
 });
 
 test("search throws when response not ok (non-429)", async () => {
-  const fetchImpl = async () => ({
-    ok: false,
-    status: 500,
-    text: async () => "",
-    json: async () => ({}),
-  });
+  const fetchImpl = async () => jsonResponse({}, 500);
 
   const client = createBraveSearchClient({
     fetchImpl,
@@ -124,12 +117,9 @@ test("search retries on 429 then succeeds", async () => {
   const fetchImpl = async () => {
     attempt += 1;
     if (attempt === 1) {
-      return { ok: false, status: 429, text: async () => "rate limited", json: async () => ({}) };
+      return jsonResponse({ error: "rate limited" }, 429);
     }
-    return {
-      ok: true,
-      json: async () => ({ web: { results: [{ title: "ok", url: "https://ok", description: "" }] } }),
-    };
+    return jsonResponse({ web: { results: [{ title: "ok", url: "https://ok", description: "" }] } });
   };
 
   const sleeps = [];
@@ -152,7 +142,7 @@ test("search returns empty results when 429 persists after retries", async () =>
   let attempt = 0;
   const fetchImpl = async () => {
     attempt += 1;
-    return { ok: false, status: 429, text: async () => "rate limited", json: async () => ({}) };
+    return jsonResponse({ error: "rate limited" }, 429);
   };
 
   const client = createBraveSearchClient({
@@ -172,10 +162,7 @@ test("search returns empty results when 429 persists after retries", async () =>
 });
 
 test("search throttles sequential requests to the minimum spacing", async () => {
-  const fetchImpl = async () => ({
-    ok: true,
-    json: async () => ({ web: { results: [] } }),
-  });
+  const fetchImpl = async () => jsonResponse({ web: { results: [] } });
 
   const sleeps = [];
   let fakeNow = 1_000_000;

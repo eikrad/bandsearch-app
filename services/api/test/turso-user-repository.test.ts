@@ -2,9 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Client as LibSQLClient } from "@libsql/client";
 import { createTursoUserRepository as createRepository } from "../src/auth/tursoUserRepository.js";
+import { assertRecord } from "./helpers/typeAssertions.js";
+
+function assertRepositoryClient(client: unknown): asserts client is LibSQLClient {
+  assertRecord(client);
+  assert.ok(typeof client.execute === "function", "client.execute must be a function");
+}
 
 function createTursoUserRepository(options: { client: unknown }) {
-  return createRepository({ client: options.client as LibSQLClient });
+  assertRepositoryClient(options.client);
+  return createRepository({ client: options.client });
 }
 
 function makeUserRow(overrides = {}) {

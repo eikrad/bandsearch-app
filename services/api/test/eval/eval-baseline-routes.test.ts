@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../../src/app.js";
 import { createInMemoryEvalRepository } from "../../src/eval/evalRepository.js";
+import { assertArray, assertRecord } from "../helpers/typeAssertions.js";
 
 function makePreferenceRepoStub() {
   return {
@@ -38,7 +39,7 @@ async function makeRequest(baseUrl: string, method: string, path: string, payloa
   };
   if (payload !== undefined) opts.body = JSON.stringify(payload);
   const response = await fetch(`${baseUrl}${path}`, opts);
-  let data = null;
+  let data: unknown = null;
   const ct = response.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) data = await response.json();
   return { status: response.status, data };
@@ -71,7 +72,8 @@ test("GET /eval/baselines returns empty array when no baselines exist", async ()
   try {
     const result = await makeRequest(baseUrl, "GET", "/eval/baselines");
     assert.equal(result.status, 200);
-    assert.ok(Array.isArray(result.data.baselines));
+    assertRecord(result.data);
+    assertArray(result.data.baselines);
     assert.equal(result.data.baselines.length, 0);
   } finally {
     server.close();
@@ -121,6 +123,7 @@ test("POST /eval/baseline creates a baseline and returns id + label + createdAt"
   try {
     const result = await makeRequest(baseUrl, "POST", "/eval/baseline", { label: "initial" });
     assert.equal(result.status, 201);
+    assertRecord(result.data);
     assert.ok(typeof result.data.id === "string" && result.data.id.length > 0);
     assert.equal(result.data.label, "initial");
     assert.ok(typeof result.data.createdAt === "string");
@@ -142,8 +145,14 @@ test("GET /eval/baselines lists created baselines", async () => {
     await makeRequest(baseUrl, "POST", "/eval/baseline", { label: "v2" });
     const result = await makeRequest(baseUrl, "GET", "/eval/baselines");
     assert.equal(result.status, 200);
+    assertRecord(result.data);
+    assertArray(result.data.baselines);
     assert.equal(result.data.baselines.length, 2);
-    const labels = result.data.baselines.map((b) => b.label);
+    const labels = result.data.baselines.map((baseline) => {
+      assertRecord(baseline);
+      assert.ok(typeof baseline.label === "string");
+      return baseline.label;
+    });
     assert.ok(labels.includes("v1"));
     assert.ok(labels.includes("v2"));
   } finally {
@@ -178,6 +187,7 @@ test("GET /eval/metrics returns current metrics with null baseline and delta whe
   try {
     const result = await makeRequest(baseUrl, "GET", "/eval/metrics");
     assert.equal(result.status, 200);
+    assertRecord(result.data);
     assert.ok("current" in result.data);
     assert.equal(result.data.baseline, null);
     assert.equal(result.data.delta, null);
@@ -199,7 +209,9 @@ test("GET /eval/metrics returns delta against latest baseline", async () => {
     await makeRequest(baseUrl, "POST", "/eval/baseline", { label: "empty-baseline" });
     const result = await makeRequest(baseUrl, "GET", "/eval/metrics");
     assert.equal(result.status, 200);
+    assertRecord(result.data);
     assert.ok(result.data.baseline !== null);
+    assertRecord(result.data.baseline);
     assert.ok(result.data.delta !== null);
     assert.equal(result.data.baseline.label, "empty-baseline");
   } finally {
@@ -229,10 +241,16 @@ test("GET /eval/events embeds bandScores per event", async () => {
   try {
     const result = await makeRequest(baseUrl, "GET", "/eval/events");
     assert.equal(result.status, 200);
+    assertRecord(result.data);
+    assertArray(result.data.events);
     assert.equal(result.data.events.length, 1);
-    assert.ok(Array.isArray(result.data.events[0].bandScores));
-    assert.equal(result.data.events[0].bandScores.length, 1);
-    assert.equal(result.data.events[0].bandScores[0].bandName, "Alcest");
+    const event = result.data.events[0];
+    assertRecord(event);
+    assertArray(event.bandScores);
+    assert.equal(event.bandScores.length, 1);
+    const bandScore = event.bandScores[0];
+    assertRecord(bandScore);
+    assert.equal(bandScore.bandName, "Alcest");
   } finally {
     server.close();
   }

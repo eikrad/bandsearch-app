@@ -1,22 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildJudgePrompt, createJudgeWorker as createWorker } from "../../src/eval/judgeWorker.js";
-import { createInMemoryEvalRepository } from "../../src/eval/evalRepository.js";
-import type { EvalRepository } from "../../src/eval/evalRepository.js";
+import { createInMemoryEvalRepository, createNoOpEvalRepository } from "../../src/eval/evalRepository.js";
 import { assertArray, assertRecord } from "../helpers/typeAssertions.js";
 
 type JudgeWorkerOptions = Parameters<typeof createWorker>[0];
 
-function createJudgeWorker(
-  options: Omit<JudgeWorkerOptions, "evalRepository" | "fetchImpl"> & {
-    evalRepository: unknown;
-    fetchImpl?: unknown;
-  },
-) {
-  return createWorker({
-    ...options,
-    evalRepository: options.evalRepository as EvalRepository,
-    fetchImpl: options.fetchImpl as typeof fetch,
+function createJudgeWorker(options: JudgeWorkerOptions) {
+  return createWorker(options);
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
   });
 }
 
@@ -127,7 +124,7 @@ test("createJudgeWorker: no-op when anthropicApiKey is empty", async () => {
   const fetchCalls = [];
   const fetchStub = async (...args) => {
     fetchCalls.push(args);
-    return { ok: true, json: async () => successResponseBody };
+    return jsonResponse(successResponseBody);
   };
 
   const repo = createInMemoryEvalRepository();
@@ -143,7 +140,7 @@ test("createJudgeWorker: sends all bands in one batched request (not per-band)",
     const body: unknown = JSON.parse(options.body);
     assertRecord(body);
     fetchCalls.push({ url, body });
-    return { ok: true, json: async () => successResponseBody };
+    return jsonResponse(successResponseBody);
   };
 
   const repo = createInMemoryEvalRepository();
@@ -159,7 +156,7 @@ test("createJudgeWorker: sends all bands in one batched request (not per-band)",
 });
 
 test("createJudgeWorker: parses batch response and upserts scores per band", async () => {
-  const fetchStub = async () => ({ ok: true, json: async () => successResponseBody });
+  const fetchStub = async () => jsonResponse(successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const eventId = await repo.logEvent({
@@ -198,12 +195,10 @@ test("createJudgeWorker: parses batch response and upserts scores per band", asy
 test("createJudgeWorker: upsertBandEvalScore called once per band with parsed scores", async () => {
   const upsertCalls = [];
   const repoStub = {
+    ...createNoOpEvalRepository(),
     upsertBandEvalScore: async (input) => { upsertCalls.push(input); },
-    logEvent: async () => "event-1",
-    listEvents: async () => [],
-    listBandEvalScores: async () => [],
   };
-  const fetchStub = async () => ({ ok: true, json: async () => successResponseBody });
+  const fetchStub = async () => jsonResponse(successResponseBody);
 
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repoStub, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
@@ -227,10 +222,7 @@ test("createJudgeWorker: does not throw on AbortError (timeout)", async () => {
 });
 
 test("createJudgeWorker: does not throw on malformed JSON response", async () => {
-  const fetchStub = async () => ({
-    ok: true,
-    json: async () => ({ content: [{ type: "text", text: "not valid json {{{" }] }),
-  });
+  const fetchStub = async () => jsonResponse({ content: [{ type: "text", text: "not valid json {{{" }] });
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
@@ -239,7 +231,7 @@ test("createJudgeWorker: does not throw on malformed JSON response", async () =>
 });
 
 test("createJudgeWorker: does not throw on non-ok API response", async () => {
-  const fetchStub = async () => ({ ok: false, status: 429, json: async () => ({}) });
+  const fetchStub = async () => jsonResponse({}, 429);
 
   const repo = createInMemoryEvalRepository();
   const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
@@ -251,7 +243,7 @@ test("createJudgeWorker: does not call fetch when bands array is empty", async (
   const fetchCalls = [];
   const fetchStub = async (...args) => {
     fetchCalls.push(args);
-    return { ok: true, json: async () => ({}) };
+    return jsonResponse({});
   };
 
   const repo = createInMemoryEvalRepository();
@@ -265,7 +257,7 @@ test("createJudgeWorker: prompt caching header is sent with request", async () =
   const capturedHeaders = [];
   const fetchStub = async (_url, options) => {
     capturedHeaders.push(options.headers);
-    return { ok: true, json: async () => successResponseBody };
+    return jsonResponse(successResponseBody);
   };
 
   const repo = createInMemoryEvalRepository();
@@ -282,7 +274,7 @@ test("createJudgeWorker: system message has cache_control ephemeral", async () =
     const body: unknown = JSON.parse(options.body);
     assertRecord(body);
     capturedBodies.push(body);
-    return { ok: true, json: async () => successResponseBody };
+    return jsonResponse(successResponseBody);
   };
 
   const repo = createInMemoryEvalRepository();
