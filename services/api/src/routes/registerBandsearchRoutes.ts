@@ -299,7 +299,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.patch("/preferences/:id", async (req, res) => {
     const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {}, req.userId);
     if (!result.ok) {
-      return sendError(res, result.status ?? 400, "preference_update_failed", result.error ?? "update failed");
+      const status = result.status ?? 400;
+      return sendError(res, status, "preference_update_failed", result.error ?? "update failed");
     }
     return res.status(200).json({ savedBand: result.savedBand });
   });
@@ -307,7 +308,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.delete("/preferences/:id", async (req, res) => {
     const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id, req.userId);
     if (!result.ok) {
-      return sendError(res, result.status ?? 404, "preference_delete_failed", result.error ?? "delete failed");
+      const status = result.status ?? 404;
+      return sendError(res, status, "preference_delete_failed", result.error ?? "delete failed");
     }
     return res.status(200).json({ deletedId: result.deletedId });
   });
