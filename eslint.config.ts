@@ -12,20 +12,6 @@ export default tseslint.config(
     ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**"],
   },
   js.configs.recommended,
-  {
-    files: ["**/*.js", "**/*.mjs"],
-    languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "commonjs",
-      globals: {
-        ...globals.node,
-        fetch: "readonly",
-      },
-    },
-    rules: {
-      "no-console": "off",
-    },
-  },
   ...typescriptConfigs,
   {
     files: ["**/*.ts"],

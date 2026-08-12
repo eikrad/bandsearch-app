@@ -13,8 +13,8 @@
     "shared/*"
   ],
   "scripts": {
-    "start": "tsx services/api/src/server.js",
-    "dev": "tsx services/api/src/server.js",
+    "start": "tsx services/api/src/server.ts",
+    "dev": "tsx services/api/src/server.ts",
     "desktop": "npm run tauri:dev --workspace @bandsearch/desktop",
     "migrate": "npm run migrate --workspace @bandsearch/api",
     "lint:js": "npm run lint --workspaces --if-present",
