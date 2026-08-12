@@ -1,10 +1,17 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { ReactElement } from "react";
+import {
+  createDesktopReactMount,
+  type DesktopReactMountOptions,
+} from "../src/ui/mountDesktopReactApp.js";
+import { fakeContainer } from "./helpers/fakeDom.js";
 
-const { createDesktopReactMount } = require("../src/ui/mountDesktopReactApp");
-const { fakeContainer } = require("./helpers/fakeDom");
+type MountShell = DesktopReactMountOptions["shell"];
+type MountRouter = NonNullable<DesktopReactMountOptions["router"]>;
+type SavedArtistsShell = NonNullable<DesktopReactMountOptions["savedArtistsShell"]>;
 
-function makeShell(overrides = {}) {
+function makeShell(overrides: Partial<MountShell> = {}): MountShell {
   return {
     getViewProps: () => ({
       headerTitle: "Bandsearch",
@@ -24,23 +31,23 @@ function makeShell(overrides = {}) {
   };
 }
 
-function makeRouter(initialRoute = "home") {
+function makeRouter(initialRoute = "home"): MountRouter {
   let route = initialRoute;
-  const callbacks = [];
+  const callbacks: Array<(route: string) => void> = [];
   return {
     getRoute: () => route,
-    navigate: (r) => {
+    navigate: (r: string) => {
       route = r;
       callbacks.forEach((fn) => fn(r));
     },
-    onRouteChange: (fn) => {
+    onRouteChange: (fn: () => void) => {
       callbacks.push(fn);
       return () => {};
     },
   };
 }
 
-function makeSavedArtistsShell(overrides = {}) {
+function makeSavedArtistsShell(overrides: Partial<SavedArtistsShell> = {}): SavedArtistsShell {
   return {
     getViewProps: () => ({
       savedArtists: [],
@@ -49,7 +56,6 @@ function makeSavedArtistsShell(overrides = {}) {
       searchResults: [],
       isSearching: false,
     }),
-    loadSavedArtists: async () => {},
     toggleArtistSelection: () => {},
     setSearchQuery: () => {},
     searchArtists: async () => {},
@@ -59,7 +65,7 @@ function makeSavedArtistsShell(overrides = {}) {
 }
 
 test("routed mount calls render with SavedArtistsView when route is saved", async () => {
-  const renders = [];
+  const renders: ReactElement[] = [];
   const shell = makeShell();
   const router = makeRouter("saved");
   const savedShell = makeSavedArtistsShell();
@@ -83,7 +89,7 @@ test("routed mount calls render with SavedArtistsView when route is saved", asyn
 });
 
 test("routed mount calls render with ChatAppView when route is home", async () => {
-  const renders = [];
+  const renders: ReactElement[] = [];
   const shell = makeShell();
   const router = makeRouter("home");
   const savedShell = makeSavedArtistsShell();
@@ -105,7 +111,7 @@ test("routed mount calls render with ChatAppView when route is home", async () =
 });
 
 test("routed mount calls render with WelcomeView when route is welcome", async () => {
-  const renders = [];
+  const renders: ReactElement[] = [];
   const shell = makeShell();
   const router = makeRouter("welcome");
   const savedShell = makeSavedArtistsShell();
@@ -127,7 +133,7 @@ test("routed mount calls render with WelcomeView when route is welcome", async (
 });
 
 test("routed mount calls render with SettingsView when route is settings", async () => {
-  const renders = [];
+  const renders: ReactElement[] = [];
   const shell = makeShell();
   const router = makeRouter("settings");
   const savedShell = makeSavedArtistsShell();
@@ -154,7 +160,7 @@ test("routed mount calls render with SettingsView when route is settings", async
 });
 
 test("routed mount settingsHandlers.onSaveTursoConfig calls provided saveTursoConfig", async () => {
-  const calls = [];
+  const calls: Array<{ url: string; token: string }> = [];
   const shell = makeShell();
   const router = makeRouter("settings");
 

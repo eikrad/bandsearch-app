@@ -1,11 +1,10 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { fakeDesktopApp } = require("./helpers/fakeApp");
-const { chatViewProps } = require("./helpers/fakeViewProps");
-
-const { BandsearchHttpError } = require("../src/chatClient");
-const { bootstrapDesktopReactShell } = require("../src");
-const { createDesktopReactShell } = require("../src/ui/createDesktopReactShell");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { fakeDesktopApp } from "./helpers/fakeApp.js";
+import { chatViewProps } from "./helpers/fakeViewProps.js";
+import { BandsearchHttpError } from "../src/chatClient.js";
+import { bootstrapDesktopReactShell } from "../src/index.js";
+import { createDesktopReactShell } from "../src/ui/createDesktopReactShell.js";
 
 test("desktop react shell renders HTML with recommendation card and actions", async () => {
   const appState = { messages: [] };
@@ -40,7 +39,7 @@ test("desktop react shell renders HTML with recommendation card and actions", as
 });
 
 test("desktop react shell save and rate actions call app handlers", async () => {
-  const calls = [];
+  const calls: Array<{ type: string; artistName: string; rating?: number }> = [];
   const shell = bootstrapDesktopReactShell({
     app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
@@ -97,8 +96,7 @@ test("desktop react shell maps BandsearchHttpError to a human recommendation err
 });
 
 test("desktop react shell clears action status after timeout", async () => {
-  /** @type {() => void} */
-  let scheduled = () => {
+  let scheduled: () => void = () => {
     throw new Error("scheduled callback invoked before setTimeoutImpl ran");
   };
   const shell = createDesktopReactShell({

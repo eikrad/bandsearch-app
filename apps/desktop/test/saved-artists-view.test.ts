@@ -1,9 +1,8 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
-
-const { SavedArtistsView } = require("../src/ui/SavedArtistsView");
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { SavedArtistsView } from "../src/ui/SavedArtistsView.js";
 
 const baseHandlers = {
   onNavigate: () => {},

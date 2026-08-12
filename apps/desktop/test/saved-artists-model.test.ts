@@ -1,9 +1,12 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { ArtistSearchResult, SavedBand } from "../src/domain.js";
+import {
+  createSavedArtistsModel,
+  type SavedArtistsCollaborator,
+} from "../src/savedArtistsModel.js";
 
-const { createSavedArtistsModel } = require("../src/savedArtistsModel");
-
-function makeApp(savedBands = []) {
+function makeApp(savedBands: SavedBand[] = []): SavedArtistsCollaborator {
   const bands = [...savedBands];
   return {
     listSavedBands: async () => bands,
@@ -39,7 +42,7 @@ test("saved artists model maps saved bands to UI items after load", async () => 
 });
 
 test("saved artists model sets isLoading true during load", async () => {
-  let observedDuringLoad = null;
+  let observedDuringLoad: boolean | null = null;
   const app = {
     ...makeApp(),
     listSavedBands: async () => {
@@ -78,14 +81,13 @@ test("saved artists model tracks search results after searchArtists call", async
 });
 
 test("saved artists model isSearching is true during search", async () => {
-  /** @type {(value?: unknown) => void} */
-  let resolveSearch = () => {
+  let resolveSearch: (value: ArtistSearchResult[]) => void = () => {
     throw new Error("resolveSearch called before the search promise was created");
   };
   const model = createSavedArtistsModel({
     app: {
       ...makeApp(),
-      searchArtists: () => new Promise((resolve) => { resolveSearch = resolve; }),
+      searchArtists: () => new Promise<ArtistSearchResult[]>((resolve) => { resolveSearch = resolve; }),
     },
   });
 

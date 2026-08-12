@@ -1,11 +1,11 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-
-const { createDesktopReactMount } = require("../src/ui/mountDesktopReactApp");
-const { fakeContainer } = require("./helpers/fakeDom");
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { ReactNode } from "react";
+import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
+import { fakeContainer } from "./helpers/fakeDom.js";
 
 test("desktop react mount renders and wires interaction callbacks", async () => {
-  const calls = [];
+  const calls: Array<{ type: string; element?: ReactNode; mode?: string; query?: string; artistName?: string; rating?: number }> = [];
   const fakeRoot = {
     render: (element) => {
       calls.push({ type: "render", element });

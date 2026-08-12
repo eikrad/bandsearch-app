@@ -1,9 +1,8 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { fakeDesktopApp } = require("./helpers/fakeApp");
-
-const { bootstrapDesktopUi } = require("../src");
-const { createDesktopChatUiStack } = require("../src/desktopChatUiStack");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { fakeDesktopApp } from "./helpers/fakeApp.js";
+import { bootstrapDesktopUi } from "../src/index.js";
+import { createDesktopChatUiStack } from "../src/desktopChatUiStack.js";
 
 test("desktop ui bootstrap exposes mode get/set", () => {
   const ui = bootstrapDesktopUi({
@@ -65,7 +64,7 @@ test("desktopChatUiStack exposes cancelSearch that delegates to app.cancelSearch
 });
 
 test("desktopChatUiStack exposes retryLastSearch that delegates to appModel", async () => {
-  const calls = [];
+  const calls: string[] = [];
   const stack = createDesktopChatUiStack({
     app: fakeDesktopApp({
       requestRecommendations: async (query) => {

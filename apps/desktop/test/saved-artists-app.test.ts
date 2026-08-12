@@ -1,11 +1,20 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { bootstrapDesktopApp } from "../src/index.js";
+import type { ArtistSearchResult, RecommendationItem, SavedBand } from "../src/domain.js";
+import { jsonResponse } from "./helpers/fakeResponse.js";
 
-const { bootstrapDesktopApp } = require("../src/index");
-const { jsonResponse } = require("./helpers/fakeResponse");
-
-function createStubFetch({ savedBands = [], artists = [], recommendations = [] } = {}) {
-  return async (url, init) => {
+function createStubFetch({
+  savedBands = [],
+  artists = [],
+  recommendations = [],
+}: {
+  savedBands?: SavedBand[];
+  artists?: ArtistSearchResult[];
+  recommendations?: RecommendationItem[];
+} = {}): typeof fetch {
+  return async (input, init) => {
+    const url = String(input);
     if (url.includes("/preferences") && (!init || init.method === "GET")) {
       return jsonResponse({ savedBands });
     }
@@ -63,9 +72,11 @@ test("app.toggleArtistSelection removes already-selected artist id", () => {
 });
 
 test("app.requestRecommendations sends priorityContext when artists are selected", async () => {
-  const requestBodies = [];
-  const fetchImpl = async (url, init) => {
+  const requestBodies: unknown[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
     if (url.includes("/recommendations")) {
+      assert.equal(typeof init?.body, "string");
       requestBodies.push(JSON.parse(init.body));
       return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     }
@@ -81,6 +92,10 @@ test("app.requestRecommendations sends priorityContext when artists are selected
   await app.requestRecommendations("I like atmospheric black metal", "fresh");
 
   assert.equal(requestBodies.length, 1);
-  assert.equal(typeof requestBodies[0].priorityContext, "string");
-  assert.equal(requestBodies[0].priorityContext.includes("Alcest"), true);
+  const body = requestBodies[0];
+  assert.ok(body && typeof body === "object" && "priorityContext" in body);
+  if (typeof body.priorityContext !== "string") {
+    assert.fail("priorityContext should be a string");
+  }
+  assert.equal(body.priorityContext.includes("Alcest"), true);
 });

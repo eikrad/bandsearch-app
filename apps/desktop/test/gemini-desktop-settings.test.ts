@@ -1,7 +1,8 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createGeminiSettingsController } from "../src/geminiDesktopSettings.js";
 
-const { createGeminiSettingsController } = require("../src/geminiDesktopSettings");
+type TauriCall = { cmd: string; args?: Record<string, string> };
 
 test("createGeminiSettingsController reports missing key when invoke returns hasStoredKey false", async () => {
   const ctrl = createGeminiSettingsController({
@@ -74,7 +75,7 @@ test("createGeminiSettingsController hasBraveKey defaults to false when not retu
 });
 
 test("createGeminiSettingsController saveBraveApiKey calls save_brave_api_key command", async () => {
-  const calls = [];
+  const calls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => {
       calls.push({ cmd, args });
@@ -127,7 +128,7 @@ test("createGeminiSettingsController getBootstrapGate reads onboarding flag from
 });
 
 test("createGeminiSettingsController completeOnboarding invokes Tauri command", async () => {
-  const calls = [];
+  const calls: string[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => {
       calls.push(cmd);
@@ -170,8 +171,8 @@ test("createGeminiSettingsController hasTursoConfig is true when invoke returns 
 });
 
 test("createGeminiSettingsController saveTursoConfig probes connection before saving", async () => {
-  const probeArgs = [];
-  const tauriCalls = [];
+  const probeArgs: Array<{ url: string; token: string }> = [];
+  const tauriCalls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async (url, token) => { probeArgs.push({ url, token }); return { ok: true }; },
@@ -183,7 +184,7 @@ test("createGeminiSettingsController saveTursoConfig probes connection before sa
 });
 
 test("createGeminiSettingsController saveTursoConfig invokes Tauri when probe succeeds", async () => {
-  const tauriCalls = [];
+  const tauriCalls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async () => ({ ok: true }),
@@ -196,7 +197,7 @@ test("createGeminiSettingsController saveTursoConfig invokes Tauri when probe su
 });
 
 test("createGeminiSettingsController saveTursoConfig does NOT invoke Tauri when probe fails", async () => {
-  const tauriCalls = [];
+  const tauriCalls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async () => ({ ok: false, error: "connection refused" }),
@@ -228,7 +229,7 @@ test("createGeminiSettingsController saveTursoConfig sets success status when pr
 });
 
 test("createGeminiSettingsController saveTursoConfig rejects empty databaseUrl", async () => {
-  const tauriCalls = [];
+  const tauriCalls: string[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => { tauriCalls.push(cmd); return {}; },
     probeTursoConnection: async () => ({ ok: true }),
@@ -266,7 +267,7 @@ test("getBootstrapGate includes apiEndpointUrl from invoke", async () => {
 });
 
 test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async () => {
-  const calls = [];
+  const calls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
   });
@@ -277,7 +278,7 @@ test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async ()
 });
 
 test("saveApiEndpointUrl accepts empty string to reset to local and reports success", async () => {
-  const calls = [];
+  const calls: TauriCall[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
   });
@@ -290,7 +291,7 @@ test("saveApiEndpointUrl accepts empty string to reset to local and reports succ
 });
 
 test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => {
-  const calls = [];
+  const calls: string[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
   });
@@ -301,7 +302,7 @@ test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => 
 });
 
 test("saveApiEndpointUrl rejects a non-http protocol without invoking", async () => {
-  const calls = [];
+  const calls: string[] = [];
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
   });

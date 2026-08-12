@@ -1,9 +1,8 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const React = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
-
-const { SettingsView } = require("../src/ui/SettingsView");
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { SettingsView } from "../src/ui/SettingsView.js";
 
 const baseViewProps = {
   headerTitle: "Settings",

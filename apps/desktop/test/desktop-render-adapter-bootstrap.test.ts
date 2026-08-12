@@ -1,8 +1,7 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { fakeDesktopApp } = require("./helpers/fakeApp");
-
-const { bootstrapDesktopRenderAdapter } = require("../src");
+import test from "node:test";
+import assert from "node:assert/strict";
+import { fakeDesktopApp } from "./helpers/fakeApp.js";
+import { bootstrapDesktopRenderAdapter } from "../src/index.js";
 
 test("desktop render adapter bootstrap exposes initial view props", () => {
   const adapter = bootstrapDesktopRenderAdapter({
