@@ -1,15 +1,15 @@
-const esbuild = require("esbuild");
-const fs = require("node:fs");
+import * as esbuild from "esbuild";
+import fs from "node:fs";
+import type { BuildOptions } from "esbuild";
 
-/** @type {import("esbuild").BuildOptions} */
-const config = {
+const config: BuildOptions = {
   entryPoints: ["./src/browserEntry.ts"],
   bundle: true,
   outfile: "dist/bundle.js",
   platform: "browser",
 };
 
-async function run() {
+async function run(): Promise<void> {
   const watch = process.argv.includes("--watch");
   fs.mkdirSync("dist", { recursive: true });
   fs.copyFileSync("public/index.html", "dist/index.html");
@@ -25,7 +25,7 @@ async function run() {
   }
 }
 
-run().catch((e) => {
+run().catch((e: unknown) => {
   console.error(e);
   process.exit(1);
 });
