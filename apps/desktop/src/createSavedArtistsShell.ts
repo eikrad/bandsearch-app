@@ -1,10 +1,28 @@
-export function createSavedArtistsShell({ app }: { app: any }) {
+import type { ArtistGroup, ArtistSearchResult, SavedBand } from "./domain.js";
+
+/** The slice of the bootstrapped app this shell drives. */
+export type SavedArtistsShellCollaborator = {
+  listSavedBands(): Promise<SavedBand[]>;
+  listGroups(): Promise<ArtistGroup[]>;
+  getState(): { selectedArtistIds: string[] };
+  toggleArtistSelection(id: string): void;
+  searchArtists(query: string): Promise<ArtistSearchResult[]>;
+  saveBand(name: string, options?: { note?: string }): Promise<unknown>;
+  deleteSavedBand(id: string): Promise<unknown>;
+  exportPreferences(): Promise<unknown[]>;
+  importPreferences(bands: unknown[]): Promise<unknown>;
+  createGroup(name: string): Promise<unknown>;
+  deleteGroup(id: string): Promise<unknown>;
+  autoGroup(): Promise<unknown>;
+};
+
+export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollaborator }) {
   let state: {
-    savedArtists: any[];
-    groups: any[];
-    selectedIds: any[];
+    savedArtists: SavedBand[];
+    groups: ArtistGroup[];
+    selectedIds: string[];
     searchQuery: string;
-    searchResults: any[];
+    searchResults: ArtistSearchResult[];
     isSearching: boolean;
   } = {
     savedArtists: [],
@@ -47,7 +65,7 @@ export function createSavedArtistsShell({ app }: { app: any }) {
         state = { ...state, isSearching: false };
       }
     },
-    async addArtist(mbArtist: any) {
+    async addArtist(mbArtist: ArtistSearchResult) {
       await app.saveBand(mbArtist.name, { note: mbArtist.disambiguation || "Added via search." });
       await reloadAll();
     },

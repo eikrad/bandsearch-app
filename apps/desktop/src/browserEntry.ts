@@ -1,13 +1,14 @@
 import { startDesktopBrowserApp } from "./startDesktopBrowserApp.js";
+import type { StartDesktopBrowserAppOptions } from "./startDesktopBrowserApp.js";
 
 function canAutoBoot(): boolean {
-  return typeof globalThis !== "undefined" && !!(globalThis as any).document;
+  return typeof globalThis !== "undefined" && !!globalThis.document;
 }
 
-export function bootBrowserDesktopApp(options: Record<string, any> = {}): any {
+export function bootBrowserDesktopApp(options: StartDesktopBrowserAppOptions = {}) {
   const p = startDesktopBrowserApp(options);
-  if (p && typeof (p as any).catch === "function") {
-    void (p as any).catch((err: unknown) => {
+  if (p && typeof p.catch === "function") {
+    void p.catch((err: unknown) => {
       console.error("[bandsearch] boot failed", err);
     });
   }
@@ -15,7 +16,7 @@ export function bootBrowserDesktopApp(options: Record<string, any> = {}): any {
 }
 
 if (canAutoBoot()) {
-  const doc = (globalThis as any).document;
+  const doc = globalThis.document;
   if (doc.readyState === "loading") {
     doc.addEventListener("DOMContentLoaded", () => {
       void bootBrowserDesktopApp();

@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { fakeDesktopApp } = require("./helpers/fakeApp");
+const { chatViewProps } = require("./helpers/fakeViewProps");
 
 const { BandsearchHttpError } = require("../src/chatClient");
 const { bootstrapDesktopReactShell } = require("../src");
@@ -8,7 +10,7 @@ const { createDesktopReactShell } = require("../src/ui/createDesktopReactShell")
 test("desktop react shell renders HTML with recommendation card and actions", async () => {
   const appState = { messages: [] };
   const shell = bootstrapDesktopReactShell({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => {
         appState.messages = [
           {
@@ -26,7 +28,7 @@ test("desktop react shell renders HTML with recommendation card and actions", as
         return { recommendations: appState.messages[0].recommendations, meta: appState.messages[0].meta };
       },
       getState: () => appState,
-    },
+    }),
   });
 
   await shell.submitQuery("I like post-black metal");
@@ -40,7 +42,7 @@ test("desktop react shell renders HTML with recommendation card and actions", as
 test("desktop react shell save and rate actions call app handlers", async () => {
   const calls = [];
   const shell = bootstrapDesktopReactShell({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({ messages: [] }),
       saveBand: async (artistName) => {
@@ -49,7 +51,7 @@ test("desktop react shell save and rate actions call app handlers", async () => 
       rateBand: async (artistName, rating) => {
         calls.push({ type: "rate", artistName, rating });
       },
-    },
+    }),
   });
 
   await shell.saveBand("Fen");
@@ -68,7 +70,7 @@ test("desktop react shell save and rate actions call app handlers", async () => 
 test("desktop react shell maps BandsearchHttpError to a human recommendation error banner", async () => {
   const shell = createDesktopReactShell({
     renderAdapter: {
-      getViewProps: () => ({
+      getViewProps: () => chatViewProps({
         headerTitle: "Bandsearch",
         headerSubtitle: "Niche recommendations",
         viewport: "desktop",
@@ -77,7 +79,6 @@ test("desktop react shell maps BandsearchHttpError to a human recommendation err
         queryPlaceholder: "Describe bands...",
         queryDisabled: false,
         cards: [],
-        emptyText: "No recommendations yet.",
       }),
       onModeChange: () => ({}),
       onSubmitQuery: async () => {
@@ -96,10 +97,13 @@ test("desktop react shell maps BandsearchHttpError to a human recommendation err
 });
 
 test("desktop react shell clears action status after timeout", async () => {
-  let scheduled;
+  /** @type {() => void} */
+  let scheduled = () => {
+    throw new Error("scheduled callback invoked before setTimeoutImpl ran");
+  };
   const shell = createDesktopReactShell({
     renderAdapter: {
-      getViewProps: () => ({
+      getViewProps: () => chatViewProps({
         headerTitle: "Bandsearch",
         headerSubtitle: "Niche recommendations",
         viewport: "desktop",
@@ -108,7 +112,6 @@ test("desktop react shell clears action status after timeout", async () => {
         queryPlaceholder: "Describe bands...",
         queryDisabled: false,
         cards: [],
-        emptyText: "No recommendations yet.",
       }),
       onModeChange: () => ({}),
       onSubmitQuery: async () => ({}),
@@ -136,7 +139,7 @@ test("createDesktopReactShell exposes cancelSearch and retryLastSearch from prov
     renderAdapter: {
       onModeChange: () => {},
       onSubmitQuery: async () => {},
-      getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
+      getViewProps: () => chatViewProps({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
     },
     cancelSearchImpl: () => { cancelled = true; },
     retryLastSearchImpl: () => { retried = true; },
@@ -157,7 +160,7 @@ test("desktop react shell renderHtml includes all three obscurity picker buttons
       onModeChange: () => {},
       onSubmitQuery: async () => {},
       onObscurityTargetChange: () => {},
-      getViewProps: () => ({
+      getViewProps: () => chatViewProps({
         headerTitle: "Bandsearch",
         viewport: "desktop",
         modeValue: "fresh",

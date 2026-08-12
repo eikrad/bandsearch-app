@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createDesktopReactMount } = require("../src/ui/mountDesktopReactApp");
+const { fakeContainer } = require("./helpers/fakeDom");
 
 test("desktop react mount renders and wires interaction callbacks", async () => {
   const calls = [];
@@ -11,7 +12,7 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
     },
   };
   const fakeCreateRoot = () => fakeRoot;
-  const fakeContainer = {};
+  const container = fakeContainer();
 
   const shell = {
     getViewProps: () => ({
@@ -33,7 +34,7 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
   const mount = createDesktopReactMount({
     shell,
     createRootImpl: fakeCreateRoot,
-    resolveContainer: () => fakeContainer,
+    resolveContainer: () => container,
   });
 
   mount.mount();
@@ -62,7 +63,7 @@ test("createDesktopReactMount exposes onStop handler that calls shell.cancelSear
       retryLastSearch: async () => {},
     },
     createRootImpl: () => ({ render: () => {} }),
-    resolveContainer: () => ({ id: "root" }),
+    resolveContainer: () => fakeContainer({ id: "root" }),
   });
 
   await mountApi.handlers.onStop?.();
@@ -81,7 +82,7 @@ test("createDesktopReactMount exposes onRetry handler that calls shell.retryLast
       retryLastSearch: async () => { retried = true; },
     },
     createRootImpl: () => ({ render: () => {} }),
-    resolveContainer: () => ({ id: "root" }),
+    resolveContainer: () => fakeContainer({ id: "root" }),
   });
 
   await mountApi.handlers.onRetry?.();

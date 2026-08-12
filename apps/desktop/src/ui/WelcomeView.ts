@@ -1,3 +1,4 @@
+import type { WelcomeHandlers } from "./viewTypes.js";
 import * as React from "react";
 
 const palette = {
@@ -15,7 +16,7 @@ const palette = {
 /**
  * First-run welcome: guides the user to add a Gemini API key (Settings) or skip for later.
  */
-export function WelcomeView({ viewProps, handlers }: { viewProps: any; handlers: any }) {
+export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: string }; handlers: WelcomeHandlers }) {
   void viewProps;
   return React.createElement(
     "main",

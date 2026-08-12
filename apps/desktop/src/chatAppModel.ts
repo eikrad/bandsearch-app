@@ -1,3 +1,12 @@
+import type {
+  RecommendationItem,
+  RecommendationMeta,
+  SavedBand,
+  ChatStateMessage,
+} from "./domain.js";
+
+export type { RecommendationItem, RecommendationMeta, SavedBand, ChatStateMessage };
+
 export type RenderableRecommendation = {
   title: string;
   why: string;
@@ -17,8 +26,23 @@ export type ConversationMessage =
 
 export type ChatAppModel = ReturnType<typeof createChatAppModel>;
 
-function toRenderableRecommendation(item: any, savedBands: any[]): RenderableRecommendation {
-  const savedBand = savedBands.find((s: any) => s.name === item.artist) ?? null;
+/** The slice of the bootstrapped app this model drives. */
+export type ChatAppCollaborator = {
+  requestRecommendations(
+    query: string,
+    mode: string,
+    obscurityTarget: string | undefined,
+  ): Promise<{ meta?: RecommendationMeta } | undefined>;
+  sendFeedback?(eventId: string, feedbackType: string): Promise<unknown>;
+  getState(): { messages?: ChatStateMessage[]; savedBands?: SavedBand[] };
+  cancelSearch?(): void;
+};
+
+function toRenderableRecommendation(
+  item: RecommendationItem,
+  savedBands: SavedBand[],
+): RenderableRecommendation {
+  const savedBand = savedBands.find((s) => s.name === item.artist) ?? null;
   return {
     title: item.artist,
     why: item.why || "",
@@ -33,12 +57,12 @@ function toRenderableRecommendation(item: any, savedBands: any[]): RenderableRec
   };
 }
 
-export function createChatAppModel({ app }: { app: any }) {
+export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
   let mode = "fresh";
   let obscurityTarget: string | undefined = "underground";
   let loadingState = false;
   let lastQuery = "";
-  let lastMeta: { modeUsed: string; usedPreferenceContext: boolean; eventId?: string } = {
+  let lastMeta: RecommendationMeta = {
     modeUsed: "fresh",
     usedPreferenceContext: false,
   };
@@ -51,7 +75,7 @@ export function createChatAppModel({ app }: { app: any }) {
     feedbackDismissed = false;
     loadingState = true;
     try {
-      const response = await app.requestRecommendations(query, mode, obscurityTarget) as any;
+      const response = await app.requestRecommendations(query, mode, obscurityTarget);
       lastMeta = response.meta ?? lastMeta;
       return response;
     } catch (error) {
@@ -100,12 +124,12 @@ export function createChatAppModel({ app }: { app: any }) {
       feedbackDismissed = true;
       const eventId = lastMeta.eventId;
       if (!eventId) return;
-      await app.sendFeedback(eventId, feedbackType);
+      await app.sendFeedback?.(eventId, feedbackType);
     },
     getConversation(): ConversationMessage[] | null {
       const appState = app.getState();
-      const messages: any[] = appState.messages || [];
-      const savedBands: any[] = appState.savedBands || [];
+      const messages: ChatStateMessage[] = appState.messages || [];
+      const savedBands: SavedBand[] = appState.savedBands || [];
       if (messages.length === 0) return null;
 
       const conversation: ConversationMessage[] = [];
@@ -115,7 +139,7 @@ export function createChatAppModel({ app }: { app: any }) {
           conversation.push({ id: `user-${i}`, role: "user", content: msg.content || "" });
         } else if (msg.role === "assistant") {
           const cards = (Array.isArray(msg.recommendations) ? msg.recommendations : []).map(
-            (item: any) => toRenderableRecommendation(item, savedBands),
+            (item) => toRenderableRecommendation(item, savedBands),
           );
           conversation.push({
             id: `assistant-${i}`,

@@ -1,14 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { fakeDesktopApp } = require("./helpers/fakeApp");
 
 const { bootstrapDesktopRenderAdapter } = require("../src");
 
 test("desktop render adapter bootstrap exposes initial view props", () => {
   const adapter = bootstrapDesktopRenderAdapter({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({ messages: [] }),
-    },
+    }),
   });
 
   const props = adapter.getViewProps();
@@ -18,10 +19,10 @@ test("desktop render adapter bootstrap exposes initial view props", () => {
 
 test("desktopUi.setViewport updates view props viewport", () => {
   const adapter = bootstrapDesktopRenderAdapter({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({ messages: [] }),
-    },
+    }),
   });
 
   assert.equal(adapter.getViewProps().viewport, "desktop");

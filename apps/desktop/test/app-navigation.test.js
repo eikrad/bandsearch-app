@@ -1,10 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const { jsonResponse } = require("./helpers/fakeResponse");
 const { bootstrapDesktopApp } = require("../src");
 
 function makeApp() {
-  return bootstrapDesktopApp({ apiBaseUrl: "http://localhost:3001", fetchImpl: async () => ({}) });
+  return bootstrapDesktopApp({ apiBaseUrl: "http://localhost:3001", fetchImpl: async () => jsonResponse({}) });
 }
 
 test("bootstrapDesktopApp starts on chat view", () => {

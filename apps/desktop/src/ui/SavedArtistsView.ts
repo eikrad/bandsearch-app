@@ -1,3 +1,6 @@
+import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
+import type { SavedArtistItem as SavedArtistItemProps, SavedArtistsScreenState } from "../savedArtistsModel.js";
+import type { SavedArtistsHandlers } from "./viewTypes.js";
 import * as React from "react";
 
 const theme = {
@@ -14,7 +17,7 @@ const theme = {
   buttonText: "#c8d4e8",
 };
 
-function SavedArtistItem({ artist, handlers }: { artist: any; handlers: any }) {
+function SavedArtistItem({ artist, handlers }: { artist: SavedArtistItemProps; handlers: SavedArtistsHandlers }) {
   const itemStyles = {
     li: {
       display: "flex",
@@ -94,7 +97,7 @@ function SavedArtistItem({ artist, handlers }: { artist: any; handlers: any }) {
   );
 }
 
-function SearchResultItem({ result, handlers }: { result: any; handlers: any }) {
+function SearchResultItem({ result, handlers }: { result: ArtistSearchResult; handlers: SavedArtistsHandlers }) {
   const styles = {
     li: {
       display: "flex",
@@ -142,7 +145,7 @@ function SearchResultItem({ result, handlers }: { result: any; handlers: any }) 
   );
 }
 
-function SearchResultsList({ results, handlers }: { results: any[]; handlers: any }) {
+function SearchResultsList({ results, handlers }: { results: ArtistSearchResult[]; handlers: SavedArtistsHandlers }) {
   const listStyle = { display: "grid", gap: "6px", listStyle: "none", padding: "0", margin: "0" };
   return React.createElement(
     "ul",
@@ -153,7 +156,7 @@ function SearchResultsList({ results, handlers }: { results: any[]; handlers: an
   );
 }
 
-function SearchSection({ searchResults, isSearching, handlers }: { searchResults: any[]; isSearching: boolean; handlers: any }) {
+function SearchSection({ searchResults, isSearching, handlers }: { searchResults: ArtistSearchResult[]; isSearching: boolean; handlers: SavedArtistsHandlers }) {
   const styles = {
     section: { marginTop: "20px" },
     sectionTitle: { fontSize: "13px", fontWeight: "600", color: theme.textSecondary, marginBottom: "8px" },
@@ -188,9 +191,9 @@ function SearchSection({ searchResults, isSearching, handlers }: { searchResults
       "form",
       {
         style: styles.row,
-        onSubmit: (e: any) => {
+        onSubmit: (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
-          const q = (e.target.elements["artist-search"] as any).value.trim();
+          const q = (e.currentTarget.elements.namedItem("artist-search") as HTMLInputElement).value.trim();
           if (q) handlers.onSearch?.(q);
         },
       },
@@ -215,7 +218,7 @@ function SearchSection({ searchResults, isSearching, handlers }: { searchResults
   );
 }
 
-function SelectionBar({ selectedCount, handlers }: { selectedCount: number; handlers: any }) {
+function SelectionBar({ selectedCount, handlers }: { selectedCount: number; handlers: SavedArtistsHandlers }) {
   const styles = {
     bar: {
       display: "flex",
@@ -256,7 +259,7 @@ function SelectionBar({ selectedCount, handlers }: { selectedCount: number; hand
   );
 }
 
-function GroupSection({ group, artists, handlers }: { group: any; artists: any[]; handlers: any }) {
+function GroupSection({ group, artists, handlers }: { group: ArtistGroup; artists: SavedArtistItemProps[]; handlers: SavedArtistsHandlers }) {
   const memberArtists = artists.filter((a) => group.memberIds.includes(a.id));
   const styles = {
     section: { marginTop: "20px" },
@@ -304,7 +307,7 @@ function GroupSection({ group, artists, handlers }: { group: any; artists: any[]
   );
 }
 
-function GroupsSection({ groups, artists, handlers }: { groups: any[]; artists: any[]; handlers: any }) {
+function GroupsSection({ groups, artists, handlers }: { groups: ArtistGroup[]; artists: SavedArtistItemProps[]; handlers: SavedArtistsHandlers }) {
   const styles = {
     section: { marginTop: "24px" },
     toolbar: { display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" },
@@ -355,9 +358,9 @@ function GroupsSection({ groups, artists, handlers }: { groups: any[]; artists: 
         "form",
         {
           style: { display: "flex", gap: "6px", flex: 1 },
-          onSubmit: (e: any) => {
+          onSubmit: (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
-            const input = e.target.elements["create-group"] as any;
+            const input = e.currentTarget.elements.namedItem("create-group") as HTMLInputElement;
             const name = input.value.trim();
             if (name) {
               handlers.onCreateGroup?.(name);
@@ -385,7 +388,7 @@ function GroupsSection({ groups, artists, handlers }: { groups: any[]; artists: 
   );
 }
 
-export function SavedArtistsView({ viewProps, handlers }: { viewProps: any; handlers: any }) {
+export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArtistsScreenState; handlers: SavedArtistsHandlers }) {
   const styles = {
     page: {
       backgroundColor: theme.pageBg,
@@ -462,7 +465,7 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: any; hand
               type: "file",
               accept: ".json,application/json",
               style: { display: "none" },
-              onChange: (e: any) => {
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 handlers.onImportFile?.(file);
@@ -494,7 +497,7 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: any; hand
         : React.createElement(
             "ul",
             { style: { ...styles.list, listStyle: "none", padding: "0", margin: "0" } },
-            artists.map((artist: any) =>
+            artists.map((artist) =>
               React.createElement(SavedArtistItem, { key: artist.id, artist, handlers }),
             ),
           ),
