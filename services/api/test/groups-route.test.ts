@@ -5,17 +5,47 @@ import { createApp } from "../src/app.js";
 import { createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 
 type Group = { id: string; name: string; memberIds: string[] };
-type ApiData = {
-  groups: Group[];
-  group: Group;
-  savedBand: { id: string };
-  deletedId: string;
-  error: { code: string };
-};
 
-function parseApiData(value: unknown): ApiData {
-  assert.ok(value && typeof value === "object" && !Array.isArray(value));
-  return value as ApiData;
+function asRecord(value: unknown): asserts value is Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+}
+
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  assert.ok(typeof value === "string");
+  return value;
+}
+
+function recordField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  asRecord(value);
+  return value;
+}
+
+function groupFrom(value: unknown): Group {
+  asRecord(value);
+  const memberIds = value.memberIds;
+  assert.ok(Array.isArray(memberIds));
+  return {
+    id: stringField(value, "id"),
+    name: stringField(value, "name"),
+    memberIds: memberIds.map((memberId) => {
+      assert.equal(typeof memberId, "string");
+      return memberId;
+    }),
+  };
+}
+
+function groupField(record: Record<string, unknown>, key: string): Group {
+  return groupFrom(record[key]);
+}
+
+function groupsField(record: Record<string, unknown>): Group[] {
+  const groups = record.groups;
+  assert.ok(Array.isArray(groups));
+  return groups.map(groupFrom);
 }
 
 type CreateAppOptions = NonNullable<Parameters<typeof createApp>[0]>;
@@ -44,7 +74,8 @@ async function req(
       headers: { "content-type": "application/json" },
       body: payload !== undefined ? JSON.stringify(payload) : undefined,
     });
-    const data = parseApiData(await response.json());
+    const data: unknown = await response.json();
+    asRecord(data);
     return { status: response.status, data };
   } finally {
     server.close();
@@ -56,7 +87,7 @@ test("GET /preferences/groups returns empty array initially", async () => {
   const result = await req(app, "GET", "/preferences/groups");
 
   assert.equal(result.status, 200);
-  assert.deepEqual(result.data.groups, []);
+  assert.deepEqual(groupsField(result.data), []);
 });
 
 test("POST /preferences/groups creates a group", async () => {
@@ -64,9 +95,10 @@ test("POST /preferences/groups creates a group", async () => {
   const result = await req(app, "POST", "/preferences/groups", { name: "Blackgaze" });
 
   assert.equal(result.status, 201);
-  assert.equal(result.data.group.name, "Blackgaze");
-  assert.ok(result.data.group.id, "group should have an id");
-  assert.deepEqual(result.data.group.memberIds, []);
+  const group = groupField(result.data, "group");
+  assert.equal(group.name, "Blackgaze");
+  assert.ok(group.id, "group should have an id");
+  assert.deepEqual(group.memberIds, []);
 });
 
 test("POST /preferences/groups rejects blank name", async () => {
@@ -74,7 +106,7 @@ test("POST /preferences/groups rejects blank name", async () => {
   const result = await req(app, "POST", "/preferences/groups", { name: "  " });
 
   assert.equal(result.status, 400);
-  assert.equal(result.data.error.code, "validation_error");
+  assert.equal(stringField(recordField(result.data, "error"), "code"), "validation_error");
 });
 
 test("POST /preferences/groups rejects duplicate group name", async () => {
@@ -83,18 +115,18 @@ test("POST /preferences/groups rejects duplicate group name", async () => {
   const result = await req(app, "POST", "/preferences/groups", { name: "Blackgaze" });
 
   assert.equal(result.status, 409);
-  assert.equal(result.data.error.code, "group_name_conflict");
+  assert.equal(stringField(recordField(result.data, "error"), "code"), "group_name_conflict");
 });
 
 test("PATCH /preferences/groups/:id renames a group", async () => {
   const app = freshApp();
   const created = await req(app, "POST", "/preferences/groups", { name: "Blackgaze" });
-  const id = created.data.group.id;
+  const id = groupField(created.data, "group").id;
 
   const result = await req(app, "PATCH", `/preferences/groups/${id}`, { name: "Shoegaze" });
 
   assert.equal(result.status, 200);
-  assert.equal(result.data.group.name, "Shoegaze");
+  assert.equal(groupField(result.data, "group").name, "Shoegaze");
 });
 
 test("PATCH /preferences/groups/:id returns 404 for unknown group", async () => {
@@ -107,14 +139,14 @@ test("PATCH /preferences/groups/:id returns 404 for unknown group", async () => 
 test("DELETE /preferences/groups/:id deletes a group", async () => {
   const app = freshApp();
   const created = await req(app, "POST", "/preferences/groups", { name: "Post-metal" });
-  const id = created.data.group.id;
+  const id = groupField(created.data, "group").id;
 
   const deletion = await req(app, "DELETE", `/preferences/groups/${id}`);
   assert.equal(deletion.status, 200);
-  assert.equal(deletion.data.deletedId, id);
+  assert.equal(stringField(deletion.data, "deletedId"), id);
 
   const list = await req(app, "GET", "/preferences/groups");
-  assert.equal(list.data.groups.length, 0);
+  assert.equal(groupsField(list.data).length, 0);
 });
 
 test("DELETE /preferences/groups/:id returns 404 for unknown group", async () => {
@@ -134,16 +166,17 @@ test("POST /preferences/groups/:id/artists adds saved band to group", async () =
     categories: [],
     note: "",
   });
-  const bandId = band.data.savedBand.id;
+  const bandId = stringField(recordField(band.data, "savedBand"), "id");
 
   const group = await req(app, "POST", "/preferences/groups", { name: "Blackgaze" });
-  const groupId = group.data.group.id;
+  const groupId = groupField(group.data, "group").id;
 
   const result = await req(app, "POST", `/preferences/groups/${groupId}/artists`, { savedBandId: bandId });
   assert.equal(result.status, 200);
 
   const list = await req(app, "GET", "/preferences/groups");
-  const g = list.data.groups.find((group) => group.id === groupId);
+  const g = groupsField(list.data).find((candidate) => candidate.id === groupId);
+  assert.ok(g);
   assert.equal(g.memberIds.includes(bandId), true);
 });
 
@@ -157,17 +190,18 @@ test("DELETE /preferences/groups/:id/artists/:savedBandId removes band from grou
     categories: [],
     note: "",
   });
-  const bandId = band.data.savedBand.id;
+  const bandId = stringField(recordField(band.data, "savedBand"), "id");
 
   const group = await req(app, "POST", "/preferences/groups", { name: "Blackgaze" });
-  const groupId = group.data.group.id;
+  const groupId = groupField(group.data, "group").id;
 
   await req(app, "POST", `/preferences/groups/${groupId}/artists`, { savedBandId: bandId });
   const removal = await req(app, "DELETE", `/preferences/groups/${groupId}/artists/${bandId}`);
   assert.equal(removal.status, 200);
 
   const list = await req(app, "GET", "/preferences/groups");
-  const g = list.data.groups.find((group) => group.id === groupId);
+  const g = groupsField(list.data).find((candidate) => candidate.id === groupId);
+  assert.ok(g);
   assert.deepEqual(g.memberIds, []);
 });
 
@@ -192,12 +226,13 @@ test("POST /preferences/groups/auto creates genre-based groups from saved bands"
 
   const result = await req(app, "POST", "/preferences/groups/auto");
   assert.equal(result.status, 200);
-  assert.ok(Array.isArray(result.data.groups), "should return groups array");
+  const groups = groupsField(result.data);
 
-  const groupNames = result.data.groups.map((group) => group.name);
+  const groupNames = groups.map((group) => group.name);
   assert.ok(groupNames.includes("blackgaze"), "should create blackgaze group");
   assert.ok(groupNames.includes("post-metal"), "should create post-metal group");
 
-  const blackgazeGroup = result.data.groups.find((group) => group.name === "blackgaze");
+  const blackgazeGroup = groups.find((group) => group.name === "blackgaze");
+  assert.ok(blackgazeGroup);
   assert.ok(blackgazeGroup.memberIds.length > 0, "blackgaze group should have members");
 });

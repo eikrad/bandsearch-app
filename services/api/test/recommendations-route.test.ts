@@ -5,17 +5,28 @@ import { createApp } from "../src/app.js";
 import type { PreferenceRepository } from "../src/preferences/preferenceRepository.js";
 import type { RecommendationError } from "../src/recommendations.js";
 
-type Recommendation = { artist: string; why: string; sourceSignals: string[] };
-type ApiData = {
-  recommendations: Recommendation[];
-  assistantReply: string;
-  meta: { modeUsed: string; usedPreferenceContext: boolean; eventId: string };
-  error: { code: string; message: string };
-};
+function asRecord(value: unknown): asserts value is Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+}
 
-function parseApiData(value: unknown): ApiData {
-  assert.ok(value && typeof value === "object" && !Array.isArray(value));
-  return value as ApiData;
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  assert.ok(typeof value === "string");
+  return value;
+}
+
+function recordField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  asRecord(value);
+  return value;
+}
+
+function arrayField(record: Record<string, unknown>, key: string): unknown[] {
+  const value = record[key];
+  assert.ok(Array.isArray(value));
+  return value;
 }
 
 function createPreferenceRepositoryStub(buildContext: () => string): PreferenceRepository {
@@ -49,7 +60,8 @@ async function makeRequest(app: ReturnType<typeof createApp>, path: string, payl
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = parseApiData(await response.json());
+    const data: unknown = await response.json();
+    asRecord(data);
     return { status: response.status, data };
   } finally {
     server.close();
@@ -61,8 +73,9 @@ test("POST /recommendations rejects empty query", async () => {
   const result = await makeRequest(app, "/recommendations", { query: "" });
 
   assert.equal(result.status, 400);
-  assert.equal(result.data.error.code, "validation_error");
-  assert.equal(result.data.error.message, "query is required");
+  const error = recordField(result.data, "error");
+  assert.equal(stringField(error, "code"), "validation_error");
+  assert.equal(stringField(error, "message"), "query is required");
 });
 
 test("POST /recommendations returns recommendation results", async () => {
@@ -96,15 +109,17 @@ test("POST /recommendations returns recommendation results", async () => {
   });
 
   assert.equal(result.status, 200);
-  assert.equal(Array.isArray(result.data.recommendations), true);
-  assert.equal(result.data.recommendations.length, 3);
-  assert.equal(typeof result.data.recommendations[0].artist, "string");
-  assert.equal(typeof result.data.recommendations[0].why, "string");
-  assert.equal(Array.isArray(result.data.recommendations[0].sourceSignals), true);
-  assert.equal(result.data.meta.modeUsed, "fresh");
-  assert.equal(result.data.meta.usedPreferenceContext, false);
-  assert.equal(typeof result.data.assistantReply, "string");
-  assert.equal(result.data.assistantReply.includes("heavier"), true);
+  const recommendations = arrayField(result.data, "recommendations");
+  assert.equal(recommendations.length, 3);
+  const firstRecommendation = recommendations[0];
+  asRecord(firstRecommendation);
+  stringField(firstRecommendation, "artist");
+  stringField(firstRecommendation, "why");
+  arrayField(firstRecommendation, "sourceSignals");
+  const meta = recordField(result.data, "meta");
+  assert.equal(stringField(meta, "modeUsed"), "fresh");
+  assert.equal(meta.usedPreferenceContext, false);
+  assert.equal(stringField(result.data, "assistantReply").includes("heavier"), true);
 });
 
 test("POST /recommendations uses injected recommendation pipeline", async () => {
@@ -136,10 +151,13 @@ test("POST /recommendations uses injected recommendation pipeline", async () => 
   });
 
   assert.equal(result.status, 200);
-  assert.equal(result.data.recommendations[0].artist, "Les Discrets");
-  assert.equal(result.data.recommendations[0].sourceSignals[0], "musicbrainz_search");
-  assert.equal(result.data.meta.modeUsed, "preference-aware");
-  assert.equal(result.data.meta.usedPreferenceContext, true);
+  const firstRecommendation = arrayField(result.data, "recommendations")[0];
+  asRecord(firstRecommendation);
+  assert.equal(stringField(firstRecommendation, "artist"), "Les Discrets");
+  assert.equal(arrayField(firstRecommendation, "sourceSignals")[0], "musicbrainz_search");
+  const meta = recordField(result.data, "meta");
+  assert.equal(stringField(meta, "modeUsed"), "preference-aware");
+  assert.equal(meta.usedPreferenceContext, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].mode, "preference-aware");
 });
@@ -160,7 +178,7 @@ test("POST /recommendations returns 503 when pipeline is initializing", async ()
   });
 
   assert.equal(result.status, 503);
-  assert.equal(result.data.error.code, "recommendation_initializing");
+  assert.equal(stringField(recordField(result.data, "error"), "code"), "recommendation_initializing");
 });
 
 test("POST /recommendations returns 502 on recommendation service error", async () => {
@@ -177,8 +195,9 @@ test("POST /recommendations returns 502 on recommendation service error", async 
   });
 
   assert.equal(result.status, 502);
-  assert.equal(result.data.error.code, "recommendation_unavailable");
-  assert.equal(result.data.error.message, "recommendation service unavailable");
+  const error = recordField(result.data, "error");
+  assert.equal(stringField(error, "code"), "recommendation_unavailable");
+  assert.equal(stringField(error, "message"), "recommendation service unavailable");
 });
 
 test("POST /recommendations logs prompt_safety_truncate when priorityContext is over limit", async () => {
@@ -308,7 +327,7 @@ test("POST /recommendations forwards priorityContext to the pipeline", async () 
 
   assert.equal(result.status, 200);
   assert.equal(calls[0].priorityContext, "Priority references: Alcest, Agalloch");
-  assert.equal(result.data.meta.usedPreferenceContext, true);
+  assert.equal(recordField(result.data, "meta").usedPreferenceContext, true);
 });
 
 // ─── Phase 8.3b: obscurityTarget threading ───────────────────────────────────
@@ -421,8 +440,9 @@ test("POST /recommendations defaults to fresh mode", async () => {
 
   assert.equal(result.status, 200);
   assert.equal(calls[0].mode, "fresh");
-  assert.equal(result.data.meta.modeUsed, "fresh");
-  assert.equal(result.data.meta.usedPreferenceContext, false);
+  const meta = recordField(result.data, "meta");
+  assert.equal(stringField(meta, "modeUsed"), "fresh");
+  assert.equal(meta.usedPreferenceContext, false);
 });
 
 test("POST /recommendations includes eventId in meta when evalWorker is set", async () => {
@@ -444,8 +464,8 @@ test("POST /recommendations includes eventId in meta when evalWorker is set", as
   const result = await makeRequest(app, "/recommendations", { query: "blackgaze bands" });
 
   assert.equal(result.status, 200);
-  assert.ok(typeof result.data.meta.eventId === "string", "meta.eventId should be a string");
-  assert.ok(result.data.meta.eventId.length > 0, "meta.eventId should not be empty");
+  const eventId = stringField(recordField(result.data, "meta"), "eventId");
+  assert.ok(eventId.length > 0, "meta.eventId should not be empty");
 });
 
 test("POST /recommendations passes pre-generated eventId to processEvent", async () => {
@@ -469,5 +489,5 @@ test("POST /recommendations passes pre-generated eventId to processEvent", async
 
   assert.equal(result.status, 200);
   assert.equal(processedContexts.length, 1);
-  assert.equal(processedContexts[0].eventId, result.data.meta.eventId);
+  assert.equal(processedContexts[0].eventId, stringField(recordField(result.data, "meta"), "eventId"));
 });

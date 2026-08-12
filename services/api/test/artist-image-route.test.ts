@@ -3,14 +3,22 @@ import assert from "node:assert/strict";
 
 import { createApp } from "../src/app.js";
 
-type ApiData = {
-  imageUrl: string | null;
-  error: { code: string };
-};
+function asRecord(value: unknown): asserts value is Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+}
 
-function parseApiData(value: unknown): ApiData {
-  assert.ok(value && typeof value === "object" && !Array.isArray(value));
-  return value as ApiData;
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  assert.ok(typeof value === "string");
+  return value;
+}
+
+function recordField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  asRecord(value);
+  return value;
 }
 
 async function makeGetRequest(app: ReturnType<typeof createApp>, path: string) {
@@ -21,7 +29,8 @@ async function makeGetRequest(app: ReturnType<typeof createApp>, path: string) {
   const port = address.port;
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);
-    const data = parseApiData(await response.json());
+    const data: unknown = await response.json();
+    asRecord(data);
     return { status: response.status, data };
   } finally {
     server.close();
@@ -42,7 +51,7 @@ test("GET /artists/image returns image URL from Wikidata client", async () => {
   const result = await makeGetRequest(app, "/artists/image?name=Fen");
 
   assert.equal(result.status, 200);
-  assert.equal(result.data.imageUrl, "https://commons.wikimedia.org/w/fen.jpg");
+  assert.equal(stringField(result.data, "imageUrl"), "https://commons.wikimedia.org/w/fen.jpg");
 });
 
 test("GET /artists/image returns null imageUrl when not found", async () => {
@@ -63,5 +72,5 @@ test("GET /artists/image requires non-empty name parameter", async () => {
 
   const noName = await makeGetRequest(app, "/artists/image");
   assert.equal(noName.status, 400);
-  assert.equal(noName.data.error.code, "validation_error");
+  assert.equal(stringField(recordField(noName.data, "error"), "code"), "validation_error");
 });

@@ -7,16 +7,22 @@ import { createPreferenceRepository } from "../src/preferences/preferenceReposit
 
 const JWT_SECRET = "test-secret-at-least-32-chars-long!!";
 
-type ApiData = {
-  token: string;
-  recoveryCode: string;
-  newRecoveryCode: string;
-  user: { email: string };
-};
+function asRecord(value: unknown): asserts value is Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+}
 
-function parseApiData(value: unknown): ApiData {
-  assert.ok(value && typeof value === "object" && !Array.isArray(value));
-  return value as ApiData;
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  assert.ok(typeof value === "string");
+  return value;
+}
+
+function recordField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  asRecord(value);
+  return value;
 }
 
 function freshApp(userRepository: ReturnType<typeof createInMemoryUserRepository> = createInMemoryUserRepository()) {
@@ -47,7 +53,9 @@ async function req(
       headers,
       body: payload ? JSON.stringify(payload) : undefined,
     });
-    return { status: response.status, data: parseApiData(await response.json()) };
+    const data: unknown = await response.json();
+    asRecord(data);
+    return { status: response.status, data };
   } finally {
     server.close();
   }
@@ -59,9 +67,9 @@ test("POST /auth/register creates user and returns token + recoveryCode", async 
   const app = freshApp();
   const r = await req(app, "POST", "/auth/register", { email: "a@x.com", displayName: "A", password: "pw" });
   assert.equal(r.status, 201);
-  assert.ok(r.data.token);
-  assert.ok(r.data.recoveryCode);
-  assert.equal(r.data.user.email, "a@x.com");
+  assert.ok(stringField(r.data, "token"));
+  assert.ok(stringField(r.data, "recoveryCode"));
+  assert.equal(stringField(recordField(r.data, "user"), "email"), "a@x.com");
 });
 
 test("POST /auth/register returns 400 for duplicate email", async () => {
@@ -85,7 +93,7 @@ test("POST /auth/login returns token for valid credentials", async () => {
   await req(app, "POST", "/auth/register", { email: "b@x.com", displayName: "B", password: "correct" });
   const r = await req(app, "POST", "/auth/login", { email: "b@x.com", password: "correct" });
   assert.equal(r.status, 200);
-  assert.ok(r.data.token);
+  assert.ok(stringField(r.data, "token"));
 });
 
 test("POST /auth/login returns 401 for wrong password", async () => {
@@ -109,11 +117,11 @@ test("POST /auth/reset-password succeeds with valid recovery code", async () => 
   const reg = await req(app, "POST", "/auth/register", { email: "d@x.com", displayName: "D", password: "old" });
   const r = await req(app, "POST", "/auth/reset-password", {
     email: "d@x.com",
-    recoveryCode: reg.data.recoveryCode,
+    recoveryCode: stringField(reg.data, "recoveryCode"),
     newPassword: "new",
   });
   assert.equal(r.status, 200);
-  assert.ok(r.data.newRecoveryCode);
+  assert.ok(stringField(r.data, "newRecoveryCode"));
 });
 
 test("POST /auth/reset-password returns 400 for wrong recovery code", async () => {
@@ -143,7 +151,7 @@ test("protected route accepts valid Bearer token", async () => {
   const ur = createInMemoryUserRepository();
   const app = freshApp(ur);
   const reg = await req(app, "POST", "/auth/register", { email: "g@x.com", displayName: "G", password: "pw" });
-  const r = await req(app, "GET", "/preferences", undefined, reg.data.token);
+  const r = await req(app, "GET", "/preferences", undefined, stringField(reg.data, "token"));
   assert.equal(r.status, 200);
 });
 

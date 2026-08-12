@@ -3,13 +3,28 @@ import assert from "node:assert/strict";
 
 import { createApp } from "../src/app.js";
 
-type Session = { id: string; title: string; createdAt: string };
-type Message = { id: string; role: string; content: string };
-type ApiData = { session: Session; sessions: Session[]; message: Message; messages: Message[] };
+function asRecord(value: unknown): asserts value is Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+}
 
-function parseApiData(value: unknown): ApiData {
-  assert.ok(value && typeof value === "object" && !Array.isArray(value));
-  return value as ApiData;
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  assert.ok(typeof value === "string");
+  return value;
+}
+
+function recordField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  asRecord(value);
+  return value;
+}
+
+function arrayField(record: Record<string, unknown>, key: string): unknown[] {
+  const value = record[key];
+  assert.ok(Array.isArray(value));
+  return value;
 }
 
 async function makeRequest(
@@ -26,7 +41,8 @@ async function makeRequest(
     const options: RequestInit = { method, headers: { "content-type": "application/json" } };
     if (body !== undefined) options.body = JSON.stringify(body);
     const response = await fetch(`http://127.0.0.1:${port}${path}`, options);
-    const data = parseApiData(await response.json());
+    const data: unknown = await response.json();
+    asRecord(data);
     return { status: response.status, data };
   } finally {
     server.close();
@@ -41,9 +57,10 @@ test("POST /sessions creates a new chat session", async () => {
   });
 
   assert.equal(result.status, 201);
-  assert.equal(typeof result.data.session.id, "string");
-  assert.equal(result.data.session.title, "Post-black exploration");
-  assert.equal(typeof result.data.session.createdAt, "string");
+  const session = recordField(result.data, "session");
+  stringField(session, "id");
+  assert.equal(stringField(session, "title"), "Post-black exploration");
+  stringField(session, "createdAt");
 });
 
 test("GET /sessions returns list of sessions", async () => {
@@ -53,8 +70,7 @@ test("GET /sessions returns list of sessions", async () => {
 
   const result = await makeRequest(app, "/sessions");
   assert.equal(result.status, 200);
-  assert.equal(Array.isArray(result.data.sessions), true);
-  assert.equal(result.data.sessions.length >= 1, true);
+  assert.equal(arrayField(result.data, "sessions").length >= 1, true);
 });
 
 test("POST /sessions/:id/messages appends a message to session", async () => {
@@ -63,7 +79,7 @@ test("POST /sessions/:id/messages appends a message to session", async () => {
     method: "POST",
     body: { title: "Test" },
   });
-  const sessionId = created.data.session.id;
+  const sessionId = stringField(recordField(created.data, "session"), "id");
 
   const result = await makeRequest(app, `/sessions/${sessionId}/messages`, {
     method: "POST",
@@ -71,9 +87,10 @@ test("POST /sessions/:id/messages appends a message to session", async () => {
   });
 
   assert.equal(result.status, 201);
-  assert.equal(typeof result.data.message.id, "string");
-  assert.equal(result.data.message.role, "user");
-  assert.equal(result.data.message.content, "I like atmospheric black metal");
+  const message = recordField(result.data, "message");
+  stringField(message, "id");
+  assert.equal(stringField(message, "role"), "user");
+  assert.equal(stringField(message, "content"), "I like atmospheric black metal");
 });
 
 test("GET /sessions/:id returns session with messages", async () => {
@@ -82,7 +99,7 @@ test("GET /sessions/:id returns session with messages", async () => {
     method: "POST",
     body: { title: "My chat" },
   });
-  const sessionId = created.data.session.id;
+  const sessionId = stringField(recordField(created.data, "session"), "id");
 
   await makeRequest(app, `/sessions/${sessionId}/messages`, {
     method: "POST",
@@ -91,8 +108,10 @@ test("GET /sessions/:id returns session with messages", async () => {
 
   const result = await makeRequest(app, `/sessions/${sessionId}`);
   assert.equal(result.status, 200);
-  assert.equal(result.data.session.id, sessionId);
-  assert.equal(Array.isArray(result.data.messages), true);
-  assert.equal(result.data.messages.length, 1);
-  assert.equal(result.data.messages[0].content, "I like Alcest");
+  assert.equal(stringField(recordField(result.data, "session"), "id"), sessionId);
+  const messages = arrayField(result.data, "messages");
+  assert.equal(messages.length, 1);
+  const message = messages[0];
+  asRecord(message);
+  assert.equal(stringField(message, "content"), "I like Alcest");
 });
