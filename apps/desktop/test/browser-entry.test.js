@@ -11,7 +11,7 @@ test("bootBrowserDesktopApp forwards options to browser starter", async () => {
     ...originalStarter,
     startDesktopBrowserApp: (options) => {
       calls.push(options);
-      return Promise.resolve({ ok: true });
+      return /** @type {any} */ (Promise.resolve({ ok: true }));
     },
   };
 
@@ -21,7 +21,7 @@ test("bootBrowserDesktopApp forwards options to browser starter", async () => {
 
   require.cache[starterPath].exports = originalStarter;
 
-  assert.equal(result.ok, true);
+  assert.equal(/** @type {any} */ (result).ok, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].apiBaseUrl, "http://localhost:3001");
 });

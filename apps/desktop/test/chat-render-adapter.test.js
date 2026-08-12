@@ -23,8 +23,12 @@ function makeDesktopUi(overrides = {}) {
   let mode = "fresh";
   let obscurityTarget = "underground";
   let conversation = null;
+  let viewport = "desktop";
   return {
-    getViewport: () => "desktop",
+    setViewport: (v) => { viewport = v; },
+    getViewport: () => viewport,
+    cancelSearch: () => {},
+    retryLastSearch: async () => {},
     getMode: () => mode,
     isLoading: () => false,
     isShowFeedbackBar: () => false,

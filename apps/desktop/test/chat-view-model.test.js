@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const { createChatAppModel } = require("../src/chatAppModel");
 const { bootstrapDesktopApp } = require("../src/bootstrapDesktopApp");
+const { jsonResponse } = require("./helpers/fakeResponse");
 
 test("chat app model tracks mode and sends queries through app interface", async () => {
   const calls = [];
@@ -56,7 +57,9 @@ test("chat app model formats recommendation list for rendering", () => {
 
   const conversation = vm.getConversation();
   assert.ok(conversation, "conversation is non-null");
-  const cards = conversation[0].cards;
+  const first = conversation[0];
+  assert.ok(first.role === "assistant", "first conversation entry is the assistant reply");
+  const cards = first.cards;
   assert.equal(cards.length, 1);
   assert.equal(cards[0].title, "Fen");
   assert.ok(cards[0].why.includes("Post-metal"), "why field preserved");
@@ -183,7 +186,10 @@ test("chatAppModel.retryLastSearch is a no-op when lastQuery is empty", async ()
 });
 
 test("chatAppModel.submitQuery swallows AbortError and resets loadingState", async () => {
-  let rejectWithAbort;
+  /** @type {(reason?: unknown) => void} */
+  let rejectWithAbort = () => {
+    throw new Error("rejectWithAbort called before the search promise was created");
+  };
   const vm = createChatAppModel({
     app: {
       requestRecommendations: async () => {
@@ -203,7 +209,7 @@ test("chatAppModel.submitQuery swallows AbortError and resets loadingState", asy
 
 test("bootstrapDesktopApp.cancelSearch is a no-op when idle", () => {
   const app = bootstrapDesktopApp({
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ recommendations: [], meta: {} }) }),
+    fetchImpl: async () => (jsonResponse({ recommendations: [], meta: {} })),
   });
   // Should not throw
   assert.doesNotThrow(() => app.cancelSearch());

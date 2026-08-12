@@ -1,3 +1,12 @@
+import type {
+  ArtistGroup,
+  ArtistSearchResult,
+  ChatSession,
+  RecommendationItem,
+  RecommendationMeta,
+  RecommendationResponse,
+  SavedBand,
+} from "./domain.js";
 export class BandsearchHttpError extends Error {
   status?: number;
   code?: string;
@@ -73,7 +82,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         signal,
       });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<RecommendationResponse>;
     },
 
     async sendFeedback(eventId: string, feedbackType: string) {
@@ -109,7 +118,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
     async listPreferences() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      const data = await response.json() as { savedBands?: unknown[] };
+      const data = await response.json() as { savedBands?: SavedBand[] };
       return data.savedBands || [];
     },
 
@@ -125,7 +134,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
     async fetchSavedBands() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ savedBands: SavedBand[] }>;
     },
 
     async searchArtists(query: string) {
@@ -134,7 +143,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         { headers: jsonHeaders() },
       );
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ artists: ArtistSearchResult[] }>;
     },
 
     async createSession(title = "Untitled") {
@@ -144,13 +153,13 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         body: JSON.stringify({ title }),
       });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ session: ChatSession }>;
     },
 
     async listSessions() {
       const response = await fetchImpl(`${baseUrl}/sessions`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ sessions: ChatSession[] }>;
     },
 
     async appendSessionMessage(sessionId: string, message: unknown) {
@@ -182,7 +191,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
     async listGroups() {
       const response = await fetchImpl(`${baseUrl}/preferences/groups`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      const data = await response.json() as { groups?: unknown[] };
+      const data = await response.json() as { groups?: ArtistGroup[] };
       return data.groups || [];
     },
 
@@ -211,7 +220,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         headers: jsonHeaders(),
       });
       await ensureOk(response);
-      const data = await response.json() as { groups?: unknown[] };
+      const data = await response.json() as { groups?: ArtistGroup[] };
       return data.groups || [];
     },
   };
@@ -219,16 +228,24 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
 
 export type ChatClient = ReturnType<typeof createChatClient>;
 
-export type ChatMessage = { role: "user" | "assistant"; content: string; recommendations?: unknown[]; meta?: unknown };
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  recommendations?: RecommendationItem[];
+  meta?: RecommendationMeta;
+};
 export type ChatState = { messages: ChatMessage[]; savedBands: unknown[]; selectedArtistIds: string[]; currentSessionId: string | null };
 
 export function createInitialChatState(): Pick<ChatState, "messages"> {
   return { messages: [] };
 }
 
-export function buildLocalAssistantFallback(recommendations: unknown[], queryHint = ""): string {
+export function buildLocalAssistantFallback(
+  recommendations: RecommendationItem[],
+  queryHint = "",
+): string {
   const names = Array.isArray(recommendations)
-    ? recommendations.map((r: any) => r && r.artist).filter((n: unknown) => typeof n === "string" && (n as string).trim())
+    ? recommendations.map((r) => r && r.artist).filter((n) => typeof n === "string" && n.trim())
     : [];
   const tail = names.length
     ? `: ${names.slice(0, 3).join(", ")}. Want to go heavier or softer, or narrow the era or region next?`
@@ -238,20 +255,25 @@ export function buildLocalAssistantFallback(recommendations: unknown[], queryHin
   return `${head}${tail}`;
 }
 
-export function applyAssistantMessage(state: ChatState, recommendationResponse: Record<string, unknown>): ChatState {
-  let assistantReply =
-    typeof recommendationResponse.assistantReply === "string" ? recommendationResponse.assistantReply.trim() : "";
+// Only `messages` is read; everything else is passed through untouched. Taking
+// the narrower shape lets callers hand over the result of
+// createInitialChatState(), which does not carry the rest of ChatState yet.
+export function applyAssistantMessage<S extends Pick<ChatState, "messages">>(
+  state: S,
+  recommendationResponse: RecommendationResponse,
+): S {
+  let assistantReply = recommendationResponse.assistantReply?.trim() ?? "";
   if (!assistantReply && Array.isArray(recommendationResponse.recommendations)) {
     const lastUser = [...state.messages].reverse().find((m) => m.role === "user");
     assistantReply = buildLocalAssistantFallback(
-      recommendationResponse.recommendations as unknown[],
+      recommendationResponse.recommendations,
       lastUser && typeof lastUser.content === "string" ? lastUser.content : "",
     );
   }
   const nextMessage: ChatMessage = {
     role: "assistant",
     content: assistantReply,
-    recommendations: recommendationResponse.recommendations as unknown[] | undefined,
+    recommendations: recommendationResponse.recommendations,
     meta: recommendationResponse.meta,
   };
   return { ...state, messages: [...state.messages, nextMessage] };

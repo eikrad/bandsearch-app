@@ -22,9 +22,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event.
 
-- **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — Claude scores each band asynchronously (optional, requires `ANTHROPIC_API_KEY`).
+- **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `MISTRAL_API_KEY`).
 
-- **LLM-as-judge** — an async eval worker using Claude to score each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Only active when `ANTHROPIC_API_KEY` is set; never on the critical response path.
+- **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Only active when `MISTRAL_API_KEY` is set; never on the critical response path.
 
 - **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with expected `nuggets` (bands that should appear) and `antiBands` (bands that should not). The eval runner (`run-golden.ts`) computes `antiBandRate@8` and fails CI if it exceeds 50%.
 

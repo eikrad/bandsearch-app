@@ -1,29 +1,38 @@
+import type { ChatViewProps } from "../chatRenderAdapter.js";
+import type { DesktopChatUiStack } from "../desktopChatUiStack.js";
+import type { SavedArtistsScreenState } from "../savedArtistsModel.js";
+import type { ChatHandlers } from "./viewTypes.js";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatAppView } from "./ChatAppView.js";
-import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { formatRecommendationQueryError } from "../apiErrorMessages.js";
 
 type ActionStatus = { type: "success" | "error"; message: string } | null;
 
+/** Node returns a Timeout, browsers and test fakes return a number. */
+type TimerHandle = ReturnType<typeof setTimeout> | number;
+
 interface CreateDesktopReactShellOptions {
   renderAdapter: {
-    onModeChange: (mode: string) => any;
-    onSubmitQuery: (query: string) => any;
-    onObscurityTargetChange?: (target: string | undefined) => any;
-    getViewProps: () => Record<string, any>;
+    onModeChange: (mode: string) => unknown;
+    onSubmitQuery: (query: string) => unknown;
+    onObscurityTargetChange?: (target: string | undefined) => unknown;
+    getViewProps: () => ChatViewProps;
   };
-  actionHandlers?: Record<string, any>;
+  actionHandlers?: Partial<ChatHandlers>;
   statusTimeoutMs?: number;
   errorStatusTimeoutMs?: number;
-  setTimeoutImpl?: typeof setTimeout;
+  // Only "schedule this callback, give me a handle I can cancel" is used, so
+  // the seam does not need the full setTimeout signature (which drags in
+  // __promisify__ and forces fakes to be Node Timeouts).
+  setTimeoutImpl?: (handler: () => void, timeout: number) => TimerHandle;
   getViewImpl?: () => string;
-  navigateImpl?: (view: string) => any;
+  navigateImpl?: (view: string) => unknown;
   searchArtistsImpl?: (query: string) => Promise<void>;
   toggleSelectionImpl?: (id: string) => void;
   deleteSavedArtistImpl?: (id: string) => Promise<void>;
   activateStyleRefImpl?: () => Promise<void>;
-  getSavedArtistsViewPropsImpl?: () => Record<string, any>;
+  getSavedArtistsViewPropsImpl?: () => SavedArtistsScreenState;
   cancelSearchImpl?: () => void;
   retryLastSearchImpl?: () => Promise<unknown> | void;
 }
@@ -47,12 +56,13 @@ export function createDesktopReactShell({
     selectedCount: 0,
     searchResults: [],
     isSearching: false,
+    groups: [],
   }),
   cancelSearchImpl,
   retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
   let actionStatus: ActionStatus = null;
-  let clearStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  let clearStatusTimer: TimerHandle | null = null;
 
   function scheduleStatusClear(customDelayMs?: number) {
     const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
@@ -73,8 +83,8 @@ export function createDesktopReactShell({
   };
 
   const shell = {
-    desktopUi: undefined as any,
-    getViewProps() {
+    desktopUi: undefined as DesktopChatUiStack | undefined,
+    getViewProps(): (ChatViewProps | SavedArtistsScreenState) & { actionStatus?: ActionStatus } {
       if (getViewImpl() === "saved-artists") {
         return getSavedArtistsViewPropsImpl();
       }
@@ -90,7 +100,7 @@ export function createDesktopReactShell({
       } catch (error) {
         actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
         scheduleStatusClear(errorStatusTimeoutMs);
-        throw new Error("query failed");
+        throw new Error("query failed", { cause: error });
       }
     },
     async saveBand(artistName: string) {
@@ -149,7 +159,7 @@ export function createDesktopReactShell({
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();
-      return renderToStaticMarkup(React.createElement(ChatAppView as any, { viewProps, handlers }));
+      return renderToStaticMarkup(React.createElement(ChatAppView, { viewProps, handlers }));
     },
   };
   return shell;

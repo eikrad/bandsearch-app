@@ -4,22 +4,23 @@
   "private": true,
   "description": "Tauri + React desktop client",
   "scripts": {
-    "lint": "eslint \"src/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
+    "lint": "eslint \"src/**/*.{js,ts}\" \"test/**/*.{js,ts}\" \"scripts/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test",
     "build": "node scripts/build.js",
     "build:watch": "node scripts/build.js --watch",
+    "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "@tauri-apps/api": "^2.11.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.2",
-    "esbuild": "^0.28.0"
+    "@tauri-apps/cli": "^2.11.4",
+    "esbuild": "^0.28.1"
   }
 }

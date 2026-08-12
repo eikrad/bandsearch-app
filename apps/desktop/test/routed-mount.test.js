@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createDesktopReactMount } = require("../src/ui/mountDesktopReactApp");
+const { fakeContainer } = require("./helpers/fakeDom");
 
 function makeShell(overrides = {}) {
   return {
@@ -72,7 +73,7 @@ test("routed mount calls render with SavedArtistsView when route is saved", asyn
     router,
     savedArtistsShell: savedShell,
     createRootImpl: () => fakeRoot,
-    resolveContainer: () => ({}),
+    resolveContainer: () => fakeContainer(),
   });
 
   await mount.mount();
@@ -94,7 +95,7 @@ test("routed mount calls render with ChatAppView when route is home", async () =
     router,
     savedArtistsShell: savedShell,
     createRootImpl: () => fakeRoot,
-    resolveContainer: () => ({}),
+    resolveContainer: () => fakeContainer(),
   });
 
   await mount.mount();
@@ -116,7 +117,7 @@ test("routed mount calls render with WelcomeView when route is welcome", async (
     router,
     savedArtistsShell: savedShell,
     createRootImpl: () => fakeRoot,
-    resolveContainer: () => ({}),
+    resolveContainer: () => fakeContainer(),
   });
 
   await mount.mount();
@@ -143,7 +144,7 @@ test("routed mount calls render with SettingsView when route is settings", async
       statusMessage: null,
     }),
     createRootImpl: () => fakeRoot,
-    resolveContainer: () => ({}),
+    resolveContainer: () => fakeContainer(),
   });
 
   await mount.mount();
@@ -163,7 +164,7 @@ test("routed mount settingsHandlers.onSaveTursoConfig calls provided saveTursoCo
     getSettingsViewProps: () => ({ headerTitle: "Settings", hasStoredKey: false }),
     saveTursoConfig: async (url, token) => { calls.push({ url, token }); },
     createRootImpl: () => ({ render: () => {} }),
-    resolveContainer: () => ({}),
+    resolveContainer: () => fakeContainer(),
   });
 
   await mount.handlers.onSaveTursoConfig("libsql://test.turso.io", "mytoken");

@@ -61,7 +61,7 @@ Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users
 ## Phase 7 — Platform Expansion
 
 - Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI. ✓ Done: `externalBin: ["binaries/node"]` added to `tauri.conf.json`; `sidecar_name()` uses `env!("TARGET")` so the binary name always matches the compile-time Rust target triple; `windows-latest` runner added to CI matrix with `fail-fast: false` and `shell: bash`.
-- Windows release pipeline: add a CI job (`release.yml`) that runs on `windows-latest`, downloads the official Node.js binary for `x86_64-pc-windows-msvc`, renames it to `node-x86_64-pc-windows-msvc.exe`, places it in `src-tauri/binaries/`, then runs `tauri build` to produce the `.msi` / `.exe` installer. Same job needed for `ubuntu-latest` (`node-x86_64-unknown-linux-gnu`) and `macos-latest` (`node-aarch64-apple-darwin` + `node-x86_64-apple-darwin` for universal binary). Artifacts should be uploaded per-platform and attached to a GitHub Release on version tags.
+- Windows release pipeline: add a CI job (`release.yml`) that runs on `windows-latest`, downloads the official Node.js binary for `x86_64-pc-windows-msvc`, renames it to `node-x86_64-pc-windows-msvc.exe`, places it in `src-tauri/binaries/`, then runs `tauri build` to produce the `.msi` / `.exe` installer. Same job needed for `ubuntu-latest` (`node-x86_64-unknown-linux-gnu`) and `macos-latest` (`node-aarch64-apple-darwin` + `node-x86_64-apple-darwin` for universal binary). Artifacts should be uploaded per-platform and attached to a GitHub Release on version tags. ✓ Done: `.github/workflows/release.yml` builds on `ubuntu-latest` / `windows-latest` / `macos-latest` (ARM sidecar), signs updater artifacts via `TAURI_SIGNING_*` secrets, and attaches a draft prerelease with `tauri-action`. macOS Intel sidecar deferred.
 - Android: use Tauri's Android target (`tauri android init`). Voice input as the primary chat input method via the Web Speech API (`SpeechRecognition`), which works natively in Chromium-based Android webviews — no native plugin needed. Requires responsive layout review and touch-friendly tap targets throughout the UI.
 
 ## Parallel Track — Incremental TypeScript Migration (Non-blocking)
@@ -88,7 +88,7 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [x] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log ✓ Done
 - [x] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed ✓ Done
-- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `ANTHROPIC_API_KEY`; silently skipped if absent ✓ Done
+- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY` (env var name is a known mismatch — the key is actually sent to Anthropic's API, not Mistral's); silently skipped if absent ✓ Done
 - [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
@@ -142,24 +142,26 @@ The existing migration script targets local SQLite and Postgres. It needs to als
 Deploy the Express API as a Render Web Service.
 
 **Action:**
-1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install --prefix services/api`, start command `npm start --prefix services/api`, health check path `/`, and `region: frankfurt`. ✓ Done
+1. Add a `render.yaml` to the repo root declaring the web service: `type: web`, build command `npm install`, start command `npm start` (run at the repo root — the root `package.json` scripts delegate to the API workspace), health check path `/`, and `region: frankfurt`. ✓ Done
 2. Configure required environment variables in `render.yaml` (non-secret keys) and via the Render dashboard (secrets): `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `PREFERENCE_STORE=turso`. Render injects `PORT` automatically. ✓ Done
 3. Verify the `start` script in `services/api/package.json` works — it already uses `tsx`; confirm the installed Node.js version on Render matches local (specify `engines.node` in `package.json` if needed). ✓ Done (`"start": "tsx src/server.ts"` added; `engines.node: ">=22"` added to root `package.json`; `tsx` moved to `services/api` production deps)
 4. Connect the GitHub repository to Render; auto-deploy triggers on push to `main`. — manual step via Render dashboard
 
 ---
 
-### 9.4 — Desktop app: configurable API endpoint
+### 9.4 — Desktop app: configurable API endpoint ✓ Done
 
 **Files:** `apps/desktop/src/`, `apps/desktop/src-tauri/`
 
 The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
 
 **Action:**
-1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`).
-2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials.
-3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend.
-4. Update `chatClient.ts` and all API callers to use the configured endpoint.
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`)
+2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials. ✓ Done (`api_endpoint_url` in `bandsearch/config.json`; localStorage fallback for browser dev)
+3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend. ✓ Done (single `reconcile_sidecar()` invariant: local sidecar runs iff no remote endpoint)
+4. Update `chatClient.ts` and all API callers to use the configured endpoint. ✓ Done (`startDesktopBrowserApp` resolves the endpoint before building the auth/chat clients; `chatClient` already took `apiBaseUrl`, so no change needed there)
+
+Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini_config_status`; controller `saveApiEndpointUrl` with http(s) format validation (no reachability probe — Render cold starts would make one falsely fail); settings card with "Reset to local"; Gemini/Brave/Turso cards stay visible in remote mode with a "managed locally" note. Note: applies on next app restart (the frontend resolves the base URL at startup).
 
 ---
 
@@ -213,13 +215,9 @@ Tester werden direkt in der App über neue Versionen informiert. Windows & Linux
 
 The following refactors were identified during architecture review but not yet implemented. Each has a clear action and known files.
 
-### 1. Extract auto-group inference out of the route handler
+### 1. Extract auto-group inference out of the route handler ✓ Done
 
-**Files:** `services/api/src/routes/registerBandsearchRoutes.ts` (lines 290–322)
-
-The logic that fetches saved bands, calls MusicBrainz for each artist's genre, and creates/updates groups lives inline in the `POST /preferences/auto-group` HTTP handler. It is untested, has a race condition when two concurrent requests try to create the same genre group, and cannot be reused by non-HTTP callers (e.g. the import flow).
-
-**Action:** Extract a `bandGroupInference` module (or similar name grounded in domain vocabulary) with one function: given a band name and MusicBrainz metadata, return zero or more group assignments. The route handler calls this and applies the result. Move the MusicBrainz I/O, deduplication, and group upsert logic inside the new module. Add unit tests for at least the race condition and the silent-MusicBrainz-failure path.
+Resolved — the inference logic now lives in `services/api/src/preferences/bandGroupInference.ts`, with its own tests in `services/api/test/band-group-inference.test.js`. `POST /preferences/groups/auto` in `registerBandsearchRoutes.ts` just calls into it.
 
 ---
 
@@ -233,13 +231,9 @@ All four implementations carry 13 methods covering three distinct concerns: band
 
 ---
 
-### 3. Consolidate the HTTP retry seam shared by integration clients
+### 3. Consolidate the HTTP retry seam shared by integration clients ✓ Done
 
-**Files:** `services/api/src/integrations/musicbrainz.ts`, `braveSearch.ts`
-
-`fetchWithTimeoutAndRetry` is copied verbatim in both files — same function, same signature, same AbortController pattern. A bug fix or timeout policy change must be applied in two places.
-
-**Action:** Extract `fetchWithTimeoutAndRetry` into a shared `services/api/src/integrations/httpClient.ts` module. Both `musicbrainz.ts` and `braveSearch.ts` import from it. Add a focused test for the retry and timeout behaviour in the new shared module; remove the duplicated copies from both clients.
+Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrations/httpClient.ts`, imported by both `musicbrainz.ts` and `braveSearch.ts`, with its own test in `services/api/test/http-client.test.js`.
 
 ---
 
@@ -250,3 +244,40 @@ All four implementations carry 13 methods covering three distinct concerns: band
 `normalizeEmail()`, `publicUser()`, and `rowToUser()` are copied verbatim in both user repository adapters.
 
 **Action:** Move the three functions into a shared `services/api/src/auth/userModel.ts` module. Both adapters import from it. The factory in `userRepository.ts` is unchanged. Test `normalizeEmail` once in `userModel.test.ts`.
+
+---
+
+### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller
+
+**Files:** `apps/desktop/src/geminiDesktopSettings.ts`
+
+`getBootstrapGate()` and `getSettingsViewProps()` both call `invokeTauri("gemini_config_status")` and parse the response independently. Any change to the response shape must be applied in two places, and a concurrent render after save could read two different snapshots.
+
+**Action:** Extract a private `readStatus()` async helper that invokes `gemini_config_status` once and returns the typed result. Both `getBootstrapGate` and `getSettingsViewProps` call it. Add a test that stubs `invokeTauri` and asserts it is called exactly once per `getSettingsViewProps` call.
+
+---
+
+### 6. Bearer token forwarded to user-configured remote endpoints
+
+**Files:** `apps/desktop/src/startDesktopBrowserApp.ts`, `apps/desktop/src/authAwareFetch.ts`
+
+`authAwareFetch` injects `Authorization: Bearer <token>` on every request. Once a user overrides the API endpoint in Settings, all requests — including auth API calls — go to the user-supplied URL carrying the JWT. In a self-hosted scenario with a trusted operator-supplied URL this is correct behaviour; if the URL were somehow corrupted (e.g. a stored config tampered on disk) the token could be sent to an unintended host.
+
+**Note (low priority, no immediate action):** The desktop is a local trust boundary, so this risk is low. Document the invariant in `authAwareFetch.ts`: tokens are sent to `apiBaseUrl` only, and `apiBaseUrl` originates from either the default localhost or the URL the user explicitly saved in Settings. Revisit if the app ever accepts the endpoint from a non-user source (e.g. a deep-link or QR code).
+
+---
+
+### 7. Saved artists: one screen served by two competing implementations ← **next up**
+
+**Files:** `apps/desktop/src/savedArtistsModel.ts`, `apps/desktop/src/createSavedArtistsShell.ts`, `apps/desktop/src/ui/mountDesktopReactApp.ts`, `apps/desktop/src/index.ts`, `apps/desktop/src/ui/createDesktopReactShell.ts`
+
+Two modules hold saved-artists state and talk to the same app object, and which one serves the screen depends on how the app was assembled:
+
+- **Live path:** `startDesktopBrowserApp.ts:108` builds `createSavedArtistsShell({ app })` and hands it to the mount; `mountDesktopReactApp` renders `SavedArtistsView` from `savedArtistsShell.getViewProps()`.
+- **Second path:** `index.ts` wires `savedArtistsModel.getScreenState()` into `createDesktopReactShell` as `getSavedArtistsViewPropsImpl`, which serves the same screen when `shell.getView() === "saved-artists"` and no `savedArtistsShell` was supplied.
+
+The duplication had already rotted. Five `savedArtistsModel` methods (`exportArtists`, `importArtists`, `loadGroups`, `createGroup`, `autoGroupByGenre`) were unreachable from production code, and two of them called `app.importArtists` / `app.autoGroupByGenre` — which `bootstrapDesktopApp` never implemented; it exposes `importPreferences` / `autoGroup`. They would have thrown on first use. **The tests kept them alive** by supplying fakes that implemented the non-existent methods, so a green suite was asserting a contract the real app never fulfilled. Those five methods and their tests were deleted together with this entry; the two implementations themselves remain.
+
+Leftover symptom to expect: `savedArtistsModel`'s state still declares a `groups` field that nothing writes, because grouping lives only in the shell. It is kept deliberately so that `SavedArtistsScreenState` — the type `SavedArtistsView` renders against — stays whole. That is the thread to pull.
+
+**Action:** Give the screen a single owner. `createSavedArtistsShell` is the better candidate: it is the path the running app uses, it owns grouping, and it reloads after mutations. Move over the two things only the model still has — selection state (`toggleSelection` / `clearSelection` / `getSelectedIds`, consumed by `activateStyleRefImpl` in `index.ts`) and the `isLoading` / `isSearching` flags — then delete `savedArtistsModel.ts` along with the `getSavedArtistsViewPropsImpl` seam in `createDesktopReactShell`. Give `SavedArtistsView` an explicit props type rather than one derived from whichever module survives, so the view stops being coupled to the winner. Verify by driving the screen end to end — search, add, select, activate style ref, create/auto group, import, export — since the two paths differ precisely in the mutation-and-reload behaviour that unit tests with fakes do not exercise.

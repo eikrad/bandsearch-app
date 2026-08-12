@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { normalizeEmail, publicUser, rowToUser } from "./userModel.js";
 
 export type User = {
   id: string;
@@ -31,28 +32,6 @@ export type UserRepository = {
   updatePassword(id: string, input: UpdatePasswordInput): Promise<{ ok: true } | { ok: false; error: string }>;
   getFirstUser(): Promise<User | null>;
 };
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-function publicUser(user: User): PublicUser {
-  const { passwordHash: _ph, recoveryCodeHash: _rc, ...pub } = user;
-  void _ph;
-  void _rc;
-  return pub;
-}
-
-function rowToUser(row: Record<string, unknown>): User {
-  return {
-    id: row.id as string,
-    email: row.email as string,
-    displayName: row.display_name as string,
-    passwordHash: row.password_hash as string,
-    recoveryCodeHash: row.recovery_code_hash as string,
-    createdAt: row.created_at as string,
-  };
-}
 
 export function createInMemoryUserRepository(): UserRepository {
   const users = new Map<string, User>();

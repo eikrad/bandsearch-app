@@ -13,9 +13,13 @@ function hostTriple() {
   return match[1];
 }
 
-test("tauri.conf.json externalBin entries all have a matching binary file", (t) => {
+function readTauriConf() {
   const confPath = path.join(root, "src-tauri/tauri.conf.json");
-  const conf = JSON.parse(fs.readFileSync(confPath, "utf8"));
+  return JSON.parse(fs.readFileSync(confPath, "utf8"));
+}
+
+test("tauri.conf.json externalBin entries all have a matching binary file", (t) => {
+  const conf = readTauriConf();
 
   const bins = conf?.bundle?.externalBin ?? [];
   if (bins.length === 0) return;
@@ -30,4 +34,24 @@ test("tauri.conf.json externalBin entries all have a matching binary file", (t) 
       return;
     }
   }
+});
+
+test("tauri.conf.json enables updater artifacts for signed releases", () => {
+  const conf = readTauriConf();
+  assert.equal(
+    conf?.bundle?.createUpdaterArtifacts,
+    true,
+    "Expected bundle.createUpdaterArtifacts true",
+  );
+  assert.ok(
+    conf?.plugins?.updater?.pubkey,
+    "Expected plugins.updater.pubkey to be set",
+  );
+  assert.ok(
+    Array.isArray(conf?.plugins?.updater?.endpoints) &&
+      conf.plugins.updater.endpoints.some((u) =>
+        String(u).includes("releases/latest/download/latest.json"),
+      ),
+    "Expected GitHub latest.json updater endpoint",
+  );
 });

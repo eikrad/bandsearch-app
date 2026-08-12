@@ -1,0 +1,46 @@
+version: 2
+updates:
+  # Root npm workspace — covers apps/*, services/*, shared/*
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    target-branch: "staging"
+    labels:
+      - "dependencies"
+
+  # Rust (Tauri desktop app)
+  - package-ecosystem: "cargo"
+    directory: "/apps/desktop/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    target-branch: "staging"
+    labels:
+      - "dependencies"
+
+  # Python tooling (uv-managed, project root)
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    target-branch: "staging"
+    labels:
+      - "dependencies"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    target-branch: "staging"
+    labels:
+      - "dependencies"
+      - "ci"

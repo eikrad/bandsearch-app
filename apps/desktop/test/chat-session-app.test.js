@@ -2,36 +2,25 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { bootstrapDesktopApp } = require("../src/index");
+const { jsonResponse } = require("./helpers/fakeResponse");
 
 function createStubFetch({ sessionId = "sess-1", recommendations = [] } = {}) {
   return async (url, init) => {
     const method = init?.method || "GET";
     if (url.includes("/sessions") && method === "POST" && !url.match(/sessions\/[^/]+\/messages/)) {
-      return {
-        ok: true,
-        json: async () => ({ session: { id: sessionId, title: "Test", createdAt: "2026-01-01T00:00:00Z" } }),
-      };
+      return jsonResponse({ session: { id: sessionId, title: "Test", createdAt: "2026-01-01T00:00:00Z" } });
     }
     if (url.match(/sessions\/[^/]+\/messages/) && method === "POST") {
       const body = JSON.parse(init?.body || "{}");
-      return {
-        ok: true,
-        json: async () => ({ message: { id: `msg-${Date.now()}`, ...body } }),
-      };
+      return jsonResponse({ message: { id: `msg-${Date.now()}`, ...body } });
     }
     if (url.includes("/sessions") && method === "GET") {
-      return {
-        ok: true,
-        json: async () => ({ sessions: [{ id: sessionId, title: "Test" }] }),
-      };
+      return jsonResponse({ sessions: [{ id: sessionId, title: "Test" }] });
     }
     if (url.includes("/recommendations")) {
-      return {
-        ok: true,
-        json: async () => ({ recommendations, meta: { modeUsed: "fresh", usedPreferenceContext: false } }),
-      };
+      return jsonResponse({ recommendations, meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     }
-    return { ok: true, json: async () => ({}) };
+    return jsonResponse({});
   };
 }
 

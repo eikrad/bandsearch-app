@@ -12,5 +12,11 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.js", "src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/**/*.js",
+    "src/**/*.ts",
+    "test/**/*.js",
+    "test/**/*.ts",
+    "scripts/**/*.js"
+  ]
 }

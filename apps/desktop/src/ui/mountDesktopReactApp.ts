@@ -8,10 +8,46 @@ import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
 
-type AnyShell = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyRouter = any;
-type AnySavedShell = Record<string, any> | null;
+/** The shell surface this mount drives; everything optional is guarded with `?.`. */
+type MountShell = {
+  getViewProps(): unknown;
+  getView?(): string;
+  updateMode(mode: string): Promise<unknown>;
+  submitQuery(query: string): Promise<unknown> | unknown;
+  saveBand?(artistName: string): Promise<unknown> | unknown;
+  rateBand?(artistName: string, rating?: number): Promise<unknown> | unknown;
+  deleteSavedArtist?(id: string): Promise<unknown>;
+  toggleSelection?(id: string): void;
+  activateStyleRef?(): Promise<unknown>;
+  searchArtists?(query: string): Promise<unknown>;
+  navigate?(view: string): Promise<unknown> | unknown;
+  cancelSearch?(): void;
+  retryLastSearch?(): Promise<unknown> | void;
+  desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
+};
+
+// The mount dispatches to views with differing prop shapes, so prop types are
+// deliberately erased at this one seam rather than throughout.
+type ViewComponentLike = React.ComponentType<Record<string, unknown>>;
+
+type MountRouter = {
+  getRoute(): string;
+  navigate(route: string): void;
+  onRouteChange?(listener: () => void): unknown;
+};
+type MountSavedShell = {
+  getViewProps(): unknown;
+  toggleArtistSelection(id: string): void;
+  setSearchQuery(query: string): void;
+  searchArtists(): Promise<unknown>;
+  addArtist(artist: { id: string; name: string; disambiguation?: string }): Promise<unknown> | unknown;
+  deleteSavedArtist?(id: string): Promise<unknown>;
+  exportArtists?(): Promise<unknown[] | undefined>;
+  importArtists?(bands: unknown[]): Promise<unknown>;
+  createGroup?(name: string): Promise<unknown>;
+  deleteGroup?(id: string): Promise<unknown>;
+  autoGroup?(): Promise<unknown>;
+} | null;
 
 function defaultContainerResolver(): HTMLElement {
   const browserDocument = globalThis.document as Document | undefined;
@@ -26,14 +62,15 @@ function resolveViewComponent(viewName: string) {
 }
 
 export interface DesktopReactMountOptions {
-  shell: AnyShell;
-  router?: AnyRouter;
-  savedArtistsShell?: AnySavedShell;
-  getSettingsViewProps?: () => any;
+  shell: MountShell;
+  router?: MountRouter;
+  savedArtistsShell?: MountSavedShell;
+  getSettingsViewProps?: () => unknown;
   saveGeminiApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
   clearTursoConfig?: () => Promise<void>;
+  saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
@@ -57,6 +94,7 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
+  saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
   onRegister,
@@ -71,23 +109,23 @@ export function createDesktopReactMount({
     const route = router ? router.getRoute() : "home";
 
     if (route === "login") {
-      root.render(React.createElement(LoginView as any, { viewProps: {}, handlers: loginHandlers }));
+      root.render(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
       return {};
     }
 
     if (route === "register") {
-      root.render(React.createElement(RegisterView as any, { viewProps: {}, handlers: registerHandlers }));
+      root.render(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
       return {};
     }
 
     if (route === "reset-password") {
-      root.render(React.createElement(ResetPasswordView as any, { viewProps: {}, handlers: resetPasswordHandlers }));
+      root.render(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
       return {};
     }
 
     if (route === "welcome") {
       root.render(
-        React.createElement(WelcomeView as any, {
+        React.createElement(WelcomeView as unknown as ViewComponentLike, {
           viewProps: {},
           handlers: welcomeHandlers,
         }),
@@ -98,7 +136,7 @@ export function createDesktopReactMount({
     if (route === "saved" && savedArtistsShell) {
       const viewProps = savedArtistsShell.getViewProps();
       root.render(
-        React.createElement(SavedArtistsView as any, {
+        React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: savedHandlers,
         }),
@@ -109,7 +147,7 @@ export function createDesktopReactMount({
     if (route === "settings") {
       const viewProps = await Promise.resolve(getSettingsViewProps());
       root.render(
-        React.createElement(SettingsView as any, {
+        React.createElement(SettingsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: settingsHandlers,
         }),
@@ -120,7 +158,7 @@ export function createDesktopReactMount({
     const viewProps = shell.getViewProps();
     const currentView = shell.getView?.() ?? "chat";
     const ViewComponent = resolveViewComponent(currentView);
-    root.render(React.createElement(ViewComponent as any, { viewProps, handlers }));
+    root.render(React.createElement(ViewComponent as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -230,6 +268,10 @@ export function createDesktopReactMount({
       await clearTursoConfig();
       return renderCurrent();
     },
+    onSaveApiEndpointUrl: async (url: string) => {
+      await saveApiEndpointUrl(url);
+      return renderCurrent();
+    },
   };
 
   const welcomeHandlers = {
@@ -286,7 +328,7 @@ export function createDesktopReactMount({
       await savedArtistsShell?.searchArtists();
       renderCurrent();
     },
-    onAddArtist: (artist: any) => {
+    onAddArtist: (artist: { id: string; name: string; disambiguation?: string }) => {
       Promise.resolve(savedArtistsShell?.addArtist(artist)).then(() => renderCurrent());
     },
     onDelete: async (id: string) => {

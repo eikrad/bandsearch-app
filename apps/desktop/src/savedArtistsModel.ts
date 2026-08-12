@@ -1,11 +1,24 @@
-export function createSavedArtistsModel({ app }: { app: any }) {
+import type { ArtistGroup, ArtistSearchResult, SavedBand } from "./domain.js";
+
+/** The slice of the bootstrapped app this model drives. */
+export type SavedArtistsCollaborator = {
+  listSavedBands(): Promise<SavedBand[]>;
+  deleteSavedBand(id: string): Promise<unknown>;
+  searchArtists(query: string): Promise<ArtistSearchResult[]>;
+};
+
+export function createSavedArtistsModel({ app }: { app: SavedArtistsCollaborator }) {
   const state: {
-    savedArtists: any[];
+    savedArtists: SavedBand[];
     selectedIds: Set<string>;
-    searchResults: any[];
+    searchResults: ArtistSearchResult[];
     isSearching: boolean;
     isLoading: boolean;
-    groups: any[];
+    // Never written here: grouping lives in createSavedArtistsShell, and the
+    // saved-artists screen is served from that shell in the running app. Kept
+    // so the screen-state shape stays whole — see ROADMAP "Saved-Artists:
+    // Modell und Shell zusammenführen".
+    groups: ArtistGroup[];
   } = {
     savedArtists: [],
     selectedIds: new Set(),
@@ -78,30 +91,11 @@ export function createSavedArtistsModel({ app }: { app: any }) {
         state.isSearching = false;
       }
     },
-
-    async exportArtists() {
-      return [...state.savedArtists];
-    },
-
-    async importArtists(bands: any[]) {
-      const result = await app.importArtists(bands);
-      state.savedArtists = await app.listSavedBands();
-      return result;
-    },
-
-    async loadGroups() {
-      state.groups = await app.listGroups();
-    },
-
-    async createGroup(name: string) {
-      const result = await app.createGroup(name);
-      state.groups = await app.listGroups();
-      return result;
-    },
-
-    async autoGroupByGenre() {
-      await app.autoGroupByGenre();
-      state.groups = await app.listGroups();
-    },
   };
 }
+
+/** The screen state the saved-artists view renders, derived so the two cannot drift. */
+export type SavedArtistsScreenState = ReturnType<
+  ReturnType<typeof createSavedArtistsModel>["getScreenState"]
+>;
+export type SavedArtistItem = SavedArtistsScreenState["artists"][number];

@@ -7,6 +7,7 @@ const {
   applyAssistantMessage,
   normalizeArtistId,
 } = require("../src/chatClient");
+const { jsonResponse } = require("./helpers/fakeResponse");
 
 test("chat client sends recommendation request and returns response payload", async () => {
   const calls = [];
@@ -14,15 +15,11 @@ test("chat client sends recommendation request and returns response payload", as
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return jsonResponse({
           recommendations: [{ artist: "Fen", why: "Atmospheric overlap", sourceSignals: ["musicbrainz_search"] }],
           assistantReply: "These lean atmospheric — want something heavier next?",
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
-        }),
-      };
+        });
     },
   });
 
@@ -46,13 +43,13 @@ test("chat state appends assistant message from recommendation response", () => 
   assert.equal(next.messages.length, 1);
   assert.equal(next.messages[0].role, "assistant");
   assert.equal(next.messages[0].content.includes("shoegaze"), true);
-  assert.equal(next.messages[0].recommendations[0].artist, "Alcest");
+  assert.equal(/** @type {{ artist: string }} */ (next.messages[0].recommendations[0]).artist, "Alcest");
 });
 
 test("chat state synthesizes dialogue when API omits assistantReply", () => {
   const afterUser = {
     ...createInitialChatState(),
-    messages: [{ role: "user", content: "I like grunge" }],
+    messages: /** @type {{ role: "user", content: string }[]} */ ([{ role: "user", content: "I like grunge" }]),
   };
   const next = applyAssistantMessage(afterUser, {
     recommendations: [{ artist: "Mudhoney", why: "Proto-grunge", sourceSignals: ["agent_reasoning"] }],
@@ -71,11 +68,7 @@ test("chat client creates and updates preferences", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ savedBand: { id: "pref-1", name: "Fen", rating: 4 } }),
-      };
+      return jsonResponse({ savedBand: { id: "pref-1", name: "Fen", rating: 4 } });
     },
   });
 
@@ -100,13 +93,9 @@ test("chat client fetches saved bands from preferences endpoint", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return jsonResponse({
           savedBands: [{ id: "pref-1", name: "Fen", rating: 4 }],
-        }),
-      };
+        });
     },
   });
 
@@ -125,13 +114,9 @@ test("chat client searches artists via artist search endpoint", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return jsonResponse({
           artists: [{ id: "mb-1", name: "Fen", score: 100, disambiguation: "" }],
-        }),
-      };
+        });
     },
   });
 
@@ -149,13 +134,9 @@ test("chat client creates a new session", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 201,
-        json: async () => ({
+      return jsonResponse({
           session: { id: "sess-1", title: "Post-black", createdAt: "2026-01-01T00:00:00Z" },
-        }),
-      };
+        }, { status: 201 });
     },
   });
 
@@ -168,10 +149,7 @@ test("chat client creates a new session", async () => {
 test("chat client lists sessions", async () => {
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ sessions: [{ id: "sess-1", title: "Test" }] }),
-    }),
+    fetchImpl: async () => (jsonResponse({ sessions: [{ id: "sess-1", title: "Test" }] })),
   });
 
   const result = await client.listSessions();
@@ -184,10 +162,7 @@ test("chat client appends a message to a session", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        json: async () => ({ message: { id: "msg-1", role: "user", content: "I like Alcest" } }),
-      };
+      return jsonResponse({ message: { id: "msg-1", role: "user", content: "I like Alcest" } });
     },
   });
 
@@ -202,11 +177,7 @@ test("chat client sends selectedArtistIds when provided", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ recommendations: [], meta: { modeUsed: "preference-aware", usedPreferenceContext: true } }),
-      };
+      return jsonResponse({ recommendations: [], meta: { modeUsed: "preference-aware", usedPreferenceContext: true } });
     },
   });
 
@@ -221,14 +192,10 @@ test("chat client sends priorityContext in recommendations when provided", async
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return jsonResponse({
           recommendations: [],
           meta: { modeUsed: "fresh", usedPreferenceContext: true },
-        }),
-      };
+        });
     },
   });
 
@@ -244,11 +211,7 @@ test("chat client sends conversation messages in recommendations request", async
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } }),
-      };
+      return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     },
   });
 
@@ -271,14 +234,10 @@ test("chat client includes obscurityTarget in recommendations request body when 
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return jsonResponse({
           recommendations: [],
           meta: { modeUsed: "fresh", usedPreferenceContext: false, eventId: "evt-123" },
-        }),
-      };
+        });
     },
   });
 
@@ -293,11 +252,7 @@ test("chat client omits obscurityTarget from request body when not provided", as
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
-      };
+      return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh" } });
     },
   });
 
@@ -317,10 +272,7 @@ test("chat client fetches saved bands from GET /preferences", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, method: init?.method });
-      return {
-        ok: true,
-        json: async () => ({ savedBands: [{ id: "b1", name: "Fen", rating: 3 }] }),
-      };
+      return jsonResponse({ savedBands: [{ id: "b1", name: "Fen", rating: 3 }] });
     },
   });
 
@@ -329,7 +281,7 @@ test("chat client fetches saved bands from GET /preferences", async () => {
   assert.equal(calls[0].url, "http://localhost:3001/preferences");
   assert.equal(calls[0].method, "GET");
   assert.equal(bands.length, 1);
-  assert.equal(bands[0].name, "Fen");
+  assert.equal(/** @type {{ name: string }} */ (bands[0]).name, "Fen");
 });
 
 test("chat client deletes a preference via DELETE /preferences/:id", async () => {
@@ -338,7 +290,7 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, method: init?.method });
-      return { ok: true, json: async () => ({ ok: true }) };
+      return jsonResponse({ ok: true });
     },
   });
 
@@ -354,11 +306,7 @@ test("fetchRecommendations forwards AbortSignal to fetch", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       capturedSignal = init?.signal;
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ recommendations: [], meta: {} }),
-      };
+      return jsonResponse({ recommendations: [], meta: {} });
     },
   });
 
