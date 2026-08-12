@@ -1,6 +1,7 @@
 const esbuild = require("esbuild");
 const fs = require("node:fs");
 
+/** @type {import("esbuild").BuildOptions} */
 const config = {
   entryPoints: ["./src/browserEntry.ts"],
   bundle: true,

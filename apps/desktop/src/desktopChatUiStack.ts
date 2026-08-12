@@ -1,4 +1,8 @@
-import { createChatAppModel, type ConversationMessage } from "./chatAppModel.js";
+import {
+  createChatAppModel,
+  type ChatAppCollaborator,
+  type ConversationMessage,
+} from "./chatAppModel.js";
 
 export type DesktopChatUiStack = {
   setViewport(next: string): void;
@@ -25,7 +29,7 @@ export function createDesktopChatUiStack({
   app,
   viewport = "desktop",
 }: {
-  app: any;
+  app: ChatAppCollaborator;
   viewport?: string;
 }): DesktopChatUiStack {
   let viewportState = normalizeViewport(viewport);
@@ -69,7 +73,7 @@ export function createDesktopChatUiStack({
       return appModel.submitFeedback(feedbackType);
     },
     cancelSearch() {
-      (app as any).cancelSearch?.();
+      app.cancelSearch?.();
     },
     async retryLastSearch() {
       return appModel.retryLastSearch();

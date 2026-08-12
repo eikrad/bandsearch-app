@@ -2,25 +2,23 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { bootstrapDesktopApp } = require("../src/index");
+const { jsonResponse } = require("./helpers/fakeResponse");
 
 function createStubFetch({ savedBands = [], artists = [], recommendations = [] } = {}) {
   return async (url, init) => {
     if (url.includes("/preferences") && (!init || init.method === "GET")) {
-      return { ok: true, json: async () => ({ savedBands }) };
+      return jsonResponse({ savedBands });
     }
     if (url.includes("/artists/search")) {
-      return { ok: true, json: async () => ({ artists }) };
+      return jsonResponse({ artists });
     }
     if (url.includes("/recommendations")) {
-      return {
-        ok: true,
-        json: async () => ({
+      return jsonResponse({
           recommendations,
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
-        }),
-      };
+        });
     }
-    return { ok: true, json: async () => ({}) };
+    return jsonResponse({});
   };
 }
 
@@ -33,7 +31,7 @@ test("app.listSavedBands fetches and returns saved bands", async () => {
 
   const bands = await app.listSavedBands();
   assert.equal(bands.length, 1);
-  assert.equal(bands[0].name, "Fen");
+  assert.equal(/** @type {{ name: string }} */ (bands[0]).name, "Fen");
 });
 
 test("app.searchArtists returns MusicBrainz artist results", async () => {
@@ -69,12 +67,9 @@ test("app.requestRecommendations sends priorityContext when artists are selected
   const fetchImpl = async (url, init) => {
     if (url.includes("/recommendations")) {
       requestBodies.push(JSON.parse(init.body));
-      return {
-        ok: true,
-        json: async () => ({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } }),
-      };
+      return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     }
-    return { ok: true, json: async () => ({}) };
+    return jsonResponse({});
   };
 
   const app = bootstrapDesktopApp({ fetchImpl });

@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { jsonResponse } = require("./helpers/fakeResponse");
+const { fakeMediaQueryList } = require("./helpers/fakeDom");
 
 test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
   const modulePath = require.resolve("../src/index");
@@ -56,13 +58,7 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
     },
   };
 
-  const fakeFetch = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ enabled: false, userCount: 0 }),
-    clone() { return this; },
-    text: async () => "",
-  });
+  const fakeFetch = async () => (jsonResponse({ enabled: false, userCount: 0 }));
 
   delete require.cache[require.resolve("../src/startDesktopBrowserApp")];
   const { startDesktopBrowserApp } = require("../src/startDesktopBrowserApp");
@@ -106,12 +102,9 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
   };
 
   const prevWindow = globalThis.window;
-  globalThis.window = {
-    matchMedia: (query) => ({
-      matches: query.includes("max-width"),
-      addEventListener: () => {},
-    }),
-  };
+  globalThis.window = /** @type {typeof globalThis.window} */ ({
+    matchMedia: (query) => fakeMediaQueryList(query.includes("max-width")),
+  });
 
   delete require.cache[require.resolve("../src/startDesktopBrowserApp")];
   const { startDesktopBrowserApp } = require("../src/startDesktopBrowserApp");

@@ -52,6 +52,13 @@ function getLatestCards(conversation: ConversationMessage[] | null, isMobile: bo
   return [];
 }
 
+/** A card as the view renders it — derived so the view cannot drift from the adapter. */
+export type CardViewProps = ReturnType<typeof buildCardViewProps>;
+export type MessageViewProps = ReturnType<typeof buildMessageViewProps>[number];
+export type ChatViewProps = ReturnType<typeof buildViewProps> & {
+  actionStatus?: { type: "success" | "error"; message: string } | null;
+};
+
 function buildViewProps(desktopUi: DesktopChatUiStack) {
   const viewport = desktopUi.getViewport();
   const isMobile = viewport === "mobile";

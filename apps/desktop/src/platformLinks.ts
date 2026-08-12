@@ -4,7 +4,7 @@ interface PlatformDef {
   buildUrl: (name: string) => string;
 }
 
-interface PlatformLink {
+export interface PlatformLink {
   platform: string;
   label: string;
   url: string;

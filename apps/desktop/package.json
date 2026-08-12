@@ -4,7 +4,7 @@
   "private": true,
   "description": "Tauri + React desktop client",
   "scripts": {
-    "lint": "eslint \"src/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
+    "lint": "eslint \"src/**/*.{js,ts}\" \"test/**/*.{js,ts}\" \"scripts/**/*.js\" --max-warnings=0 --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test",
     "build": "node scripts/build.js",

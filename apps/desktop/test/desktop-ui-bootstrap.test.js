@@ -1,15 +1,16 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { fakeDesktopApp } = require("./helpers/fakeApp");
 
 const { bootstrapDesktopUi } = require("../src");
 const { createDesktopChatUiStack } = require("../src/desktopChatUiStack");
 
 test("desktop ui bootstrap exposes mode get/set", () => {
   const ui = bootstrapDesktopUi({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({ messages: [], savedBands: [] }),
-    },
+    }),
   });
 
   assert.equal(ui.getMode(), "fresh");
@@ -20,7 +21,7 @@ test("desktop ui bootstrap exposes mode get/set", () => {
 test("desktop ui bootstrap refreshes conversation after query submission", async () => {
   const appState = { messages: [], savedBands: [] };
   const ui = bootstrapDesktopUi({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => {
         appState.messages = [
           {
@@ -39,7 +40,7 @@ test("desktop ui bootstrap refreshes conversation after query submission", async
         return { recommendations: appState.messages[0].recommendations, meta: appState.messages[0].meta };
       },
       getState: () => appState,
-    },
+    }),
   });
 
   await ui.submitQuery("I like blackgaze");
@@ -52,11 +53,11 @@ test("desktop ui bootstrap refreshes conversation after query submission", async
 test("desktopChatUiStack exposes cancelSearch that delegates to app.cancelSearch", () => {
   let cancelled = false;
   const stack = createDesktopChatUiStack({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: {} }),
       cancelSearch: () => { cancelled = true; },
       getState: () => ({ messages: [], savedBands: [] }),
-    },
+    }),
   });
 
   stack.cancelSearch();
@@ -66,14 +67,14 @@ test("desktopChatUiStack exposes cancelSearch that delegates to app.cancelSearch
 test("desktopChatUiStack exposes retryLastSearch that delegates to appModel", async () => {
   const calls = [];
   const stack = createDesktopChatUiStack({
-    app: {
+    app: fakeDesktopApp({
       requestRecommendations: async (query) => {
         calls.push(query);
         return { recommendations: [], meta: {} };
       },
       cancelSearch: () => {},
       getState: () => ({ messages: [], savedBands: [] }),
-    },
+    }),
   });
 
   await stack.submitQuery("jazz fusion");

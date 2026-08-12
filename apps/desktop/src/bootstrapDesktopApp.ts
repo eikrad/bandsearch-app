@@ -1,3 +1,5 @@
+import type { SavedBand } from "./domain.js";
+import type { ChatMessage } from "./chatClient.js";
 import {
   createChatClient,
   createInitialChatState,
@@ -7,7 +9,14 @@ import {
 
 const VALID_VIEWS = ["chat", "saved-artists"];
 
-function buildPriorityContext(savedBands: any[], selectedArtistIds: string[]): string {
+type DesktopAppState = {
+  messages: ChatMessage[];
+  savedBands: SavedBand[];
+  selectedArtistIds: string[];
+  currentSessionId: string | null;
+};
+
+function buildPriorityContext(savedBands: SavedBand[], selectedArtistIds: string[]): string {
   if (!selectedArtistIds.length) return "";
   const selected = savedBands.filter((b) => selectedArtistIds.includes(b.id));
   if (!selected.length) return "";
@@ -27,20 +36,25 @@ export function bootstrapDesktopApp({
   getToken = null,
 }: BootstrapDesktopAppOptions = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl: fetchImpl ?? fetch, getToken });
-  let state: any = { ...createInitialChatState(), savedBands: [], selectedArtistIds: [], currentSessionId: null };
+  let state: DesktopAppState = {
+    ...createInitialChatState(),
+    savedBands: [],
+    selectedArtistIds: [],
+    currentSessionId: null,
+  };
   let currentView = "chat";
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
 
   function findLatestRecommendationByName(artistName: string) {
     const messages = state.messages || [];
-    const latestAssistant = [...messages].reverse().find((m: any) => m.role === "assistant");
+    const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
     const recommendations = latestAssistant?.recommendations || [];
-    return recommendations.find((item: any) => item.artist === artistName);
+    return recommendations.find((item) => item.artist === artistName);
   }
 
-  function upsertSavedBand(savedBand: any) {
-    const existingIndex = state.savedBands.findIndex((item: any) => item.id === savedBand.id);
+  function upsertSavedBand(savedBand: SavedBand) {
+    const existingIndex = state.savedBands.findIndex((item) => item.id === savedBand.id);
     if (existingIndex >= 0) {
       const nextSavedBands = [...state.savedBands];
       nextSavedBands[existingIndex] = savedBand;
@@ -61,12 +75,12 @@ export function bootstrapDesktopApp({
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
     async startSession(title = "Untitled") {
-      const result = await chatClient.createSession(title) as any;
+      const result = await chatClient.createSession(title);
       state = { ...state, currentSessionId: result.session.id };
       return result.session;
     },
     async listSessions() {
-      const result = await chatClient.listSessions() as any;
+      const result = await chatClient.listSessions();
       return result.sessions;
     },
     async requestRecommendations(query: string, mode = "fresh", obscurityTarget?: string) {
@@ -75,14 +89,14 @@ export function bootstrapDesktopApp({
       if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
       let priorityContext = buildPriorityContext(state.savedBands, effectiveIds);
       if (mode === "preference-aware" && effectiveIds.length > 0) priorityContext = "";
-      const conversationHistory = (state.messages || []).flatMap((m: any) => {
+      const conversationHistory = (state.messages || []).flatMap((m) => {
         if (m.role === "user") return [{ role: "user", content: m.content }];
         if (m.role === "assistant") {
           const text =
             typeof m.content === "string" && m.content.trim()
               ? m.content
               : m.recommendations
-                ? m.recommendations.map((r: any) => r.artist).join(", ")
+                ? m.recommendations.map((r) => r.artist).join(", ")
                 : "";
           return [{ role: "assistant", content: text }];
         }
@@ -95,7 +109,7 @@ export function bootstrapDesktopApp({
         const result = await chatClient.fetchRecommendations(
           query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget, controller.signal,
         );
-        state = applyAssistantMessage(state, result as any);
+        state = applyAssistantMessage(state, result);
         return result;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
@@ -133,14 +147,14 @@ export function bootstrapDesktopApp({
         categories: options.categories || [],
         note: options.note || recommendation?.why || "Saved from recommendation card.",
       };
-      const result = await chatClient.createPreference(payload) as any;
+      const result = await chatClient.createPreference(payload);
       upsertSavedBand(result.savedBand);
       return result.savedBand;
     },
     async rateBand(artistName: string, rating = 5) {
-      let savedBand = state.savedBands.find((item: any) => item.name === artistName);
+      let savedBand = state.savedBands.find((item) => item.name === artistName);
       if (!savedBand) savedBand = await this.saveBand(artistName, { rating });
-      const result = await chatClient.updatePreference(savedBand.id, { rating }) as any;
+      const result = await chatClient.updatePreference(savedBand.id, { rating });
       upsertSavedBand(result.savedBand);
       return result.savedBand;
     },
@@ -151,10 +165,10 @@ export function bootstrapDesktopApp({
     },
     async deleteSavedBand(id: string) {
       await chatClient.deletePreference(id);
-      state = { ...state, savedBands: state.savedBands.filter((b: any) => b.id !== id) };
+      state = { ...state, savedBands: state.savedBands.filter((b) => b.id !== id) };
     },
     async searchArtists(query: string) {
-      const result = await chatClient.searchArtists(query) as any;
+      const result = await chatClient.searchArtists(query);
       return result.artists || [];
     },
     async exportPreferences() {

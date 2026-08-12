@@ -8,6 +8,12 @@ function makeApp(savedBands = []) {
   return {
     listSavedBands: async () => bands,
     deleteSavedBand: async (id) => { const i = bands.findIndex((b) => b.id === id); if (i >= 0) bands.splice(i, 1); },
+    // Defaults so each test only states the collaborator calls it cares about.
+    searchArtists: async () => [],
+    importArtists: async () => ({ imported: 0, skipped: 0, failed: 0 }),
+    listGroups: async () => [],
+    createGroup: async () => ({}),
+    autoGroupByGenre: async () => ({}),
   };
 }
 
@@ -39,6 +45,7 @@ test("saved artists model maps saved bands to UI items after load", async () => 
 test("saved artists model sets isLoading true during load", async () => {
   let observedDuringLoad = null;
   const app = {
+    ...makeApp(),
     listSavedBands: async () => {
       observedDuringLoad = model.getScreenState().isLoading;
       return [];
@@ -75,7 +82,10 @@ test("saved artists model tracks search results after searchArtists call", async
 });
 
 test("saved artists model isSearching is true during search", async () => {
-  let resolveSearch;
+  /** @type {(value?: unknown) => void} */
+  let resolveSearch = () => {
+    throw new Error("resolveSearch called before the search promise was created");
+  };
   const model = createSavedArtistsModel({
     app: {
       ...makeApp(),
@@ -257,6 +267,7 @@ test("saved artists model importArtists calls app importArtists and reloads", as
   let importedBands = null;
   const store = [];
   const app = {
+    ...makeApp(),
     listSavedBands: async () => [...store],
     deleteSavedBand: async (id) => { const i = store.findIndex((b) => b.id === id); if (i >= 0) store.splice(i, 1); },
     importArtists: async (toImport) => {

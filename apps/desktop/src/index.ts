@@ -2,23 +2,44 @@ import { createChatRenderAdapter } from "./chatRenderAdapter.js";
 import { createSavedArtistsModel } from "./savedArtistsModel.js";
 import { createDesktopReactShell } from "./ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "./ui/mountDesktopReactApp.js";
+import type { DesktopReactMountOptions } from "./ui/mountDesktopReactApp.js";
+import type { ChatAppCollaborator } from "./chatAppModel.js";
+import type { SavedArtistsCollaborator } from "./savedArtistsModel.js";
+import type { ChatHandlers } from "./ui/viewTypes.js";
 import { createDesktopChatUiStack } from "./desktopChatUiStack.js";
 import { bootstrapDesktopApp } from "./bootstrapDesktopApp.js";
 
 export { bootstrapDesktopApp };
 
-function bootstrapDesktopUi(options: any) {
+/** Everything index.ts asks of the bootstrapped app, across both screens. */
+type DesktopAppCollaborator = ChatAppCollaborator &
+  SavedArtistsCollaborator & {
+    getView?(): string;
+    navigate?(view: string): unknown;
+    saveBand?(artistName: string): unknown;
+    rateBand?(artistName: string, rating?: number): unknown;
+    setPendingStyleRef?(ids: string[]): void;
+  };
+
+function bootstrapDesktopUi(options: { app: DesktopAppCollaborator; viewport?: string }) {
   return createDesktopChatUiStack(options);
 }
 
-function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }: { app: any; viewport?: string }) {
+function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }: { app: DesktopAppCollaborator; viewport?: string }) {
   const desktopUi = bootstrapDesktopUi({ app, viewport });
-  const adapter = createChatRenderAdapter({ desktopUi }) as any;
-  adapter.desktopUi = desktopUi;
-  return adapter;
+  // The adapter carries the stack so the shell can reach cancel/retry.
+  return Object.assign(createChatRenderAdapter({ desktopUi }), { desktopUi });
 }
 
-function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers = {} }: { app: any; viewport?: string; actionHandlers?: any }) {
+function bootstrapDesktopReactShell({
+  app,
+  viewport = "desktop",
+  actionHandlers = {},
+}: {
+  app: DesktopAppCollaborator;
+  viewport?: string;
+  actionHandlers?: Partial<ChatHandlers>;
+}) {
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
   const savedArtistsModel = createSavedArtistsModel({ app });
   const mergedActionHandlers = {
@@ -46,20 +67,20 @@ function bootstrapDesktopReactShell({ app, viewport = "desktop", actionHandlers 
       app.navigate?.("chat");
     },
     getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
-    cancelSearchImpl: () => (renderAdapter.desktopUi as any).cancelSearch?.(),
-    retryLastSearchImpl: () => (renderAdapter.desktopUi as any).retryLastSearch?.(),
-  }) as any;
+    cancelSearchImpl: () => renderAdapter.desktopUi.cancelSearch(),
+    retryLastSearchImpl: () => renderAdapter.desktopUi.retryLastSearch(),
+  });
   shell.desktopUi = renderAdapter.desktopUi;
   return shell;
 }
 
 export type BootstrapDesktopReactAppOptions = {
-  app?: any;
+  app?: DesktopAppCollaborator;
   viewport?: string;
   actionHandlers?: Record<string, unknown>;
-  router?: any;
-  savedArtistsShell?: any;
-  getSettingsViewProps?: () => Promise<any>;
+  router?: DesktopReactMountOptions["router"];
+  savedArtistsShell?: DesktopReactMountOptions["savedArtistsShell"];
+  getSettingsViewProps?: () => Promise<unknown>;
   saveGeminiApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
