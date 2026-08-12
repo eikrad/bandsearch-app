@@ -536,6 +536,7 @@ fn complete_onboarding() -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
@@ -666,6 +667,31 @@ mod tests {
         assert!(
             external_bin.iter().any(|e| e.as_str() == Some("binaries/node")),
             "bundle.externalBin must contain 'binaries/node'",
+        );
+    }
+
+    #[test]
+    fn tauri_conf_enables_updater_artifacts_and_pubkey() {
+        let conf = include_str!("../tauri.conf.json");
+        let parsed: serde_json::Value =
+            serde_json::from_str(conf).expect("tauri.conf.json must be valid JSON");
+        assert_eq!(
+            parsed["bundle"]["createUpdaterArtifacts"].as_bool(),
+            Some(true),
+            "bundle.createUpdaterArtifacts must be true for signed releases",
+        );
+        let pubkey = parsed["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .expect("plugins.updater.pubkey must be a string");
+        assert!(!pubkey.trim().is_empty(), "plugins.updater.pubkey must not be empty");
+        let endpoints = parsed["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .expect("plugins.updater.endpoints must be an array");
+        assert!(
+            endpoints.iter().any(|e| e
+                .as_str()
+                .is_some_and(|u| u.contains("releases/latest/download/latest.json"))),
+            "plugins.updater.endpoints must include GitHub latest.json",
         );
     }
 

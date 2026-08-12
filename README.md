@@ -105,6 +105,17 @@ curl -X POST http://localhost:3001/recommendations \
 npm run desktop             # opens native window, starts API automatically
 ```
 
+Tauri expects a Node sidecar next to the Rust crate (`bundle.externalBin`). For local
+dev, symlink your system Node once (the file is gitignored):
+
+```bash
+# Linux / macOS — use the host triple from: rustc -vV | grep ^host
+ln -sf "$(which node)" apps/desktop/src-tauri/binaries/node-$(rustc -vV | sed -n 's/^host: //p')
+```
+
+On Windows, copy `node.exe` to
+`apps/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe` instead.
+
 ### Platform prerequisites
 
 **Linux:**
@@ -206,6 +217,25 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
 3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
 
 Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds.
+
+---
+
+## Desktop releases
+
+Tagged pushes matching `v*` run [`.github/workflows/release.yml`](.github/workflows/release.yml): each OS downloads the matching Node sidecar into `apps/desktop/src-tauri/binaries/`, then `tauri-apps/tauri-action` builds installers and opens a **draft prerelease**.
+
+One-time signing setup (required before the first tag):
+
+1. Generate keys (private key stays outside the repo):
+   ```bash
+   npx --workspace @bandsearch/desktop tauri signer generate -w ~/.tauri/bandsearch.key
+   ```
+2. Put the **public** key string into `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey` (already set for the current keypair).
+3. Add GitHub Actions secrets:
+   - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/bandsearch.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password used at generation (empty string if none)
+
+In-app update UI is still Phase 10; this pipeline already produces signed updater artifacts (`createUpdaterArtifacts`) and `latest.json` for that work.
 
 ---
 

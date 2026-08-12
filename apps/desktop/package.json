@@ -9,6 +9,7 @@
     "test": "tsx --test",
     "build": "node scripts/build.js",
     "build:watch": "node scripts/build.js --watch",
+    "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml"
