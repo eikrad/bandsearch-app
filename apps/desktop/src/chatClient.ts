@@ -38,6 +38,13 @@ function parseSavedBandResponse(data: unknown, operation: string): { savedBand: 
   return { savedBand: data.savedBand };
 }
 
+function parseSavedBandsResponse(data: unknown, operation: string): { savedBands: SavedBand[] } {
+  if (!isRecord(data) || !Array.isArray(data.savedBands) || !data.savedBands.every(isSavedBand)) {
+    throw new Error(`invalid ${operation} response: savedBands must be an array of valid saved bands`);
+  }
+  return { savedBands: data.savedBands };
+}
+
 export class BandsearchHttpError extends Error {
   status?: number;
   code?: string;
@@ -152,10 +159,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
       const data: unknown = await response.json();
-      if (!isRecord(data) || !Array.isArray(data.savedBands) || !data.savedBands.every(isSavedBand)) {
-        throw new Error("invalid list preferences response: savedBands must be an array of valid saved bands");
-      }
-      return data.savedBands;
+      return parseSavedBandsResponse(data, "list preferences").savedBands;
     },
 
     async deletePreference(id: string) {
@@ -170,7 +174,8 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
     async fetchSavedBands() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      return response.json() as Promise<{ savedBands: SavedBand[] }>;
+      const data: unknown = await response.json();
+      return parseSavedBandsResponse(data, "fetch saved bands");
     },
 
     async searchArtists(query: string) {

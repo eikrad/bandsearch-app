@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+type RecommendationApiResponse = {
+  recommendations: Array<{
+    why: string;
+    sourceSignals: string[];
+  }>;
+};
+
 test.describe("Bandsearch UI", () => {
   test("renders the app with mode toggle and input", async ({ page }) => {
     await page.goto("/");
@@ -27,11 +34,11 @@ test.describe("Bandsearch UI", () => {
   });
 
   test("recommendations come from Gemini, not deterministic fallback", async ({ page }) => {
-    const apiResponses = [];
+    const apiResponses: RecommendationApiResponse[] = [];
 
     await page.route("**/recommendations", async (route) => {
       const response = await route.fetch();
-      const body = await response.json();
+      const body = await response.json() as RecommendationApiResponse;
       apiResponses.push(body);
       await route.fulfill({ response });
     });

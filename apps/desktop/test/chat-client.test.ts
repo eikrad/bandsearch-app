@@ -156,6 +156,18 @@ test("chat client fetches saved bands from preferences endpoint", async () => {
   assert.equal(result.savedBands[0].name, "Fen");
 });
 
+test("chat client rejects malformed saved bands responses", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => jsonResponse({ savedBands: [{ id: "pref-1", name: 42 }] }),
+  });
+
+  await assert.rejects(
+    client.fetchSavedBands(),
+    /invalid fetch saved bands response: savedBands must be an array of valid saved bands/,
+  );
+});
+
 test("chat client searches artists via artist search endpoint", async () => {
   const calls: FetchCall[] = [];
   const client = createChatClient({
