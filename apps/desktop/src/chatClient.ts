@@ -102,7 +102,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         body: JSON.stringify(savedBand),
       });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ savedBand: SavedBand }>;
     },
 
     async updatePreference(id: string, updates: unknown) {
@@ -112,7 +112,7 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         body: JSON.stringify(updates),
       });
       await ensureOk(response);
-      return response.json();
+      return response.json() as Promise<{ savedBand: SavedBand }>;
     },
 
     async listPreferences() {

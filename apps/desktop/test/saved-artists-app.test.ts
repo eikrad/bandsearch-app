@@ -76,7 +76,7 @@ test("app.requestRecommendations sends priorityContext when artists are selected
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input);
     if (url.includes("/recommendations")) {
-      assert.equal(typeof init?.body, "string");
+      assert.ok(typeof init?.body === "string");
       requestBodies.push(JSON.parse(init.body));
       return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     }

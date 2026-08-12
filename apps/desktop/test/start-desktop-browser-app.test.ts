@@ -40,7 +40,7 @@ test("startDesktopBrowserApp mounts bootstrapped react app", async () => {
         calls.push({ type: "bootstrapApp", apiBaseUrl: options?.apiBaseUrl });
         return bootstrapDesktopApp(options);
       },
-      bootstrapDesktopReactApp: ({ viewport } = {}) => {
+      bootstrapDesktopReactApp: ({ viewport }) => {
         calls.push({ type: "bootstrapReact", viewport });
         return fakeReactApp({
           mount: async () => {
@@ -78,7 +78,7 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
         calls.push({ type: "bootstrapApp", apiBaseUrl: options?.apiBaseUrl });
         return bootstrapDesktopApp(options);
       },
-      bootstrapDesktopReactApp: ({ saveApiEndpointUrl } = {}) => {
+      bootstrapDesktopReactApp: ({ saveApiEndpointUrl }) => {
         calls.push({ type: "bootstrapReact", saveApiEndpointUrl });
         return fakeReactApp({
           mount: async () => {
@@ -109,7 +109,7 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
       viewport: "desktop",
       deps: {
         bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
-        bootstrapDesktopReactApp: ({ viewport } = {}) => {
+        bootstrapDesktopReactApp: ({ viewport }) => {
           calls.push({ type: "bootstrapReact", viewport });
           return fakeReactApp({
             mount: async () => {

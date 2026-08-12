@@ -3,23 +3,21 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatAppView } from "../src/ui/ChatAppView.js";
+import { cardViewProps, chatHandlers, chatViewProps } from "./helpers/fakeViewProps.js";
+
+const FRESH_ONLY = [{ value: "fresh", label: "Fresh search" }];
 
 test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [
           { value: "fresh", label: "Fresh search" },
           { value: "preference-aware", label: "Preference-aware" },
         ],
         queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Fen",
             why: "Atmospheric overlap",
             saved: true,
@@ -27,23 +25,11 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
             country: "UK",
             genres: ["post-black"],
             connection: "Related to Alcest",
-            actions: {
-              save: { visible: true },
-              rate: { visible: true },
-              more: { visible: true },
-            },
-          },
+          }),
         ],
-        emptyText: "No recommendations yet.",
         actionStatus: { type: "success", message: "Saved Fen." },
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-      },
+      }),
+      handlers: chatHandlers(),
     }),
   );
 
@@ -62,41 +48,19 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
 test("RecommendationCard has CSS class for card styling", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
+      viewProps: chatViewProps({
+        modeOptions: FRESH_ONLY,
         cards: [
-          {
+          cardViewProps({
             title: "Fen",
             why: "Atmospheric post-metal",
-            saved: false,
-            rating: null,
             country: "UK",
             genres: ["post-black"],
-            connection: "",
-            actions: {
-              save: { visible: true },
-              rate: { visible: true },
-              more: { visible: true },
-            },
-          },
+          }),
         ],
         actionStatus: null,
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -115,27 +79,12 @@ test("RecommendationCard has CSS class for card styling", () => {
 test("ChatAppView shows loading indicator while recommendations are in flight", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
+      viewProps: chatViewProps({
+        modeOptions: FRESH_ONLY,
         queryDisabled: true,
         isLoading: true,
-        cards: [],
-        emptyText: "No recommendations yet.",
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -148,15 +97,8 @@ test("ChatAppView shows loading indicator while recommendations are in flight", 
 test("ChatAppView renders conversation thread when messages prop provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
         messages: [
           { id: "m1", role: "user", content: "I like atmospheric bands" },
           {
@@ -164,25 +106,16 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
             role: "assistant",
             content: "Here are picks in that vein — want something heavier or more shoegaze?",
             cards: [
-              {
+              cardViewProps({
                 title: "Fen",
                 why: "Atmospheric overlap",
-                genres: [],
                 actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
-              },
+              }),
             ],
           },
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -196,15 +129,9 @@ test("ChatAppView renders conversation thread when messages prop provided", () =
 test("ChatAppView mobile keeps cards in the scroll thread (layout A)", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
+      viewProps: chatViewProps({
         viewport: "mobile",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
+        modeOptions: FRESH_ONLY,
         messages: [
           { id: "m1", role: "user", content: "I like atmospheric bands" },
           {
@@ -212,25 +139,16 @@ test("ChatAppView mobile keeps cards in the scroll thread (layout A)", () => {
             role: "assistant",
             content: "Here are picks.",
             cards: [
-              {
+              cardViewProps({
                 title: "Fen",
                 why: "Atmospheric overlap",
-                genres: [],
                 actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
-              },
+              }),
             ],
           },
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -239,44 +157,29 @@ test("ChatAppView mobile keeps cards in the scroll thread (layout A)", () => {
 });
 
 test("ChatAppView desktop collapses earlier recommendation turns (C)", () => {
-  const cardProps = { genres: [], actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } } };
+  const hiddenActions = { save: { visible: true }, rate: { visible: false }, more: { visible: false } };
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
+      viewProps: chatViewProps({
+        modeOptions: FRESH_ONLY,
         messages: [
           { id: "u1", role: "user", content: "Round one" },
           {
             id: "a1",
             role: "assistant",
             content: "First suggestions.",
-            cards: [{ title: "EarlierArtist", why: "Because", ...cardProps }],
+            cards: [cardViewProps({ title: "EarlierArtist", why: "Because", actions: hiddenActions })],
           },
           { id: "u2", role: "user", content: "Round two" },
           {
             id: "a2",
             role: "assistant",
             content: "Latest suggestions.",
-            cards: [{ title: "LatestArtist", why: "Fit", ...cardProps }],
+            cards: [cardViewProps({ title: "LatestArtist", why: "Fit", actions: hiddenActions })],
           },
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -289,33 +192,18 @@ test("ChatAppView desktop collapses earlier recommendation turns (C)", () => {
 test("ChatAppView renders artist image when imageUrl is provided on card", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Fen",
             genres: ["post-black"],
             imageUrl: "https://commons.wikimedia.org/fen.jpg",
-            platformLinks: [],
             actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
-          },
+          }),
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -325,34 +213,20 @@ test("ChatAppView renders artist image when imageUrl is provided on card", () =>
 test("ChatAppView renders platform links when provided on card", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Fen",
             platformLinks: [
               { platform: "bandcamp", url: "https://bandcamp.com/search?q=Fen", label: "Bandcamp" },
               { platform: "spotify", url: "https://open.spotify.com/search/Fen", label: "Spotify" },
             ],
             actions: { save: { visible: false }, rate: { visible: false }, more: { visible: false } },
-          },
+          }),
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -363,25 +237,8 @@ test("ChatAppView renders platform links when provided on card", () => {
 test("ChatAppView renders a Saved Artists navigation button", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      viewProps: chatViewProps({ modeOptions: [{ value: "fresh", label: "Fresh" }] }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -391,25 +248,8 @@ test("ChatAppView renders a Saved Artists navigation button", () => {
 test("ChatAppView renders a Settings navigation button", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onNavigateSettings: () => {},
-        onNavigateSaved: () => {},
-      },
+      viewProps: chatViewProps({ modeOptions: [{ value: "fresh", label: "Fresh" }] }),
+      handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
@@ -419,29 +259,17 @@ test("ChatAppView renders a Settings navigation button", () => {
 test("ChatAppView renders genre chips for cards with genres", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Wolves in the Throne Room",
             genres: ["atmospheric-black", "cascadian"],
             actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
-          },
+          }),
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-      },
+      }),
+      handlers: chatHandlers(),
     }),
   );
 
@@ -452,31 +280,17 @@ test("ChatAppView renders genre chips for cards with genres", () => {
 test("RecommendationCard renders a per-card copy button", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
-        viewport: "desktop",
-        modeValue: "fresh",
+      viewProps: chatViewProps({
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Fen",
             why: "Atmospheric overlap",
-            genres: [],
             actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
-          },
+          }),
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onCopyCard: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onCopyCard: () => {} }),
     }),
   );
 
@@ -486,15 +300,9 @@ test("RecommendationCard renders a per-card copy button", () => {
 test("MessageThread renders copy-all button for assistant message with cards", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
+      viewProps: chatViewProps({
         viewport: "mobile",
-        modeValue: "fresh",
         modeOptions: [{ value: "fresh", label: "Fresh" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        cards: [],
         messages: [
           { id: "u1", role: "user", content: "I like dark ambient" },
           {
@@ -502,25 +310,16 @@ test("MessageThread renders copy-all button for assistant message with cards", (
             role: "assistant",
             content: "Here are picks.",
             cards: [
-              {
+              cardViewProps({
                 title: "Fen",
                 why: "Atmospheric",
-                genres: [],
                 actions: { save: { visible: true }, rate: { visible: false }, more: { visible: false } },
-              },
+              }),
             ],
           },
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onCopyCard: () => {},
-        onCopyAll: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onCopyCard: () => {}, onCopyAll: () => {} }),
     }),
   );
 
@@ -530,16 +329,12 @@ test("MessageThread renders copy-all button for assistant message with cards", (
 test("ChatAppView uses compact mobile layout and action density", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
-        headerSubtitle: "Niche recommendations",
+      viewProps: chatViewProps({
         viewport: "mobile",
         modeValue: "preference-aware",
         modeOptions: [{ value: "preference-aware", label: "Preference-aware" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
         cards: [
-          {
+          cardViewProps({
             title: "Alcest",
             why: "Dreamlike overlap",
             actions: {
@@ -547,17 +342,10 @@ test("ChatAppView uses compact mobile layout and action density", () => {
               rate: { visible: false },
               more: { visible: true },
             },
-          },
+          }),
         ],
-        emptyText: "No recommendations yet.",
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-      },
+      }),
+      handlers: chatHandlers(),
     }),
   );
 
@@ -572,26 +360,14 @@ test("ChatAppView uses compact mobile layout and action density", () => {
 test("ChatAppView renders stop button inside SearchInProgress when isLoading", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
+      viewProps: chatViewProps({
         headerSubtitle: "",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
+        modeOptions: FRESH_ONLY,
         queryDisabled: true,
         isLoading: true,
-        cards: [],
         actionStatus: null,
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onStop: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onStop: () => {} }),
     }),
   );
 
@@ -601,26 +377,12 @@ test("ChatAppView renders stop button inside SearchInProgress when isLoading", (
 test("ChatAppView does not render stop button when not loading", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
+      viewProps: chatViewProps({
         headerSubtitle: "",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        isLoading: false,
-        cards: [],
+        modeOptions: FRESH_ONLY,
         actionStatus: null,
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onStop: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onStop: () => {} }),
     }),
   );
 
@@ -630,31 +392,16 @@ test("ChatAppView does not render stop button when not loading", () => {
 test("ChatAppView renders retry button on last user message when not loading", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
+      viewProps: chatViewProps({
         headerSubtitle: "",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
-        queryDisabled: false,
-        isLoading: false,
-        cards: [],
+        modeOptions: FRESH_ONLY,
         actionStatus: null,
         messages: [
           { id: "u-0", role: "user", content: "post-metal" },
           { id: "a-1", role: "assistant", content: "Here are picks", cards: [] },
         ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onStop: () => {},
-        onRetry: () => {},
-      },
+      }),
+      handlers: chatHandlers({ onStop: () => {}, onRetry: () => {} }),
     }),
   );
 
@@ -664,30 +411,15 @@ test("ChatAppView renders retry button on last user message when not loading", (
 test("ChatAppView does not render retry button when loading", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {
-      viewProps: {
-        headerTitle: "Bandsearch",
+      viewProps: chatViewProps({
         headerSubtitle: "",
-        viewport: "desktop",
-        modeValue: "fresh",
-        modeOptions: [{ value: "fresh", label: "Fresh search" }],
-        queryPlaceholder: "Describe bands...",
+        modeOptions: FRESH_ONLY,
         queryDisabled: true,
         isLoading: true,
-        cards: [],
         actionStatus: null,
-        messages: [
-          { id: "u-0", role: "user", content: "post-metal" },
-        ],
-      },
-      handlers: {
-        onModeChange: () => {},
-        onQuerySubmit: () => {},
-        onSave: () => {},
-        onRate: () => {},
-        onMore: () => {},
-        onStop: () => {},
-        onRetry: () => {},
-      },
+        messages: [{ id: "u-0", role: "user", content: "post-metal" }],
+      }),
+      handlers: chatHandlers({ onStop: () => {}, onRetry: () => {} }),
     }),
   );
 

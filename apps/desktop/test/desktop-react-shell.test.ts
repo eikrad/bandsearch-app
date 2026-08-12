@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { fakeDesktopApp } from "./helpers/fakeApp.js";
 import { chatViewProps } from "./helpers/fakeViewProps.js";
 import { BandsearchHttpError } from "../src/chatClient.js";
+import type { ChatStateMessage } from "../src/domain.js";
 import { bootstrapDesktopReactShell } from "../src/index.js";
 import { createDesktopReactShell } from "../src/ui/createDesktopReactShell.js";
 
 test("desktop react shell renders HTML with recommendation card and actions", async () => {
-  const appState = { messages: [] };
+  const appState: { messages: ChatStateMessage[] } = { messages: [] };
   const shell = bootstrapDesktopReactShell({
     app: fakeDesktopApp({
       requestRecommendations: async () => {
@@ -62,8 +63,8 @@ test("desktop react shell save and rate actions call app handlers", async () => 
   assert.equal(calls[0].type, "save");
   assert.equal(calls[1].type, "rate");
   assert.equal(calls[1].rating, 5);
-  assert.equal(afterSave.actionStatus.message, "Saved Fen.");
-  assert.equal(afterRate.actionStatus.message, "Rated Fen: 5/5.");
+  assert.equal(afterSave.actionStatus?.message, "Saved Fen.");
+  assert.equal(afterRate.actionStatus?.message, "Rated Fen: 5/5.");
 });
 
 test("desktop react shell maps BandsearchHttpError to a human recommendation error banner", async () => {
@@ -91,8 +92,8 @@ test("desktop react shell maps BandsearchHttpError to a human recommendation err
 
   await assert.rejects(() => shell.submitQuery("metal"), /query failed/);
   const props = shell.getViewProps();
-  assert.equal(props.actionStatus.type, "error");
-  assert.match(props.actionStatus.message, /Settings|API key|Gemini/i);
+  assert.equal(props.actionStatus?.type, "error");
+  assert.match(props.actionStatus?.message, /Settings|API key|Gemini/i);
 });
 
 test("desktop react shell clears action status after timeout", async () => {
@@ -125,7 +126,7 @@ test("desktop react shell clears action status after timeout", async () => {
   });
 
   await shell.saveBand("Fen");
-  assert.equal(shell.getViewProps().actionStatus.message, "Saved Fen.");
+  assert.equal(shell.getViewProps().actionStatus?.message, "Saved Fen.");
   scheduled();
   assert.equal(shell.getViewProps().actionStatus, null);
 });

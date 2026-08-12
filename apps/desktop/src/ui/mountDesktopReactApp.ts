@@ -9,7 +9,7 @@ import { RegisterView } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
-type MountShell = {
+export type MountShell = {
   getViewProps(): unknown;
   getView?(): string;
   updateMode(mode: string): Promise<unknown>;
@@ -63,8 +63,8 @@ function resolveViewComponent(viewName: string) {
 
 export interface DesktopReactMountOptions {
   shell: MountShell;
-  router?: MountRouter;
-  savedArtistsShell?: MountSavedShell;
+  router?: MountRouter | null;
+  savedArtistsShell?: MountSavedShell | null;
   getSettingsViewProps?: () => unknown;
   saveGeminiApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
@@ -372,7 +372,7 @@ export function createDesktopReactMount({
   };
 
   if (router) {
-    router.onRouteChange(() => renderCurrent());
+    router.onRouteChange?.(() => renderCurrent());
   }
 
   return {

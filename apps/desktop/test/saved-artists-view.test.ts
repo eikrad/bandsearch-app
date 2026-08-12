@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SavedArtistsView } from "../src/ui/SavedArtistsView.js";
+import { savedArtistsViewProps } from "./helpers/fakeViewProps.js";
 
 const baseHandlers = {
   onNavigate: () => {},
@@ -12,14 +13,13 @@ const baseHandlers = {
 test("SavedArtistsView renders each saved artist name", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [
           { id: "b1", name: "Fen", rating: 4, categoryTags: ["post-black"], note: "", isSelected: false },
           { id: "b2", name: "Alcest", rating: 5, categoryTags: [], note: "", isSelected: false },
         ],
         isLoading: false,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -31,11 +31,10 @@ test("SavedArtistsView renders each saved artist name", () => {
 test("SavedArtistsView renders empty state when no artists", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -47,11 +46,10 @@ test("SavedArtistsView renders empty state when no artists", () => {
 test("SavedArtistsView renders navigation back to chat", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -62,11 +60,10 @@ test("SavedArtistsView renders navigation back to chat", () => {
 test("SavedArtistsView renders Saved Artists heading", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -77,13 +74,12 @@ test("SavedArtistsView renders Saved Artists heading", () => {
 test("SavedArtistsView renders search input and button", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -95,13 +91,12 @@ test("SavedArtistsView renders search input and button", () => {
 test("SavedArtistsView renders search results with Add buttons", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
         searchResults: [{ id: "abc", name: "Alcest", disambiguation: "French blackgaze" }],
         isSearching: false,
-      },
+      }),
       handlers: { ...baseHandlers, onAddArtist: () => {} },
     }),
   );
@@ -114,14 +109,13 @@ test("SavedArtistsView renders search results with Add buttons", () => {
 test("SavedArtistsView renders tick button per artist", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: false }],
         isLoading: false,
         searchResults: [],
         isSearching: false,
         selectedCount: 0,
-      },
+      }),
       handlers: { ...baseHandlers, onToggleSelection: () => {} },
     }),
   );
@@ -133,14 +127,13 @@ test("SavedArtistsView renders tick button per artist", () => {
 test("SavedArtistsView renders checkmark for selected artist", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: true }],
         isLoading: false,
         searchResults: [],
         isSearching: false,
         selectedCount: 1,
-      },
+      }),
       handlers: { ...baseHandlers, onToggleSelection: () => {}, onActivateStyleRef: () => {} },
     }),
   );
@@ -152,14 +145,13 @@ test("SavedArtistsView renders checkmark for selected artist", () => {
 test("SavedArtistsView shows loading state when isLoading", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: true,
         searchResults: [],
         isSearching: false,
         selectedCount: 0,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -171,14 +163,13 @@ test("SavedArtistsView shows loading state when isLoading", () => {
 test("SavedArtistsView shows selection bar when selectedCount > 0", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [{ id: "b1", name: "Fen", rating: 4, categoryTags: [], note: "", isSelected: true }],
         isLoading: false,
         searchResults: [],
         isSearching: false,
         selectedCount: 1,
-      },
+      }),
       handlers: { ...baseHandlers, onToggleSelection: () => {}, onActivateStyleRef: () => {} },
     }),
   );
@@ -189,13 +180,12 @@ test("SavedArtistsView shows selection bar when selectedCount > 0", () => {
 test("SavedArtistsView shows searching indicator when isSearching", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
         searchResults: [],
         isSearching: true,
-      },
+      }),
       handlers: baseHandlers,
     }),
   );
@@ -206,13 +196,12 @@ test("SavedArtistsView shows searching indicator when isSearching", () => {
 test("SavedArtistsView renders Export button", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
+      }),
       handlers: { ...baseHandlers, onExport: () => {} },
     }),
   );
@@ -223,14 +212,13 @@ test("SavedArtistsView renders Export button", () => {
 test("SavedArtistsView renders group sections when groups provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [{ id: "b1", name: "Alcest", rating: 5, categoryTags: [], note: "", isSelected: false }],
         groups: [{ id: "g1", name: "Blackgaze", memberIds: ["b1"] }],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
+      }),
       handlers: { ...baseHandlers },
     }),
   );
@@ -241,14 +229,13 @@ test("SavedArtistsView renders group sections when groups provided", () => {
 test("SavedArtistsView renders Group by genre button", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         groups: [],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
+      }),
       handlers: { ...baseHandlers, onAutoGroup: () => {} },
     }),
   );
@@ -259,14 +246,13 @@ test("SavedArtistsView renders Group by genre button", () => {
 test("SavedArtistsView renders create group input", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         groups: [],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
+      }),
       handlers: { ...baseHandlers, onCreateGroup: () => {} },
     }),
   );
@@ -277,14 +263,13 @@ test("SavedArtistsView renders create group input", () => {
 test("SavedArtistsView renders Import file input", () => {
   const html = renderToStaticMarkup(
     React.createElement(SavedArtistsView, {
-      viewProps: {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+      viewProps: savedArtistsViewProps({
         artists: [],
         isLoading: false,
         searchResults: [],
         isSearching: false,
-      },
-      handlers: { ...baseHandlers, onImport: () => {} },
+      }),
+      handlers: { ...baseHandlers, onImportFile: () => {} },
     }),
   );
 

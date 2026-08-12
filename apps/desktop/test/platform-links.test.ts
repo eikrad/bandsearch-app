@@ -24,6 +24,7 @@ test("buildPlatformLinks returns Bandcamp, SoundCloud, Spotify search links for 
 test("buildPlatformLinks URL-encodes artist names with special characters", () => {
   const links = buildPlatformLinks("Fen & Friends");
   const bandcamp = links.find((l) => l.platform === "bandcamp");
+  assert.ok(bandcamp, "has bandcamp link");
   assert.equal(bandcamp.url.includes("Fen"), true);
   assert.equal(bandcamp.url.includes(" "), false, "no raw spaces in URL");
 });

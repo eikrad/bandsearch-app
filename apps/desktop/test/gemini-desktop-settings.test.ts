@@ -85,7 +85,7 @@ test("createGeminiSettingsController saveBraveApiKey calls save_brave_api_key co
   await ctrl.saveBraveApiKey("bsapikey123");
   const saveCall = calls.find((c) => c.cmd === "save_brave_api_key");
   assert.ok(saveCall, "should call save_brave_api_key");
-  assert.equal(saveCall.args.apiKey, "bsapikey123");
+  assert.equal(saveCall.args?.apiKey, "bsapikey123");
 });
 
 test("createGeminiSettingsController saveBraveApiKey rejects empty key", async () => {
@@ -192,8 +192,8 @@ test("createGeminiSettingsController saveTursoConfig invokes Tauri when probe su
   await ctrl.saveTursoConfig("libsql://db.turso.io", "mytoken");
   const saveCall = tauriCalls.find((c) => c.cmd === "save_turso_config");
   assert.ok(saveCall, "should call save_turso_config");
-  assert.equal(saveCall.args.databaseUrl, "libsql://db.turso.io");
-  assert.equal(saveCall.args.authToken, "mytoken");
+  assert.equal(saveCall.args?.databaseUrl, "libsql://db.turso.io");
+  assert.equal(saveCall.args?.authToken, "mytoken");
 });
 
 test("createGeminiSettingsController saveTursoConfig does NOT invoke Tauri when probe fails", async () => {
@@ -274,7 +274,7 @@ test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async ()
   await ctrl.saveApiEndpointUrl("  https://bandsearch.onrender.com  ");
   const saveCall = calls.find((c) => c.cmd === "save_api_endpoint_url");
   assert.ok(saveCall, "should call save_api_endpoint_url");
-  assert.equal(saveCall.args.url, "https://bandsearch.onrender.com");
+  assert.equal(saveCall.args?.url, "https://bandsearch.onrender.com");
 });
 
 test("saveApiEndpointUrl accepts empty string to reset to local and reports success", async () => {
@@ -285,7 +285,7 @@ test("saveApiEndpointUrl accepts empty string to reset to local and reports succ
   await ctrl.saveApiEndpointUrl("   ");
   const saveCall = calls.find((c) => c.cmd === "save_api_endpoint_url");
   assert.ok(saveCall, "should call save_api_endpoint_url with empty url");
-  assert.equal(saveCall.args.url, "");
+  assert.equal(saveCall.args?.url, "");
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.apiEndpointStatusMessage?.type, "success");
 });

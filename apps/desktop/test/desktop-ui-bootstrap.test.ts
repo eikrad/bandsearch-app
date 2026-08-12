@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { fakeDesktopApp } from "./helpers/fakeApp.js";
 import { bootstrapDesktopUi } from "../src/index.js";
 import { createDesktopChatUiStack } from "../src/desktopChatUiStack.js";
+import type { ChatStateMessage, SavedBand } from "../src/domain.js";
 
 test("desktop ui bootstrap exposes mode get/set", () => {
   const ui = bootstrapDesktopUi({
@@ -18,7 +19,7 @@ test("desktop ui bootstrap exposes mode get/set", () => {
 });
 
 test("desktop ui bootstrap refreshes conversation after query submission", async () => {
-  const appState = { messages: [], savedBands: [] };
+  const appState: { messages: ChatStateMessage[]; savedBands: SavedBand[] } = { messages: [], savedBands: [] };
   const ui = bootstrapDesktopUi({
     app: fakeDesktopApp({
       requestRecommendations: async () => {

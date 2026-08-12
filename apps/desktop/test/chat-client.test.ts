@@ -39,9 +39,9 @@ test("chat client sends recommendation request and returns response payload", as
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:3001/recommendations");
-  assert.equal(result.recommendations[0].artist, "Fen");
-  assert.equal(result.assistantReply.includes("heavier"), true);
-  assert.equal(result.meta.modeUsed, "fresh");
+  assert.equal(result.recommendations?.[0].artist, "Fen");
+  assert.equal(result.assistantReply?.includes("heavier"), true);
+  assert.equal(result.meta?.modeUsed, "fresh");
 });
 
 test("chat state appends assistant message from recommendation response", () => {
@@ -115,7 +115,7 @@ test("chat client fetches saved bands from preferences endpoint", async () => {
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:3001/preferences");
-  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[0].init?.method, "GET");
   assert.equal(result.savedBands.length, 1);
   assert.equal(result.savedBands[0].name, "Fen");
 });
@@ -154,7 +154,7 @@ test("chat client creates a new session", async () => {
 
   const result = await client.createSession("Post-black");
   assert.equal(calls[0].url, "http://localhost:3001/sessions");
-  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init?.method, "POST");
   assert.equal(result.session.id, "sess-1");
 });
 
@@ -180,7 +180,7 @@ test("chat client appends a message to a session", async () => {
 
   await client.appendSessionMessage("sess-1", { role: "user", content: "I like Alcest" });
   assert.equal(calls[0].url, "http://localhost:3001/sessions/sess-1/messages");
-  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init?.method, "POST");
 });
 
 test("chat client sends selectedArtistIds when provided", async () => {

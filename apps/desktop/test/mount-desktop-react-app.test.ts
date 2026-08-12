@@ -2,19 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { ReactNode } from "react";
 import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
-import { fakeContainer } from "./helpers/fakeDom.js";
+import type { MountShell } from "../src/ui/mountDesktopReactApp.js";
+import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 
 test("desktop react mount renders and wires interaction callbacks", async () => {
   const calls: Array<{ type: string; element?: ReactNode; mode?: string; query?: string; artistName?: string; rating?: number }> = [];
-  const fakeRoot = {
-    render: (element) => {
-      calls.push({ type: "render", element });
-    },
-  };
+  const fakeRoot = fakeReactRoot((element) => {
+    calls.push({ type: "render", element });
+  });
   const fakeCreateRoot = () => fakeRoot;
   const container = fakeContainer();
 
-  const shell = {
+  const shell: MountShell = {
     getViewProps: () => ({
       headerTitle: "Bandsearch",
       headerSubtitle: "Niche recommendations",
@@ -62,7 +61,7 @@ test("createDesktopReactMount exposes onStop handler that calls shell.cancelSear
       cancelSearch: () => { cancelled = true; },
       retryLastSearch: async () => {},
     },
-    createRootImpl: () => ({ render: () => {} }),
+    createRootImpl: () => fakeReactRoot(),
     resolveContainer: () => fakeContainer({ id: "root" }),
   });
 
@@ -81,7 +80,7 @@ test("createDesktopReactMount exposes onRetry handler that calls shell.retryLast
       cancelSearch: () => {},
       retryLastSearch: async () => { retried = true; },
     },
-    createRootImpl: () => ({ render: () => {} }),
+    createRootImpl: () => fakeReactRoot(),
     resolveContainer: () => fakeContainer({ id: "root" }),
   });
 
