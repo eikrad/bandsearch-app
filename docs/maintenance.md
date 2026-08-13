@@ -4,6 +4,121 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-08-12
+
+### Checks performed
+- `git fetch origin`, then compared the working branch (`claude/eloquent-volta-l94b2x`) against
+  `origin/staging`: 0 commits behind, but 1 commit "ahead" (`383ce9a`, PR #102 "Update for Main").
+  Investigated before touching anything, per this cycle's instructions — that commit turned out to
+  be the merge of `staging` into `main` (already on `origin/main`'s tip, confirmed via
+  `git merge-base --is-ancestor`), so it was not unique/unpushed work, just the branch having been
+  seeded from `origin/main`'s tip instead of `origin/staging`'s. Reset to `origin/staging`
+  (`ff80c78`, merge of #101) — same underlying "seeded from the wrong ref" pattern as the
+  2026-07-15 and 2026-08-05 cycles, this time pointing at `main` rather than being stale.
+- Confirmed `npm ci` + `cache: npm` in `.github/workflows/ci.yml` and `package-lock.json` (not
+  `pnpm-lock.yaml`) is what CI actually installs from — npm/`package-lock.json` is authoritative.
+- Baseline: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`,
+  `npm --workspace @bandsearch/desktop run build` — all green before any changes.
+- `npm outdated` / `npm audit` across all workspaces (root, `apps/desktop`, `services/api`,
+  `services/eval`, `shared/schemas`).
+- Confirmed root `pyproject.toml` still declares `dependencies = []` — nothing to audit on the
+  Python side, reconfirmed rather than assumed.
+- Installed `cargo-audit` 0.22.2 (not cached in this sandbox) via `cargo install cargo-audit
+  --locked`, then ran `cargo audit --no-yanked` in `apps/desktop/src-tauri` (yanked-crate checks
+  hit `503` from the registry through the sandbox's outbound proxy; the vulnerability/warning scan
+  itself is unaffected by that flag).
+- Cross-referenced `npm outdated` against the 10 open Dependabot npm/cargo PRs (via `git fetch`
+  branch list and `list_pull_requests`) to avoid duplicating any in-flight bump.
+- Checked recent CI runs on `staging` via the GitHub Actions API.
+- Re-ran the full baseline suite after applying updates.
+
+### CI health (staging)
+Most recent `CI` run against `staging`'s current tip (`ff80c78`, run `31590463407`) is
+`completed`/`success`. No red runs found in recent history.
+
+### Fixes applied
+
+- **npm — no new security vulnerabilities this cycle.** Baseline `npm audit`: **0 vulnerabilities**
+  (workspace-wide). Nothing to fix.
+
+- **Safe npm updates** — applied only where not already covered by an open Dependabot PR
+  (`npm update` targeted at specific packages; no `package.json` range changes):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.66.0 | 8.67.0 |
+  | root | `globals` | 17.9.0 | 17.11.0 |
+  | `services/api` | `pg` (+ transitive `pg-protocol`) | 8.22.0 → n/a | 8.23.0 / 1.16.0 |
+
+  Only `package-lock.json` changed (142 lines: 71 insertions / 71 deletions). `better-sqlite3`,
+  `esbuild`, `eslint`, `tsx` were left untouched despite being outdated — each already has an open
+  Dependabot PR (#111, #108, #109, #112) targeting the same or a newer version; bumping them here
+  would either duplicate or conflict with those PRs. Note: the open `tsx` PR (#112) targets
+  4.23.11, one patch behind the true latest (4.23.12) — left as-is rather than superseding an
+  in-flight PR; worth a glance by the owner when merging #112.
+
+- **Rust — no fix needed/applied this cycle.** `cargo audit --no-yanked`: **0 vulnerabilities**,
+  19 informational unmaintained/unsound warnings — identical set and count to the 2026-08-05
+  cycle (no new advisories this week). `Cargo.lock` still resolves `plist 1.10.0` / `quick-xml
+  0.41.0` (RUSTSEC-2026-0194/0195 fix unregressed). `cargo update --dry-run` shows the same
+  category of non-security patch/minor bumps across the `tauri` 2.x family as prior cycles (plus
+  churn already covered by the open cargo Dependabot PRs #105/#107/#110) — none applied, consistent
+  with "keep security-driven PRs minimal" precedent.
+
+### Majors — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 07-08; still needs a dedicated compatibility pass across all 4 npm workspaces + `typescript-eslint`. Note: open PR #113 ("complete TypeScript migration with strict mode") may be adjacent to this — worth the owner checking whether #113 also lands the v7 bump before a future cycle attempts it separately. |
+| `@types/node` (root) | 25.9.5 | 26.2.0 | Type-defs major ahead of `engines: ">=22"` / CI's pinned Node 22 — low risk but flagged per policy, unchanged from prior cycles. |
+| `better-sqlite3` (`services/api`) | 12.11.1 | 13.0.3 | Native-addon major; already has an open Dependabot PR (#111) — not duplicated here, needs its own rebuild/verification pass per prior cycles' notes. |
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | **0 vulnerabilities** (baseline and after updates) |
+| Python | manual (`dependencies = []` in `pyproject.toml`) | Nothing to audit, reconfirmed |
+| Rust | `cargo audit` 0.22.2 (535 crate deps scanned) | **0 vulnerabilities**. 19 informational unmaintained/unsound warnings, unchanged from 2026-08-05 (GTK3 `gtk-rs` bindings ×5, `proc-macro-error`, `unic-char-*`/`unic-common`/`unic-ucd-*` ×6, `anyhow` `Error::downcast_mut()` unsoundness, `event-listener` `!Send` unsoundness, `glib` iterator unsoundness) — no independent fix available. |
+| GitHub | `security-audit`-labeled issues | 0 open issues (repo-wide) — reverified fresh rather than assumed from last week. |
+
+### Open-PR backlog — flag for owner
+
+**11 PRs are currently open against `staging`** (#103–#112 Dependabot bumps across npm/cargo/
+github-actions, plus #113 a large manual "complete TypeScript migration with strict mode" PR) with
+none merged since at least the 2026-08-05 cycle. This is a sizeable, growing backlog — prior
+cycles' logs have flagged pileups like this before, and it's worth the owner's attention: either a
+batch-review/merge session for the low-risk Dependabot PRs, or an explicit decision to let them
+keep queuing. Per this cycle's constraints, none of the 11 were merged, closed, or edited — only
+this cycle's own PR was opened.
+
+### Notes
+
+- **Lock file drift (pre-existing, not fixed this cycle, call for repo owner)** —
+  `package-lock.json` and `pnpm-lock.yaml` (+ `pnpm-workspace.yaml`) still coexist at the root.
+  Reconfirmed this cycle that CI (`.github/workflows/ci.yml`) only ever runs `npm ci` (with
+  `cache: npm`) and every `package.json` script in this repo invokes `npm`/`npx` — so
+  `package-lock.json` is the ecosystem CI and this maintenance routine actually depend on, and
+  `pnpm-lock.yaml`/`pnpm-workspace.yaml` look like unintentional drift (an abandoned pnpm
+  experiment, or a stale artifact from before the repo settled on npm workspaces) rather than a
+  second supported install path. Still not independently resolved this cycle — remains the repo
+  owner's call whether to delete the pnpm files or adopt pnpm properly — but flagged more pointedly
+  this time since it's now been observed across multiple consecutive cycles without action.
+- Local branch was seeded from `origin/main`'s tip rather than `origin/staging`'s this cycle (see
+  Checks performed) — third consecutive cycle with a branch-seeding issue (07-15: seeded from
+  `main`; 08-05: 76 commits stale; 08-12: seeded from `main`'s post-merge tip). Worth a look at
+  whatever automation seeds these session branches.
+- Re-ran `npm run lint`, `npm run typecheck`, `npm run test` (all workspaces), and
+  `apps/desktop`'s `npm --workspace @bandsearch/desktop run build` after the dependency updates —
+  all still green, identical pass counts to baseline: **685/686 tests** (desktop 221/222 pass + 1
+  pre-existing skip, api 423/423, eval 16/16, schemas 25/25); lint and typecheck clean.
+- `cargo audit`'s yanked-crate check failed with `503 Service Unavailable` through this sandbox's
+  outbound proxy (unrelated to the advisory-database scan, which completed normally) — ran with
+  `--no-yanked` to get a clean result; worth re-running the yanked check outside this sandbox if a
+  yanked-crate concern ever comes up specifically.
+
+---
+
 ## 2026-08-05
 
 ### Correction / backlog note — please read first
