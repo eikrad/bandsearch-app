@@ -7,6 +7,44 @@ import type {
   RecommendationResponse,
   SavedBand,
 } from "./domain.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isSavedBand(value: unknown): value is SavedBand {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") {
+    return false;
+  }
+  if (value.rating !== undefined && value.rating !== null && typeof value.rating !== "number") {
+    return false;
+  }
+  if (value.note !== undefined && typeof value.note !== "string") {
+    return false;
+  }
+  if (
+    value.categories !== undefined &&
+    (!Array.isArray(value.categories) || !value.categories.every((category) => typeof category === "string"))
+  ) {
+    return false;
+  }
+  return value.musicbrainzArtistId === undefined || typeof value.musicbrainzArtistId === "string";
+}
+
+function parseSavedBandResponse(data: unknown, operation: string): { savedBand: SavedBand } {
+  if (!isRecord(data) || !isSavedBand(data.savedBand)) {
+    throw new Error(`invalid ${operation} response: savedBand must be a valid saved band`);
+  }
+  return { savedBand: data.savedBand };
+}
+
+function parseSavedBandsResponse(data: unknown, operation: string): { savedBands: SavedBand[] } {
+  if (!isRecord(data) || !Array.isArray(data.savedBands) || !data.savedBands.every(isSavedBand)) {
+    throw new Error(`invalid ${operation} response: savedBands must be an array of valid saved bands`);
+  }
+  return { savedBands: data.savedBands };
+}
+
 export class BandsearchHttpError extends Error {
   status?: number;
   code?: string;
@@ -102,7 +140,8 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         body: JSON.stringify(savedBand),
       });
       await ensureOk(response);
-      return response.json();
+      const data: unknown = await response.json();
+      return parseSavedBandResponse(data, "create preference");
     },
 
     async updatePreference(id: string, updates: unknown) {
@@ -112,14 +151,15 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
         body: JSON.stringify(updates),
       });
       await ensureOk(response);
-      return response.json();
+      const data: unknown = await response.json();
+      return parseSavedBandResponse(data, "update preference");
     },
 
     async listPreferences() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      const data = await response.json() as { savedBands?: SavedBand[] };
-      return data.savedBands || [];
+      const data: unknown = await response.json();
+      return parseSavedBandsResponse(data, "list preferences").savedBands;
     },
 
     async deletePreference(id: string) {
@@ -134,7 +174,8 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
     async fetchSavedBands() {
       const response = await fetchImpl(`${baseUrl}/preferences`, { method: "GET", headers: jsonHeaders() });
       await ensureOk(response);
-      return response.json() as Promise<{ savedBands: SavedBand[] }>;
+      const data: unknown = await response.json();
+      return parseSavedBandsResponse(data, "fetch saved bands");
     },
 
     async searchArtists(query: string) {

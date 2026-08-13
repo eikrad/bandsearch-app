@@ -222,7 +222,7 @@ export function createApp({
     resolvedRecommendationPipeline: recommendationPipeline,
     createTursoClient,
     logger,
-    resolvedAuthService,
+    resolvedAuthService: resolvedAuthService ?? undefined,
     authMiddleware: authMiddleware ?? undefined,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"

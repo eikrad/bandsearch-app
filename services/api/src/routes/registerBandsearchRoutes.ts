@@ -12,6 +12,7 @@ import { createNoOpEvalRepository } from "../eval/evalRepository.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
+import type { SavedBand } from "../preferences/preferenceRepository.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -25,7 +26,7 @@ export type BandsearchRouteContext = {
   recommendationsLimiter: RequestHandler;
   resolvedPreferenceRepository: {
     addSavedBand: (body: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
-    listSavedBands: (userId?: string) => Promise<unknown[]>;
+    listSavedBands: (userId?: string) => Promise<SavedBand[]>;
     updateSavedBand: (
       id: string,
       body: Record<string, unknown>,
@@ -53,7 +54,7 @@ export type BandsearchRouteContext = {
     getMessages: (id: string) => Promise<Record<string, unknown>[]>;
     addMessage: (id: string, msg: { role: string; content: string }) => Promise<Record<string, unknown>>;
   };
-  resolvedRecommendationPipeline: {
+  resolvedRecommendationPipeline?: {
     recommend: (req: Record<string, unknown>) => Promise<{
       recommendations: unknown[];
       assistantReply?: string;
@@ -227,6 +228,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     }
 
     try {
+      if (!resolvedRecommendationPipeline) {
+        throw new Error("recommendation pipeline is not configured");
+      }
       const pipelineResult = await resolvedRecommendationPipeline.recommend({
         query: validation.query,
         mode: validation.mode,
@@ -295,7 +299,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.patch("/preferences/:id", async (req, res) => {
     const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {}, req.userId);
     if (!result.ok) {
-      return sendError(res, result.status, "preference_update_failed", result.error ?? "update failed");
+      const status = result.status ?? 400;
+      return sendError(res, status, "preference_update_failed", result.error ?? "update failed");
     }
     return res.status(200).json({ savedBand: result.savedBand });
   });
@@ -303,7 +308,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.delete("/preferences/:id", async (req, res) => {
     const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id, req.userId);
     if (!result.ok) {
-      return sendError(res, result.status, "preference_delete_failed", result.error ?? "delete failed");
+      const status = result.status ?? 404;
+      return sendError(res, status, "preference_delete_failed", result.error ?? "delete failed");
     }
     return res.status(200).json({ deletedId: result.deletedId });
   });
@@ -336,7 +342,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
     const existingGroups = await resolvedPreferenceRepository.listGroups(req.userId);
     await inferAndApplyGroupAssignments(
-      savedBands as unknown as import("../preferences/bandGroupInference.js").BandLike[],
+      savedBands,
       existingGroups,
       {
         lookupArtist: (mbid) => resolvedMusicBrainzClient.lookupArtist!(mbid),

@@ -75,7 +75,7 @@ function bootstrapDesktopReactShell({
 }
 
 export type BootstrapDesktopReactAppOptions = {
-  app?: DesktopAppCollaborator;
+  app: DesktopAppCollaborator;
   viewport?: string;
   actionHandlers?: Record<string, unknown>;
   router?: DesktopReactMountOptions["router"];
@@ -92,7 +92,7 @@ export type BootstrapDesktopReactAppOptions = {
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
 };
 
-function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions = {}) {
+function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
   const {
     app,
     viewport = "desktop",
