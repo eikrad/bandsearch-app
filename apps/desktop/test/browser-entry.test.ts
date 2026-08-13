@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 type BrowserEntryProbe = {
   result: { ok: boolean };
@@ -30,18 +31,22 @@ function assertBrowserEntryProbe(value: unknown): asserts value is BrowserEntryP
 }
 
 test("bootBrowserDesktopApp forwards options to browser starter", () => {
+  // Node 22 mock.module requires `namedExports` (not `exports`). Resolve the
+  // mocked module via an absolute file URL so --eval import.meta.url is irrelevant.
+  const starterHref = pathToFileURL(path.join(root, "src/startDesktopBrowserApp.js")).href;
+  const entryHref = pathToFileURL(path.join(root, "src/browserEntry.js")).href;
   const probeScript = `
     import { mock } from "node:test";
     const calls = [];
-    mock.module(new URL("./src/startDesktopBrowserApp.js", import.meta.url), {
-      exports: {
+    mock.module(${JSON.stringify(starterHref)}, {
+      namedExports: {
         startDesktopBrowserApp: (options) => {
           calls.push(options);
           return Promise.resolve({ ok: true });
         },
       },
     });
-    const { bootBrowserDesktopApp } = await import("./src/browserEntry.js");
+    const { bootBrowserDesktopApp } = await import(${JSON.stringify(entryHref)});
     const result = await bootBrowserDesktopApp({ apiBaseUrl: "http://localhost:3001" });
     process.stdout.write(JSON.stringify({ result, calls }));
   `;
