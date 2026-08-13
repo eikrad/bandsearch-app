@@ -62,7 +62,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 | Layer | Technology |
 |-------|------------|
-| API server | Express.js + TypeScript (Node.js 22+) |
+| API server | Express.js + TypeScript (Node.js 26+) |
 | AI pipeline | LangGraph + Google Gemini |
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
@@ -74,7 +74,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ## Quick Start
 
-**Prerequisites:** Node.js 22+
+**Prerequisites:** Node.js 26+
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
@@ -205,7 +205,7 @@ See `.env.example` for all options including storage backends, timeouts, search 
 
 ## Deployment
 
-The API is a standalone Express service and can run anywhere Node.js 22+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option.
+The API is a standalone Express service and can run anywhere Node.js 26+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option.
 
 Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays stateless and all data (preferences, sessions, auth) lives in Turso/libSQL:
 

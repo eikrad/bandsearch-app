@@ -30,7 +30,7 @@ bandsearch-app/
 ├── apps/
 │   └── desktop/         — Tauri + React desktop application (Rust + TypeScript)
 ├── services/
-│   └── api/             — Express.js API server (TypeScript, Node.js 22+)
+│   └── api/             — Express.js API server (TypeScript, Node.js 26+)
 │   └── eval/            — Golden dataset and eval runner
 ├── shared/
 │   └── schemas/         — Shared TypeScript validation contracts

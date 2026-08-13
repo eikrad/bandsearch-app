@@ -2,6 +2,8 @@ import type { CardViewProps, ChatViewProps, MessageViewProps } from "../chatRend
 import type { ChatHandlers } from "./viewTypes.js";
 import type { PlatformLink } from "../platformLinks.js";
 import * as React from "react";
+import { validateObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
+import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { FeedbackReactionBar } from "./FeedbackReactionBar.js";
 
@@ -624,7 +626,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
                     const text = msg.cards
                       .map((c) => `${c.title}${c.why ? ` — ${c.why}` : ""}`)
                       .join("\n");
-                    handlers.onCopyAll(text);
+                    handlers.onCopyAll?.(text);
                   },
                 },
                 "Copy all",
@@ -851,8 +853,8 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
         onDismiss: () => handlers.onFeedbackDismiss?.(),
       }),
       React.createElement(ObscurityTargetPicker, {
-        target: viewProps.obscurityTarget,
-        onTargetChange: (target: string | undefined) => handlers.onObscurityTargetChange?.(target),
+        target: validateObscurityTarget(viewProps.obscurityTarget),
+        onTargetChange: (target: ObscurityTarget | undefined) => handlers.onObscurityTargetChange?.(target),
       }),
       React.createElement(
         "form",
@@ -862,7 +864,8 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
             event.preventDefault();
             const form = event.currentTarget;
             const queryInput = form.querySelector('input[name="query"]') as HTMLInputElement | null;
-            const query = String(queryInput?.value || "").trim();
+            if (!queryInput) return;
+            const query = queryInput.value.trim();
             if (!query || viewProps.queryDisabled) return;
             queryInput.value = "";
             handlers.onQuerySubmit(query);

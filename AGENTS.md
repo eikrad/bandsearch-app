@@ -18,9 +18,9 @@ Single-context layout: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domai
 
 When working on Roadmap items update Roadmap corresponfingly.
 
-### TypeScript migration policy
+### TypeScript
 
-Implement TypeScript as a parallel, non-blocking track: migrate incrementally in files touched by current tasks; do not pause feature work for large rewrites.
+Application, test, and JS-toolchain config code is TypeScript only (`strict` + `noImplicitAny`). Do not add new `.js` / `.mjs` sources.
 
 ### Readme
 

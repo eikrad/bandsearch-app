@@ -32,7 +32,7 @@ export type ChatAppCollaborator = {
     query: string,
     mode: string,
     obscurityTarget: string | undefined,
-  ): Promise<{ meta?: RecommendationMeta } | undefined>;
+  ): Promise<{ meta?: RecommendationMeta }>;
   sendFeedback?(eventId: string, feedbackType: string): Promise<unknown>;
   getState(): { messages?: ChatStateMessage[]; savedBands?: SavedBand[] };
   cancelSearch?(): void;

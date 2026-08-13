@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
 
       - name: Install Rust stable
@@ -40,20 +40,20 @@ jobs:
       - name: Node sidecar (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -fsSL https://nodejs.org/dist/v22.16.0/node-v22.16.0-linux-x64.tar.gz | tar xz
+          curl -fsSL https://nodejs.org/dist/v26.5.1/node-v26.5.1-linux-x64.tar.gz | tar xz
           mkdir -p apps/desktop/src-tauri/binaries
           rm -f apps/desktop/src-tauri/binaries/node-x86_64-unknown-linux-gnu
-          cp node-v22.16.0-linux-x64/bin/node \
+          cp node-v26.5.1-linux-x64/bin/node \
             apps/desktop/src-tauri/binaries/node-x86_64-unknown-linux-gnu
           chmod +x apps/desktop/src-tauri/binaries/node-x86_64-unknown-linux-gnu
 
       - name: Node sidecar (macOS ARM)
         if: runner.os == 'macOS'
         run: |
-          curl -fsSL https://nodejs.org/dist/v22.16.0/node-v22.16.0-darwin-arm64.tar.gz | tar xz
+          curl -fsSL https://nodejs.org/dist/v26.5.1/node-v26.5.1-darwin-arm64.tar.gz | tar xz
           mkdir -p apps/desktop/src-tauri/binaries
           rm -f apps/desktop/src-tauri/binaries/node-aarch64-apple-darwin
-          cp node-v22.16.0-darwin-arm64/bin/node \
+          cp node-v26.5.1-darwin-arm64/bin/node \
             apps/desktop/src-tauri/binaries/node-aarch64-apple-darwin
           chmod +x apps/desktop/src-tauri/binaries/node-aarch64-apple-darwin
 
@@ -61,11 +61,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest https://nodejs.org/dist/v22.16.0/node-v22.16.0-win-x64.zip -OutFile node.zip
+          Invoke-WebRequest https://nodejs.org/dist/v26.5.1/node-v26.5.1-win-x64.zip -OutFile node.zip
           Expand-Archive node.zip -DestinationPath .
           New-Item -ItemType Directory -Force -Path apps\desktop\src-tauri\binaries | Out-Null
           Remove-Item -Force -ErrorAction SilentlyContinue apps\desktop\src-tauri\binaries\node-x86_64-pc-windows-msvc.exe
-          Copy-Item node-v22.16.0-win-x64\node.exe `
+          Copy-Item node-v26.5.1-win-x64\node.exe `
             apps\desktop\src-tauri\binaries\node-x86_64-pc-windows-msvc.exe
 
       - name: Install dependencies
