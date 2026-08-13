@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       tsx:
-        specifier: ^4.22.4
+        specifier: ^4.23.12
         version: 4.23.12
     devDependencies:
       '@eslint/js':
