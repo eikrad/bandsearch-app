@@ -5,8 +5,6 @@ type DesktopApp = ChatAppCollaborator & {
   listSavedBands(): Promise<SavedBand[]>;
   deleteSavedBand(id: string): Promise<unknown>;
   searchArtists(query: string): Promise<ArtistSearchResult[]>;
-  getView?(): string;
-  navigate?(view: string): unknown;
   saveBand?(artistName: string): unknown;
   rateBand?(artistName: string, rating?: number): unknown;
 };

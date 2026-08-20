@@ -15,8 +15,6 @@ export { bootstrapDesktopApp };
  * and is assembled in `startDesktopBrowserApp`, not here.
  */
 type DesktopAppCollaborator = ChatAppCollaborator & {
-  getView?(): string;
-  navigate?(view: string): unknown;
   saveBand?(artistName: string): unknown;
   rateBand?(artistName: string, rating?: number): unknown;
 };
@@ -49,8 +47,6 @@ function bootstrapDesktopReactShell({
   const shell = createDesktopReactShell({
     renderAdapter,
     actionHandlers: mergedActionHandlers,
-    getViewImpl: () => app.getView?.() ?? "chat",
-    navigateImpl: (view: string) => app.navigate?.(view),
     cancelSearchImpl: () => renderAdapter.desktopUi.cancelSearch(),
     retryLastSearchImpl: () => renderAdapter.desktopUi.retryLastSearch(),
   });

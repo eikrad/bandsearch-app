@@ -25,8 +25,6 @@ interface CreateDesktopReactShellOptions {
   // the seam does not need the full setTimeout signature (which drags in
   // __promisify__ and forces fakes to be Node Timeouts).
   setTimeoutImpl?: (handler: () => void, timeout: number) => TimerHandle;
-  getViewImpl?: () => string;
-  navigateImpl?: (view: string) => unknown;
   cancelSearchImpl?: () => void;
   retryLastSearchImpl?: () => Promise<unknown> | void;
 }
@@ -37,8 +35,6 @@ export function createDesktopReactShell({
   statusTimeoutMs = 3000,
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
-  getViewImpl = () => "chat",
-  navigateImpl = () => {},
   cancelSearchImpl,
   retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
@@ -104,12 +100,6 @@ export function createDesktopReactShell({
         scheduleStatusClear();
         throw error;
       }
-    },
-    getView() {
-      return getViewImpl();
-    },
-    async navigate(view: string) {
-      await navigateImpl(view);
     },
     cancelSearch() {
       cancelSearchImpl?.();

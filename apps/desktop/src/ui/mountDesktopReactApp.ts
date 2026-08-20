@@ -11,12 +11,10 @@ import { ResetPasswordView } from "./ResetPasswordView.js";
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
   getViewProps(): unknown;
-  getView?(): string;
   updateMode(mode: string): Promise<unknown>;
   submitQuery(query: string): Promise<unknown> | unknown;
   saveBand?(artistName: string): Promise<unknown> | unknown;
   rateBand?(artistName: string, rating?: number): Promise<unknown> | unknown;
-  navigate?(view: string): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
   desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
@@ -193,10 +191,6 @@ export function createDesktopReactMount({
       } catch {
         // error surfaced via actionStatus
       }
-      return renderCurrent();
-    },
-    onNavigate: async (view: string) => {
-      await shell.navigate?.(view);
       return renderCurrent();
     },
     onNavigateSaved: async () => {
