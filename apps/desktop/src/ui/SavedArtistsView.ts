@@ -1,6 +1,5 @@
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
-import type { SavedArtistItem as SavedArtistItemProps, SavedArtistsScreenState } from "../savedArtistsModel.js";
-import type { SavedArtistsHandlers } from "./viewTypes.js";
+import type { SavedArtistItemProps, SavedArtistsHandlers, SavedArtistsViewProps } from "./viewTypes.js";
 import * as React from "react";
 
 const theme = {
@@ -388,7 +387,7 @@ function GroupsSection({ groups, artists, handlers }: { groups: ArtistGroup[]; a
   );
 }
 
-export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArtistsScreenState; handlers: SavedArtistsHandlers }) {
+export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArtistsViewProps; handlers: SavedArtistsHandlers }) {
   const styles = {
     page: {
       backgroundColor: theme.pageBg,
