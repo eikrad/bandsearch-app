@@ -37,6 +37,7 @@ type MountRouter = {
 };
 type MountSavedShell = {
   getViewProps(): unknown;
+  loadSavedArtists?(): Promise<unknown>;
   toggleArtistSelection(id: string): void;
   setSearchQuery(query: string): void;
   searchArtists(): Promise<unknown>;
@@ -238,7 +239,11 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onNavigateSaved: async () => {
-      await shell.navigate?.("saved-artists");
+      // Route, not view flag: `route === "saved"` is what selects the shell
+      // implementation below. Setting only the app's view flag left the hash on
+      // "home" and quietly served a second, less capable copy of this screen.
+      if (router) router.navigate("saved");
+      await savedArtistsShell?.loadSavedArtists?.();
       return renderCurrent();
     },
     onNavigateSettings: async () => {
