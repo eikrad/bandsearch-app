@@ -16,10 +16,6 @@ export type MountShell = {
   submitQuery(query: string): Promise<unknown> | unknown;
   saveBand?(artistName: string): Promise<unknown> | unknown;
   rateBand?(artistName: string, rating?: number): Promise<unknown> | unknown;
-  deleteSavedArtist?(id: string): Promise<unknown>;
-  toggleSelection?(id: string): void;
-  activateStyleRef?(): Promise<unknown>;
-  searchArtists?(query: string): Promise<unknown>;
   navigate?(view: string): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
@@ -56,11 +52,6 @@ function defaultContainerResolver(): HTMLElement {
   const root = browserDocument?.getElementById("root");
   if (!root) throw new Error("missing root container");
   return root;
-}
-
-function resolveViewComponent(viewName: string) {
-  if (viewName === "saved-artists") return SavedArtistsView;
-  return ChatAppView;
 }
 
 export interface DesktopReactMountOptions {
@@ -158,9 +149,7 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
-    const currentView = shell.getView?.() ?? "chat";
-    const ViewComponent = resolveViewComponent(currentView);
-    root.render(React.createElement(ViewComponent as unknown as ViewComponentLike, { viewProps, handlers }));
+    root.render(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -190,34 +179,6 @@ export function createDesktopReactMount({
     },
     onObscurityTargetChange: (target: string | undefined) => {
       shell.desktopUi?.setObscurityTarget?.(target);
-      return renderCurrent();
-    },
-    onDelete: async (id: string) => {
-      try {
-        await shell.deleteSavedArtist?.(id);
-      } catch {
-        // Error surfaced via actionStatus
-      }
-      return renderCurrent();
-    },
-    onToggleSelection: (id: string) => {
-      shell.toggleSelection?.(id);
-      return renderCurrent();
-    },
-    onActivateStyleRef: async () => {
-      await shell.activateStyleRef?.();
-      return renderCurrent();
-    },
-    onSearch: async (query: string) => {
-      await shell.searchArtists?.(query);
-      return renderCurrent();
-    },
-    onAddArtist: async ({ name }: { name: string }) => {
-      try {
-        await shell.saveBand?.(name);
-      } catch {
-        // Error surfaced via actionStatus
-      }
       return renderCurrent();
     },
     onStop: () => {
