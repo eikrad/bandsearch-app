@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as React from "react";
+import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createSavedArtistsShell, type SavedArtistsShellCollaborator } from "../src/createSavedArtistsShell.js";
+import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
 import { SavedArtistsView } from "../src/ui/SavedArtistsView.js";
+import type { SavedArtistsHandlers } from "../src/ui/viewTypes.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "../src/domain.js";
+import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 
 // These tests pair the real shell with the real view. Every other saved-artists
 // test feeds the view a hand-written prop object, which is how the shell's
@@ -125,4 +129,104 @@ test("saved artists screen lists search results the user can add", async () => {
   const html = renderScreen(shell);
   assert.equal(html.includes("Duster"), true);
   assert.equal(html.includes("Add"), true);
+});
+
+// --- the screen as the mount assembles it -----------------------------------
+//
+// The tests above drive the shell directly. These drive the handlers the mount
+// actually hands to the view, which is where the previous implementation failed
+// silently: the screen was reachable through a route whose handler object had no
+// onExport / onImportFile / onCreateGroup / onDeleteGroup / onAutoGroup, and the
+// view calls all of those with `?.`, so the buttons did nothing at all.
+
+type RenderedScreen = ReactElement<{ handlers: SavedArtistsHandlers }>;
+
+function mountSavedScreen(app: SavedArtistsShellCollaborator) {
+  const shell = createSavedArtistsShell({ app });
+  let lastRender: RenderedScreen | null = null;
+  const mount = createDesktopReactMount({
+    shell: {
+      getViewProps: () => ({}),
+      updateMode: async () => {},
+      submitQuery: async () => {},
+    },
+    router: {
+      getRoute: () => "saved",
+      navigate: () => {},
+      onRouteChange: () => {},
+    },
+    savedArtistsShell: shell,
+    createRootImpl: () => fakeReactRoot((element) => { lastRender = element as RenderedScreen; }),
+    resolveContainer: () => fakeContainer(),
+  });
+  return {
+    shell,
+    mount,
+    // The handlers React would invoke on click, taken from the rendered element.
+    handlers(): SavedArtistsHandlers {
+      const rendered: RenderedScreen | null = lastRender;
+      assert.ok(rendered, "expected the saved screen to have rendered");
+      return rendered.props.handlers;
+    },
+  };
+}
+
+test("the mounted screen sends a new group to the app", async () => {
+  const created: string[] = [];
+  const screen = mountSavedScreen(fakeShellApp({ createGroup: async (name: string) => { created.push(name); return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onCreateGroup?.("Slowcore");
+
+  assert.deepEqual(created, ["Slowcore"]);
+});
+
+test("the mounted screen asks the app to group by genre", async () => {
+  let autoGrouped = false;
+  const screen = mountSavedScreen(fakeShellApp({ autoGroup: async () => { autoGrouped = true; return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onAutoGroup?.();
+
+  assert.equal(autoGrouped, true);
+});
+
+test("the mounted screen deletes a group through the app", async () => {
+  const deleted: string[] = [];
+  const screen = mountSavedScreen(fakeShellApp({ deleteGroup: async (id: string) => { deleted.push(id); return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onDeleteGroup?.("g1");
+
+  assert.deepEqual(deleted, ["g1"]);
+});
+
+test("the mounted screen imports bands through the app", async () => {
+  const imported: unknown[][] = [];
+  const screen = mountSavedScreen(fakeShellApp({ importPreferences: async (bands: unknown[]) => { imported.push(bands); return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onImportFile?.({ text: async () => JSON.stringify([{ name: "Duster" }]) } as File);
+
+  assert.deepEqual(imported, [[{ name: "Duster" }]]);
+});
+
+test("the mounted screen adds a searched artist through the app", async () => {
+  const saved: string[] = [];
+  const screen = mountSavedScreen(fakeShellApp({ saveBand: async (name: string) => { saved.push(name); return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onAddArtist?.({ id: "mb-1", name: "Duster" });
+
+  assert.deepEqual(saved, ["Duster"]);
+});
+
+test("the mounted screen deletes a saved artist through the app", async () => {
+  const deleted: string[] = [];
+  const screen = mountSavedScreen(fakeShellApp({ deleteSavedBand: async (id: string) => { deleted.push(id); return {}; } }));
+  await screen.mount.mount();
+
+  await screen.handlers().onDelete?.("b1");
+
+  assert.deepEqual(deleted, ["b1"]);
 });
