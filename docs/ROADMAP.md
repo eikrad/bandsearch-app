@@ -218,7 +218,12 @@ Resolved — the inference logic now lives in `services/api/src/preferences/band
 
 ---
 
-### 2. Split the monolithic preference repository interface ← **next up**
+### 2. Split the monolithic preference repository interface — partially done ← **next up**
+
+Done in `f7171fc`: `BandRepository` and `BandGroupRepository` are declared in `preferenceRepository.ts`, with `assertMethods` validating each set separately.
+
+Still open, and it is the part the entry was actually about: every adapter still implements both interfaces — `PreferenceRepository = BandRepository & BandGroupRepository` is described in the source as kept "for backwards compatibility during transition", so adding a method still means touching four files. `buildContext` / `buildContextForIds` also still sit on `BandRepository` rather than moving next to the recommendation pipeline.
+
 
 **Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
 
@@ -234,7 +239,12 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 ---
 
-### 4. Remove duplicated user repository helpers
+### 4. Remove duplicated user repository helpers ✓ Done
+
+Resolved in `2c7c7a1` — `normalizeEmail()`, `publicUser()` and `rowToUser()` live in `services/api/src/auth/userModel.ts`; both adapters import them; covered by `services/api/test/user-model.test.ts`.
+
+<details><summary>Original entry</summary>
+
 
 **Files:** `services/api/src/auth/userRepository.ts`, `tursoUserRepository.ts`
 
@@ -242,15 +252,13 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 **Action:** Move the three functions into a shared `services/api/src/auth/userModel.ts` module. Both adapters import from it. The factory in `userRepository.ts` is unchanged. Test `normalizeEmail` once in `userModel.test.ts`.
 
+</details>
+
 ---
 
-### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller
+### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller ✓ Done
 
-**Files:** `apps/desktop/src/geminiDesktopSettings.ts`
-
-`getBootstrapGate()` and `getSettingsViewProps()` both call `invokeTauri("gemini_config_status")` and parse the response independently. Any change to the response shape must be applied in two places, and a concurrent render after save could read two different snapshots.
-
-**Action:** Extract a private `readStatus()` async helper that invokes `gemini_config_status` once and returns the typed result. Both `getBootstrapGate` and `getSettingsViewProps` call it. Add a test that stubs `invokeTauri` and asserts it is called exactly once per `getSettingsViewProps` call.
+Resolved in `9bc4058` — `readStatus()` in `geminiDesktopSettings.ts` is the single read; `getBootstrapGate` and `getSettingsViewProps` both call it, and `gemini-desktop-settings.test.ts` asserts one `invokeTauri` call per invocation of each.
 
 ---
 
