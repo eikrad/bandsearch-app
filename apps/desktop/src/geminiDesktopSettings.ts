@@ -55,7 +55,13 @@ export function createGeminiSettingsController(options: GeminiSettingsController
           apiEndpointUrl?: string;
         };
       } catch {
-        return {};
+        // A failed invoke means there is no Tauri host answering — the browser
+        // build bundles @tauri-apps/api, so the import succeeds even in a plain
+        // browser and only the IPC call fails. Returning `null` (not `{}`) is
+        // what routes callers to their localStorage fallback; `{}` reads as
+        // "Tauri answered, nothing configured" and stranded browser dev on the
+        // welcome screen no matter what was stored.
+        return null;
       }
     }
     return null;
