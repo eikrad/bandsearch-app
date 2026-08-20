@@ -96,8 +96,12 @@ export function createDesktopReactMount({
   const container = resolveContainer();
   const root = createRootImpl(container);
 
+  // Whether the saved screen has fetched since the route was last entered.
+  let savedArtistsLoaded = false;
+
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
+    if (route !== "saved") savedArtistsLoaded = false;
 
     if (route === "login") {
       root.render(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
@@ -125,6 +129,14 @@ export function createDesktopReactMount({
     }
 
     if (route === "saved" && savedArtistsShell) {
+      // Fetch on entry to the route, not in the navigation handler: the route is
+      // also entered by reload and deep link, which never touch that handler.
+      // Mutations re-render while already on the route and reload themselves, so
+      // the flag keeps those from refetching twice.
+      if (!savedArtistsLoaded) {
+        savedArtistsLoaded = true;
+        await savedArtistsShell.loadSavedArtists?.();
+      }
       const viewProps = savedArtistsShell.getViewProps();
       root.render(
         React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
@@ -198,7 +210,6 @@ export function createDesktopReactMount({
       // implementation below. Setting only the app's view flag left the hash on
       // "home" and quietly served a second, less capable copy of this screen.
       if (router) router.navigate("saved");
-      await savedArtistsShell?.loadSavedArtists?.();
       return renderCurrent();
     },
     onNavigateSettings: async () => {

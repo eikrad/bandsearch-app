@@ -171,6 +171,40 @@ function mountSavedScreen(app: SavedArtistsShellCollaborator) {
   };
 }
 
+test("landing directly on the saved route loads the artists", async () => {
+  // A reload or deep link enters the route without going through the Saved
+  // button, so the screen has to fetch for itself rather than relying on the
+  // navigation handler to have done it.
+  const screen = mountSavedScreen(fakeShellApp({ listSavedBands: async () => [CODEINE] }));
+
+  await screen.mount.mount();
+
+  assert.equal(screen.shell.getViewProps().artists.length, 1);
+});
+
+test("arriving via the Saved button loads the artists", async () => {
+  let route = "home";
+  const listeners: Array<() => void> = [];
+  const shell = createSavedArtistsShell({ app: fakeShellApp({ listSavedBands: async () => [CODEINE] }) });
+  const mount = createDesktopReactMount({
+    shell: { getViewProps: () => ({}), updateMode: async () => {}, submitQuery: async () => {} },
+    router: {
+      getRoute: () => route,
+      navigate: (r: string) => { route = r; listeners.forEach((fn) => fn()); },
+      onRouteChange: (fn: () => void) => { listeners.push(fn); },
+    },
+    savedArtistsShell: shell,
+    createRootImpl: () => fakeReactRoot(),
+    resolveContainer: () => fakeContainer(),
+  });
+  await mount.mount();
+  assert.equal(shell.getViewProps().artists.length, 0, "chat route should not have fetched");
+
+  await mount.handlers.onNavigateSaved();
+
+  assert.equal(shell.getViewProps().artists.length, 1);
+});
+
 test("the mounted screen sends a new group to the app", async () => {
   const created: string[] = [];
   const screen = mountSavedScreen(fakeShellApp({ createGroup: async (name: string) => { created.push(name); return {}; } }));
