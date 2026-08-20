@@ -42,6 +42,7 @@ type MountSavedShell = {
   searchArtists(): Promise<unknown>;
   addArtist(artist: { id: string; name: string; disambiguation?: string }): Promise<unknown> | unknown;
   deleteSavedArtist?(id: string): Promise<unknown>;
+  activateStyleRef?(): Promise<unknown>;
   exportArtists?(): Promise<unknown[] | undefined>;
   importArtists?(bands: unknown[]): Promise<unknown>;
   createGroup?(name: string): Promise<unknown>;
@@ -335,7 +336,11 @@ export function createDesktopReactMount({
       await savedArtistsShell?.deleteSavedArtist?.(id);
       renderCurrent();
     },
-    onActivateStyleRef: async () => {},
+    onActivateStyleRef: async () => {
+      await savedArtistsShell?.activateStyleRef?.();
+      if (router) router.navigate("home");
+      renderCurrent();
+    },
     onExport: async () => {
       const bands = await savedArtistsShell?.exportArtists?.();
       if (!bands) return;

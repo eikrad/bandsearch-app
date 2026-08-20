@@ -134,6 +134,9 @@ export function bootstrapDesktopApp({
         state = { ...state, selectedArtistIds: [...ids, id] };
       }
     },
+    clearArtistSelection() {
+      state = { ...state, selectedArtistIds: [] };
+    },
     async saveBand(artistName: string, options: { rating?: number; categories?: string[]; note?: string } = {}) {
       const recommendation = findLatestRecommendationByName(artistName);
       const mbFromCard =

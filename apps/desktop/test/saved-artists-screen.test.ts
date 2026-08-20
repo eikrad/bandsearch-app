@@ -20,6 +20,8 @@ function fakeShellApp(overrides: Partial<SavedArtistsShellCollaborator> = {}): S
         ? selectedArtistIds.filter((x) => x !== id)
         : [...selectedArtistIds, id];
     },
+    clearArtistSelection: () => { selectedArtistIds = []; },
+    setPendingStyleRef: () => {},
     searchArtists: async (): Promise<ArtistSearchResult[]> => [],
     saveBand: async () => ({}),
     deleteSavedBand: async () => ({}),
@@ -89,6 +91,24 @@ test("saved artists screen shows the groups the shell loaded", async () => {
   await shell.loadSavedArtists();
 
   assert.equal(renderScreen(shell).includes("Slowcore"), true);
+});
+
+test("activating a style reference hands the selected ids to the chat and clears the selection", async () => {
+  const pendingStyleRefs: string[][] = [];
+  const shell = createSavedArtistsShell({
+    app: fakeShellApp({
+      listSavedBands: async () => [CODEINE, BEDHEAD],
+      setPendingStyleRef: (ids: string[]) => { pendingStyleRefs.push(ids); },
+    }),
+  });
+  await shell.loadSavedArtists();
+  shell.toggleArtistSelection("b1");
+  shell.toggleArtistSelection("b2");
+
+  await shell.activateStyleRef();
+
+  assert.deepEqual(pendingStyleRefs, [["b1", "b2"]]);
+  assert.equal(shell.getViewProps().selectedCount, 0);
 });
 
 test("saved artists screen lists search results the user can add", async () => {

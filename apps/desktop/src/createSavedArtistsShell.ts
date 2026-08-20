@@ -7,6 +7,8 @@ export type SavedArtistsShellCollaborator = {
   listGroups(): Promise<ArtistGroup[]>;
   getState(): { selectedArtistIds: string[] };
   toggleArtistSelection(id: string): void;
+  clearArtistSelection(): void;
+  setPendingStyleRef(ids: string[]): void;
   searchArtists(query: string): Promise<ArtistSearchResult[]>;
   saveBand(name: string, options?: { note?: string }): Promise<unknown>;
   deleteSavedBand(id: string): Promise<unknown>;
@@ -76,6 +78,15 @@ export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollabo
       app.toggleArtistSelection(id);
       const appSelectedIds = app.getState().selectedArtistIds;
       state = { ...state, selectedIds: appSelectedIds };
+    },
+    // Selection lives on the app, not here: `requestRecommendations` reads
+    // `state.selectedArtistIds` as the fallback for priority context, so a
+    // second copy in the shell would be a second answer to "what is selected".
+    async activateStyleRef() {
+      const ids = app.getState().selectedArtistIds;
+      app.setPendingStyleRef(ids);
+      app.clearArtistSelection();
+      state = { ...state, selectedIds: [] };
     },
     setSearchQuery(query: string) {
       state = { ...state, searchQuery: query };
