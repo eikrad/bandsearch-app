@@ -11,6 +11,8 @@ Thanks for contributing to Bandsearch.
    - `npm run test:e2e` — Playwright end-to-end smoke tests, if you touched user-facing flows.
      Needs browsers once (`npx playwright install chromium`). Runs against its own
      `e2e-bandsearch.db` and signs itself in, so it does not touch your dev database.
+     CI runs this on every pull request, with dummy API keys — these specs never reach
+     the recommendation pipeline, so no real credentials are involved and forked PRs work.
    - `npm run test:e2e:live` — additionally runs the `@live` specs, which drive the real
      Gemini + Brave + MusicBrainz pipeline. Excluded from the default run: MusicBrainz
      throttles at roughly one request per second, so the same query has taken anywhere
