@@ -81,3 +81,29 @@ test("deletes a saved artist", async ({ page, request }) => {
 
   await expect(page.locator("li", { hasText: "Slint" })).toHaveCount(0, { timeout: 15000 });
 });
+
+test("exported artists can be imported back", async ({ page, request }) => {
+  // Unique per run: importing re-adds the artist under a fresh id, so a fixed
+  // name would accumulate duplicates and make the delete assertion below fail on
+  // the second run against the same database.
+  const artist = `Codeine ${Date.now()}`;
+  const rows = page.locator("li", { hasText: artist });
+
+  await seedArtist(page, request, artist);
+  await page.goto("/#/saved");
+  await expect(rows.first()).toBeVisible({ timeout: 15000 });
+
+  // Export, then delete, then import the exported file: a round trip proves the
+  // two halves agree on a format, which a hand-written fixture would not.
+  const download = page.waitForEvent("download", { timeout: 15000 });
+  await page.click("button:has-text('Export')");
+  const exported = await (await download).path();
+  expect(exported, "export produced no file").toBeTruthy();
+
+  await rows.first().locator("button").last().click();
+  await expect(rows).toHaveCount(0, { timeout: 15000 });
+
+  await page.locator("input[type=file]").setInputFiles(exported as string);
+
+  await expect(rows.first()).toBeVisible({ timeout: 15000 });
+});
