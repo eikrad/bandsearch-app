@@ -350,3 +350,49 @@ test("gemini_config_status is invoked exactly once per getBootstrapGate call", a
   await ctrl.getBootstrapGate();
   assert.equal(callCount, 1, "invokeTauri should be called exactly once");
 });
+
+// The browser build bundles @tauri-apps/api, so `invokeTauri` is a function even
+// in a plain browser — the call is what fails, not the import. Treating a failed
+// invoke as "no config" instead of "not Tauri" left the documented browser-dev
+// localStorage fallback unreachable, and the app stuck on the welcome screen.
+function withStubbedLocalStorage<T>(entries: Record<string, string>, run: () => Promise<T>): Promise<T> {
+  const globals = globalThis as { localStorage?: Storage };
+  const previous = globals.localStorage;
+  globals.localStorage = {
+    getItem: (key: string) => entries[key] ?? null,
+    setItem: () => {},
+    removeItem: () => {},
+  } as unknown as Storage;
+  return run().finally(() => {
+    if (previous === undefined) delete globals.localStorage;
+    else globals.localStorage = previous;
+  });
+}
+
+test("bootstrap gate falls back to browser storage when the Tauri invoke fails", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => { throw new Error("not running in Tauri"); },
+  });
+
+  const gate = await withStubbedLocalStorage(
+    { bandsearch_onboarding_complete: "1", bandsearch_gemini_api_key: "key-123" },
+    () => ctrl.getBootstrapGate(),
+  );
+
+  assert.equal(gate.onboardingComplete, true);
+  assert.equal(gate.hasStoredKey, true);
+});
+
+test("settings view falls back to browser storage when the Tauri invoke fails", async () => {
+  const ctrl = createGeminiSettingsController({
+    invokeTauri: async () => { throw new Error("not running in Tauri"); },
+  });
+
+  const props = await withStubbedLocalStorage(
+    { bandsearch_gemini_api_key: "key-123", bandsearch_brave_api_key: "brave-456" },
+    () => ctrl.getSettingsViewProps(),
+  );
+
+  assert.equal(props.hasStoredKey, true);
+  assert.equal(props.hasBraveKey, true);
+});

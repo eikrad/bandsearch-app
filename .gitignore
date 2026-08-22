@@ -25,3 +25,6 @@ coverage/
 .env
 .env.*
 test-results/
+
+# Playwright cached auth state
+playwright/.auth/
