@@ -11,16 +11,10 @@ import { ResetPasswordView } from "./ResetPasswordView.js";
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
   getViewProps(): unknown;
-  getView?(): string;
   updateMode(mode: string): Promise<unknown>;
   submitQuery(query: string): Promise<unknown> | unknown;
   saveBand?(artistName: string): Promise<unknown> | unknown;
   rateBand?(artistName: string, rating?: number): Promise<unknown> | unknown;
-  deleteSavedArtist?(id: string): Promise<unknown>;
-  toggleSelection?(id: string): void;
-  activateStyleRef?(): Promise<unknown>;
-  searchArtists?(query: string): Promise<unknown>;
-  navigate?(view: string): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
   desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
@@ -37,11 +31,13 @@ type MountRouter = {
 };
 type MountSavedShell = {
   getViewProps(): unknown;
+  loadSavedArtists?(): Promise<unknown>;
   toggleArtistSelection(id: string): void;
   setSearchQuery(query: string): void;
   searchArtists(): Promise<unknown>;
   addArtist(artist: { id: string; name: string; disambiguation?: string }): Promise<unknown> | unknown;
   deleteSavedArtist?(id: string): Promise<unknown>;
+  activateStyleRef?(): Promise<unknown>;
   exportArtists?(): Promise<unknown[] | undefined>;
   importArtists?(bands: unknown[]): Promise<unknown>;
   createGroup?(name: string): Promise<unknown>;
@@ -54,11 +50,6 @@ function defaultContainerResolver(): HTMLElement {
   const root = browserDocument?.getElementById("root");
   if (!root) throw new Error("missing root container");
   return root;
-}
-
-function resolveViewComponent(viewName: string) {
-  if (viewName === "saved-artists") return SavedArtistsView;
-  return ChatAppView;
 }
 
 export interface DesktopReactMountOptions {
@@ -105,8 +96,12 @@ export function createDesktopReactMount({
   const container = resolveContainer();
   const root = createRootImpl(container);
 
+  // Whether the saved screen has fetched since the route was last entered.
+  let savedArtistsLoaded = false;
+
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
+    if (route !== "saved") savedArtistsLoaded = false;
 
     if (route === "login") {
       root.render(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
@@ -134,6 +129,14 @@ export function createDesktopReactMount({
     }
 
     if (route === "saved" && savedArtistsShell) {
+      // Fetch on entry to the route, not in the navigation handler: the route is
+      // also entered by reload and deep link, which never touch that handler.
+      // Mutations re-render while already on the route and reload themselves, so
+      // the flag keeps those from refetching twice.
+      if (!savedArtistsLoaded) {
+        savedArtistsLoaded = true;
+        await savedArtistsShell.loadSavedArtists?.();
+      }
       const viewProps = savedArtistsShell.getViewProps();
       root.render(
         React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
@@ -156,9 +159,7 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
-    const currentView = shell.getView?.() ?? "chat";
-    const ViewComponent = resolveViewComponent(currentView);
-    root.render(React.createElement(ViewComponent as unknown as ViewComponentLike, { viewProps, handlers }));
+    root.render(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -190,34 +191,6 @@ export function createDesktopReactMount({
       shell.desktopUi?.setObscurityTarget?.(target);
       return renderCurrent();
     },
-    onDelete: async (id: string) => {
-      try {
-        await shell.deleteSavedArtist?.(id);
-      } catch {
-        // Error surfaced via actionStatus
-      }
-      return renderCurrent();
-    },
-    onToggleSelection: (id: string) => {
-      shell.toggleSelection?.(id);
-      return renderCurrent();
-    },
-    onActivateStyleRef: async () => {
-      await shell.activateStyleRef?.();
-      return renderCurrent();
-    },
-    onSearch: async (query: string) => {
-      await shell.searchArtists?.(query);
-      return renderCurrent();
-    },
-    onAddArtist: async ({ name }: { name: string }) => {
-      try {
-        await shell.saveBand?.(name);
-      } catch {
-        // Error surfaced via actionStatus
-      }
-      return renderCurrent();
-    },
     onStop: () => {
       shell.cancelSearch?.();
       return renderCurrent();
@@ -232,12 +205,11 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onNavigate: async (view: string) => {
-      await shell.navigate?.(view);
-      return renderCurrent();
-    },
     onNavigateSaved: async () => {
-      await shell.navigate?.("saved-artists");
+      // Route, not view flag: `route === "saved"` is what selects the shell
+      // implementation below. Setting only the app's view flag left the hash on
+      // "home" and quietly served a second, less capable copy of this screen.
+      if (router) router.navigate("saved");
       return renderCurrent();
     },
     onNavigateSettings: async () => {
@@ -335,7 +307,11 @@ export function createDesktopReactMount({
       await savedArtistsShell?.deleteSavedArtist?.(id);
       renderCurrent();
     },
-    onActivateStyleRef: async () => {},
+    onActivateStyleRef: async () => {
+      await savedArtistsShell?.activateStyleRef?.();
+      if (router) router.navigate("home");
+      renderCurrent();
+    },
     onExport: async () => {
       const bands = await savedArtistsShell?.exportArtists?.();
       if (!bands) return;

@@ -7,8 +7,6 @@ import {
   normalizeArtistId,
 } from "./chatClient.js";
 
-const VALID_VIEWS = ["chat", "saved-artists"];
-
 type DesktopAppState = {
   messages: ChatMessage[];
   savedBands: SavedBand[];
@@ -42,7 +40,6 @@ export function bootstrapDesktopApp({
     selectedArtistIds: [],
     currentSessionId: null,
   };
-  let currentView = "chat";
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
 
@@ -66,11 +63,6 @@ export function bootstrapDesktopApp({
 
   return {
     getState() { return state; },
-    getView() { return currentView; },
-    navigate(view: string) {
-      if (!VALID_VIEWS.includes(view)) return;
-      currentView = view;
-    },
     setPendingStyleRef(ids: string[]) {
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
@@ -133,6 +125,9 @@ export function bootstrapDesktopApp({
       } else {
         state = { ...state, selectedArtistIds: [...ids, id] };
       }
+    },
+    clearArtistSelection() {
+      state = { ...state, selectedArtistIds: [] };
     },
     async saveBand(artistName: string, options: { rating?: number; categories?: string[]; note?: string } = {}) {
       const recommendation = findLatestRecommendationByName(artistName);

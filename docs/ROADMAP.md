@@ -218,7 +218,12 @@ Resolved — the inference logic now lives in `services/api/src/preferences/band
 
 ---
 
-### 2. Split the monolithic preference repository interface
+### 2. Split the monolithic preference repository interface — partially done ← **next up**
+
+Done in `f7171fc`: `BandRepository` and `BandGroupRepository` are declared in `preferenceRepository.ts`, with `assertMethods` validating each set separately.
+
+Still open, and it is the part the entry was actually about: every adapter still implements both interfaces — `PreferenceRepository = BandRepository & BandGroupRepository` is described in the source as kept "for backwards compatibility during transition", so adding a method still means touching four files. `buildContext` / `buildContextForIds` also still sit on `BandRepository` rather than moving next to the recommendation pipeline.
+
 
 **Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
 
@@ -234,7 +239,12 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 ---
 
-### 4. Remove duplicated user repository helpers
+### 4. Remove duplicated user repository helpers ✓ Done
+
+Resolved in `2c7c7a1` — `normalizeEmail()`, `publicUser()` and `rowToUser()` live in `services/api/src/auth/userModel.ts`; both adapters import them; covered by `services/api/test/user-model.test.ts`.
+
+<details><summary>Original entry</summary>
+
 
 **Files:** `services/api/src/auth/userRepository.ts`, `tursoUserRepository.ts`
 
@@ -242,15 +252,13 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 **Action:** Move the three functions into a shared `services/api/src/auth/userModel.ts` module. Both adapters import from it. The factory in `userRepository.ts` is unchanged. Test `normalizeEmail` once in `userModel.test.ts`.
 
+</details>
+
 ---
 
-### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller
+### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller ✓ Done
 
-**Files:** `apps/desktop/src/geminiDesktopSettings.ts`
-
-`getBootstrapGate()` and `getSettingsViewProps()` both call `invokeTauri("gemini_config_status")` and parse the response independently. Any change to the response shape must be applied in two places, and a concurrent render after save could read two different snapshots.
-
-**Action:** Extract a private `readStatus()` async helper that invokes `gemini_config_status` once and returns the typed result. Both `getBootstrapGate` and `getSettingsViewProps` call it. Add a test that stubs `invokeTauri` and asserts it is called exactly once per `getSettingsViewProps` call.
+Resolved in `9bc4058` — `readStatus()` in `geminiDesktopSettings.ts` is the single read; `getBootstrapGate` and `getSettingsViewProps` both call it, and `gemini-desktop-settings.test.ts` asserts one `invokeTauri` call per invocation of each.
 
 ---
 
@@ -264,17 +272,18 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 ---
 
-### 7. Saved artists: one screen served by two competing implementations ← **next up**
+### 7. Saved artists: one screen served by two competing implementations ✓ Done
 
-**Files:** `apps/desktop/src/savedArtistsModel.ts`, `apps/desktop/src/createSavedArtistsShell.ts`, `apps/desktop/src/ui/mountDesktopReactApp.ts`, `apps/desktop/src/index.ts`, `apps/desktop/src/ui/createDesktopReactShell.ts`
+Resolved — `createSavedArtistsShell` is the sole owner. `savedArtistsModel.ts` and its 199 lines of tests are gone, along with the `getSavedArtistsViewPropsImpl` seam and the app's view-flag state. Net −422/+28 in the deletion commit.
 
-Two modules hold saved-artists state and talk to the same app object, and which one serves the screen depends on how the app was assembled:
+**Correction to this entry's original premise.** It claimed the shell was "the path the running app uses" and the model the second path. It was the other way round, and both were broken:
 
-- **Live path:** `startDesktopBrowserApp.ts:108` builds `createSavedArtistsShell({ app })` and hands it to the mount; `mountDesktopReactApp` renders `SavedArtistsView` from `savedArtistsShell.getViewProps()`.
-- **Second path:** `index.ts` wires `savedArtistsModel.getScreenState()` into `createDesktopReactShell` as `getSavedArtistsViewPropsImpl`, which serves the same screen when `shell.getView() === "saved-artists"` and no `savedArtistsShell` was supplied.
+- The chat header's "Saved" button called `shell.navigate("saved-artists")`, which set a **view flag on the app and never touched the router**. The hash stayed `#/`, so the mount fell through to its default branch and served the screen from `savedArtistsModel` — rendered with the *chat* handler object, which has no `onExport`, `onImportFile`, `onCreateGroup`, `onDeleteGroup` or `onAutoGroup`. The view invokes those with `?.`, so Export, Import, "Group by genre" and Create silently did nothing, and the model's `groups` array was never written — the group list was permanently empty.
+- The `#/saved` route did reach the shell, but the shell returned `{savedArtists, groups, selectedIds, …}` where the view renders `header`, `artists`, `selectedCount`. It **threw** `TypeError: Cannot read properties of undefined (reading 'title')` on every visit. Reachable only by typing the hash or reloading on it, which is why nobody reported it.
+- `savedHandlers.onActivateStyleRef` was `async () => {}`, so "Use as style reference" worked only on the model path.
 
-The duplication had already rotted. Five `savedArtistsModel` methods (`exportArtists`, `importArtists`, `loadGroups`, `createGroup`, `autoGroupByGenre`) were unreachable from production code, and two of them called `app.importArtists` / `app.autoGroupByGenre` — which `bootstrapDesktopApp` never implemented; it exposes `importPreferences` / `autoGroup`. They would have thrown on first use. **The tests kept them alive** by supplying fakes that implemented the non-existent methods, so a green suite was asserting a contract the real app never fulfilled. Those five methods and their tests were deleted together with this entry; the two implementations themselves remain.
+The suite was green throughout: `routed-mount.test.ts` asserted only `element.type.name` without ever rendering, and `saved-artists-view.test.ts` fed the view a hand-written prop object. No test paired a real supplier with the real view — the same failure mode this entry already documented for the five deleted methods, one level up.
 
-Leftover symptom to expect: `savedArtistsModel`'s state still declares a `groups` field that nothing writes, because grouping lives only in the shell. It is kept deliberately so that `SavedArtistsScreenState` — the type `SavedArtistsView` renders against — stays whole. That is the thread to pull.
+**What changed.** `SavedArtistsViewProps` is now declared in `ui/viewTypes.ts` and owned by the view, so every supplier must satisfy a type none of them owns. The Saved button navigates the router, so `#/saved` is the only way in. Selection lives on the app (`toggleArtistSelection` / new `clearArtistSelection`), which is where `requestRecommendations` already read it from. `test/saved-artists-screen.test.ts` drives the real shell through the real view, and separately drives the mount's handler object, so both the prop-shape drift and the missing-handler wiring now have a test that fails when they regress.
 
-**Action:** Give the screen a single owner. `createSavedArtistsShell` is the better candidate: it is the path the running app uses, it owns grouping, and it reloads after mutations. Move over the two things only the model still has — selection state (`toggleSelection` / `clearSelection` / `getSelectedIds`, consumed by `activateStyleRefImpl` in `index.ts`) and the `isLoading` / `isSearching` flags — then delete `savedArtistsModel.ts` along with the `getSavedArtistsViewPropsImpl` seam in `createDesktopReactShell`. Give `SavedArtistsView` an explicit props type rather than one derived from whichever module survives, so the view stops being coupled to the winner. Verify by driving the screen end to end — search, add, select, activate style ref, create/auto group, import, export — since the two paths differ precisely in the mutation-and-reload behaviour that unit tests with fakes do not exercise.
+**Not covered:** `onExport` needs `Blob` / `URL.createObjectURL` / `document`, so it is exercised only through `exportArtists` on the shell, not through the mount handler.

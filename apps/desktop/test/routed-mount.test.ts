@@ -114,6 +114,27 @@ test("routed mount calls render with SavedArtistsView when route is saved", asyn
   assert.equal(renderedComponentName(renders[0]), "SavedArtistsView");
 });
 
+test("the Saved button navigates to the saved route", async () => {
+  const renders: ReactElement[] = [];
+  const router = makeRouter("home");
+
+  const mount = createDesktopReactMount({
+    shell: makeShell(),
+    router,
+    savedArtistsShell: makeSavedArtistsShell(),
+    createRootImpl: () => recordingRoot(renders),
+    resolveContainer: () => fakeContainer(),
+  });
+  await mount.mount();
+
+  await mount.handlers.onNavigateSaved();
+
+  // The route is what decides which implementation serves the screen, so the
+  // button has to move the router rather than a separate view flag.
+  assert.equal(router.getRoute(), "saved");
+  assert.equal(renderedComponentName(renders[renders.length - 1]), "SavedArtistsView");
+});
+
 test("routed mount calls render with ChatAppView when route is home", async () => {
   const renders: ReactElement[] = [];
   const shell = makeShell();

@@ -1,6 +1,5 @@
 import type { ChatViewProps } from "../chatRenderAdapter.js";
 import type { DesktopChatUiStack } from "../desktopChatUiStack.js";
-import type { SavedArtistsScreenState } from "../savedArtistsModel.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -26,13 +25,6 @@ interface CreateDesktopReactShellOptions {
   // the seam does not need the full setTimeout signature (which drags in
   // __promisify__ and forces fakes to be Node Timeouts).
   setTimeoutImpl?: (handler: () => void, timeout: number) => TimerHandle;
-  getViewImpl?: () => string;
-  navigateImpl?: (view: string) => unknown;
-  searchArtistsImpl?: (query: string) => Promise<void>;
-  toggleSelectionImpl?: (id: string) => void;
-  deleteSavedArtistImpl?: (id: string) => Promise<void>;
-  activateStyleRefImpl?: () => Promise<void>;
-  getSavedArtistsViewPropsImpl?: () => SavedArtistsScreenState;
   cancelSearchImpl?: () => void;
   retryLastSearchImpl?: () => Promise<unknown> | void;
 }
@@ -43,21 +35,6 @@ export function createDesktopReactShell({
   statusTimeoutMs = 3000,
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
-  getViewImpl = () => "chat",
-  navigateImpl = () => {},
-  searchArtistsImpl = async () => {},
-  toggleSelectionImpl = () => {},
-  deleteSavedArtistImpl = async () => {},
-  activateStyleRefImpl = async () => {},
-  getSavedArtistsViewPropsImpl = () => ({
-    header: { title: "Saved Artists", subtitle: "Your style references" },
-    artists: [],
-    isLoading: false,
-    selectedCount: 0,
-    searchResults: [],
-    isSearching: false,
-    groups: [],
-  }),
   cancelSearchImpl,
   retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
@@ -84,10 +61,7 @@ export function createDesktopReactShell({
 
   const shell = {
     desktopUi: undefined as DesktopChatUiStack | undefined,
-    getViewProps(): (ChatViewProps | SavedArtistsScreenState) & { actionStatus?: ActionStatus } {
-      if (getViewImpl() === "saved-artists") {
-        return getSavedArtistsViewPropsImpl();
-      }
+    getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();
       return { ...base, actionStatus };
     },
@@ -126,30 +100,6 @@ export function createDesktopReactShell({
         scheduleStatusClear();
         throw error;
       }
-    },
-    getView() {
-      return getViewImpl();
-    },
-    async navigate(view: string) {
-      await navigateImpl(view);
-    },
-    async searchArtists(query: string) {
-      await searchArtistsImpl(query);
-    },
-    toggleSelection(id: string) {
-      toggleSelectionImpl(id);
-    },
-    async deleteSavedArtist(id: string) {
-      try {
-        await deleteSavedArtistImpl(id);
-      } catch (error) {
-        actionStatus = { type: "error", message: "Could not delete artist." };
-        scheduleStatusClear();
-        throw error;
-      }
-    },
-    async activateStyleRef() {
-      await activateStyleRefImpl();
     },
     cancelSearch() {
       cancelSearchImpl?.();

@@ -1,8 +1,10 @@
-// Callback surface the React views are handed.
+// Callback surface the React views are handed, plus the prop shapes they render.
 //
 // Required entries are always wired by createDesktopReactShell; the optional
 // ones are called with `?.` in the views because not every host provides them
 // (the browser shell wires fewer than the Tauri one).
+
+import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
 
 export type ChatHandlers = {
   onModeChange(mode: string): unknown;
@@ -19,6 +21,35 @@ export type ChatHandlers = {
   onNavigateSettings?(): unknown;
   onStop?(): unknown;
   onRetry?(): unknown;
+};
+
+/** One saved artist as the saved-artists screen renders it. */
+export type SavedArtistItemProps = {
+  id: string;
+  name: string;
+  rating?: number | null;
+  categoryTags: string[];
+  note: string;
+  isSelected: boolean;
+};
+
+/**
+ * Everything SavedArtistsView renders.
+ *
+ * Declared here rather than derived from whichever module happens to supply it.
+ * When this type was `ReturnType<typeof someModel.getScreenState>` the screen was
+ * coupled to one of two competing suppliers, and the other one — the one the
+ * `#/saved` route actually used — could return a different shape without anything
+ * failing to compile. It did, and the screen threw on `header.title`.
+ */
+export type SavedArtistsViewProps = {
+  header: { title: string; subtitle: string };
+  isLoading: boolean;
+  artists: SavedArtistItemProps[];
+  selectedCount: number;
+  searchResults: ArtistSearchResult[];
+  isSearching: boolean;
+  groups: ArtistGroup[];
 };
 
 export type SavedArtistsHandlers = {
