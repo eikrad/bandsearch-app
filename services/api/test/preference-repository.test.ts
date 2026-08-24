@@ -38,3 +38,13 @@ test("createPreferenceRepository refuses the removed postgres store", () => {
     /PREFERENCE_STORE=postgres is no longer supported/,
   );
 });
+
+// The sync client has to be awaited, which this synchronous factory cannot do.
+// Falling through to SQLite would silently give a different database, so it
+// refuses and names the path that does work.
+test("createPreferenceRepository refuses turso-sync and points at the async path", () => {
+  assert.throws(
+    () => createPreferenceRepository({ preferenceStore: "turso-sync" }),
+    /createTursoSyncRepositories/,
+  );
+});

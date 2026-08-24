@@ -7,11 +7,19 @@ dotenvConfig({ path: resolve(__dirname, "../../../.env") });
 import { createApp } from "./app.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { createPreferenceRepository, splitPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createTursoSyncRepositories } from "./turso/tursoSyncRepositories.js";
 import { createRecommendationPipeline } from "./recommendationPipeline.js";
 
 async function start() {
   const runtimeConfig = validateRuntimeEnv();
-  const preferenceRepository = createPreferenceRepository(runtimeConfig);
+
+  // turso-sync keeps a local replica, which has to be opened before anything
+  // can read from it; the other stores build synchronously.
+  const syncRepositories =
+    runtimeConfig.preferenceStore === "turso-sync"
+      ? await createTursoSyncRepositories(runtimeConfig)
+      : null;
+  const preferenceRepository = syncRepositories?.preferenceRepository ?? createPreferenceRepository(runtimeConfig);
 
   const recommendationPipeline = createRecommendationPipeline({
     runtimeConfig,
@@ -25,7 +33,15 @@ async function start() {
     new Promise((resolve) => setTimeout(resolve, runtimeConfig.pipelineReadyTimeoutMs)),
   ]);
 
-  const app = createApp({ runtimeConfig, preferenceRepository, recommendationPipeline });
+  const app = createApp({
+    runtimeConfig,
+    preferenceRepository,
+    recommendationPipeline,
+    // Same replica for users and sessions — a second client would mean a second
+    // local file and a second sync loop.
+    userRepository: syncRepositories?.userRepository,
+    chatSessionRepository: syncRepositories?.chatSessionRepository,
+  });
   app.listen(runtimeConfig.port, () => {
     console.log(JSON.stringify({ level: "info", message: "Bandsearch API listening", port: runtimeConfig.port }));
   });

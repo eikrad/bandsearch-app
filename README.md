@@ -172,9 +172,10 @@ Bandsearch uses two persistence domains:
 |--------------------|-------------|
 | `sqlite` (default) | Local file, zero-config, data survives restarts |
 | `memory` | In-process only, data lost on restart |
-| `turso` | Turso cloud SQLite — enables cross-device sync |
+| `turso` | Turso cloud SQLite — every statement goes over the network |
+| `turso-sync` | Local replica synced with Turso Cloud — reads and writes stay local, so the app keeps working offline |
 
-See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`).
+See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 
 ---
 
@@ -193,7 +194,8 @@ Common optional variables:
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
-| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, or `turso` |
+| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
+| `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |

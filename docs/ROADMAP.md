@@ -49,6 +49,22 @@
 
 Implemented: `POST /preferences/turso/test` connection probe; Turso URL + token configurable in Settings with save-and-test flow; Tauri backend persists credentials and restarts the API with `PREFERENCE_STORE=turso`; `PREFERENCE_STORE=turso` activates `TursoPreferenceRepository` (fully implemented including groups/export).
 
+**Correction — the offline half was claimed but not built.** The first bullet promises that "the desktop writes locally (offline-capable) and syncs automatically to the cloud". `PREFERENCE_STORE=turso` never did that: it creates a plain remote `@libsql/client`, so every single statement is a network round trip and the app is unusable without a connection. The entry read `✓ Done` for months while half of it did not exist.
+
+**Now delivered as `PREFERENCE_STORE=turso-sync`.** A local replica holds the full database; reads and writes hit the local file and are exchanged with Turso Cloud via `push()`/`pull()`. A failed exchange is logged, not thrown — the write is already durable locally and goes out on the next attempt, which is the whole point of local-first. Writes push immediately; a 60s timer pulls and pushes; startup syncs once before serving so a restart never answers from a stale replica.
+
+- `turso-sync` is a **separate store value**, not a flag on `turso`. An existing `PREFERENCE_STORE=turso` deployment (including Render, see `render.yaml`) keeps behaving exactly as before.
+- Config: `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` as usual, plus `TURSO_SYNC_PATH` for the replica file (default `bandsearch-sync.db`).
+- One client serves preferences, users and sessions. A second would mean a second replica file and a second sync loop racing the first, so `createTursoSyncRepositories()` builds all three from one.
+- `createPreferenceRepository()` refuses `turso-sync` rather than falling back to SQLite: opening a replica is asynchronous, and silently handing back a different database is the failure mode this entry is correcting.
+
+**Two things to know about this choice.**
+
+1. **`@tursodatabase/sync` is pre-1.0** (0.7.2, with 0.8.0-pre in flight), adopted deliberately. Turso's own docs point offline-write workloads here rather than at `@libsql/client`'s embedded-replica `offline` option, so this is the forward path — but it has not reached 1.0 and Turso recommends keeping independent backups. The dependency is confined to `turso/tursoSyncClient.ts`; everything above it talks to the `TursoClient` interface, which the remote client satisfies too. Swapping back is a one-line change in `server.ts`.
+2. **The package is ESM-only and this workspace compiles to CommonJS.** Its dependency `@tursodatabase/serverless` declares only an `import` condition, and tsx's CJS resolver fails on it with `ERR_PACKAGE_PATH_NOT_EXPORTED` — in tests and in production alike, since `npm start` is `tsx src/server.ts`. tsx 4.23.12 is the latest release, so there is no upgrade. `tursoSyncClient.ts` works around it with a `new Function("s", "return import(s)")` escape hatch, which stays a real dynamic `import()` that esbuild will not rewrite into a `require`. **The proper fix is to make `services/api` an ES module** — see Architecture entry 9.
+
+No native binary is published for `darwin-x64`; Apple Silicon, Linux (x64/arm64) and Windows x64 are covered. The release workflow already ships an ARM-only macOS sidecar, so this costs nothing today.
+
 ## Phase 6 — Auth and Multi-user ✓ Done
 
 - Multi-user support: auth/session layer and user-scoped preference ownership. ✓ Done
@@ -310,3 +326,15 @@ Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE
 **Resolved by removal.** Phase 9 consolidates production on Turso, nothing deployed selects Postgres, and a backend without data isolation is risk without benefit. Gone: `postgresPreferenceRepository.ts` and its tests, the `pg` dependency and `@types/pg`, `migrations/001_create_saved_bands.sql` (Postgres-only DDL), `migratePostgres()` in `scripts/migrate.ts`, and `DATABASE_URL` / `DATABASE_SSL` from the runtime config. Three adapters remain: SQLite, Turso, in-memory.
 
 `PREFERENCE_STORE=postgres` now **fails at boot** rather than falling through to the SQLite default — a silent database swap on an existing deployment would be worse than a refused start. The guard sits in both `validateRuntimeEnv` and `createPreferenceRepository`, since `createApp` can be handed a runtime config directly. `npm run migrate` likewise refuses when `DATABASE_URL` is set instead of running the wrong migration.
+
+---
+
+### 9. `services/api` is CommonJS in an increasingly ESM ecosystem ← **next up**
+
+**Files:** `services/api/package.json`, `services/api/tsconfig.json`, and every `.ts` file under `services/api/src`
+
+Adding `@tursodatabase/sync` (Phase 5.5) surfaced this: the package is ESM-only, its dependency `@tursodatabase/serverless` publishes only an `import` condition, and tsx's CJS resolver rejects it with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Node 26 itself can `require()` it — this is tsx's resolver hook, and 4.23.12 is the newest release, so waiting for a fix is not a plan.
+
+`turso/tursoSyncClient.ts` currently works around it with a `new Function("s", "return import(s)")` escape hatch. That is contained and commented, but it is a workaround, and the next ESM-only dependency will need its own.
+
+**Action:** Set `"type": "module"` on `services/api`, move the tsconfig to an ESM module target, and fix the fallout — `__dirname` / `__filename` (used in `scripts/migrate.ts` and several tests), `require()` interop, and any `import.meta` restrictions that flip the other way. `apps/desktop` has the same shape and would follow separately. Worth pairing with a check of whether tsx is still needed at runtime, or whether a build step would serve the API better in production.

@@ -95,3 +95,33 @@ test("validateRuntimeEnv auto-generates a different jwtSecret each call when abs
   const b = validateRuntimeEnv({ ...REQUIRED });
   assert.notEqual(a.jwtSecret, b.jwtSecret);
 });
+
+// turso-sync is a separate store value rather than a flag on `turso`, so an
+// existing PREFERENCE_STORE=turso deployment keeps talking to the cloud
+// directly and nothing changes under it by accident.
+test("validateRuntimeEnv accepts the turso-sync store", () => {
+  const config = validateRuntimeEnv({
+    ...REQUIRED,
+    PREFERENCE_STORE: "turso-sync",
+    TURSO_DATABASE_URL: "libsql://example.turso.io",
+  });
+  assert.equal(config.preferenceStore, "turso-sync");
+  assert.equal(config.tursoSyncPath, "bandsearch-sync.db");
+});
+
+test("validateRuntimeEnv lets TURSO_SYNC_PATH override the replica location", () => {
+  const config = validateRuntimeEnv({
+    ...REQUIRED,
+    PREFERENCE_STORE: "turso-sync",
+    TURSO_DATABASE_URL: "libsql://example.turso.io",
+    TURSO_SYNC_PATH: "/var/data/replica.db",
+  });
+  assert.equal(config.tursoSyncPath, "/var/data/replica.db");
+});
+
+test("validateRuntimeEnv requires a remote URL for turso-sync", () => {
+  assert.throws(
+    () => validateRuntimeEnv({ ...REQUIRED, PREFERENCE_STORE: "turso-sync" }),
+    /TURSO_DATABASE_URL is required/,
+  );
+});

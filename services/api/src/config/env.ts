@@ -41,15 +41,19 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   const preferenceStore =
     env.PREFERENCE_STORE === "turso"
       ? "turso"
-      : env.PREFERENCE_STORE === "memory"
-        ? "memory"
-        : "sqlite";
+      : env.PREFERENCE_STORE === "turso-sync"
+        ? "turso-sync"
+        : env.PREFERENCE_STORE === "memory"
+          ? "memory"
+          : "sqlite";
 
   const databasePath = env.DATABASE_PATH || "bandsearch.db";
   const tursoDatabaseUrl = env.TURSO_DATABASE_URL || "";
+  // Local replica for turso-sync. Sibling files (-wal, -info) sit next to it.
+  const tursoSyncPath = env.TURSO_SYNC_PATH || "bandsearch-sync.db";
   const tursoAuthToken = env.TURSO_AUTH_TOKEN || "";
 
-  if (preferenceStore === "turso" && !tursoDatabaseUrl) {
+  if ((preferenceStore === "turso" || preferenceStore === "turso-sync") && !tursoDatabaseUrl) {
     throw new Error("TURSO_DATABASE_URL is required when PREFERENCE_STORE=turso");
   }
 
@@ -89,6 +93,7 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     preferenceStore,
     databasePath,
     tursoDatabaseUrl,
+    tursoSyncPath,
     tursoAuthToken,
     jwtSecret,
     evalDashboardEnabled: normalizeBoolean(env.EVAL_DASHBOARD_ENABLED, false),

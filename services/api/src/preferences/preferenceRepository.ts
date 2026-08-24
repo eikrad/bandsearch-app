@@ -113,6 +113,11 @@ export function splitPreferenceRepository(
   };
 }
 
+export const TURSO_SYNC_ASYNC_MESSAGE =
+  "PREFERENCE_STORE=turso-sync cannot be built here: opening the local replica is "
+  + "asynchronous. Use createTursoSyncRepositories() from turso/tursoSyncRepositories.js "
+  + "and pass the repositories into createApp().";
+
 type PreferenceConfig = {
   preferenceStore?: string;
   databasePath?: string;
@@ -125,6 +130,11 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
   // the database of a deployment that still sets this, so refuse instead.
   if (runtimeConfig.preferenceStore === "postgres") {
     throw new Error(POSTGRES_REMOVED_MESSAGE);
+  }
+  // Same reasoning as above: silently returning SQLite would hand the caller a
+  // different database than the one they asked for.
+  if (runtimeConfig.preferenceStore === "turso-sync") {
+    throw new Error(TURSO_SYNC_ASYNC_MESSAGE);
   }
   if (runtimeConfig.preferenceStore === "turso") {
     const client = createClient({
