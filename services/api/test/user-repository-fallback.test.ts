@@ -10,8 +10,6 @@ function makePrefStub() {
     listSavedBands: async () => [],
     updateSavedBand: async () => ({ ok: false, status: 404, error: "nf" }),
     deleteSavedBand: async () => ({ ok: false, status: 404, error: "nf" }),
-    buildContext: async () => "",
-    buildContextForIds: async () => "",
     importSavedBands: async () => ({ imported: 0, skipped: 0, failed: 0 }),
     listGroups: async () => [],
     createGroup: async () => ({ ok: false, status: 400, error: "stub" }),

@@ -10,8 +10,6 @@ function makePreferenceRepoStub() {
     listSavedBands: async () => [],
     updateSavedBand: async () => ({ ok: false as const, status: 404, error: "not found" }),
     deleteSavedBand: async () => ({ ok: false as const, status: 404, error: "not found" }),
-    buildContext: async () => "",
-    buildContextForIds: async () => "",
     importSavedBands: async () => ({ imported: 0, skipped: 0, failed: 0 }),
     listGroups: async () => [],
     createGroup: async () => ({ ok: false as const, status: 400, error: "stub" }),

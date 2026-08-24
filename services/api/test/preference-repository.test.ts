@@ -11,12 +11,12 @@ test("assertPreferenceRepository accepts valid repository", () => {
 
 test("assertPreferenceRepository rejects missing methods", () => {
   assert.throws(
-    () => assertPreferenceRepository({ buildContext: () => "" }),
+    () => assertPreferenceRepository({ listSavedBands: async () => [] }),
     /missing method addSavedBand/,
   );
 });
 
-test("assertPreferenceRepository requires buildContextForIds", () => {
+test("assertPreferenceRepository requires the group methods too", () => {
   assert.throws(
     () =>
       assertPreferenceRepository({
@@ -24,8 +24,7 @@ test("assertPreferenceRepository requires buildContextForIds", () => {
         listSavedBands: async () => [],
         updateSavedBand: async () => {},
         deleteSavedBand: async () => {},
-        buildContext: async () => "",
       }),
-    /missing method buildContextForIds/,
+    /missing method importSavedBands/,
   );
 });

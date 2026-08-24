@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { createApp } from "../src/app.js";
-import type { PreferenceRepository } from "../src/preferences/preferenceRepository.js";
+import type { PreferenceRepository, SavedBand } from "../src/preferences/preferenceRepository.js";
 import type { RecommendationError } from "../src/recommendations.js";
 import type { EvalEventContext, EvalWorker } from "../src/eval/evalWorker.js";
 
@@ -30,14 +30,28 @@ function arrayField(record: Record<string, unknown>, key: string): unknown[] {
   return value;
 }
 
-function createPreferenceRepositoryStub(buildContext: () => string): PreferenceRepository {
+function savedBandFixture(overrides: Partial<SavedBand> = {}): SavedBand {
+  return {
+    id: "pref-1",
+    musicbrainzArtistId: "mb-1",
+    name: "Alcest",
+    rating: 5,
+    categories: [],
+    note: "",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+// Context is built from saved bands now, so the stub supplies bands rather than
+// a ready-made context string.
+function createPreferenceRepositoryStub(savedBands: SavedBand[] = []): PreferenceRepository {
   return {
     addSavedBand: async () => ({ ok: true, savedBand: null }),
-    listSavedBands: async () => [],
+    listSavedBands: async () => savedBands,
     updateSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
     deleteSavedBand: async () => ({ ok: false, status: 404, error: "saved band not found" }),
-    buildContext: async () => buildContext(),
-    buildContextForIds: async () => "",
     importSavedBands: async () => ({ imported: 0, skipped: 0, failed: 0 }),
     listGroups: async () => [],
     createGroup: async () => ({ ok: false, status: 400, error: "stub" }),
@@ -141,9 +155,9 @@ test("POST /recommendations uses injected recommendation pipeline", async () => 
         };
       },
     },
-    preferenceRepository: createPreferenceRepositoryStub(
-      () => "Alcest (rating 5/5) tags: blackgaze note: dreamy",
-    ),
+    preferenceRepository: createPreferenceRepositoryStub([
+      savedBandFixture({ name: "Alcest", rating: 5, categories: ["blackgaze"], note: "dreamy" }),
+    ]),
   });
 
   const result = await makeRequest(app, "/recommendations", {
@@ -260,7 +274,7 @@ test("POST /recommendations forwards selectedArtistIds to the pipeline", async (
         };
       },
     },
-    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+    preferenceRepository: createPreferenceRepositoryStub(),
   });
 
   const result = await makeRequest(app, "/recommendations", {
@@ -287,7 +301,7 @@ test("POST /recommendations forwards messages to the pipeline", async () => {
         };
       },
     },
-    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+    preferenceRepository: createPreferenceRepositoryStub(),
   });
 
   await makeRequest(app, "/recommendations", {
@@ -317,7 +331,7 @@ test("POST /recommendations forwards priorityContext to the pipeline", async () 
         };
       },
     },
-    preferenceRepository: createPreferenceRepositoryStub(() => ""),
+    preferenceRepository: createPreferenceRepositoryStub(),
   });
 
   const result = await makeRequest(app, "/recommendations", {
@@ -430,9 +444,9 @@ test("POST /recommendations defaults to fresh mode", async () => {
         };
       },
     },
-    preferenceRepository: createPreferenceRepositoryStub(
-      () => "This should not be used in fresh mode.",
-    ),
+    preferenceRepository: createPreferenceRepositoryStub([
+      savedBandFixture({ name: "ShouldNotAppearInFreshMode" }),
+    ]),
   });
 
   const result = await makeRequest(app, "/recommendations", {

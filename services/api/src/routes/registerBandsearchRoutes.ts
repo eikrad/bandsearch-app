@@ -3,6 +3,7 @@ import type { Express, RequestHandler } from "express";
 import { createClient as createLibsqlClient } from "@libsql/client";
 
 import { validateRecommendationRequest } from "../recommendations.js";
+import { buildSavedBandContext } from "../savedBandContext.js";
 import { BraveSearchError } from "../integrations/braveSearch.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
@@ -33,7 +34,6 @@ export type BandsearchRouteContext = {
       userId?: string,
     ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
     deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status?: number }>;
-    buildContext: (userId?: string) => Promise<string>;
     importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number; failed: number }>;
     listGroups: (userId?: string) => Promise<Group[]>;
     createGroup: (name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
@@ -315,7 +315,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.get("/preferences/context", async (req, res) => {
-    const context = await resolvedPreferenceRepository.buildContext(req.userId);
+    const context = await buildSavedBandContext(resolvedPreferenceRepository, { userId: req.userId });
     return res.status(200).json({ context });
   });
 

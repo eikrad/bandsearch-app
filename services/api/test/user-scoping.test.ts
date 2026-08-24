@@ -6,6 +6,7 @@ import { createInMemoryPreferenceRepository } from "../src/preferences/preferenc
 import { createSqlitePreferenceRepository } from "../src/preferences/sqlitePreferenceRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "../src/sessions/chatSessionRepository.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
+import { buildSavedBandContext } from "../src/savedBandContext.js";
 
 const BAND = { musicbrainzArtistId: "mb-1", name: "Alcest", rating: 5, categories: ["blackgaze"], note: "" };
 const USER_A = "user-a";
@@ -77,11 +78,11 @@ for (const [label, makeRepo] of preferenceRepoFactories) {
     assert.equal(del.status, 404);
   });
 
-  test(`${label}: buildContext returns only calling user's bands`, async () => {
+  test(`${label}: saved band context returns only calling user's bands`, async () => {
     const repo = makeRepo();
     await repo.addSavedBand(BAND, USER_A);
-    assert.equal(await repo.buildContext(USER_B), "");
-    assert.ok((await repo.buildContext(USER_A)).includes("Alcest"));
+    assert.equal(await buildSavedBandContext(repo, { userId: USER_B }), "");
+    assert.ok((await buildSavedBandContext(repo, { userId: USER_A })).includes("Alcest"));
   });
 
   test(`${label}: groups are scoped per user`, async () => {

@@ -33,8 +33,6 @@ export type BandRepository = {
   listSavedBands: (userId?: string) => Promise<SavedBand[]>;
   updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
   deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
-  buildContext: (userId?: string) => Promise<string>;
-  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
 };
 
 export type BandGroupRepository = {
@@ -55,8 +53,6 @@ const BAND_REPOSITORY_METHODS = [
   "listSavedBands",
   "updateSavedBand",
   "deleteSavedBand",
-  "buildContext",
-  "buildContextForIds",
 ] as const;
 
 const BAND_GROUP_REPOSITORY_METHODS = [

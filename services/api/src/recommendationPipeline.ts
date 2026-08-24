@@ -6,6 +6,7 @@ import {
   resolveRecommendationFacadeInput,
 } from "./recommendations.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
+import type { SavedBandContextSource } from "./savedBandContext.js";
 
 export type RecommendationRuntimeConfig = {
   musicBrainzTimeoutMs?: number;
@@ -20,10 +21,7 @@ export type RecommendationRuntimeConfig = {
   researchTargetVerifiedCandidates?: number;
 };
 
-export type PreferenceRepositoryPipeline = {
-  buildContext: (userId?: string) => Promise<string>;
-  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
-};
+export type PreferenceRepositoryPipeline = SavedBandContextSource;
 
 export type PipelineLogger = Pick<typeof console, "log" | "warn" | "error" | "info" | "debug">;
 
@@ -38,14 +36,10 @@ export function createRecommendationPipeline({
   retryDelayMs?: number;
   logger?: PipelineLogger;
 } = {}) {
-  if (
-    !preferenceRepository
-    || typeof preferenceRepository.buildContext !== "function"
-    || typeof preferenceRepository.buildContextForIds !== "function"
-  ) {
+  if (!preferenceRepository || typeof preferenceRepository.listSavedBands !== "function") {
     throw createRecommendationError(
       "recommendation_configuration_error",
-      "preferenceRepository.buildContext and buildContextForIds are required",
+      "preferenceRepository.listSavedBands is required",
     );
   }
 

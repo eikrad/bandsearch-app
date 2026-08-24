@@ -3,6 +3,8 @@ import {
   validateRecommendationHttpBody,
   validateRecommendationMode,
 } from "../../../shared/schemas/src/contracts.js";
+import { buildSavedBandContext } from "./savedBandContext.js";
+import type { SavedBandContextSource } from "./savedBandContext.js";
 
 export type MusicBrainzArtistHit = { id?: string; name: string; score?: number; disambiguation?: string };
 
@@ -11,10 +13,7 @@ export interface RecommendationError extends Error {
   cause?: unknown;
 }
 
-export type PreferenceRepositoryFacade = {
-  buildContext: (userId?: string) => Promise<string>;
-  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
-};
+export type PreferenceRepositoryFacade = SavedBandContextSource;
 
 
 /**
@@ -55,12 +54,10 @@ export async function resolveRecommendationFacadeInput(
 
   let preferenceContext = priorityContext;
   if (mode === "preference-aware") {
-    let repoContext: string;
-    if (selectedArtistIds.length > 0) {
-      repoContext = await preferenceRepository.buildContextForIds(selectedArtistIds, userId);
-    } else {
-      repoContext = await preferenceRepository.buildContext(userId);
-    }
+    const repoContext = await buildSavedBandContext(preferenceRepository, {
+      ids: selectedArtistIds.length > 0 ? selectedArtistIds : undefined,
+      userId,
+    });
     preferenceContext = [preferenceContext, repoContext].filter(Boolean).join("\n");
   }
 

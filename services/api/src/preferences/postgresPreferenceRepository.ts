@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
-import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 import type { PreferenceRepository } from "./preferenceRepository.js";
 
 type SavedBandRow = {
@@ -121,23 +120,6 @@ export function createPostgresPreferenceRepository({ pool }: { pool: Pool }): Pr
         return { ok: false, status: 404, error: "saved band not found" };
       }
       return { ok: true, deletedId: id };
-    },
-
-    async buildContext() {
-      const savedBands = await this.listSavedBands();
-      if (savedBands.length === 0) {
-        return "";
-      }
-      return savedBands.map(formatSavedBandContextLine).join("\n");
-    },
-
-    async buildContextForIds(ids: string[]) {
-      if (!ids || ids.length === 0) return "";
-      const savedBands = await this.listSavedBands();
-      const want = new Set(ids);
-      const filtered = savedBands.filter((b) => want.has(b.id));
-      if (filtered.length === 0) return "";
-      return filtered.map(formatSavedBandContextLine).join("\n");
     },
 
     async importSavedBands(bands: unknown[]) {

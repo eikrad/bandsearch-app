@@ -19,8 +19,6 @@ function bandRepositoryStub() {
     listSavedBands: noop,
     updateSavedBand: noop,
     deleteSavedBand: noop,
-    buildContext: noop,
-    buildContextForIds: noop,
   };
 }
 
@@ -36,7 +34,7 @@ function bandGroupRepositoryStub() {
   };
 }
 
-test("assertBandRepository accepts an object with all 6 BandRepository methods", () => {
+test("assertBandRepository accepts an object with all 4 BandRepository methods", () => {
   const resolved = assertBandRepository(bandRepositoryStub());
   assert.equal(typeof resolved.addSavedBand, "function");
 });
@@ -44,11 +42,6 @@ test("assertBandRepository accepts an object with all 6 BandRepository methods",
 test("assertBandRepository throws when addSavedBand is missing", () => {
   const repo = without(bandRepositoryStub(), "addSavedBand");
   assert.throws(() => assertBandRepository(repo), /missing method addSavedBand/);
-});
-
-test("assertBandRepository throws when buildContext is missing", () => {
-  const repo = without(bandRepositoryStub(), "buildContext");
-  assert.throws(() => assertBandRepository(repo), /missing method buildContext/);
 });
 
 test("assertBandGroupRepository accepts an object with all 7 BandGroupRepository methods", () => {
@@ -66,7 +59,7 @@ test("assertBandGroupRepository throws when importSavedBands is missing", () => 
   assert.throws(() => assertBandGroupRepository(repo), /missing method importSavedBands/);
 });
 
-test("assertPreferenceRepository still accepts a full 13-method object", () => {
+test("assertPreferenceRepository still accepts a full 11-method object", () => {
   const repo = { ...bandRepositoryStub(), ...bandGroupRepositoryStub() };
   const resolved = assertPreferenceRepository(repo);
   assert.equal(typeof resolved.addSavedBand, "function");
@@ -80,7 +73,7 @@ test("assertPreferenceRepository throws when any method is missing", () => {
 
 test("the in-memory adapter satisfies assertBandRepository", () => {
   const resolved = assertBandRepository(createInMemoryPreferenceRepository());
-  assert.equal(typeof resolved.buildContextForIds, "function");
+  assert.equal(typeof resolved.listSavedBands, "function");
 });
 
 test("the in-memory adapter satisfies assertBandGroupRepository", () => {

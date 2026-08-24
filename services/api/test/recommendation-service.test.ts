@@ -5,6 +5,11 @@ import {
   resolveRecommendationFacadeInput,
   enrichRecommendationsWithMbIds,
 } from "../src/recommendations.js";
+import type { SavedBandForContext } from "../src/savedBandContext.js";
+
+function savedBand(overrides: Partial<SavedBandForContext> = {}): SavedBandForContext {
+  return { id: "b1", name: "Alcest", rating: 5, categories: [], note: "", ...overrides };
+}
 
 test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
   const items = [{ artist: "Fen", why: "x", sourceSignals: ["a"] }];
@@ -18,12 +23,9 @@ test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", 
 test("resolveRecommendationFacadeInput fresh mode does not call repository", async () => {
   let buildCalled = false;
   const preferenceRepository = {
-    async buildContext() {
+    async listSavedBands() {
       buildCalled = true;
-      return "repo";
-    },
-    async buildContextForIds() {
-      return "";
+      return [savedBand({ name: "Alcest" })];
     },
   };
 
@@ -35,13 +37,10 @@ test("resolveRecommendationFacadeInput fresh mode does not call repository", asy
   assert.equal(buildCalled, false);
 });
 
-test("resolveRecommendationFacadeInput preference-aware merges priority and buildContext", async () => {
+test("resolveRecommendationFacadeInput preference-aware merges priority with the saved band context", async () => {
   const preferenceRepository = {
-    async buildContext() {
-      return "saved context";
-    },
-    async buildContextForIds() {
-      return "";
+    async listSavedBands() {
+      return [savedBand({ name: "Alcest" })];
     },
   };
 
@@ -51,16 +50,13 @@ test("resolveRecommendationFacadeInput preference-aware merges priority and buil
   );
 
   assert.equal(result.mode, "preference-aware");
-  assert.equal(result.preferenceContext, "note\nsaved context");
+  assert.equal(result.preferenceContext, "note\nAlcest (rating 5/5) tags:  note: ");
 });
 
-test("resolveRecommendationFacadeInput preference-aware uses buildContextForIds when ids provided", async () => {
+test("resolveRecommendationFacadeInput preference-aware narrows the context to the selected ids", async () => {
   const preferenceRepository = {
-    async buildContext() {
-      return "full";
-    },
-    async buildContextForIds(ids: string[]) {
-      return `ids:${ids.join(",")}`;
+    async listSavedBands() {
+      return [savedBand({ id: "mb-1", name: "Alcest" }), savedBand({ id: "other", name: "Fen" })];
     },
   };
 
@@ -69,5 +65,6 @@ test("resolveRecommendationFacadeInput preference-aware uses buildContextForIds 
     preferenceRepository,
   );
 
-  assert.ok(result.preferenceContext.includes("ids:mb-1,mb-2"));
+  assert.match(result.preferenceContext, /Alcest/);
+  assert.doesNotMatch(result.preferenceContext, /Fen/, "unselected bands must stay out of the context");
 });

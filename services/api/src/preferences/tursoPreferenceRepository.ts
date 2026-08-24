@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Client as LibSQLClient, Row } from "@libsql/client";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
-import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 import type { PreferenceRepository } from "./preferenceRepository.js";
 
 const DEFAULT_USER = "anonymous";
@@ -105,21 +104,6 @@ export function createTursoPreferenceRepository({ client }: { client: LibSQLClie
       });
       if (result.rowsAffected === 0) return { ok: false, status: 404, error: "saved band not found" };
       return { ok: true, deletedId: id };
-    },
-
-    async buildContext(userId = DEFAULT_USER) {
-      const savedBands = await this.listSavedBands(userId);
-      if (savedBands.length === 0) return "";
-      return savedBands.map(formatSavedBandContextLine).join("\n");
-    },
-
-    async buildContextForIds(ids: string[], userId = DEFAULT_USER) {
-      if (!ids || ids.length === 0) return "";
-      const savedBands = await this.listSavedBands(userId);
-      const want = new Set(ids);
-      const filtered = savedBands.filter((b) => want.has(b.id));
-      if (filtered.length === 0) return "";
-      return filtered.map(formatSavedBandContextLine).join("\n");
     },
 
     async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {
