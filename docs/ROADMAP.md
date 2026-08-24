@@ -218,18 +218,25 @@ Resolved — the inference logic now lives in `services/api/src/preferences/band
 
 ---
 
-### 2. Split the monolithic preference repository interface — partially done ← **next up**
+### 2. Split the monolithic preference repository interface ✓ Done
 
 Done in `f7171fc`: `BandRepository` and `BandGroupRepository` are declared in `preferenceRepository.ts`, with `assertMethods` validating each set separately.
 
-Still open, and it is the part the entry was actually about: every adapter still implements both interfaces — `PreferenceRepository = BandRepository & BandGroupRepository` is described in the source as kept "for backwards compatibility during transition", so adding a method still means touching four files. `buildContext` / `buildContextForIds` also still sit on `BandRepository` rather than moving next to the recommendation pipeline.
+**Resolved**, though not the way the action below proposed — see the note at the end.
+
+- `buildContext` / `buildContextForIds` are gone from all four adapters. They were eight copies of one rule that differed only in how they filtered, and the rule decides what the LLM sees rather than how bands are stored. They are now one `buildSavedBandContext(source, { ids, userId })` in `services/api/src/savedBandContext.ts`, next to the recommendation pipeline. `savedBandContextFormat.ts` folded into it. `BandRepository` is down from six methods to four.
+- Consumers now take only the half they use: `splitPreferenceRepository()` returns `{ bands, groups }` as two narrow views on one backend. The routes take `resolvedBandRepository` and `resolvedBandGroupRepository` separately, and the recommendation pipeline is handed the band half — its type asks for nothing but `listSavedBands`.
+
+Two behaviour changes worth knowing: SQLite no longer filters selected ids with a SQL `IN` clause but in memory, like the other three adapters already did; and an empty `selectedArtistIds` array is now explicitly a filter matching nothing rather than falling through to "every band", which the callers already assumed.
+
+**Why the adapters were not split into separate files.** The entry justifies itself with "adding any method means touching four files", but splitting each adapter into a band module and a group module does not change that — it makes eight files, and a new band method still touches four of them. Each adapter talks to one database and legitimately implements both halves. What actually shrank the surface was deleting the two context methods from all four. `PreferenceRepository = BandRepository & BandGroupRepository` therefore stays, no longer as a "backwards compatibility during transition" placeholder but as the documented answer to "what one storage backend provides"; the separation that pays off is on the consuming side, and that is what `splitPreferenceRepository` gives.
 
 
 **Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
 
 All four implementations carry 13 methods covering three distinct concerns: band CRUD (4), context building for the recommendation pipeline (2), and group management (5 + import + status). Adding any method means touching four files.
 
-**Action:** Split into two interfaces: `BandRepository` (CRUD + context building) and `BandGroupRepository` (group operations + import). Each adapter implements only its relevant interface. The factory selects both implementations for the active store. The context-building methods (`buildContext`, `buildContextForIds`) move closer to the recommendation pipeline, where the LLM prompt format is the real concern.
+**Action (original, superseded):** Split into two interfaces: `BandRepository` (CRUD + context building) and `BandGroupRepository` (group operations + import). Each adapter implements only its relevant interface. The factory selects both implementations for the active store. The context-building methods (`buildContext`, `buildContextForIds`) move closer to the recommendation pipeline, where the LLM prompt format is the real concern.
 
 ---
 
@@ -287,3 +294,15 @@ The suite was green throughout: `routed-mount.test.ts` asserted only `element.ty
 **What changed.** `SavedArtistsViewProps` is now declared in `ui/viewTypes.ts` and owned by the view, so every supplier must satisfy a type none of them owns. The Saved button navigates the router, so `#/saved` is the only way in. Selection lives on the app (`toggleArtistSelection` / new `clearArtistSelection`), which is where `requestRecommendations` already read it from. `test/saved-artists-screen.test.ts` drives the real shell through the real view, and separately drives the mount's handler object, so both the prop-shape drift and the missing-handler wiring now have a test that fails when they regress.
 
 **Not covered:** `onExport` needs `Blob` / `URL.createObjectURL` / `document`, so it is exercised only through `exportArtists` on the shell, not through the mount handler.
+
+---
+
+### 8. Postgres adapter has no user scoping ← **next up**
+
+**Files:** `services/api/src/preferences/postgresPreferenceRepository.ts`
+
+Found while working on entry 2. `PREFERENCE_STORE=postgres` selects an adapter that ignores users entirely: `listSavedBands()` takes no `userId` and queries `SELECT * FROM saved_bands` with no `WHERE user_id`, and `addSavedBand` never writes a `user_id` column. The routes do pass `req.userId` — the argument is silently dropped. SQLite and Turso both scope correctly, so Phase 6's user-scoped ownership simply does not hold on this backend: every user reads and can delete every other user's saved bands.
+
+Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE=turso`, and Phase 9 consolidates production on Turso — but the adapter ships and is one env var away.
+
+**Action:** Decide between fixing and removing. Fixing means threading `user_id` through the schema and every query, matching `sqlitePreferenceRepository.ts`, plus a migration for existing rows; it needs a real Postgres instance to verify, which the unit suite does not have. Removing deletes a backend nothing uses and takes the "four adapters" count down to three. Removal is the better trade unless Postgres is a deployment target someone actually wants.

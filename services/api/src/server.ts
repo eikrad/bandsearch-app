@@ -6,7 +6,7 @@ dotenvConfig({ path: resolve(__dirname, "../../../.env") });
 
 import { createApp } from "./app.js";
 import { validateRuntimeEnv } from "./config/env.js";
-import { createPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createPreferenceRepository, splitPreferenceRepository } from "./preferences/preferenceRepository.js";
 import { createRecommendationPipeline } from "./recommendationPipeline.js";
 
 async function start() {
@@ -15,7 +15,9 @@ async function start() {
 
   const recommendationPipeline = createRecommendationPipeline({
     runtimeConfig,
-    preferenceRepository,
+    // The pipeline only reads saved bands to build prompt context; it has no
+    // business with groups, so it is handed the band half explicitly.
+    preferenceRepository: splitPreferenceRepository(preferenceRepository).bands,
   });
 
   await Promise.race([

@@ -45,7 +45,15 @@ export type BandGroupRepository = {
   removeArtistFromGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
 };
 
-// Keep for backwards compatibility during transition — all existing adapters implement both
+/**
+ * What one storage backend provides. Each adapter speaks to a single database,
+ * so it implements both halves — splitting the adapters into separate modules
+ * would not change that, and would only mean two files per backend instead of one.
+ *
+ * The separation that matters is on the consuming side: nothing should hold all
+ * eleven methods just because they arrive together. Use `splitPreferenceRepository`
+ * and pass on the half a caller actually needs.
+ */
 export type PreferenceRepository = BandRepository & BandGroupRepository;
 
 const BAND_REPOSITORY_METHODS = [
@@ -86,6 +94,21 @@ export function assertBandGroupRepository(repository: unknown): BandGroupReposit
 export function assertPreferenceRepository(repository: unknown): PreferenceRepository {
   assertMethods(repository, [...BAND_REPOSITORY_METHODS, ...BAND_GROUP_REPOSITORY_METHODS]);
   return repository as PreferenceRepository;
+}
+
+/**
+ * Two narrow views on one backend, so callers declare the half they use.
+ *
+ * Both views are the same object — this is about what a consumer's type says it
+ * may call, not about isolating instances.
+ */
+export function splitPreferenceRepository(
+  repository: unknown,
+): { bands: BandRepository; groups: BandGroupRepository } {
+  return {
+    bands: assertBandRepository(repository),
+    groups: assertBandGroupRepository(repository),
+  };
 }
 
 type PreferenceConfig = {

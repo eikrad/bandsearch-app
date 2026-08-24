@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertBandRepository, assertBandGroupRepository, assertPreferenceRepository } from "../src/preferences/preferenceRepository.js";
+import { assertBandRepository, assertBandGroupRepository, assertPreferenceRepository, splitPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 import { createInMemoryPreferenceRepository } from "../src/preferences/preferenceMemory.js";
 
 const noop = async () => {};
@@ -79,4 +79,26 @@ test("the in-memory adapter satisfies assertBandRepository", () => {
 test("the in-memory adapter satisfies assertBandGroupRepository", () => {
   const resolved = assertBandGroupRepository(createInMemoryPreferenceRepository());
   assert.equal(typeof resolved.createGroup, "function");
+});
+
+// The factory hands out one object per storage backend, but no consumer should
+// hold all eleven methods: the routes need bands and groups separately, and the
+// recommendation pipeline needs nothing but listSavedBands. splitPreferenceRepository
+// is what lets each side declare only what it uses.
+test("splitPreferenceRepository exposes the band and group halves separately", () => {
+  const { bands, groups } = splitPreferenceRepository(createInMemoryPreferenceRepository());
+
+  assert.equal(typeof bands.listSavedBands, "function");
+  assert.equal(typeof groups.listGroups, "function");
+  assert.equal("listGroups" in bands, true, "the halves are views on one backend, not copies");
+});
+
+test("splitPreferenceRepository rejects a backend missing a band method", () => {
+  const incomplete = without({ ...bandRepositoryStub(), ...bandGroupRepositoryStub() }, "listSavedBands");
+  assert.throws(() => splitPreferenceRepository(incomplete), /missing method listSavedBands/);
+});
+
+test("splitPreferenceRepository rejects a backend missing a group method", () => {
+  const incomplete = without({ ...bandRepositoryStub(), ...bandGroupRepositoryStub() }, "createGroup");
+  assert.throws(() => splitPreferenceRepository(incomplete), /missing method createGroup/);
 });

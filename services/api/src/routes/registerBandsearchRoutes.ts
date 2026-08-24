@@ -25,7 +25,7 @@ type TursoClient = { execute: (sql: string) => Promise<unknown> };
 export type BandsearchRouteContext = {
   appVersion: string;
   recommendationsLimiter: RequestHandler;
-  resolvedPreferenceRepository: {
+  resolvedBandRepository: {
     addSavedBand: (body: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
     listSavedBands: (userId?: string) => Promise<SavedBand[]>;
     updateSavedBand: (
@@ -34,6 +34,8 @@ export type BandsearchRouteContext = {
       userId?: string,
     ) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
     deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; deletedId?: string; status?: number }>;
+  };
+  resolvedBandGroupRepository: {
     importSavedBands: (bands: unknown[], userId?: string) => Promise<{ imported: number; skipped: number; failed: number }>;
     listGroups: (userId?: string) => Promise<Group[]>;
     createGroup: (name: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; group?: Group }>;
@@ -82,7 +84,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   const {
     appVersion,
     recommendationsLimiter,
-    resolvedPreferenceRepository,
+    resolvedBandRepository,
+    resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
     resolvedArtistImageClient,
     resolvedChatSessionRepository,
@@ -284,7 +287,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.post("/preferences", async (req, res) => {
-    const result = await resolvedPreferenceRepository.addSavedBand(req.body, req.userId);
+    const result = await resolvedBandRepository.addSavedBand(req.body, req.userId);
     if (!result.ok) {
       return sendError(res, 400, "validation_error", result.error ?? "validation failed");
     }
@@ -292,12 +295,12 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.get("/preferences", async (req, res) => {
-    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
+    const savedBands = await resolvedBandRepository.listSavedBands(req.userId);
     return res.status(200).json({ savedBands });
   });
 
   app.patch("/preferences/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.updateSavedBand(req.params.id, req.body || {}, req.userId);
+    const result = await resolvedBandRepository.updateSavedBand(req.params.id, req.body || {}, req.userId);
     if (!result.ok) {
       const status = result.status ?? 400;
       return sendError(res, status, "preference_update_failed", result.error ?? "update failed");
@@ -306,7 +309,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.deleteSavedBand(req.params.id, req.userId);
+    const result = await resolvedBandRepository.deleteSavedBand(req.params.id, req.userId);
     if (!result.ok) {
       const status = result.status ?? 404;
       return sendError(res, status, "preference_delete_failed", result.error ?? "delete failed");
@@ -315,12 +318,12 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.get("/preferences/context", async (req, res) => {
-    const context = await buildSavedBandContext(resolvedPreferenceRepository, { userId: req.userId });
+    const context = await buildSavedBandContext(resolvedBandRepository, { userId: req.userId });
     return res.status(200).json({ context });
   });
 
   app.get("/preferences/export", async (req, res) => {
-    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
+    const savedBands = await resolvedBandRepository.listSavedBands(req.userId);
     res.setHeader("Content-Disposition", 'attachment; filename="bandsearch-artists.json"');
     return res.status(200).json(savedBands);
   });
@@ -329,35 +332,35 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     if (!Array.isArray(req.body)) {
       return sendError(res, 400, "validation_error", "body must be an array of saved bands");
     }
-    const result = await resolvedPreferenceRepository.importSavedBands(req.body, req.userId);
+    const result = await resolvedBandGroupRepository.importSavedBands(req.body, req.userId);
     return res.status(200).json(result);
   });
 
   app.get("/preferences/groups", async (req, res) => {
-    const groups = await resolvedPreferenceRepository.listGroups(req.userId);
+    const groups = await resolvedBandGroupRepository.listGroups(req.userId);
     return res.status(200).json({ groups });
   });
 
   app.post("/preferences/groups/auto", async (req, res) => {
-    const savedBands = await resolvedPreferenceRepository.listSavedBands(req.userId);
-    const existingGroups = await resolvedPreferenceRepository.listGroups(req.userId);
+    const savedBands = await resolvedBandRepository.listSavedBands(req.userId);
+    const existingGroups = await resolvedBandGroupRepository.listGroups(req.userId);
     await inferAndApplyGroupAssignments(
       savedBands,
       existingGroups,
       {
         lookupArtist: (mbid) => resolvedMusicBrainzClient.lookupArtist!(mbid),
-        createGroup: (name, uid) => resolvedPreferenceRepository.createGroup(name, uid),
-        addArtistToGroup: (gid, bid, uid) => resolvedPreferenceRepository.addArtistToGroup(gid, bid, uid),
+        createGroup: (name, uid) => resolvedBandGroupRepository.createGroup(name, uid),
+        addArtistToGroup: (gid, bid, uid) => resolvedBandGroupRepository.addArtistToGroup(gid, bid, uid),
       },
       req.userId,
     );
-    const groups = await resolvedPreferenceRepository.listGroups(req.userId);
+    const groups = await resolvedBandGroupRepository.listGroups(req.userId);
     return res.status(200).json({ groups });
   });
 
   app.post("/preferences/groups", async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name : "";
-    const result = await resolvedPreferenceRepository.createGroup(name, req.userId);
+    const result = await resolvedBandGroupRepository.createGroup(name, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, result.status === 409 ? "group_name_conflict" : "validation_error", result.error ?? "failed");
     }
@@ -366,7 +369,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
 
   app.patch("/preferences/groups/:id", async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name : "";
-    const result = await resolvedPreferenceRepository.renameGroup(req.params.id, name, req.userId);
+    const result = await resolvedBandGroupRepository.renameGroup(req.params.id, name, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, "group_update_failed", result.error ?? "failed");
     }
@@ -374,7 +377,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/groups/:id", async (req, res) => {
-    const result = await resolvedPreferenceRepository.deleteGroup(req.params.id, req.userId);
+    const result = await resolvedBandGroupRepository.deleteGroup(req.params.id, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 404, "group_delete_failed", result.error ?? "failed");
     }
@@ -384,7 +387,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   app.post("/preferences/groups/:id/artists", async (req, res) => {
     const savedBandId = typeof req.body?.savedBandId === "string" ? req.body.savedBandId : "";
     if (!savedBandId) return sendError(res, 400, "validation_error", "savedBandId is required");
-    const result = await resolvedPreferenceRepository.addArtistToGroup(req.params.id, savedBandId, req.userId);
+    const result = await resolvedBandGroupRepository.addArtistToGroup(req.params.id, savedBandId, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 400, "group_member_add_failed", result.error ?? "failed");
     }
@@ -392,7 +395,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   });
 
   app.delete("/preferences/groups/:id/artists/:savedBandId", async (req, res) => {
-    const result = await resolvedPreferenceRepository.removeArtistFromGroup(req.params.id, req.params.savedBandId, req.userId);
+    const result = await resolvedBandGroupRepository.removeArtistFromGroup(req.params.id, req.params.savedBandId, req.userId);
     if (!result.ok) {
       return sendError(res, result.status ?? 404, "group_member_remove_failed", result.error ?? "failed");
     }
