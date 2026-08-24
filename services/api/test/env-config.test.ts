@@ -69,10 +69,13 @@ test("validateRuntimeEnv requires LangSmith API key when tracing enabled", () =>
   );
 });
 
-test("validateRuntimeEnv requires database URL when postgres store enabled", () => {
+// The Postgres adapter was removed. An existing deployment may still carry
+// PREFERENCE_STORE=postgres, and silently serving it SQLite would swap its
+// database without a word, so boot has to stop instead.
+test("validateRuntimeEnv rejects the removed postgres store instead of falling back", () => {
   assert.throws(
     () => validateRuntimeEnv({ ...REQUIRED, PREFERENCE_STORE: "postgres" }),
-    /DATABASE_URL is required/,
+    /PREFERENCE_STORE=postgres is no longer supported/,
   );
 });
 

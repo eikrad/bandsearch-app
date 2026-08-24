@@ -40,8 +40,6 @@ type AppRuntimeConfig = {
   corsOrigin?: string;
   databasePath?: string;
   preferenceStore?: string;
-  databaseUrl?: string;
-  databaseSsl?: boolean;
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
   musicBrainzTimeoutMs?: number;

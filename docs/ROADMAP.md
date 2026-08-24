@@ -9,8 +9,8 @@
 - Desktop chat UI foundation: recommendation cards, mode switching, save/rate actions, feedback states.
 - Preference memory: save bands, ratings, categories, notes.
 - Search modes: `fresh` and `preference-aware` (preference context wired through to Gemini prompt).
-- Persistence abstraction: `PreferenceRepository` interface with in-memory and Postgres implementations.
-- Database-backed preferences (Postgres/Supabase) with migration script.
+- Persistence abstraction: `PreferenceRepository` interface with in-memory and Postgres implementations. (Postgres removed later — see Architecture entry 8.)
+- Database-backed preferences (Postgres/Supabase) with migration script. (Postgres removed later — see Architecture entry 8.)
 - E2E smoke tests covering the full preference-aware recommendation chain.
 - Tauri desktop scaffold: native window, menu bar (About + Quit), API sidecar lifecycle (macOS + Linux).
 - Playwright browser smoke tests: verify the built app actually renders in a real browser. ✓ Done.
@@ -125,7 +125,7 @@ The chat session repository currently has only SQLite (`better-sqlite3`) and in-
 
 **Files:** `services/api/scripts/migrate.ts`
 
-The existing migration script targets local SQLite and Postgres. It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
+The existing migration script targets local SQLite and Postgres (Postgres since removed — see Architecture entry 8). It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
 
 **Action:**
 1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`. ✓ Done (`migrate.ts` handles `PREFERENCE_STORE=turso`)
@@ -232,7 +232,7 @@ Two behaviour changes worth knowing: SQLite no longer filters selected ids with 
 **Why the adapters were not split into separate files.** The entry justifies itself with "adding any method means touching four files", but splitting each adapter into a band module and a group module does not change that — it makes eight files, and a new band method still touches four of them. Each adapter talks to one database and legitimately implements both halves. What actually shrank the surface was deleting the two context methods from all four. `PreferenceRepository = BandRepository & BandGroupRepository` therefore stays, no longer as a "backwards compatibility during transition" placeholder but as the documented answer to "what one storage backend provides"; the separation that pays off is on the consuming side, and that is what `splitPreferenceRepository` gives.
 
 
-**Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
+**Files:** `services/api/src/preferences/` — the repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts` — since removed, see entry 8 — and `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
 
 All four implementations carry 13 methods covering three distinct concerns: band CRUD (4), context building for the recommendation pipeline (2), and group management (5 + import + status). Adding any method means touching four files.
 
@@ -297,7 +297,7 @@ The suite was green throughout: `routed-mount.test.ts` asserted only `element.ty
 
 ---
 
-### 8. Postgres adapter has no user scoping ← **next up**
+### 8. Postgres adapter has no user scoping ✓ Done — adapter removed
 
 **Files:** `services/api/src/preferences/postgresPreferenceRepository.ts`
 
@@ -306,3 +306,7 @@ Found while working on entry 2. `PREFERENCE_STORE=postgres` selects an adapter t
 Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE=turso`, and Phase 9 consolidates production on Turso — but the adapter ships and is one env var away.
 
 **Action:** Decide between fixing and removing. Fixing means threading `user_id` through the schema and every query, matching `sqlitePreferenceRepository.ts`, plus a migration for existing rows; it needs a real Postgres instance to verify, which the unit suite does not have. Removing deletes a backend nothing uses and takes the "four adapters" count down to three. Removal is the better trade unless Postgres is a deployment target someone actually wants.
+
+**Resolved by removal.** Phase 9 consolidates production on Turso, nothing deployed selects Postgres, and a backend without data isolation is risk without benefit. Gone: `postgresPreferenceRepository.ts` and its tests, the `pg` dependency and `@types/pg`, `migrations/001_create_saved_bands.sql` (Postgres-only DDL), `migratePostgres()` in `scripts/migrate.ts`, and `DATABASE_URL` / `DATABASE_SSL` from the runtime config. Three adapters remain: SQLite, Turso, in-memory.
+
+`PREFERENCE_STORE=postgres` now **fails at boot** rather than falling through to the SQLite default — a silent database swap on an existing deployment would be worse than a refused start. The guard sits in both `validateRuntimeEnv` and `createPreferenceRepository`, since `createApp` can be handed a runtime config directly. `npm run migrate` likewise refuses when `DATABASE_URL` is set instead of running the wrong migration.

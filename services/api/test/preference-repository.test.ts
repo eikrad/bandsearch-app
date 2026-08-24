@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertPreferenceRepository } from "../src/preferences/preferenceRepository.js";
+import { assertPreferenceRepository, createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
 import { createInMemoryPreferenceRepository } from "../src/preferences/preferenceMemory.js";
 
 test("assertPreferenceRepository accepts valid repository", () => {
@@ -26,5 +26,15 @@ test("assertPreferenceRepository requires the group methods too", () => {
         deleteSavedBand: async () => {},
       }),
     /missing method importSavedBands/,
+  );
+});
+
+// Defence in depth: createApp can be handed a runtime config directly, without
+// going through validateRuntimeEnv, so the factory refuses the removed store too
+// rather than quietly returning the SQLite default.
+test("createPreferenceRepository refuses the removed postgres store", () => {
+  assert.throws(
+    () => createPreferenceRepository({ preferenceStore: "postgres" }),
+    /PREFERENCE_STORE=postgres is no longer supported/,
   );
 });
