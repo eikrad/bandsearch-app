@@ -425,3 +425,41 @@ test("ChatAppView does not render retry button when loading", () => {
 
   assert.equal(html.includes(">retry<"), false, "retry button not shown while loading");
 });
+
+test("a user is told they are talking to an AI before they type anything", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [],
+        messages: [],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.match(
+    html,
+    /AI-generated recommendations/i,
+    "empty state discloses that recommendations come from an AI",
+  );
+  assert.match(html, /Gemini/, "the disclosure names the model provider");
+});
+
+test("the AI disclosure stays visible while results are on screen", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [cardViewProps({ title: "Fen", why: "Atmospheric overlap" })],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.match(html, /AI-generated recommendations/i, "disclosure persists once results are shown");
+});

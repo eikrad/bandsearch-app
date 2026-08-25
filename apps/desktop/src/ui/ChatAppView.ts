@@ -915,6 +915,19 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
           searchInFlight ? "Searching…" : "Recommend",
         ),
       ),
+      React.createElement(
+        "p",
+        {
+          className: "bandsearch-ai-disclosure",
+          style: {
+            fontSize: "11px",
+            color: theme.textTertiary,
+            margin: "8px 0 0",
+            lineHeight: 1.4,
+          },
+        },
+        "AI-generated recommendations — Google Gemini writes the picks and the explanations, verified against MusicBrainz. Not a human curator.",
+      ),
     ),
   );
 }
