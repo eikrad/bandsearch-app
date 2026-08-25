@@ -91,3 +91,28 @@ test("createHashRouter fires onRouteChange callback when navigating", () => {
   assert.equal(changes[0], "saved");
   assert.equal(changes[1], "home");
 });
+
+test("a user can reach the privacy policy by URL", () => {
+  const router = createHashRouter({
+    getHash: () => "#/privacy",
+    setHash: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+  });
+
+  assert.equal(router.getRoute(), "privacy");
+});
+
+test("navigating to the privacy policy sets a shareable hash", () => {
+  let hash = "";
+  const router = createHashRouter({
+    getHash: () => hash,
+    setHash: (next: string) => { hash = next; },
+    addListener: () => {},
+    removeListener: () => {},
+  });
+
+  router.navigate("privacy");
+
+  assert.equal(hash, "#/privacy");
+});

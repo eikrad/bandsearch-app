@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ChatAppView } from "./ChatAppView.js";
 import { SavedArtistsView } from "./SavedArtistsView.js";
 import { SettingsView } from "./SettingsView.js";
+import { PrivacyPolicyView } from "./PrivacyPolicyView.js";
 import { WelcomeView } from "./WelcomeView.js";
 import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
@@ -147,6 +148,16 @@ export function createDesktopReactMount({
       return viewProps;
     }
 
+    if (route === "privacy") {
+      root.render(
+        React.createElement(PrivacyPolicyView as unknown as ViewComponentLike, {
+          viewProps: {},
+          handlers: privacyHandlers,
+        }),
+      );
+      return {};
+    }
+
     if (route === "settings") {
       const viewProps = await Promise.resolve(getSettingsViewProps());
       root.render(
@@ -242,6 +253,17 @@ export function createDesktopReactMount({
     },
     onSaveApiEndpointUrl: async (url: string) => {
       await saveApiEndpointUrl(url);
+      return renderCurrent();
+    },
+    onNavigatePrivacy: async () => {
+      if (router) router.navigate("privacy");
+      return renderCurrent();
+    },
+  };
+
+  const privacyHandlers = {
+    onBack: async () => {
+      if (router) router.navigate("settings");
       return renderCurrent();
     },
   };
