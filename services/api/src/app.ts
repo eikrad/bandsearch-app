@@ -54,6 +54,7 @@ type AppRuntimeConfig = {
   evalDashboardPassword?: string;
   jwtSecret?: string;
   evalDashboardEnabled?: boolean;
+  evalRetentionDays?: number;
 };
 
 type CreateAppOptions = {
@@ -230,6 +231,23 @@ export function createApp({
         return createInMemoryEvalRepository();
       }
     })();
+  // GDPR Art. 5(1)(e): enforce the stated retention period for pipeline
+  // telemetry. Only armed where the eval store is real — with the no-op
+  // repository (the production default, EVAL_DASHBOARD_ENABLED=false) there is
+  // nothing persisted to purge. .unref() so it never holds the process open,
+  // which would hang `node --test` and the CLI scripts.
+  if (runtimeConfig.evalDashboardEnabled) {
+    const retentionDays = runtimeConfig.evalRetentionDays ?? 90;
+    const purgeExpiredEvents = () => {
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+      void resolvedEvalRepository.purgeEventsOlderThan(cutoff).catch(() => {
+        // A failed purge must never take the API down; the next tick retries.
+      });
+    };
+    purgeExpiredEvents();
+    setInterval(purgeExpiredEvents, 24 * 60 * 60 * 1000).unref();
+  }
+
   const resolvedJudgeWorker = runtimeConfig.mistralApiKey
     ? createJudgeWorker({
         anthropicApiKey: runtimeConfig.mistralApiKey, // Use Mistral API key

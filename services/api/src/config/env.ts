@@ -97,5 +97,7 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     tursoAuthToken,
     jwtSecret,
     evalDashboardEnabled: normalizeBoolean(env.EVAL_DASHBOARD_ENABLED, false),
+    // GDPR Art. 5(1)(e): telemetry needs a stated period, and "forever" is not one.
+    evalRetentionDays: parseNumber(env.EVAL_RETENTION_DAYS, 90),
   };
 }
