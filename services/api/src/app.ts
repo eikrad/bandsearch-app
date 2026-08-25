@@ -27,6 +27,9 @@ import { createWikidataImageClient } from "./integrations/wikidataImageClient.js
 import { createPreferenceRepository, splitPreferenceRepository } from "./preferences/preferenceRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "./sessions/chatSessionRepository.js";
 import { createTursoChatSessionRepository } from "./sessions/tursoChatSessionRepository.js";
+import { createSqliteUserDataStore } from "./privacy/userDataStore.js";
+import { createTursoUserDataStore } from "./privacy/tursoUserDataStore.js";
+import type { UserDataStore } from "./privacy/userDataStore.js";
 import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
 import { createTursoUserRepository } from "./auth/tursoUserRepository.js";
 import { createAuthService } from "./auth/authService.js";
@@ -60,6 +63,7 @@ type CreateAppOptions = {
   };
   preferenceRepository?: PreferenceRepository;
   userRepository?: UserRepository;
+  userDataStore?: UserDataStore;
   musicBrainzClient?: BandsearchRouteContext["resolvedMusicBrainzClient"];
   artistImageClient?: BandsearchRouteContext["resolvedArtistImageClient"];
   chatSessionRepository?: BandsearchRouteContext["resolvedChatSessionRepository"];
@@ -74,6 +78,7 @@ export function createApp({
   recommendationPipeline,
   preferenceRepository,
   userRepository,
+  userDataStore,
   musicBrainzClient,
   artistImageClient,
   chatSessionRepository,
@@ -138,6 +143,19 @@ export function createApp({
       lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
+  // One SQLite handle for every repository that wants one. Previously each
+  // resolver opened its own connection to the same file; memoizing gives
+  // fewer handles and one place to set pragmas later.
+  //
+  // preferenceRepository.ts deliberately keeps its own connection — it is the
+  // only one with foreign_keys=ON, and merging it would change enforcement
+  // semantics for artist_group_members.
+  let sqliteDatabase: Database.Database | null = null;
+  const openSqliteDatabase = () => {
+    sqliteDatabase ??= new Database(runtimeConfig.databasePath || "bandsearch.db");
+    return sqliteDatabase;
+  };
+
   const sharedTursoClient =
     !chatSessionRepository && !userRepository && runtimeConfig.preferenceStore === "turso"
       ? createClient({
@@ -151,8 +169,7 @@ export function createApp({
     (() => {
       if (sharedTursoClient) return createTursoChatSessionRepository({ client: sharedTursoClient });
       try {
-        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
-        return createSqliteChatSessionRepository({ db });
+        return createSqliteChatSessionRepository({ db: openSqliteDatabase() });
       } catch {
         return createInMemoryChatSessionRepository();
       }
@@ -163,16 +180,38 @@ export function createApp({
     (() => {
       if (sharedTursoClient) return createTursoUserRepository({ client: sharedTursoClient });
       try {
-        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
-        return createSqliteUserRepository({ db });
+        return createSqliteUserRepository({ db: openSqliteDatabase() });
       } catch {
         return createInMemoryUserRepository();
       }
     })();
 
+  // Where a user's rows actually live, resolved the same way the other
+  // repositories are. Null on backends that cannot erase (in-memory), so
+  // deletion reports itself unavailable rather than silently succeeding.
+  const resolvedUserDataStore: UserDataStore | null =
+    userDataStore ??
+    (() => {
+      if (sharedTursoClient) return createTursoUserDataStore({ client: sharedTursoClient });
+      // An in-memory install has nothing durable to erase from. Returning null
+      // makes deletion report itself unavailable, which is the honest answer —
+      // an erasure that reports success without erasing is worse than one that
+      // admits it cannot run.
+      if (runtimeConfig.preferenceStore === "memory") return null;
+      try {
+        return createSqliteUserDataStore({ db: openSqliteDatabase() });
+      } catch {
+        return null;
+      }
+    })();
+
   const jwtSecret = runtimeConfig.jwtSecret;
   const resolvedAuthService = jwtSecret
-    ? createAuthService({ userRepository: resolvedUserRepository, jwtSecret })
+    ? createAuthService({
+        userRepository: resolvedUserRepository,
+        jwtSecret,
+        userDataStore: resolvedUserDataStore,
+      })
     : null;
   const authMiddleware = resolvedAuthService
     ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
@@ -186,8 +225,7 @@ export function createApp({
     (() => {
       if (!runtimeConfig.evalDashboardEnabled) return createNoOpEvalRepository();
       try {
-        const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
-        return createSqliteEvalRepository({ db });
+        return createSqliteEvalRepository({ db: openSqliteDatabase() });
       } catch {
         return createInMemoryEvalRepository();
       }
@@ -224,6 +262,7 @@ export function createApp({
     logger,
     resolvedAuthService: resolvedAuthService ?? undefined,
     authMiddleware: authMiddleware ?? undefined,
+    resolvedUserDataStore,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
         ? () => recommendationPipeline.getReadinessSnapshot!()
