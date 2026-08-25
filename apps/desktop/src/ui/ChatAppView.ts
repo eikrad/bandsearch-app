@@ -200,11 +200,17 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
       fontStyle: "italic",
     },
     actions: { display: "flex", gap: "8px", flexWrap: isMobile ? "wrap" : "nowrap" } as React.CSSProperties,
+    aiNote: { fontSize: "11px", color: theme.textTertiary, margin: "0 0 8px", lineHeight: 1.4 },
   };
 
   return React.createElement(
     "article",
-    { className: "recommendation-card", style: cardStyles.article },
+    {
+      className: "recommendation-card",
+      style: cardStyles.article,
+      // EU AI Act Art. 50(2): machine-readable marking of AI-generated text.
+      "data-ai-generated": "true",
+    },
     card.imageUrl
       ? React.createElement("img", {
           src: card.imageUrl,
@@ -235,6 +241,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
         : null,
     ),
     card.why ? React.createElement("p", { style: cardStyles.why }, card.why) : null,
+    card.why ? React.createElement("p", { style: cardStyles.aiNote }, "AI-generated, not human-curated") : null,
     (card.country || card.genres?.length)
       ? React.createElement(
           "p",

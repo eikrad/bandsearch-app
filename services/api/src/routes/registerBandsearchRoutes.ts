@@ -266,10 +266,21 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         });
       }
 
+      // EU AI Act Art. 50(2): layered provenance for the generated prose.
+      // Model id is deliberately absent — it is a per-node default across the
+      // agent files with no path into meta; tracked as a follow-up.
+      const provenance = {
+        aiGenerated: true,
+        generatedAt: new Date().toISOString(),
+        pipelineVersion: appVersion,
+      };
+
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: eventId !== undefined ? { ...publicMeta, eventId } : publicMeta,
+        meta: eventId !== undefined
+          ? { ...publicMeta, ...provenance, eventId }
+          : { ...publicMeta, ...provenance },
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
