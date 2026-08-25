@@ -68,6 +68,7 @@ export interface DesktopReactMountOptions {
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
   onExportAccountData?: () => Promise<Record<string, unknown>>;
+  onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -88,6 +89,7 @@ export function createDesktopReactMount({
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
   onExportAccountData,
+  onDeleteAccount,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
@@ -273,6 +275,15 @@ export function createDesktopReactMount({
       a.download = "bandsearch-account-data.json";
       a.click();
       URL.revokeObjectURL(url);
+    },
+    onDeleteAccount: async (password: string) => {
+      if (!onDeleteAccount) return;
+      const result = await onDeleteAccount(password);
+      if (!result.ok) return renderCurrent();
+      // Erasing the only account puts the install back to zero users, which is
+      // the first-run state — so send them where a fresh install starts.
+      if (router) router.navigate("register");
+      return renderCurrent();
     },
   };
 

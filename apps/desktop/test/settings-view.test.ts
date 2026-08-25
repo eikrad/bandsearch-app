@@ -265,3 +265,30 @@ test("choosing the privacy policy navigates to it", () => {
   assert.ok(html.length > 0);
   assert.equal(navigated, false, "navigation only happens on click, not on render");
 });
+
+test("deleting an account asks for the password before it does anything", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, accountsEnabled: true },
+      handlers: { ...baseHandlers, onDeleteAccount: () => {} },
+    }),
+  );
+
+  assert.match(html, /Delete account/, "the control is offered");
+  assert.equal(
+    html.includes('name="delete-account-password"'),
+    false,
+    "the password field only appears after the first click, never on load",
+  );
+});
+
+test("settings hides account deletion when accounts are not enabled", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, accountsEnabled: false },
+      handlers: { ...baseHandlers, onDeleteAccount: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Delete account"), false, "no account, nothing to delete");
+});
