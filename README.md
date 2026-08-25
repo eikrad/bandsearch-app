@@ -161,6 +161,37 @@ Set `JWT_SECRET` in your environment for persistent sessions across restarts.
 
 ---
 
+## Privacy & transparency
+
+Bandsearch is a minimal-risk AI system under the EU AI Act, and the transparency
+duty in Art. 50 applies to it. Two disclosures ship in the UI: a permanent line
+in the chat composer stating that recommendations come from Google Gemini, and a
+per-recommendation "AI-generated, not human-curated" caption. Recommendation
+cards also carry `data-ai-generated="true"`, and `/recommendations` returns
+`aiGenerated`, `generatedAt` and `pipelineVersion` in its `meta`.
+
+The privacy policy lives in `apps/desktop/src/ui/privacyPolicyText.ts` and is
+readable in-app at `#/privacy`, linked from **Settings → Privacy & data**. It
+names every processor that receives data (Gemini, Brave Search, MusicBrainz,
+optional Last.fm, Turso), the lawful basis for each kind of processing, the
+retention periods, and how to exercise your rights.
+
+Two GDPR endpoints back the Settings controls:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /account/export` | Art. 15/20 — everything held about the account: profile, saved bands, groups, chat sessions with messages, feedback |
+| `POST /account/delete` | Art. 17 — erases every user-scoped row, password-confirmed |
+
+Erasure is an explicit transactional delete driven by one shared
+`USER_SCOPED_TABLES` list (`services/api/src/privacy/userDataStore.ts`), not a
+foreign-key cascade: SQLite enforces foreign keys per connection while libSQL
+enforces by default, so a cascade would fire on Turso and silently not fire on
+SQLite. A test walks the real schema and fails if a table gains a `user_id`
+column without being added to that list.
+
+---
+
 ## Storage
 
 Bandsearch uses two persistence domains:
@@ -199,6 +230,7 @@ Common optional variables:
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
+| `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
 
