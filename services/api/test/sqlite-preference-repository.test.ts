@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { createSqlitePreferenceRepository } from "../src/preferences/sqlitePreferenceRepository.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
+import { buildSavedBandContext } from "../src/savedBandContext.js";
 
 function createTestDb() {
   const db = new Database(":memory:");
@@ -141,18 +142,18 @@ test("sqlite repository builds preference context from saved bands", async () =>
     note: "Transcendent",
   });
 
-  const context = await repo.buildContext();
+  const context = await buildSavedBandContext(repo);
   assert.ok(context.includes("Sunn O)))"), "context must include band name");
   assert.ok(context.includes("5/5"), "context must include rating");
 });
 
 test("sqlite repository returns empty string context when no bands saved", async () => {
   const repo = createSqlitePreferenceRepository({ db: createTestDb() });
-  const context = await repo.buildContext();
+  const context = await buildSavedBandContext(repo);
   assert.equal(context, "");
 });
 
-test("sqlite repository buildContextForIds returns context for given ids", async () => {
+test("sqlite repository context for ids returns context for given ids", async () => {
   const repo = createSqlitePreferenceRepository({ db: createTestDb() });
 
   const r1 = await repo.addSavedBand({ musicbrainzArtistId: "mb-1", name: "Alcest", rating: 5, categories: ["blackgaze"], note: "dreamy" });
@@ -160,14 +161,14 @@ test("sqlite repository buildContextForIds returns context for given ids", async
 
   assertRecord(r1.savedBand);
   assert.ok(typeof r1.savedBand.id === "string");
-  const context = await repo.buildContextForIds([r1.savedBand.id]);
+  const context = await buildSavedBandContext(repo, { ids: [r1.savedBand.id] });
 
   assert.equal(context.includes("Alcest"), true);
   assert.equal(context.includes("Fen"), false, "should only include given ids");
 });
 
-test("sqlite repository buildContextForIds returns empty string for unknown ids", async () => {
+test("sqlite repository context for ids returns empty string for unknown ids", async () => {
   const repo = createSqlitePreferenceRepository({ db: createTestDb() });
-  const context = await repo.buildContextForIds(["not-a-real-id"]);
+  const context = await buildSavedBandContext(repo, { ids: ["not-a-real-id"] });
   assert.equal(context, "");
 });

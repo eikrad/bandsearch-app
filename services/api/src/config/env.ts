@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { POSTGRES_REMOVED_MESSAGE } from "../preferences/preferenceRepository.js";
 
 function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -34,25 +35,25 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     throw new Error("LANGSMITH_API_KEY is required when LANGSMITH_TRACING=true");
   }
 
+  if (env.PREFERENCE_STORE === "postgres") {
+    throw new Error(POSTGRES_REMOVED_MESSAGE);
+  }
   const preferenceStore =
-    env.PREFERENCE_STORE === "postgres"
-      ? "postgres"
-      : env.PREFERENCE_STORE === "turso"
-        ? "turso"
+    env.PREFERENCE_STORE === "turso"
+      ? "turso"
+      : env.PREFERENCE_STORE === "turso-sync"
+        ? "turso-sync"
         : env.PREFERENCE_STORE === "memory"
           ? "memory"
           : "sqlite";
 
-  const databaseSsl = normalizeBoolean(env.DATABASE_SSL, true);
-  const databaseUrl = env.DATABASE_URL || "";
   const databasePath = env.DATABASE_PATH || "bandsearch.db";
   const tursoDatabaseUrl = env.TURSO_DATABASE_URL || "";
+  // Local replica for turso-sync. Sibling files (-wal, -info) sit next to it.
+  const tursoSyncPath = env.TURSO_SYNC_PATH || "bandsearch-sync.db";
   const tursoAuthToken = env.TURSO_AUTH_TOKEN || "";
 
-  if (preferenceStore === "postgres" && !databaseUrl) {
-    throw new Error("DATABASE_URL is required when PREFERENCE_STORE=postgres");
-  }
-  if (preferenceStore === "turso" && !tursoDatabaseUrl) {
+  if ((preferenceStore === "turso" || preferenceStore === "turso-sync") && !tursoDatabaseUrl) {
     throw new Error("TURSO_DATABASE_URL is required when PREFERENCE_STORE=turso");
   }
 
@@ -90,10 +91,9 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     musicBrainzRetries,
     corsOrigin: env.CORS_ORIGIN || "*",
     preferenceStore,
-    databaseUrl,
-    databaseSsl,
     databasePath,
     tursoDatabaseUrl,
+    tursoSyncPath,
     tursoAuthToken,
     jwtSecret,
     evalDashboardEnabled: normalizeBoolean(env.EVAL_DASHBOARD_ENABLED, false),

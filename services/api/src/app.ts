@@ -24,7 +24,7 @@ const { version: appVersion } = require("../../../package.json") as { version: s
 
 import { createMusicBrainzClient } from "./integrations/musicbrainz.js";
 import { createWikidataImageClient } from "./integrations/wikidataImageClient.js";
-import { assertPreferenceRepository, createPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { createPreferenceRepository, splitPreferenceRepository } from "./preferences/preferenceRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "./sessions/chatSessionRepository.js";
 import { createTursoChatSessionRepository } from "./sessions/tursoChatSessionRepository.js";
 import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
@@ -40,8 +40,6 @@ type AppRuntimeConfig = {
   corsOrigin?: string;
   databasePath?: string;
   preferenceStore?: string;
-  databaseUrl?: string;
-  databaseSsl?: boolean;
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
   musicBrainzTimeoutMs?: number;
@@ -123,9 +121,10 @@ export function createApp({
     },
   });
 
-  const resolvedPreferenceRepository = assertPreferenceRepository(
-    preferenceRepository || createPreferenceRepository(runtimeConfig),
-  );
+  // One backend, handed on as two narrow views: the routes take the half they
+  // touch, and the recommendation pipeline sees only the band side.
+  const { bands: resolvedBandRepository, groups: resolvedBandGroupRepository } =
+    splitPreferenceRepository(preferenceRepository || createPreferenceRepository(runtimeConfig));
 
   const resolvedMusicBrainzClient = musicBrainzClient || createMusicBrainzClient({
     timeoutMs: runtimeConfig.musicBrainzTimeoutMs,
@@ -215,7 +214,8 @@ export function createApp({
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
-    resolvedPreferenceRepository,
+    resolvedBandRepository,
+    resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
     resolvedArtistImageClient,
     resolvedChatSessionRepository,

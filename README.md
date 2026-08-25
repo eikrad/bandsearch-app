@@ -13,7 +13,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 - **Preference memory** — save and rate bands; future recommendations adapt to your listening history
 - **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
 - **Native desktop app** — Tauri shell for Linux, macOS, and Windows; API keys stored in the OS config directory
-- **Flexible storage** — SQLite by default, PostgreSQL or Turso for shared/cloud deployments
+- **Flexible storage** — SQLite by default, Turso for shared/cloud deployments
 - **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config
 
 ## How it works
@@ -67,7 +67,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
 | Desktop shell | Tauri v2 (Rust) + React + TypeScript |
-| Database | SQLite / PostgreSQL / Turso (pluggable) |
+| Database | SQLite / Turso (pluggable) |
 | Auth | bcrypt + JWT (30-day sessions) |
 
 ---
@@ -172,10 +172,10 @@ Bandsearch uses two persistence domains:
 |--------------------|-------------|
 | `sqlite` (default) | Local file, zero-config, data survives restarts |
 | `memory` | In-process only, data lost on restart |
-| `postgres` | PostgreSQL / Supabase; run `npm run migrate` after setup |
-| `turso` | Turso cloud SQLite — enables cross-device sync |
+| `turso` | Turso cloud SQLite — every statement goes over the network |
+| `turso-sync` | Local replica synced with Turso Cloud — reads and writes stay local, so the app keeps working offline |
 
-See `.env.example` for the connection variables needed for each backend (`DATABASE_URL`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`).
+See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 
 ---
 
@@ -194,7 +194,8 @@ Common optional variables:
 |----------|---------|-------------|
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
-| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `postgres`, or `turso` |
+| `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
+| `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |

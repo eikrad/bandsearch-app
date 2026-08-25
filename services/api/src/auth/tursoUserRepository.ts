@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Client as LibSQLClient } from "@libsql/client";
+import type { TursoClient } from "../turso/tursoClient.js";
 import type { UserRepository } from "./userRepository";
 import { normalizeEmail, publicUser, rowToUser } from "./userModel.js";
 
-export function createTursoUserRepository({ client }: { client: LibSQLClient }): UserRepository {
+export function createTursoUserRepository({ client }: { client: TursoClient }): UserRepository {
   return {
     async countUsers() {
       const result = await client.execute({ sql: "SELECT COUNT(*) as n FROM users", args: [] });

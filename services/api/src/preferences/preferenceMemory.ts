@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
-import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 import type { PreferenceRepository } from "./preferenceRepository.js";
 
 export { validateSavedBandInput };
@@ -123,20 +122,6 @@ export function createPreferenceMemory() {
 
       const [deleted] = savedBands.splice(index, 1);
       return { ok: true, deletedId: deleted.id };
-    },
-
-    async buildContext(userId = DEFAULT_USER) {
-      const userBands = savedBands.filter((b) => b.userId === userId);
-      if (userBands.length === 0) return "";
-      return userBands.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
-    },
-
-    async buildContextForIds(ids: string[], userId = DEFAULT_USER) {
-      if (!ids || ids.length === 0) return "";
-      const want = new Set(ids);
-      const filtered = savedBands.filter((b) => b.userId === userId && want.has(b.id));
-      if (filtered.length === 0) return "";
-      return filtered.map(withoutUserId).map(formatSavedBandContextLine).join("\n");
     },
 
     async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {

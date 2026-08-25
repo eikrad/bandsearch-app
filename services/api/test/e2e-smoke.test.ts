@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { createApp } from "../src/app.js";
 import { createPreferenceRepository } from "../src/preferences/preferenceRepository.js";
+import { buildSavedBandContext } from "../src/savedBandContext.js";
 
 function asRecord(value: unknown): asserts value is Record<string, unknown> {
   assert.equal(typeof value, "object");
@@ -59,7 +60,7 @@ function buildStack({ onRunModel }: { onRunModel: (args: ModelArgs) => void }) {
       const query = typeof input.query === "string" ? input.query : "";
       const mode = input.mode;
       const modeUsed = mode === "preference-aware" ? "preference-aware" : "fresh";
-      const preferenceContext = modeUsed === "preference-aware" ? await preferenceRepository.buildContext() : "";
+      const preferenceContext = modeUsed === "preference-aware" ? await buildSavedBandContext(preferenceRepository) : "";
       onRunModel({
         query,
         preferenceContext,
