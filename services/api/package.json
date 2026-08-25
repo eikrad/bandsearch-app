@@ -13,8 +13,8 @@
     "create-user": "tsx scripts/create-user.ts"
   },
   "dependencies": {
+    "@langchain/langgraph": "^1.4.12",
     "@langchain/google-genai": "^2.3.0",
-    "@langchain/langgraph": "^1.3.2",
     "@libsql/client": "^0.17.4",
     "@tursodatabase/sync": "^0.7.2",
     "bcryptjs": "^3.0.3",
