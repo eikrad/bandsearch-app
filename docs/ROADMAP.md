@@ -9,8 +9,8 @@
 - Desktop chat UI foundation: recommendation cards, mode switching, save/rate actions, feedback states.
 - Preference memory: save bands, ratings, categories, notes.
 - Search modes: `fresh` and `preference-aware` (preference context wired through to Gemini prompt).
-- Persistence abstraction: `PreferenceRepository` interface with in-memory and Postgres implementations.
-- Database-backed preferences (Postgres/Supabase) with migration script.
+- Persistence abstraction: `PreferenceRepository` interface with in-memory and Postgres implementations. (Postgres removed later — see Architecture entry 8.)
+- Database-backed preferences (Postgres/Supabase) with migration script. (Postgres removed later — see Architecture entry 8.)
 - E2E smoke tests covering the full preference-aware recommendation chain.
 - Tauri desktop scaffold: native window, menu bar (About + Quit), API sidecar lifecycle (macOS + Linux).
 - Playwright browser smoke tests: verify the built app actually renders in a real browser. ✓ Done.
@@ -48,6 +48,22 @@
 - Foundation for Phase 6 multi-user: Turso supports per-user namespacing and row-level security.
 
 Implemented: `POST /preferences/turso/test` connection probe; Turso URL + token configurable in Settings with save-and-test flow; Tauri backend persists credentials and restarts the API with `PREFERENCE_STORE=turso`; `PREFERENCE_STORE=turso` activates `TursoPreferenceRepository` (fully implemented including groups/export).
+
+**Correction — the offline half was claimed but not built.** The first bullet promises that "the desktop writes locally (offline-capable) and syncs automatically to the cloud". `PREFERENCE_STORE=turso` never did that: it creates a plain remote `@libsql/client`, so every single statement is a network round trip and the app is unusable without a connection. The entry read `✓ Done` for months while half of it did not exist.
+
+**Now delivered as `PREFERENCE_STORE=turso-sync`.** A local replica holds the full database; reads and writes hit the local file and are exchanged with Turso Cloud via `push()`/`pull()`. A failed exchange is logged, not thrown — the write is already durable locally and goes out on the next attempt, which is the whole point of local-first. Writes push immediately; a 60s timer pulls and pushes; startup syncs once before serving so a restart never answers from a stale replica.
+
+- `turso-sync` is a **separate store value**, not a flag on `turso`. An existing `PREFERENCE_STORE=turso` deployment (including Render, see `render.yaml`) keeps behaving exactly as before.
+- Config: `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` as usual, plus `TURSO_SYNC_PATH` for the replica file (default `bandsearch-sync.db`).
+- One client serves preferences, users and sessions. A second would mean a second replica file and a second sync loop racing the first, so `createTursoSyncRepositories()` builds all three from one.
+- `createPreferenceRepository()` refuses `turso-sync` rather than falling back to SQLite: opening a replica is asynchronous, and silently handing back a different database is the failure mode this entry is correcting.
+
+**Two things to know about this choice.**
+
+1. **`@tursodatabase/sync` is pre-1.0** (0.7.2, with 0.8.0-pre in flight), adopted deliberately. Turso's own docs point offline-write workloads here rather than at `@libsql/client`'s embedded-replica `offline` option, so this is the forward path — but it has not reached 1.0 and Turso recommends keeping independent backups. The dependency is confined to `turso/tursoSyncClient.ts`; everything above it talks to the `TursoClient` interface, which the remote client satisfies too. Swapping back is a one-line change in `server.ts`.
+2. **The package is ESM-only and this workspace compiles to CommonJS.** Its dependency `@tursodatabase/serverless` declares only an `import` condition, and tsx's CJS resolver fails on it with `ERR_PACKAGE_PATH_NOT_EXPORTED` — in tests and in production alike, since `npm start` is `tsx src/server.ts`. tsx 4.23.12 is the latest release, so there is no upgrade. `tursoSyncClient.ts` works around it with a `new Function("s", "return import(s)")` escape hatch, which stays a real dynamic `import()` that esbuild will not rewrite into a `require`. **The proper fix is to make `services/api` an ES module** — see Architecture entry 9.
+
+No native binary is published for `darwin-x64`; Apple Silicon, Linux (x64/arm64) and Windows x64 are covered. The release workflow already ships an ARM-only macOS sidecar, so this costs nothing today.
 
 ## Phase 6 — Auth and Multi-user ✓ Done
 
@@ -125,7 +141,7 @@ The chat session repository currently has only SQLite (`better-sqlite3`) and in-
 
 **Files:** `services/api/scripts/migrate.ts`
 
-The existing migration script targets local SQLite and Postgres. It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
+The existing migration script targets local SQLite and Postgres (Postgres since removed — see Architecture entry 8). It needs to also handle Turso so that the `chat_sessions`, `chat_messages`, `saved_bands`, `artist_groups`, and `artist_group_members` tables are created on the remote Turso database.
 
 **Action:**
 1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`. ✓ Done (`migrate.ts` handles `PREFERENCE_STORE=turso`)
@@ -218,13 +234,25 @@ Resolved — the inference logic now lives in `services/api/src/preferences/band
 
 ---
 
-### 2. Split the monolithic preference repository interface
+### 2. Split the monolithic preference repository interface ✓ Done
 
-**Files:** `services/api/src/preferences/` — all four repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts`, `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
+Done in `f7171fc`: `BandRepository` and `BandGroupRepository` are declared in `preferenceRepository.ts`, with `assertMethods` validating each set separately.
+
+**Resolved**, though not the way the action below proposed — see the note at the end.
+
+- `buildContext` / `buildContextForIds` are gone from all four adapters. They were eight copies of one rule that differed only in how they filtered, and the rule decides what the LLM sees rather than how bands are stored. They are now one `buildSavedBandContext(source, { ids, userId })` in `services/api/src/savedBandContext.ts`, next to the recommendation pipeline. `savedBandContextFormat.ts` folded into it. `BandRepository` is down from six methods to four.
+- Consumers now take only the half they use: `splitPreferenceRepository()` returns `{ bands, groups }` as two narrow views on one backend. The routes take `resolvedBandRepository` and `resolvedBandGroupRepository` separately, and the recommendation pipeline is handed the band half — its type asks for nothing but `listSavedBands`.
+
+Two behaviour changes worth knowing: SQLite no longer filters selected ids with a SQL `IN` clause but in memory, like the other three adapters already did; and an empty `selectedArtistIds` array is now explicitly a filter matching nothing rather than falling through to "every band", which the callers already assumed.
+
+**Why the adapters were not split into separate files.** The entry justifies itself with "adding any method means touching four files", but splitting each adapter into a band module and a group module does not change that — it makes eight files, and a new band method still touches four of them. Each adapter talks to one database and legitimately implements both halves. What actually shrank the surface was deleting the two context methods from all four. `PreferenceRepository = BandRepository & BandGroupRepository` therefore stays, no longer as a "backwards compatibility during transition" placeholder but as the documented answer to "what one storage backend provides"; the separation that pays off is on the consuming side, and that is what `splitPreferenceRepository` gives.
+
+
+**Files:** `services/api/src/preferences/` — the repository files (`sqlitePreferenceRepository.ts`, `tursoPreferenceRepository.ts`, `postgresPreferenceRepository.ts` — since removed, see entry 8 — and `preferenceMemory.ts`) plus the factory `preferenceRepository.ts`
 
 All four implementations carry 13 methods covering three distinct concerns: band CRUD (4), context building for the recommendation pipeline (2), and group management (5 + import + status). Adding any method means touching four files.
 
-**Action:** Split into two interfaces: `BandRepository` (CRUD + context building) and `BandGroupRepository` (group operations + import). Each adapter implements only its relevant interface. The factory selects both implementations for the active store. The context-building methods (`buildContext`, `buildContextForIds`) move closer to the recommendation pipeline, where the LLM prompt format is the real concern.
+**Action (original, superseded):** Split into two interfaces: `BandRepository` (CRUD + context building) and `BandGroupRepository` (group operations + import). Each adapter implements only its relevant interface. The factory selects both implementations for the active store. The context-building methods (`buildContext`, `buildContextForIds`) move closer to the recommendation pipeline, where the LLM prompt format is the real concern.
 
 ---
 
@@ -234,7 +262,12 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 ---
 
-### 4. Remove duplicated user repository helpers
+### 4. Remove duplicated user repository helpers ✓ Done
+
+Resolved in `2c7c7a1` — `normalizeEmail()`, `publicUser()` and `rowToUser()` live in `services/api/src/auth/userModel.ts`; both adapters import them; covered by `services/api/test/user-model.test.ts`.
+
+<details><summary>Original entry</summary>
+
 
 **Files:** `services/api/src/auth/userRepository.ts`, `tursoUserRepository.ts`
 
@@ -242,15 +275,13 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 **Action:** Move the three functions into a shared `services/api/src/auth/userModel.ts` module. Both adapters import from it. The factory in `userRepository.ts` is unchanged. Test `normalizeEmail` once in `userModel.test.ts`.
 
+</details>
+
 ---
 
-### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller
+### 5. Consolidate duplicate `gemini_config_status` reads in the desktop settings controller ✓ Done
 
-**Files:** `apps/desktop/src/geminiDesktopSettings.ts`
-
-`getBootstrapGate()` and `getSettingsViewProps()` both call `invokeTauri("gemini_config_status")` and parse the response independently. Any change to the response shape must be applied in two places, and a concurrent render after save could read two different snapshots.
-
-**Action:** Extract a private `readStatus()` async helper that invokes `gemini_config_status` once and returns the typed result. Both `getBootstrapGate` and `getSettingsViewProps` call it. Add a test that stubs `invokeTauri` and asserts it is called exactly once per `getSettingsViewProps` call.
+Resolved in `9bc4058` — `readStatus()` in `geminiDesktopSettings.ts` is the single read; `getBootstrapGate` and `getSettingsViewProps` both call it, and `gemini-desktop-settings.test.ts` asserts one `invokeTauri` call per invocation of each.
 
 ---
 
@@ -264,17 +295,46 @@ Resolved — `fetchWithTimeoutAndRetry` now lives in `services/api/src/integrati
 
 ---
 
-### 7. Saved artists: one screen served by two competing implementations ← **next up**
+### 7. Saved artists: one screen served by two competing implementations ✓ Done
 
-**Files:** `apps/desktop/src/savedArtistsModel.ts`, `apps/desktop/src/createSavedArtistsShell.ts`, `apps/desktop/src/ui/mountDesktopReactApp.ts`, `apps/desktop/src/index.ts`, `apps/desktop/src/ui/createDesktopReactShell.ts`
+Resolved — `createSavedArtistsShell` is the sole owner. `savedArtistsModel.ts` and its 199 lines of tests are gone, along with the `getSavedArtistsViewPropsImpl` seam and the app's view-flag state. Net −422/+28 in the deletion commit.
 
-Two modules hold saved-artists state and talk to the same app object, and which one serves the screen depends on how the app was assembled:
+**Correction to this entry's original premise.** It claimed the shell was "the path the running app uses" and the model the second path. It was the other way round, and both were broken:
 
-- **Live path:** `startDesktopBrowserApp.ts:108` builds `createSavedArtistsShell({ app })` and hands it to the mount; `mountDesktopReactApp` renders `SavedArtistsView` from `savedArtistsShell.getViewProps()`.
-- **Second path:** `index.ts` wires `savedArtistsModel.getScreenState()` into `createDesktopReactShell` as `getSavedArtistsViewPropsImpl`, which serves the same screen when `shell.getView() === "saved-artists"` and no `savedArtistsShell` was supplied.
+- The chat header's "Saved" button called `shell.navigate("saved-artists")`, which set a **view flag on the app and never touched the router**. The hash stayed `#/`, so the mount fell through to its default branch and served the screen from `savedArtistsModel` — rendered with the *chat* handler object, which has no `onExport`, `onImportFile`, `onCreateGroup`, `onDeleteGroup` or `onAutoGroup`. The view invokes those with `?.`, so Export, Import, "Group by genre" and Create silently did nothing, and the model's `groups` array was never written — the group list was permanently empty.
+- The `#/saved` route did reach the shell, but the shell returned `{savedArtists, groups, selectedIds, …}` where the view renders `header`, `artists`, `selectedCount`. It **threw** `TypeError: Cannot read properties of undefined (reading 'title')` on every visit. Reachable only by typing the hash or reloading on it, which is why nobody reported it.
+- `savedHandlers.onActivateStyleRef` was `async () => {}`, so "Use as style reference" worked only on the model path.
 
-The duplication had already rotted. Five `savedArtistsModel` methods (`exportArtists`, `importArtists`, `loadGroups`, `createGroup`, `autoGroupByGenre`) were unreachable from production code, and two of them called `app.importArtists` / `app.autoGroupByGenre` — which `bootstrapDesktopApp` never implemented; it exposes `importPreferences` / `autoGroup`. They would have thrown on first use. **The tests kept them alive** by supplying fakes that implemented the non-existent methods, so a green suite was asserting a contract the real app never fulfilled. Those five methods and their tests were deleted together with this entry; the two implementations themselves remain.
+The suite was green throughout: `routed-mount.test.ts` asserted only `element.type.name` without ever rendering, and `saved-artists-view.test.ts` fed the view a hand-written prop object. No test paired a real supplier with the real view — the same failure mode this entry already documented for the five deleted methods, one level up.
 
-Leftover symptom to expect: `savedArtistsModel`'s state still declares a `groups` field that nothing writes, because grouping lives only in the shell. It is kept deliberately so that `SavedArtistsScreenState` — the type `SavedArtistsView` renders against — stays whole. That is the thread to pull.
+**What changed.** `SavedArtistsViewProps` is now declared in `ui/viewTypes.ts` and owned by the view, so every supplier must satisfy a type none of them owns. The Saved button navigates the router, so `#/saved` is the only way in. Selection lives on the app (`toggleArtistSelection` / new `clearArtistSelection`), which is where `requestRecommendations` already read it from. `test/saved-artists-screen.test.ts` drives the real shell through the real view, and separately drives the mount's handler object, so both the prop-shape drift and the missing-handler wiring now have a test that fails when they regress.
 
-**Action:** Give the screen a single owner. `createSavedArtistsShell` is the better candidate: it is the path the running app uses, it owns grouping, and it reloads after mutations. Move over the two things only the model still has — selection state (`toggleSelection` / `clearSelection` / `getSelectedIds`, consumed by `activateStyleRefImpl` in `index.ts`) and the `isLoading` / `isSearching` flags — then delete `savedArtistsModel.ts` along with the `getSavedArtistsViewPropsImpl` seam in `createDesktopReactShell`. Give `SavedArtistsView` an explicit props type rather than one derived from whichever module survives, so the view stops being coupled to the winner. Verify by driving the screen end to end — search, add, select, activate style ref, create/auto group, import, export — since the two paths differ precisely in the mutation-and-reload behaviour that unit tests with fakes do not exercise.
+**Not covered:** `onExport` needs `Blob` / `URL.createObjectURL` / `document`, so it is exercised only through `exportArtists` on the shell, not through the mount handler.
+
+---
+
+### 8. Postgres adapter has no user scoping ✓ Done — adapter removed
+
+**Files:** `services/api/src/preferences/postgresPreferenceRepository.ts`
+
+Found while working on entry 2. `PREFERENCE_STORE=postgres` selects an adapter that ignores users entirely: `listSavedBands()` takes no `userId` and queries `SELECT * FROM saved_bands` with no `WHERE user_id`, and `addSavedBand` never writes a `user_id` column. The routes do pass `req.userId` — the argument is silently dropped. SQLite and Turso both scope correctly, so Phase 6's user-scoped ownership simply does not hold on this backend: every user reads and can delete every other user's saved bands.
+
+Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE=turso`, and Phase 9 consolidates production on Turso — but the adapter ships and is one env var away.
+
+**Action:** Decide between fixing and removing. Fixing means threading `user_id` through the schema and every query, matching `sqlitePreferenceRepository.ts`, plus a migration for existing rows; it needs a real Postgres instance to verify, which the unit suite does not have. Removing deletes a backend nothing uses and takes the "four adapters" count down to three. Removal is the better trade unless Postgres is a deployment target someone actually wants.
+
+**Resolved by removal.** Phase 9 consolidates production on Turso, nothing deployed selects Postgres, and a backend without data isolation is risk without benefit. Gone: `postgresPreferenceRepository.ts` and its tests, the `pg` dependency and `@types/pg`, `migrations/001_create_saved_bands.sql` (Postgres-only DDL), `migratePostgres()` in `scripts/migrate.ts`, and `DATABASE_URL` / `DATABASE_SSL` from the runtime config. Three adapters remain: SQLite, Turso, in-memory.
+
+`PREFERENCE_STORE=postgres` now **fails at boot** rather than falling through to the SQLite default — a silent database swap on an existing deployment would be worse than a refused start. The guard sits in both `validateRuntimeEnv` and `createPreferenceRepository`, since `createApp` can be handed a runtime config directly. `npm run migrate` likewise refuses when `DATABASE_URL` is set instead of running the wrong migration.
+
+---
+
+### 9. `services/api` is CommonJS in an increasingly ESM ecosystem ← **next up**
+
+**Files:** `services/api/package.json`, `services/api/tsconfig.json`, and every `.ts` file under `services/api/src`
+
+Adding `@tursodatabase/sync` (Phase 5.5) surfaced this: the package is ESM-only, its dependency `@tursodatabase/serverless` publishes only an `import` condition, and tsx's CJS resolver rejects it with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Node 26 itself can `require()` it — this is tsx's resolver hook, and 4.23.12 is the newest release, so waiting for a fix is not a plan.
+
+`turso/tursoSyncClient.ts` currently works around it with a `new Function("s", "return import(s)")` escape hatch. That is contained and commented, but it is a workaround, and the next ESM-only dependency will need its own.
+
+**Action:** Set `"type": "module"` on `services/api`, move the tsconfig to an ESM module target, and fix the fallout — `__dirname` / `__filename` (used in `scripts/migrate.ts` and several tests), `require()` interop, and any `import.meta` restrictions that flip the other way. `apps/desktop` has the same shape and would follow separately. Worth pairing with a check of whether tsx is still needed at runtime, or whether a build step would serve the API better in production.

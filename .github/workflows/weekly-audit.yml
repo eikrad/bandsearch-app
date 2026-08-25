@@ -14,7 +14,7 @@ jobs:
     name: Dependency security audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # ── npm audit (workspace-wide) ────────────────────────────────────────
       # npm workspaces means a single audit at the root covers all packages
@@ -40,7 +40,7 @@ jobs:
 
       # ── Python audit (pip-audit via uv, project root) ───────────────────────
       - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 

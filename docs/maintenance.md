@@ -4,6 +4,100 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-08-19
+
+### Checks performed
+- `git fetch origin staging` then `git reset --hard origin/staging` (`6168af7`, merge of #120) —
+  the working branch (`claude/eloquent-volta-jdicez`) did not exist on the remote yet this cycle,
+  so this was a clean start rather than a correction. Confirmed working tree clean afterward.
+- Confirmed via `.github/workflows/ci.yml` (`cache: npm`, `npm ci`) and `.github/workflows/
+  weekly-audit.yml` (same) that npm/`package-lock.json` is the tool of record, not
+  `pnpm-lock.yaml`/`pnpm-workspace.yaml` — reconfirmed rather than assumed.
+- Baseline `npm ci` + `npm run ci` (lint+typecheck+test) on the sandbox's default Node 22 hit one
+  failure: `apps/desktop/test/browser-entry.test.ts` (`bootBrowserDesktopApp is not a function`)
+  via `node:test`'s `mock.module`/`--experimental-test-module-mocks`. Rather than treat this as a
+  repo bug, installed real Node 26 via `nvm` (matching `engines: ">=26"` and CI's pinned version),
+  reinstalled (`npm ci`), and re-ran — **fully green, 0 failures**. Root cause was a Node
+  22-vs-26 behavioral difference in the experimental mock-module API, not a code defect; CI itself
+  runs Node 26 so this was never actually broken on `staging`.
+- `npm audit` (workspace-wide), `uv export --format requirements-txt --no-hashes` + `pip-audit`,
+  and `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (installed `cargo-audit` 0.22.2, not
+  cached in this sandbox) — all re-run fresh rather than trusting Monday's automated run.
+- `npm outdated` across all workspaces; attempted `cargo install cargo-outdated` (timed out after
+  3 minutes mid-compile in this sandbox — not installed, not blocking since Cargo is already a
+  Dependabot-covered ecosystem and `cargo audit` came back clean) and `uv pip list --outdated`
+  (clean — `pyproject.toml` still declares `dependencies = []`).
+- Compared `package-lock.json` vs `pnpm-lock.yaml` resolved versions directly (not just file
+  mtimes) to check for real divergence, not just staleness.
+- Re-ran the full `npm run ci` suite (Node 26) after applying updates.
+
+### CI health (staging)
+Confirmed clean per task framing (zero open PRs, zero open `security-audit` issues, last several
+`CI` runs on `staging` all `success` — mostly this past Monday's Dependabot merges). Not
+independently re-queried this cycle beyond that framing since nothing was found to contradict it.
+
+### Fixes applied
+
+- **No repo bugs found.** The Node 22 test failure above was a sandbox/tooling artifact, not a
+  `staging` defect — nothing to fix in the codebase.
+
+- **npm — no new security vulnerabilities this cycle.** `npm audit`: **0 vulnerabilities**
+  (workspace-wide), both before and after updates.
+
+- **Safe npm updates** — `npm update` targeted at the two packages `npm outdated` flagged as
+  in-range (no `package.json` range changes needed, both already used caret ranges):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | `services/api` | `@langchain/langgraph` | 1.4.9 | 1.4.10 |
+  | root | `@types/pg` | 8.21.0 | 8.23.1 |
+
+  Only `package-lock.json` changed (20 lines: 10 insertions / 10 deletions). `pnpm-lock.yaml` was
+  **not** regenerated — see Notes below for why, and the divergence this surfaced.
+
+### Majors — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 07-08 — still unresolved; needs a dedicated compatibility pass across all 4 npm workspaces + `typescript-eslint`. |
+
+No other npm, Rust, or Python major was outstanding this cycle.
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | **0 vulnerabilities** (baseline and after updates) |
+| Python | `pip-audit` (via `uv export`) | **0 vulnerabilities** — `dependencies = []` in `pyproject.toml`, nothing to audit, reconfirmed rather than assumed |
+| Rust | `cargo audit` 0.22.2 (518 crate deps scanned) | **0 vulnerabilities**. 19 informational unmaintained/unsound warnings, same category/count as prior cycles (GTK3 `gtk-rs` bindings ×9, `proc-macro-error`, `unic-*` ×5, `anyhow` `Error::downcast_mut()` unsoundness, `event-listener` `!Send` unsoundness, `glib` iterator unsoundness) — no independent fix available, all transitive through `tauri`'s GTK3 Linux backend. |
+| GitHub | `security-audit`-labeled issues | 0 open (per task framing, not independently re-queried this cycle) |
+
+### Notes
+
+- **Lock file divergence confirmed, not just staleness (pre-existing, not fixed this cycle, call
+  for repo owner)** — went beyond checking mtimes this cycle and diffed actual resolved versions:
+  `package-lock.json` already resolved `@langchain/langgraph` to `1.4.9` before this cycle's
+  update, while `pnpm-lock.yaml` was still pinned at `1.3.2` (the exact floor of its own
+  `^1.3.2` specifier — i.e. never bumped since introduction). `pnpm-lock.yaml` is not listed in
+  `.github/dependabot.yml` (npm ecosystem only tracks `package-lock.json`) and no workflow ever
+  runs `pnpm install`, so it is pure dead weight that will keep drifting every cycle. Did not
+  regenerate it or delete it — per standing guidance this is the repo owner's call (drop
+  `pnpm-lock.yaml`/`pnpm-workspace.yaml`, or wire up real pnpm support) — but flagging with
+  concrete evidence of drift now, not just "these files coexist."
+- **`cargo-outdated` unavailable this cycle** — `cargo install cargo-outdated --locked` did not
+  finish compiling within a 3-minute budget in this sandbox (unlike `cargo-audit`, which
+  installed in ~5 min the same session). Not treated as blocking: Cargo is fully covered by
+  Dependabot (`.github/dependabot.yml`, weekly) and `cargo audit` found 0 vulnerabilities, so
+  there was no security-relevant gap — but a future cycle with more sandbox budget could still
+  install it for a non-security "outdated" sweep beyond what Dependabot's PRs already surface.
+- Re-ran `npm run ci` (lint+typecheck+test, all workspaces) on Node 26 after the dependency
+  updates — all still green, identical pass counts to baseline: **691/692 tests** (desktop
+  226/227 pass + 1 pre-existing skip, api 424/424, eval 16/16, schemas 25/25); lint and typecheck
+  clean. `test:e2e` was not run — no user-facing code was touched this cycle (pure
+  `services/api` + root devDependency lockfile bump).
+
+---
+
 ## 2026-08-12
 
 ### Checks performed

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Client as LibSQLClient } from "@libsql/client";
+import type { TursoClient } from "../turso/tursoClient.js";
 
 const DEFAULT_USER = "anonymous";
 
-export function createTursoChatSessionRepository({ client }: { client: LibSQLClient }) {
+export function createTursoChatSessionRepository({ client }: { client: TursoClient }) {
   return {
     async createSession({ title = "Untitled" } = {}, userId = DEFAULT_USER) {
       const id = randomUUID();

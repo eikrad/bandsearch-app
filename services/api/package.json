@@ -13,9 +13,10 @@
     "create-user": "tsx scripts/create-user.ts"
   },
   "dependencies": {
-    "@langchain/google-genai": "^2.1.31",
-    "@langchain/langgraph": "^1.3.2",
+    "@langchain/langgraph": "^1.4.12",
+    "@langchain/google-genai": "^2.3.0",
     "@libsql/client": "^0.17.4",
+    "@tursodatabase/sync": "^0.7.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
@@ -24,7 +25,6 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.22.0",
     "zod": "^4.4.3"
   }
 }

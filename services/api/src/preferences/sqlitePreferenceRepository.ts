@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
-import { formatSavedBandContextLine } from "./savedBandContextFormat.js";
 import type { PreferenceRepository } from "./preferenceRepository.js";
 
 const DEFAULT_USER = "anonymous";
@@ -112,22 +111,6 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }): Pref
       const result = db.prepare("DELETE FROM saved_bands WHERE id = ? AND user_id = ?").run(id, userId);
       if (result.changes === 0) return { ok: false, status: 404, error: "saved band not found" };
       return { ok: true, deletedId: id };
-    },
-
-    async buildContext(userId = DEFAULT_USER) {
-      const savedBands = await this.listSavedBands(userId);
-      if (savedBands.length === 0) return "";
-      return savedBands.map(formatSavedBandContextLine).join("\n");
-    },
-
-    async buildContextForIds(ids: string[], userId = DEFAULT_USER) {
-      if (!ids || ids.length === 0) return "";
-      const placeholders = ids.map(() => "?").join(", ");
-      const rows = db
-        .prepare(`SELECT * FROM saved_bands WHERE user_id = ? AND id IN (${placeholders})`)
-        .all(userId, ...ids) as SavedBandRow[];
-      if (rows.length === 0) return "";
-      return rows.map(mapRowToSavedBand).map(formatSavedBandContextLine).join("\n");
     },
 
     async importSavedBands(bands: unknown[], userId = DEFAULT_USER) {

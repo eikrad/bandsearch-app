@@ -1,25 +1,23 @@
 import { createChatRenderAdapter } from "./chatRenderAdapter.js";
-import { createSavedArtistsModel } from "./savedArtistsModel.js";
 import { createDesktopReactShell } from "./ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "./ui/mountDesktopReactApp.js";
 import type { DesktopReactMountOptions } from "./ui/mountDesktopReactApp.js";
 import type { ChatAppCollaborator } from "./chatAppModel.js";
-import type { SavedArtistsCollaborator } from "./savedArtistsModel.js";
 import type { ChatHandlers } from "./ui/viewTypes.js";
 import { createDesktopChatUiStack } from "./desktopChatUiStack.js";
 import { bootstrapDesktopApp } from "./bootstrapDesktopApp.js";
 
 export { bootstrapDesktopApp };
 
-/** Everything index.ts asks of the bootstrapped app, across both screens. */
-type DesktopAppCollaborator = ChatAppCollaborator &
-  SavedArtistsCollaborator & {
-    getView?(): string;
-    navigate?(view: string): unknown;
-    saveBand?(artistName: string): unknown;
-    rateBand?(artistName: string, rating?: number): unknown;
-    setPendingStyleRef?(ids: string[]): void;
-  };
+/**
+ * Everything index.ts asks of the bootstrapped app. Scoped to the chat screen —
+ * the saved-artists screen states its own needs in `SavedArtistsShellCollaborator`
+ * and is assembled in `startDesktopBrowserApp`, not here.
+ */
+type DesktopAppCollaborator = ChatAppCollaborator & {
+  saveBand?(artistName: string): unknown;
+  rateBand?(artistName: string, rating?: number): unknown;
+};
 
 function bootstrapDesktopUi(options: { app: DesktopAppCollaborator; viewport?: string }) {
   return createDesktopChatUiStack(options);
@@ -41,7 +39,6 @@ function bootstrapDesktopReactShell({
   actionHandlers?: Partial<ChatHandlers>;
 }) {
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
-  const savedArtistsModel = createSavedArtistsModel({ app });
   const mergedActionHandlers = {
     onSave: actionHandlers.onSave || ((artistName: string) => app.saveBand?.(artistName)),
     onRate: actionHandlers.onRate || ((artistName: string) => app.rateBand?.(artistName, 5)),
@@ -50,23 +47,6 @@ function bootstrapDesktopReactShell({
   const shell = createDesktopReactShell({
     renderAdapter,
     actionHandlers: mergedActionHandlers,
-    getViewImpl: () => app.getView?.() ?? "chat",
-    navigateImpl: async (view: string) => {
-      app.navigate?.(view);
-      if (view === "saved-artists") {
-        await savedArtistsModel.loadSavedArtists();
-      }
-    },
-    searchArtistsImpl: (query: string) => savedArtistsModel.searchArtists(query),
-    toggleSelectionImpl: (id: string) => savedArtistsModel.toggleSelection(id),
-    deleteSavedArtistImpl: (id: string) => savedArtistsModel.deleteSavedArtist(id),
-    activateStyleRefImpl: async () => {
-      const ids = savedArtistsModel.getSelectedIds();
-      savedArtistsModel.clearSelection();
-      app.setPendingStyleRef?.(ids);
-      app.navigate?.("chat");
-    },
-    getSavedArtistsViewPropsImpl: () => savedArtistsModel.getScreenState(),
     cancelSearchImpl: () => renderAdapter.desktopUi.cancelSearch(),
     retryLastSearchImpl: () => renderAdapter.desktopUi.retryLastSearch(),
   });

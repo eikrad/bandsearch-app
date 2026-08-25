@@ -55,7 +55,6 @@ test("createDesktopReactMount exposes onStop handler that calls shell.cancelSear
   const mountApi = createDesktopReactMount({
     shell: {
       getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
-      getView: () => "chat",
       submitQuery: async () => {},
       updateMode: async () => {},
       cancelSearch: () => { cancelled = true; },
@@ -74,7 +73,6 @@ test("createDesktopReactMount exposes onRetry handler that calls shell.retryLast
   const mountApi = createDesktopReactMount({
     shell: {
       getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
-      getView: () => "chat",
       submitQuery: async () => {},
       updateMode: async () => {},
       cancelSearch: () => {},

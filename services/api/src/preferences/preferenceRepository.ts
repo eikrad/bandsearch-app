@@ -1,10 +1,12 @@
-import { Pool } from "pg";
 import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
 import { createInMemoryPreferenceRepository } from "./preferenceMemory.js";
-import { createPostgresPreferenceRepository } from "./postgresPreferenceRepository.js";
 import { createSqlitePreferenceRepository } from "./sqlitePreferenceRepository.js";
 import { createTursoPreferenceRepository } from "./tursoPreferenceRepository.js";
+
+export const POSTGRES_REMOVED_MESSAGE =
+  "PREFERENCE_STORE=postgres is no longer supported — the Postgres adapter was removed "
+  + "because it had no user scoping. Use PREFERENCE_STORE=turso (shared/cloud) or sqlite (local).";
 
 type PragmaTableRow = { name: string };
 
@@ -33,8 +35,6 @@ export type BandRepository = {
   listSavedBands: (userId?: string) => Promise<SavedBand[]>;
   updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
   deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
-  buildContext: (userId?: string) => Promise<string>;
-  buildContextForIds: (ids: string[], userId?: string) => Promise<string>;
 };
 
 export type BandGroupRepository = {
@@ -47,7 +47,15 @@ export type BandGroupRepository = {
   removeArtistFromGroup: (groupId: string, savedBandId: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number }>;
 };
 
-// Keep for backwards compatibility during transition — all existing adapters implement both
+/**
+ * What one storage backend provides. Each adapter speaks to a single database,
+ * so it implements both halves — splitting the adapters into separate modules
+ * would not change that, and would only mean two files per backend instead of one.
+ *
+ * The separation that matters is on the consuming side: nothing should hold all
+ * eleven methods just because they arrive together. Use `splitPreferenceRepository`
+ * and pass on the half a caller actually needs.
+ */
 export type PreferenceRepository = BandRepository & BandGroupRepository;
 
 const BAND_REPOSITORY_METHODS = [
@@ -55,8 +63,6 @@ const BAND_REPOSITORY_METHODS = [
   "listSavedBands",
   "updateSavedBand",
   "deleteSavedBand",
-  "buildContext",
-  "buildContextForIds",
 ] as const;
 
 const BAND_GROUP_REPOSITORY_METHODS = [
@@ -92,22 +98,43 @@ export function assertPreferenceRepository(repository: unknown): PreferenceRepos
   return repository as PreferenceRepository;
 }
 
+/**
+ * Two narrow views on one backend, so callers declare the half they use.
+ *
+ * Both views are the same object — this is about what a consumer's type says it
+ * may call, not about isolating instances.
+ */
+export function splitPreferenceRepository(
+  repository: unknown,
+): { bands: BandRepository; groups: BandGroupRepository } {
+  return {
+    bands: assertBandRepository(repository),
+    groups: assertBandGroupRepository(repository),
+  };
+}
+
+export const TURSO_SYNC_ASYNC_MESSAGE =
+  "PREFERENCE_STORE=turso-sync cannot be built here: opening the local replica is "
+  + "asynchronous. Use createTursoSyncRepositories() from turso/tursoSyncRepositories.js "
+  + "and pass the repositories into createApp().";
+
 type PreferenceConfig = {
   preferenceStore?: string;
-  databaseUrl?: string;
-  databaseSsl?: boolean;
   databasePath?: string;
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
 };
 
 export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {}): PreferenceRepository {
+  // Removed backend. Falling through to the SQLite default would silently swap
+  // the database of a deployment that still sets this, so refuse instead.
   if (runtimeConfig.preferenceStore === "postgres") {
-    const pool = new Pool({
-      connectionString: runtimeConfig.databaseUrl,
-      ssl: runtimeConfig.databaseSsl ? { rejectUnauthorized: false } : undefined,
-    });
-    return createPostgresPreferenceRepository({ pool });
+    throw new Error(POSTGRES_REMOVED_MESSAGE);
+  }
+  // Same reasoning as above: silently returning SQLite would hand the caller a
+  // different database than the one they asked for.
+  if (runtimeConfig.preferenceStore === "turso-sync") {
+    throw new Error(TURSO_SYNC_ASYNC_MESSAGE);
   }
   if (runtimeConfig.preferenceStore === "turso") {
     const client = createClient({

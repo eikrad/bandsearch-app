@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Client as LibSQLClient } from "@libsql/client";
 import { createTursoPreferenceRepository as createRepository } from "../src/preferences/tursoPreferenceRepository.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
+import { buildSavedBandContext } from "../src/savedBandContext.js";
 
 type ExecutedStatement = { sql: string; args?: unknown[] };
 
@@ -154,7 +155,7 @@ test("turso repository builds preference context from saved bands", async () => 
     client: { execute: async () => ({ rows, rowsAffected: 0 }) },
   });
 
-  const context = await repo.buildContext();
+  const context = await buildSavedBandContext(repo);
   assert.ok(context.includes("Sunn O)))"), "context must include band name");
   assert.ok(context.includes("5/5"), "context must include rating");
 });
@@ -164,6 +165,6 @@ test("turso repository returns empty string context when no bands saved", async 
     client: { execute: async () => ({ rows: [], rowsAffected: 0 }) },
   });
 
-  const context = await repo.buildContext();
+  const context = await buildSavedBandContext(repo);
   assert.equal(context, "");
 });

@@ -69,10 +69,13 @@ test("validateRuntimeEnv requires LangSmith API key when tracing enabled", () =>
   );
 });
 
-test("validateRuntimeEnv requires database URL when postgres store enabled", () => {
+// The Postgres adapter was removed. An existing deployment may still carry
+// PREFERENCE_STORE=postgres, and silently serving it SQLite would swap its
+// database without a word, so boot has to stop instead.
+test("validateRuntimeEnv rejects the removed postgres store instead of falling back", () => {
   assert.throws(
     () => validateRuntimeEnv({ ...REQUIRED, PREFERENCE_STORE: "postgres" }),
-    /DATABASE_URL is required/,
+    /PREFERENCE_STORE=postgres is no longer supported/,
   );
 });
 
@@ -91,4 +94,34 @@ test("validateRuntimeEnv auto-generates a different jwtSecret each call when abs
   const a = validateRuntimeEnv({ ...REQUIRED });
   const b = validateRuntimeEnv({ ...REQUIRED });
   assert.notEqual(a.jwtSecret, b.jwtSecret);
+});
+
+// turso-sync is a separate store value rather than a flag on `turso`, so an
+// existing PREFERENCE_STORE=turso deployment keeps talking to the cloud
+// directly and nothing changes under it by accident.
+test("validateRuntimeEnv accepts the turso-sync store", () => {
+  const config = validateRuntimeEnv({
+    ...REQUIRED,
+    PREFERENCE_STORE: "turso-sync",
+    TURSO_DATABASE_URL: "libsql://example.turso.io",
+  });
+  assert.equal(config.preferenceStore, "turso-sync");
+  assert.equal(config.tursoSyncPath, "bandsearch-sync.db");
+});
+
+test("validateRuntimeEnv lets TURSO_SYNC_PATH override the replica location", () => {
+  const config = validateRuntimeEnv({
+    ...REQUIRED,
+    PREFERENCE_STORE: "turso-sync",
+    TURSO_DATABASE_URL: "libsql://example.turso.io",
+    TURSO_SYNC_PATH: "/var/data/replica.db",
+  });
+  assert.equal(config.tursoSyncPath, "/var/data/replica.db");
+});
+
+test("validateRuntimeEnv requires a remote URL for turso-sync", () => {
+  assert.throws(
+    () => validateRuntimeEnv({ ...REQUIRED, PREFERENCE_STORE: "turso-sync" }),
+    /TURSO_DATABASE_URL is required/,
+  );
 });

@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -27,7 +27,7 @@ jobs:
           cache: npm
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -45,3 +45,52 @@ jobs:
 
       - name: Test
         run: npm run test
+
+  # Separate job, ubuntu only: Playwright needs a browser download and a built
+  # desktop bundle, neither of which the checks job wants, and doubling that onto
+  # the Windows runner buys little for a browser-rendering suite.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tests/e2e/serve-frontend.ts serves apps/desktop/dist, which is gitignored.
+      - name: Build desktop bundle
+        run: npm run build --workspace @bandsearch/desktop
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        # The API refuses to boot without these, but the default suite never
+        # reaches the recommendation pipeline — it exercises rendering, routing,
+        # auth and preference CRUD. Dummy values keep this runnable on forked
+        # PRs, which cannot read secrets, and spend no Gemini or Brave quota.
+        # The `@live` specs, which do call the pipeline, are excluded by the
+        # script and are not run in CI at all.
+        env:
+          GEMINI_API_KEY: ci-dummy-key
+          BRAVE_API_KEY: ci-dummy-key
+        run: npm run test:e2e
+
+      # test-results/ holds the failure context, screenshots and traces. There is
+      # no playwright-report/ — the config sets no reporter, so nothing HTML is
+      # produced.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-failures
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

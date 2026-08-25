@@ -18,7 +18,7 @@ graph LR
     GRAPH --> GEMINI[Google Gemini\nplan · extract · reflect · rank]
     GRAPH --> BRAVE[Brave Search API\nniche artist discovery]
     GRAPH --> MB[MusicBrainz\nartist verification]
-    GRAPH --> DB[(SQLite / Postgres\n/ Turso)]
+    GRAPH --> DB[(SQLite / Turso)]
 ```
 
 ---
@@ -69,7 +69,7 @@ graph TD
     PIPELINE --> BRAVE[Brave Search API\ndiscovery queries]
     PIPELINE --> MB[MusicBrainz\nartist verification]
 
-    API --> DB[("SQLite / Postgres / Turso\npreferences · sessions · auth")]
+    API --> DB[("SQLite / Turso\npreferences · sessions · auth")]
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
@@ -242,7 +242,6 @@ Two persistence domains, both backed by an abstract repository pattern to allow 
 |---------|--------|----------|
 | `sqlite` (default) | `DATABASE_PATH` | Local, zero-config |
 | `memory` | — | Ephemeral / testing |
-| `postgres` | `DATABASE_URL` | Shared or hosted deployment |
 | `turso` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Cross-device cloud sync |
 
 Tables: `saved_bands` (rating, categories, notes), `artist_groups`
@@ -291,7 +290,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 | **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
 | **Claude as optional async judge** | Keeps the LLM judge off the critical response path; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
-| **Pluggable storage** | Abstract repository pattern allows SQLite → Postgres → Turso swap without touching business logic |
+| **Pluggable storage** | Abstract repository pattern allows SQLite → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
 | **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |
 | **Reflection as nested subgraph** | LangGraph subgraph encapsulates the reflection loop's own state and conditional edges cleanly, keeping the main graph linear |
