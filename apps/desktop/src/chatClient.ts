@@ -219,6 +219,17 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       return response.json() as Promise<unknown[]>;
     },
 
+    /**
+     * GDPR Art. 15/20: everything the app holds about this account.
+     * Distinct from exportPreferences, which is the narrower,
+     * import-compatible artist backup.
+     */
+    async exportAccountData() {
+      const response = await fetchImpl(`${baseUrl}/account/export`, { method: "GET", headers: jsonHeaders() });
+      await ensureOk(response);
+      return response.json() as Promise<Record<string, unknown>>;
+    },
+
     async importPreferences(bands: unknown[]) {
       const response = await fetchImpl(`${baseUrl}/preferences/import`, {
         method: "POST",

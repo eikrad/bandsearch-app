@@ -381,3 +381,26 @@ test("fetchRecommendations forwards AbortSignal to fetch", async () => {
   assert.equal(capturedSignal, controller.signal, "signal is forwarded to fetch");
 });
 
+
+test("exporting account data requests the full export with the auth token", async () => {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://api.test",
+    getToken: () => "tok-123",
+    fetchImpl: (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ format: "bandsearch-account-export/1" }),
+      };
+    }) as unknown as typeof fetch,
+  });
+
+  await client.exportAccountData();
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/account\/export$/, "hits the full account export, not the artist backup");
+  const headers = calls[0].init?.headers as Record<string, string>;
+  assert.equal(headers.authorization, "Bearer tok-123", "the export is authenticated");
+});

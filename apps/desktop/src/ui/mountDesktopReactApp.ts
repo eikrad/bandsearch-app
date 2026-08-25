@@ -67,6 +67,7 @@ export interface DesktopReactMountOptions {
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
+  onExportAccountData?: () => Promise<Record<string, unknown>>;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -86,6 +87,7 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
+  onExportAccountData,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
@@ -258,6 +260,19 @@ export function createDesktopReactMount({
     onNavigatePrivacy: async () => {
       if (router) router.navigate("privacy");
       return renderCurrent();
+    },
+    onExportAccountData: async () => {
+      if (!onExportAccountData) return;
+      // Same Blob + a.download path the saved-artists export already uses:
+      // the Tauri webview blocks nothing here and it needs no new dependency.
+      const bundle = await onExportAccountData();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bandsearch-account-data.json";
+      a.click();
+      URL.revokeObjectURL(url);
     },
   };
 

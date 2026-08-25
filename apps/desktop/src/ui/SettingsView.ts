@@ -422,6 +422,93 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
   );
 }
 
+interface PrivacyCardProps {
+  onNavigatePrivacy?: () => void;
+  onExportAccountData?: () => void;
+  statusMessage: StatusMessage;
+}
+
+/**
+ * GDPR self-service: read what is collected (Art. 13/14), take a copy
+ * (Art. 15/20). Deliberately a plain link and a plain button — the house style
+ * for this app is disclosure, not consent gates.
+ */
+function PrivacyCard({ onNavigatePrivacy, onExportAccountData, statusMessage }: PrivacyCardProps) {
+  return React.createElement(
+    "section",
+    {
+      style: {
+        marginTop: "12px",
+        padding: "16px",
+        borderRadius: "10px",
+        border: `1px solid ${palette.border}`,
+        backgroundColor: palette.cardBg,
+      },
+    },
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
+      "Privacy & data",
+    ),
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
+      "Read what Bandsearch collects and why, or download a copy of everything it holds about you.",
+    ),
+    React.createElement(
+      "div",
+      { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "privacy-policy-btn",
+          onClick: () => onNavigatePrivacy?.(),
+          style: {
+            backgroundColor: palette.buttonBg,
+            color: palette.buttonText,
+            border: `1px solid ${palette.buttonBorder}`,
+            borderRadius: "7px",
+            padding: "7px 14px",
+            fontSize: "12px",
+          },
+        },
+        "Privacy policy",
+      ),
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "export-account-btn",
+          onClick: () => onExportAccountData?.(),
+          style: {
+            backgroundColor: palette.buttonBg,
+            color: palette.buttonText,
+            border: `1px solid ${palette.buttonBorder}`,
+            borderRadius: "7px",
+            padding: "7px 14px",
+            fontSize: "12px",
+          },
+        },
+        "Export my data",
+      ),
+    ),
+    statusMessage
+      ? React.createElement(
+          "p",
+          {
+            style: {
+              fontSize: "12px",
+              marginTop: "10px",
+              color: statusMessage.type === "error" ? "#e08a7a" : palette.accent,
+            },
+          },
+          statusMessage.text,
+        )
+      : null,
+  );
+}
+
 interface SettingsViewProps {
   viewProps: {
     headerTitle?: string;
@@ -437,6 +524,7 @@ interface SettingsViewProps {
     braveStatusMessage?: StatusMessage;
     tursoStatusMessage?: StatusMessage;
     apiEndpointStatusMessage?: StatusMessage;
+    privacyStatusMessage?: StatusMessage;
   };
   handlers: {
     onNavigateChat?: () => void;
@@ -445,6 +533,8 @@ interface SettingsViewProps {
     onSaveTursoConfig?: (url: string, token: string) => void;
     onClearTursoConfig?: () => void;
     onSaveApiEndpointUrl?: (url: string) => void;
+    onNavigatePrivacy?: () => void;
+    onExportAccountData?: () => void;
   };
 }
 
@@ -559,6 +649,11 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       onSave: (url) => handlers.onSaveApiEndpointUrl?.(url),
     }),
     serverManagedNote,
+    React.createElement(PrivacyCard, {
+      onNavigatePrivacy: handlers.onNavigatePrivacy,
+      onExportAccountData: handlers.onExportAccountData,
+      statusMessage: viewProps.privacyStatusMessage ?? null,
+    }),
     React.createElement(ApiKeyCard, {
       id: "gemini-api-key",
       label: "Gemini API key",
