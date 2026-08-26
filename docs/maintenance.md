@@ -4,6 +4,202 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-08-26
+
+### Checks performed
+- `git fetch origin staging` then `git merge --ff-only origin/staging` — reported "Already up to
+  date." The working branch (`claude/eloquent-volta-u683om`) was seeded from `origin/main`'s tip
+  (`f88d073`, "Merge pull request #130 from eikrad/staging") rather than `origin/staging`'s
+  (`09400b9`), same recurring pattern as 2026-08-12 and 2026-07-15. Investigated before trusting
+  the ff-only result: `git merge-base --is-ancestor origin/staging HEAD` confirmed `origin/staging`
+  is a real ancestor of `HEAD`, and `git diff --stat origin/staging HEAD` was empty — the one
+  "ahead" commit is a no-diff merge of `staging` into `main`, identical in content to
+  `origin/staging`'s tip. Same "seeded from `main`, but content-identical" situation as 2026-08-12's
+  `383ce9a`, not a real divergence. Working tree confirmed clean before starting.
+- Matched local toolchain to CI (`node-version: 26` in both jobs of `.github/workflows/ci.yml`,
+  `engines: ">=26"` in root `package.json`): default sandbox Node was `v22.22.2`; installed Node 26
+  via `nvm install 26` → resolved `v26.8.0`. **New finding this cycle**: this sandbox's Node 26
+  build reports `process.version` as `v26.8.0-alpha.0.0.0` (not the plain `v26.8.0` its own
+  `/versions/node/v26.8.0/` install path implies), which broke `npm ci` outright — `node-gyp`
+  derives the release-headers URL from `process.version` and requested
+  `.../v26.8.0-alpha.0.0.0/node-v26.8.0-alpha.0.0.0-headers.tar.gz`, a 404 (verified the real,
+  correctly-versioned headers exist at `.../v26.8.0/node-v26.8.0-headers.tar.gz`). This is a
+  sandbox/nvm-mirror labeling artifact, not a repo defect — GitHub-hosted runners via
+  `actions/setup-node@v7` pull the official, correctly-versioned Node 26 build and would never hit
+  this. Reproduced twice (plain `npm ci` fails deterministically both times) before working around
+  it locally with `npm_config_target=26.8.0 npm ci` (overrides node-gyp's derived target version
+  without touching any repo file) to get a trustworthy local baseline. Same "false failure from a
+  sandbox Node-build quirk" category as 2026-08-19's Node 22-vs-26 `mock.module` finding, different
+  specific mechanism this time.
+- Baseline `npm ci` (with the above workaround) + `npm run ci` (lint+typecheck+test) + `npm run
+  build --workspace @bandsearch/desktop` (mirrors the `e2e` job's build step) — **fully green**
+  before any changes: lint clean, typecheck clean, tests 722/723 (desktop 226/227 pass + 1
+  pre-existing skip, api 454/454, eval 16/16, schemas 25/25), build clean.
+- `npm audit` (workspace-wide), `uv export --format requirements-txt --no-hashes` + `pip-audit`,
+  `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (installed `cargo-audit` 0.22.2 fresh,
+  ~5 min compile, not cached in this sandbox) — all re-run rather than trusting last cycle.
+- `npm outdated` per workspace (root, `apps/desktop`, `services/api`, `services/eval`,
+  `shared/schemas`) — **note**: `npm outdated --workspaces --include-workspace-root` (the combined
+  form used in prior cycles) silently returned `{}` in this npm version (11.19.0, bundled with this
+  sandbox's Node 26 build) even though real outdated packages existed; ran per-workspace instead
+  (`npm outdated --json` at root, then `-w <workspace>` for each) which correctly surfaced them.
+  Worth using the per-workspace form next cycle too until confirmed fixed upstream.
+- `uv pip list --outdated` — reconfirmed `pyproject.toml` still declares `dependencies = []`
+  (nothing installed, nothing to be outdated).
+- `cargo update --dry-run --manifest-path apps/desktop/src-tauri/Cargo.toml` — 143 packages have
+  newer in-range versions available. Cross-referenced the diff against the `cargo audit` informational
+  warnings list and found two (`event-listener`, `anyhow`) are RustSec advisories with a real patched
+  version available in-range — see Fixes applied.
+- Re-verified the `typescript` v7 block specifically for this repo (not carried over from
+  Job-Tracker): `npm view typescript-eslint@8.68.0 peerDependencies` (the version this cycle bumped
+  to) still declares `"typescript": ">=4.8.4 <6.1.0"` — identical range to the previously-installed
+  8.67.0, so TS7 (`6.0.3` → `7.0.2`) is still out of range. Checked upstream
+  `typescript-eslint/typescript-eslint#10940` directly (still **open**): it's about integrating
+  TypeScript 7's Go-based `tsgo`/`typescript-go` implementation, blocked on ESLint lacking an async
+  parser API plus `tsgo` itself still being pre-stable — maintainers note this is unlikely to land
+  for another 1–2 TS-eslint majors, not a near-term fix.
+- Checked `.github/dependabot.yml` — unchanged since 2026-07-08 (npm root, cargo at
+  `/apps/desktop/src-tauri`, uv at `/`, github-actions, all → `staging`). Confirmed via `git log`
+  on `pnpm-lock.yaml`/`package-lock.json` (see Notes) rather than assuming prior cycles' "growing
+  gap" framing still holds.
+- Attempted `apps/desktop/src-tauri` Rust build verification, which every prior cycle since
+  2026-07-08 could not do in-sandbox (GTK3 pkg-config gap or missing Node sidecar symlink). This
+  cycle `pkg-config --exists gdk-3.0` / `webkit2gtk-4.1` both succeeded (dev headers now present in
+  this sandbox — an environment change, not a repo change). Temporarily created the local-dev-only
+  sidecar symlink per `apps/desktop/src-tauri/binaries/README`'s documented command
+  (`ln -sf "$(which node)" binaries/node-x86_64-unknown-linux-gnu`), ran `cargo check` and
+  `cargo test`, then **deleted the symlink again** before committing (README: "these binaries are
+  NOT committed to the repository" — confirmed `git status` showed no trace of it afterward).
+- Re-ran the full `npm run ci` suite + desktop build + `cargo test` (all Node 26, workaround
+  applied) after every change.
+
+### CI health (staging)
+Confirmed clean per task framing (zero open Dependabot PRs, zero open `security-audit` issues, PR
+#131 open/green and unrelated/untouched). Not independently re-queried against the Actions API
+this cycle beyond that framing since nothing surfaced to contradict it.
+
+### Fixes applied
+
+- **Rust — informational/unsound advisories, 2 of 19 resolved via in-range `Cargo.lock` bump.**
+  `cargo audit` baseline: 0 vulnerabilities, 19 informational unmaintained/unsound warnings (same
+  set as every prior cycle). Cross-checked `cargo update --dry-run`'s available bumps against the
+  RustSec advisory files directly (`~/.cargo/advisory-db`) rather than assuming "informational
+  means unfixable" — two turned out to have real patched versions in-range of `Cargo.toml`'s
+  existing constraints (both are transitive deps, no `Cargo.toml` edit needed):
+
+  | Crate | Advisory | Before | Patched (per advisory) | After |
+  |---|---|---|---|---|
+  | `event-listener` (transitive, via `tauri`/`async-*`) | RUSTSEC-2026-0221 (`!Send` tag crosses thread boundary via `StackSlot`) | 5.4.1 | `>= 5.4.2` | 5.4.2 |
+  | `anyhow` (transitive) | RUSTSEC-2026-0190 (`Error::downcast_mut()` unsoundness) | 1.0.102 | `>= 1.0.103` | 1.0.104 |
+
+  Applied with targeted `cargo update -p <crate> --precise <version>` (same pattern as the
+  2026-07-15/2026-07-08 `plist`/`quick-xml` fixes) rather than a blanket `cargo update`, to keep the
+  diff minimal and avoid mixing in 141 unrelated non-security bumps. `Cargo.lock` diff: 9 lines (4
+  insertions / 5 deletions), no `Cargo.toml` changes. Re-ran `cargo audit`: **19 → 17 informational
+  warnings**, still 0 vulnerabilities. Verified with a real `cargo check` + `cargo test` (see Checks
+  performed) — **21/21 Rust unit tests pass** (one more than the 20/20 last actually run in the
+  2026-07-08 cycle; a test was added since). The remaining 17 warnings (GTK3 `gtk-rs` bindings ×9,
+  `proc-macro-error`, `unic-*` ×5, `glib` iterator unsoundness) still have no independently-fixable
+  upstream version — unchanged from every prior cycle's assessment.
+
+- **npm — no new security vulnerabilities this cycle.** `npm audit`: **0 vulnerabilities**
+  (workspace-wide), both before and after updates.
+
+- **Safe npm updates** — `npm update` targeted at the packages `npm outdated` (run per-workspace,
+  see Checks performed) flagged as in-range, all root `devDependencies` (no `package.json` range
+  changes needed, all already used caret ranges):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `@types/node` | 26.2.0 | 26.3.0 |
+  | root | `@types/react-dom` | 19.2.4 | 19.2.5 |
+  | root | `eslint` | 10.8.1 | 10.9.1 |
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.67.0 | 8.68.0 |
+
+  `apps/desktop`, `services/api`, `services/eval`, `shared/schemas` had **nothing outdated** this
+  cycle (all already at latest in-range, including `@langchain/langgraph` 1.4.12 and
+  `@langchain/google-genai` 2.3.0, merged via Dependabot before this cycle started). `pg`,
+  `@types/pg`, `better-sqlite3`, `@tursodatabase/sync` (still 0.7.2, unchanged, per the
+  fragility note — nothing available to bump anyway) all current.
+
+  Only `package-lock.json` changed (148 lines: 74 insertions / 74 deletions). `pnpm-lock.yaml` was
+  **not** regenerated — see Notes for this cycle's (improved) divergence picture.
+
+### Majors — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 07-08 — still blocked. Re-verified specifically for this repo this cycle (not assumed from the sibling Job-Tracker finding): `typescript-eslint@8.68.0` (this cycle's own latest) still declares peer `"typescript": ">=4.8.4 <6.1.0"`; upstream `typescript-eslint/typescript-eslint#10940` (TS7/`tsgo` support) remains open and is explicitly described by maintainers as unlikely to land within 1–2 of their own majors. |
+
+No other npm, Rust, or Python major was outstanding this cycle.
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | **0 vulnerabilities** (baseline and after updates) |
+| Python | `pip-audit` (via `uv export`) | **0 vulnerabilities** — `dependencies = []` in `pyproject.toml`, nothing to audit, reconfirmed |
+| Rust | `cargo audit` 0.22.2 (518 crate deps scanned) | 0 vulnerabilities before and after. **19 → 17 informational warnings** — 2 resolved this cycle (`event-listener` RUSTSEC-2026-0221, `anyhow` RUSTSEC-2026-0190, see Fixes applied); 17 remain (GTK3 `gtk-rs` bindings ×9, `proc-macro-error`, `unic-*` ×5, `glib` iterator unsoundness), all transitive through `tauri`'s GTK3 Linux backend with no independently-fixable upstream version. |
+| GitHub | `security-audit`-labeled issues | 0 open (per task framing, not independently re-queried this cycle) |
+
+### Notes
+
+- **Lock file divergence — smaller and apparently no longer abandoned (re-measured, not assumed
+  from prior cycles).** Every cycle since 2026-06-10 has flagged `pnpm-lock.yaml` as growing stale
+  dead weight (up to ~6.5 weeks behind by 2026-07-15). This cycle it's a different picture: `git log
+  -1 -- pnpm-lock.yaml` shows it was last committed **2026-08-25 — the day before this cycle**,
+  and diffing actual resolved versions (not just the commit date) shows it already matches
+  `package-lock.json`'s *pre-cycle* state for the packages checked (`@langchain/langgraph@1.4.12`,
+  `better-sqlite3@13.0.3`) — it just doesn't yet reflect this cycle's own bumps
+  (`typescript-eslint@8.67.0` in `pnpm-lock.yaml` vs. `8.68.0` now in `package-lock.json`), which is
+  expected for a file nobody in this routine touches. `.github/dependabot.yml` and every workflow
+  still only cover/run npm, so `package-lock.json` remains the sole tool of record — but someone
+  (outside this maintenance routine) appears to be keeping `pnpm-lock.yaml` reasonably current by
+  hand now, worth the owner confirming intent (adopt pnpm for real, or this is incidental and will
+  drift again) rather than continuing to flag it as unowned dead weight by default.
+- **New finding — root `package.json`'s `allowScripts` allowlist is stale against currently-pinned
+  versions.** `npm ci`/`npm install` now warns `2 packages have install scripts not yet covered by
+  allowScripts: better-sqlite3@13.0.3 (install: node-gyp rebuild), esbuild@0.28.2 (postinstall: node
+  install.js)` — but `package.json`'s `allowScripts` block still pins the old
+  `better-sqlite3@12.11.1` / `esbuild@0.28.1` (pre-dating this repo's own already-merged
+  `better-sqlite3` 12→13 major and a subsequent esbuild patch bump). This appears to be npm 11.19's
+  install-script governance (bundled with this cycle's Node 26; not present under the sandbox's
+  default npm 10.9.7 under Node 22, so this is the first cycle positioned to notice it). Currently
+  **advisory-only, not build-breaking**: verified `better-sqlite3` still loads and queries
+  correctly (`require('better-sqlite3')(':memory:')` round-tripped a query) because it ships
+  pre-built binaries in `prebuilds/` and doesn't strictly need its install script to run on common
+  platforms — confirmed via a full `npm run ci` pass, fully green either way. Not fixed this cycle
+  (editing a supply-chain allowlist felt outside "safe patch/minor dependency bump" scope), but
+  flagging with the exact stale/current version pairs so the owner can decide whether to update the
+  `allowScripts` keys to `better-sqlite3@13.0.3` / `esbuild@0.28.2` (or drop the block if it's no
+  longer serving its purpose) before a future cycle where a script's actually being skipped starts
+  to matter.
+- **`npm outdated --workspaces --include-workspace-root` returned `{}` incorrectly this cycle**
+  under npm 11.19.0 (this sandbox's Node 26 build) even with real outdated packages present at
+  root — worked around by running it per-workspace instead (see Checks performed). Not a repo
+  issue; flagging in case it reproduces in a future cycle's sandbox and costs time re-diagnosing.
+- **Sandbox Node 26 build mislabeled as `v26.8.0-alpha.0.0.0`, broke `npm ci` outright until
+  worked around** — see Checks performed for the full mechanism. Recommend nothing repo-side; this
+  is purely this sandbox's `nvm` mirror, and CI's `actions/setup-node@v7` pulls a normal,
+  correctly-versioned Node 26.
+- **Rust build/test actually verifiable this cycle**, unlike every cycle since 2026-07-08 — this
+  sandbox now has the GTK3 `-dev`/pkg-config packages present (`pkg-config --exists gdk-3.0` /
+  `webkit2gtk-4.1` both succeed, where prior cycles hit either a 404'd apt mirror or missing
+  headers). Used the local-dev-only Node sidecar symlink documented in
+  `apps/desktop/src-tauri/binaries/README`, ran `cargo check` + `cargo test` (21/21 pass), then
+  removed the symlink before committing anything (confirmed `git status` clean of it). Worth
+  keeping this cargo-verification step in future cycles' baselines now that it's actually possible
+  here, rather than reflexively assuming it will fail again.
+- Re-ran `npm run ci` (lint+typecheck+test, all workspaces) and `npm run build --workspace
+  @bandsearch/desktop` on Node 26 after all dependency updates — all still green, identical pass
+  counts to baseline: **722/723 tests** (desktop 226/227 pass + 1 pre-existing skip, api 454/454,
+  eval 16/16, schemas 25/25); lint and typecheck clean. `api`'s count grew from 424 (2026-08-19) to
+  454 — accounted for by PR #131's already-merged EU AI Act/GDPR transparency feature, not by
+  anything this cycle touched. `test:e2e` was not run — no user-facing code was touched this cycle
+  (lockfile-only npm bumps + a transitive `Cargo.lock` bump).
+
+---
+
 ## 2026-08-19
 
 ### Checks performed
