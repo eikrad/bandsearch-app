@@ -182,6 +182,16 @@ No other npm, Rust, or Python major was outstanding this cycle.
   worked around** — see Checks performed for the full mechanism. Recommend nothing repo-side; this
   is purely this sandbox's `nvm` mirror, and CI's `actions/setup-node@v7` pulls a normal,
   correctly-versioned Node 26.
+- **`.husky/pre-commit` runs under whatever Node the ambient shell defaults to, not whatever
+  version an interactive `nvm use` selected earlier in the session** — the first commit attempt
+  this cycle ran the hook's `npm test` under the sandbox's default Node 22 (despite `npm run ci`
+  having just passed clean under Node 26 moments before), hit the exact `apps/desktop/test/
+  browser-entry.test.ts` `bootBrowserDesktopApp is not a function` `mock.module` failure documented
+  in the 2026-08-19 entry, and aborted the commit (`husky - pre-commit script failed (code 1)`) —
+  a session-mechanics quirk (`nvm use` doesn't persist across separate shell invocations here), not
+  a new repo issue. Re-ran the commit with Node 26 explicitly selected in the same shell invocation
+  as `git commit`, which let the hook's `npm test` pass and the commit land normally. Worth
+  remembering for the commit step specifically, not just the baseline-check step, next cycle.
 - **Rust build/test actually verifiable this cycle**, unlike every cycle since 2026-07-08 — this
   sandbox now has the GTK3 `-dev`/pkg-config packages present (`pkg-config --exists gdk-3.0` /
   `webkit2gtk-4.1` both succeed, where prior cycles hit either a 404'd apt mirror or missing
