@@ -1,4 +1,17 @@
 /**
+ * The slice of a LangChain chat model the agent modules actually use.
+ *
+ * Every `create*` factory here builds a `ChatGoogleGenerativeAI` and then only
+ * ever calls `invoke`. Naming that surface lets a caller pass its own client —
+ * the same injection the HTTP clients already offer through `fetchImpl` — so
+ * the closures these factories return can be exercised without a Gemini key or
+ * a network call.
+ */
+export type ChatModelClient = {
+  invoke(prompt: Array<{ role: string; content: string }>): Promise<{ content: unknown }>;
+};
+
+/**
  * Extract one balanced JSON object or array from text that may include model preamble or trailing prose.
  */
 export function parseModelJsonResponse(raw: string): unknown {
