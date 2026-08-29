@@ -78,10 +78,19 @@ export type EvalRepository = {
   listBaselines(): Promise<EvalBaseline[]>;
   getLatestBaseline(): Promise<EvalBaseline | null>;
   logFeedback(input: FeedbackInput): Promise<void>;
+  /**
+   * GDPR Art. 5(1)(e): telemetry is kept for a stated period, not forever.
+   * Deletes events created before `cutoffIso` along with their scores and
+   * feedback. Returns how many events went.
+   */
+  purgeEventsOlderThan(cutoffIso: string): Promise<number>;
 };
 
 export function createNoOpEvalRepository(): EvalRepository {
   return {
+    async purgeEventsOlderThan() {
+      return 0;
+    },
     async logEvent(input) {
       return input.id ?? "noop";
     },
@@ -115,6 +124,16 @@ export function createInMemoryEvalRepository(): EvalRepository {
   const bandScores: BandEvalScore[] = [];
   const baselines: EvalBaseline[] = [];
   return {
+    async purgeEventsOlderThan(cutoffIso) {
+      const expired = events.filter((e) => e.createdAt < cutoffIso).map((e) => e.id);
+      for (const id of expired) {
+        events.splice(events.findIndex((e) => e.id === id), 1);
+        for (let i = bandScores.length - 1; i >= 0; i -= 1) {
+          if (bandScores[i].eventId === id) bandScores.splice(i, 1);
+        }
+      }
+      return expired.length;
+    },
     async logEvent(input) {
       const id = input.id ?? randomUUID();
       const createdAt = new Date().toISOString();
@@ -301,6 +320,23 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
   `);
 
   return {
+    async purgeEventsOlderThan(cutoffIso) {
+      // Children first: this connection does not enable foreign_keys, so the
+      // declared references do not cascade here.
+      const purge = db.transaction((cutoff: string) => {
+        db.prepare(
+          `DELETE FROM band_eval_scores
+           WHERE event_id IN (SELECT id FROM recommendation_events WHERE created_at < ?)`,
+        ).run(cutoff);
+        db.prepare(
+          `DELETE FROM recommendation_feedback
+           WHERE event_id IN (SELECT id FROM recommendation_events WHERE created_at < ?)`,
+        ).run(cutoff);
+        return db.prepare("DELETE FROM recommendation_events WHERE created_at < ?").run(cutoff).changes;
+      });
+      return purge(cutoffIso);
+    },
+
     async logEvent(input) {
       const id = input.id ?? randomUUID();
       const createdAt = new Date().toISOString();

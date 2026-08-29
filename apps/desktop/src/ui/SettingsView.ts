@@ -422,6 +422,218 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
   );
 }
 
+interface PrivacyCardProps {
+  onNavigatePrivacy?: () => void;
+  onExportAccountData?: () => void;
+  onDeleteAccount?: (password: string) => void;
+  accountsEnabled?: boolean;
+  statusMessage: StatusMessage;
+}
+
+/**
+ * GDPR self-service: read what is collected (Art. 13/14), take a copy
+ * (Art. 15/20). Deliberately a plain link and a plain button — the house style
+ * for this app is disclosure, not consent gates.
+ */
+function PrivacyCard({
+  onNavigatePrivacy,
+  onExportAccountData,
+  onDeleteAccount,
+  accountsEnabled,
+  statusMessage,
+}: PrivacyCardProps) {
+  // Two-step reveal rather than a native confirm(): Tauri webview support for
+  // confirm() is inconsistent, and this matches ApiEndpointCard's draft-input
+  // pattern. Nothing destructive can fire from a single click.
+  const [confirming, setConfirming] = React.useState(false);
+  const [password, setPassword] = React.useState("");
+
+  const dangerZone = !accountsEnabled
+    ? null
+    : React.createElement(
+        "div",
+        {
+          style: {
+            marginTop: "14px",
+            paddingTop: "14px",
+            borderTop: `1px solid ${palette.border}`,
+          },
+        },
+        React.createElement(
+          "p",
+          { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "10px" } },
+          "Deleting your account erases your saved artists, groups and chat history. This cannot be undone.",
+        ),
+        confirming
+          ? React.createElement(
+              "div",
+              {
+                style: {
+                  border: `1px solid ${palette.warnBorder}`,
+                  backgroundColor: palette.warnBg,
+                  borderRadius: "8px",
+                  padding: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                },
+              },
+              React.createElement(
+                "label",
+                { style: { fontSize: "12px", color: palette.textSecondary }, htmlFor: "delete-account-password" },
+                "Confirm your password to delete this account permanently",
+              ),
+              React.createElement("input", {
+                id: "delete-account-password",
+                name: "delete-account-password",
+                type: "password",
+                value: password,
+                autoComplete: "current-password",
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value),
+                style: {
+                  backgroundColor: palette.inputBg,
+                  color: palette.textPrimary,
+                  border: `1px solid ${palette.buttonBorder}`,
+                  borderRadius: "7px",
+                  padding: "8px 12px",
+                  fontSize: "13px",
+                },
+              }),
+              React.createElement(
+                "div",
+                { style: { display: "flex", gap: "8px" } },
+                React.createElement(
+                  "button",
+                  {
+                    type: "button",
+                    className: "confirm-delete-account-btn",
+                    disabled: password.length === 0,
+                    onClick: () => onDeleteAccount?.(password),
+                    style: {
+                      backgroundColor: palette.warnBorder,
+                      color: palette.textPrimary,
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "7px 14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                    },
+                  },
+                  "Permanently delete",
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => { setConfirming(false); setPassword(""); },
+                    style: {
+                      backgroundColor: palette.buttonBg,
+                      color: palette.buttonText,
+                      border: `1px solid ${palette.buttonBorder}`,
+                      borderRadius: "7px",
+                      padding: "7px 14px",
+                      fontSize: "12px",
+                    },
+                  },
+                  "Cancel",
+                ),
+              ),
+            )
+          : React.createElement(
+              "button",
+              {
+                type: "button",
+                className: "delete-account-btn",
+                onClick: () => setConfirming(true),
+                style: {
+                  backgroundColor: "transparent",
+                  color: "#e08a7a",
+                  border: `1px solid ${palette.warnBorder}`,
+                  borderRadius: "7px",
+                  padding: "7px 14px",
+                  fontSize: "12px",
+                },
+              },
+              "Delete account",
+            ),
+      );
+
+  return React.createElement(
+    "section",
+    {
+      style: {
+        marginTop: "12px",
+        padding: "16px",
+        borderRadius: "10px",
+        border: `1px solid ${palette.border}`,
+        backgroundColor: palette.cardBg,
+      },
+    },
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
+      "Privacy & data",
+    ),
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
+      "Read what Bandsearch collects and why, or download a copy of everything it holds about you.",
+    ),
+    React.createElement(
+      "div",
+      { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "privacy-policy-btn",
+          onClick: () => onNavigatePrivacy?.(),
+          style: {
+            backgroundColor: palette.buttonBg,
+            color: palette.buttonText,
+            border: `1px solid ${palette.buttonBorder}`,
+            borderRadius: "7px",
+            padding: "7px 14px",
+            fontSize: "12px",
+          },
+        },
+        "Privacy policy",
+      ),
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "export-account-btn",
+          onClick: () => onExportAccountData?.(),
+          style: {
+            backgroundColor: palette.buttonBg,
+            color: palette.buttonText,
+            border: `1px solid ${palette.buttonBorder}`,
+            borderRadius: "7px",
+            padding: "7px 14px",
+            fontSize: "12px",
+          },
+        },
+        "Export my data",
+      ),
+    ),
+    statusMessage
+      ? React.createElement(
+          "p",
+          {
+            style: {
+              fontSize: "12px",
+              marginTop: "10px",
+              color: statusMessage.type === "error" ? "#e08a7a" : palette.accent,
+            },
+          },
+          statusMessage.text,
+        )
+      : null,
+    dangerZone,
+  );
+}
+
 interface SettingsViewProps {
   viewProps: {
     headerTitle?: string;
@@ -437,6 +649,8 @@ interface SettingsViewProps {
     braveStatusMessage?: StatusMessage;
     tursoStatusMessage?: StatusMessage;
     apiEndpointStatusMessage?: StatusMessage;
+    privacyStatusMessage?: StatusMessage;
+    accountsEnabled?: boolean;
   };
   handlers: {
     onNavigateChat?: () => void;
@@ -445,6 +659,9 @@ interface SettingsViewProps {
     onSaveTursoConfig?: (url: string, token: string) => void;
     onClearTursoConfig?: () => void;
     onSaveApiEndpointUrl?: (url: string) => void;
+    onNavigatePrivacy?: () => void;
+    onExportAccountData?: () => void;
+    onDeleteAccount?: (password: string) => void;
   };
 }
 
@@ -559,6 +776,13 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       onSave: (url) => handlers.onSaveApiEndpointUrl?.(url),
     }),
     serverManagedNote,
+    React.createElement(PrivacyCard, {
+      onNavigatePrivacy: handlers.onNavigatePrivacy,
+      onExportAccountData: handlers.onExportAccountData,
+      onDeleteAccount: handlers.onDeleteAccount,
+      accountsEnabled: viewProps.accountsEnabled,
+      statusMessage: viewProps.privacyStatusMessage ?? null,
+    }),
     React.createElement(ApiKeyCard, {
       id: "gemini-api-key",
       label: "Gemini API key",

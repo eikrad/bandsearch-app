@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { randomBytes } from "crypto";
 import type { UserRepository, PublicUser } from "./userRepository";
+import type { UserDataStore } from "../privacy/userDataStore.js";
 
 const BCRYPT_ROUNDS = 10;
 const JWT_EXPIRES_IN = "30d";
@@ -17,6 +18,9 @@ export type AuthService = {
   resetPassword(input: { email: string; recoveryCode: string; newPassword: string }): Promise<
     { ok: true; newRecoveryCode: string } | { ok: false; error: string }
   >;
+  deleteAccount(input: { userId: string; password: string }): Promise<
+    { ok: true; erased: Record<string, number> } | { ok: false; error: string; reason?: "unavailable" }
+  >;
   getStatus(): Promise<{ userCount: number }>;
 };
 
@@ -28,9 +32,16 @@ function generateRecoveryCode(): string {
 export function createAuthService({
   userRepository,
   jwtSecret,
+  userDataStore = null,
 }: {
   userRepository: UserRepository;
   jwtSecret: string;
+  /**
+   * Where a user's rows actually live. Null when no backend can provide one
+   * (the in-memory preference store, for instance), in which case deletion
+   * reports itself unavailable rather than succeeding without erasing.
+   */
+  userDataStore?: UserDataStore | null;
 }): AuthService {
   async function register({ email, displayName, password }: { email: string; displayName: string; password: string }) {
     if (!email || !email.trim()) return { ok: false as const, error: "email is required" };
@@ -97,10 +108,31 @@ export function createAuthService({
     return { ok: true as const, newRecoveryCode };
   }
 
+  /**
+   * GDPR Art. 17 erasure. The password is required as a secondary secret, the
+   * same shape as resetPassword requiring the recovery code — the recovery
+   * code is for recovering an account, not destroying one.
+   */
+  async function deleteAccount({ userId, password }: { userId: string; password: string }) {
+    if (!password) return { ok: false as const, error: "password is required" };
+    if (!userDataStore) {
+      return { ok: false as const, error: "account deletion is not available", reason: "unavailable" as const };
+    }
+
+    const user = await userRepository.findById(userId);
+    if (!user) return { ok: false as const, error: "invalid credentials" };
+
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) return { ok: false as const, error: "invalid credentials" };
+
+    const erased = await userDataStore.eraseUserData(userId);
+    return { ok: true as const, erased };
+  }
+
   async function getStatus() {
     const userCount = await userRepository.countUsers();
     return { userCount };
   }
 
-  return { register, login, verifyToken, resetPassword, getStatus };
+  return { register, login, verifyToken, resetPassword, deleteAccount, getStatus };
 }

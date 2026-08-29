@@ -239,3 +239,56 @@ test("SettingsView does not show the server-managed note in local mode", () => {
   );
   assert.equal(html.includes("remote endpoint is active"), false, "no server-managed note when local");
 });
+
+test("settings offers a link to the privacy policy", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, { viewProps: baseViewProps, handlers: baseHandlers }),
+  );
+  assert.match(html, /Privacy policy/, "a way into the privacy policy is offered");
+});
+
+test("settings offers a way to export all account data", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, { viewProps: baseViewProps, handlers: baseHandlers }),
+  );
+  assert.match(html, /Export my data/, "an Art. 15/20 export control is offered");
+});
+
+test("choosing the privacy policy navigates to it", () => {
+  let navigated = false;
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: baseViewProps,
+      handlers: { ...baseHandlers, onNavigatePrivacy: () => { navigated = true; } },
+    }),
+  );
+  assert.ok(html.length > 0);
+  assert.equal(navigated, false, "navigation only happens on click, not on render");
+});
+
+test("deleting an account asks for the password before it does anything", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, accountsEnabled: true },
+      handlers: { ...baseHandlers, onDeleteAccount: () => {} },
+    }),
+  );
+
+  assert.match(html, /Delete account/, "the control is offered");
+  assert.equal(
+    html.includes('name="delete-account-password"'),
+    false,
+    "the password field only appears after the first click, never on load",
+  );
+});
+
+test("settings hides account deletion when accounts are not enabled", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, accountsEnabled: false },
+      handlers: { ...baseHandlers, onDeleteAccount: () => {} },
+    }),
+  );
+
+  assert.equal(html.includes("Delete account"), false, "no account, nothing to delete");
+});
