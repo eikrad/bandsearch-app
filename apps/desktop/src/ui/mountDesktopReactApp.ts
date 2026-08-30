@@ -311,8 +311,11 @@ export function createDesktopReactMount({
       if (router) router.navigate("privacy");
       return renderCurrent();
     },
-    onExportAccountData: async () => {
-      if (!onExportAccountData) return;
+    // Left undefined when no collaborator was injected, rather than wrapped in a
+    // function that silently returns. A present-but-inert handler is exactly how
+    // #175 hid: the view could not tell the difference, so the button rendered
+    // and did nothing. Absent, the view omits the control instead.
+    onExportAccountData: !onExportAccountData ? undefined : async () => {
       // Same Blob + a.download path the saved-artists export already uses:
       // the Tauri webview blocks nothing here and it needs no new dependency.
       const bundle = await onExportAccountData();
@@ -324,8 +327,7 @@ export function createDesktopReactMount({
       a.click();
       URL.revokeObjectURL(url);
     },
-    onDeleteAccount: async (password: string) => {
-      if (!onDeleteAccount) return;
+    onDeleteAccount: !onDeleteAccount ? undefined : async (password: string) => {
       const result = await onDeleteAccount(password);
       if (!result.ok) return renderCurrent();
       // Erasing the only account puts the install back to zero users, which is

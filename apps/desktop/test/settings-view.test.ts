@@ -247,11 +247,26 @@ test("settings offers a link to the privacy policy", () => {
   assert.match(html, /Privacy policy/, "a way into the privacy policy is offered");
 });
 
-test("settings offers a way to export all account data", () => {
+test("settings offers a way to export all account data when something can serve it", () => {
+  // The handler is supplied deliberately. This test used to pass `baseHandlers`,
+  // which has none, and still asserted the button rendered — so it certified a
+  // control with nothing behind it, which is precisely how #175 shipped. The
+  // button is now omitted without a handler, per the locked rule in
+  // UI_GUIDELINES.md ("No control may render without an action behind it").
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: baseViewProps,
+      handlers: { ...baseHandlers, onExportAccountData: () => {} },
+    }),
+  );
+  assert.match(html, /Export my data/, "an Art. 15/20 export control is offered");
+});
+
+test("settings offers no export control when nothing can serve it", () => {
   const html = renderToStaticMarkup(
     React.createElement(SettingsView, { viewProps: baseViewProps, handlers: baseHandlers }),
   );
-  assert.match(html, /Export my data/, "an Art. 15/20 export control is offered");
+  assert.doesNotMatch(html, /Export my data/, "a dead control is worse than none");
 });
 
 test("choosing the privacy policy navigates to it", () => {

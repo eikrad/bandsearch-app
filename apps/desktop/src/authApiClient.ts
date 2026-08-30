@@ -29,6 +29,10 @@ export type ResetPasswordResult =
   | { ok: true; newRecoveryCode: string }
   | { ok: false; error: string };
 
+export type ExportAccountDataResult =
+  | { ok: true; bundle: Record<string, unknown> }
+  | { ok: false; error: string };
+
 export type DeleteAccountResult =
   | { ok: true; erased: Record<string, number> }
   | { ok: false; error: string };
@@ -38,6 +42,7 @@ export type AuthApiClient = {
   register(input: { email: string; displayName: string; password: string }): Promise<RegisterResult>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
   resetPassword(input: { email: string; recoveryCode: string; newPassword: string }): Promise<ResetPasswordResult>;
+  exportAccountData(): Promise<ExportAccountDataResult>;
   deleteAccount(input: { password: string }): Promise<DeleteAccountResult>;
 };
 
@@ -107,6 +112,22 @@ export function createAuthApiClient({
       const { ok, data } = await post("/auth/reset-password", { email, recoveryCode, newPassword });
       if (!ok) return { ok: false, error: extractError(data, "reset failed") };
       return { ok: true, newRecoveryCode: data.newRecoveryCode as string };
+    },
+
+    async exportAccountData(): Promise<ExportAccountDataResult> {
+      const headers: Record<string, string> = {};
+      const token = typeof getToken === "function" ? getToken() : null;
+      if (token) headers["authorization"] = `Bearer ${token}`;
+      try {
+        const res = await fetchImpl(`${base}/account/export`, { method: "GET", headers });
+        const data = (await res.json()) as Record<string, unknown>;
+        // A failed export must not be handed to the download path: the user
+        // would get a file named like their data containing an error body.
+        if (!res.ok) return { ok: false, error: extractError(data, "export failed") };
+        return { ok: true, bundle: data };
+      } catch {
+        return { ok: false, error: "could not reach the server" };
+      }
     },
 
     async deleteAccount({ password }): Promise<DeleteAccountResult> {

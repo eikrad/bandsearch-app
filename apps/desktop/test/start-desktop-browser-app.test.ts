@@ -296,3 +296,83 @@ test("a healthy API never shows the connecting screen", async () => {
   assert.equal(statusCalls, 1, "a healthy start must cost exactly one status check");
   assert.equal(routes.includes("connecting"), false, "no detour through connecting");
 });
+
+// --- GDPR export and deletion reach the UI (#175) ----------------------------
+
+/**
+ * Boots with one account present and hands back what the app passed into the
+ * mount. The privacy policy promises Art. 15/17/20 through Settings, so these
+ * handlers existing is a compliance claim, not a convenience.
+ */
+async function startWithAccount(overrides: { userCount?: number; enabled?: boolean } = {}) {
+  const { userCount = 1, enabled = true } = overrides;
+  let mountOptions: Record<string, unknown> = {};
+
+  await startDesktopBrowserApp({
+    invokeTauri: async (cmd) =>
+      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+    updateDismissalStorage: fakeUpdateStorage(),
+    fetchImpl: async (url) => {
+      if (String(url).endsWith("/auth/status")) return jsonResponse({ enabled, userCount });
+      if (String(url).endsWith("/account/export")) return jsonResponse({ user: { id: "u1" }, savedBands: [] });
+      return jsonResponse({});
+    },
+    sleep: async () => {},
+    now: () => 0,
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        mountOptions = options as unknown as Record<string, unknown>;
+        return fakeReactApp({ mount: async () => ({}), showUpdateBanner: () => {} });
+      },
+    },
+  });
+
+  return mountOptions;
+}
+
+test("the app supplies an export handler, so 'Export my data' can work", async () => {
+  const options = await startWithAccount();
+
+  assert.equal(
+    typeof options.onExportAccountData,
+    "function",
+    "the privacy policy points users here for Art. 15 and Art. 20",
+  );
+});
+
+test("the app supplies a delete handler, so account deletion can work", async () => {
+  const options = await startWithAccount();
+
+  assert.equal(
+    typeof options.onDeleteAccount,
+    "function",
+    "the privacy policy points users here for Art. 17",
+  );
+});
+
+test("the export handler returns the bundle the API sent", async () => {
+  const options = await startWithAccount();
+
+  const bundle = await (options.onExportAccountData as () => Promise<Record<string, unknown>>)();
+
+  assert.deepEqual(bundle, { user: { id: "u1" }, savedBands: [] });
+});
+
+test("the settings screen is told an account exists, so the delete zone renders", async () => {
+  const options = await startWithAccount({ userCount: 1 });
+
+  const viewProps = await (options.getSettingsViewProps as () => Promise<{ accountsEnabled?: boolean }>)();
+
+  // SettingsView renders `!accountsEnabled ? null : dangerZone`, so leaving this
+  // undefined hides account deletion entirely.
+  assert.equal(viewProps.accountsEnabled, true);
+});
+
+test("with no account yet, the delete zone stays hidden", async () => {
+  const options = await startWithAccount({ userCount: 0 });
+
+  const viewProps = await (options.getSettingsViewProps as () => Promise<{ accountsEnabled?: boolean }>)();
+
+  assert.equal(viewProps.accountsEnabled, false, "nothing to delete before registering");
+});

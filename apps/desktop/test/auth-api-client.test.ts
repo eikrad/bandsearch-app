@@ -97,6 +97,54 @@ test("auth being genuinely disabled is reported as a reachable answer", async ()
   assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: false, userCount: 0 });
 });
 
+// ------------------------------------------------------------ data export
+
+test("exporting account data asks the export endpoint", async () => {
+  const { fetchImpl, calls } = fakeFetch([jsonResponse({ savedBands: [], user: { id: "u1" } })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  await client.exportAccountData();
+
+  assert.equal(calls[0].url, "http://localhost:3001/account/export");
+  assert.equal(calls[0].method, "GET");
+});
+
+test("the export is authenticated", async () => {
+  // The route answers for req.userId, so an unauthenticated call exports nothing.
+  const { fetchImpl, calls } = fakeFetch([jsonResponse({ savedBands: [] })]);
+  const client = createAuthApiClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl,
+    getToken: () => "tok-123",
+  });
+
+  await client.exportAccountData();
+
+  assert.equal(calls[0].headers?.authorization, "Bearer tok-123");
+});
+
+test("the exported bundle is handed back as-is", async () => {
+  const bundle = { user: { id: "u1" }, savedBands: [{ id: "b1", name: "Codeine" }] };
+  const { fetchImpl } = fakeFetch([jsonResponse(bundle)]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const result = await client.exportAccountData();
+
+  assert.deepEqual(result.ok === true && result.bundle, bundle);
+});
+
+test("a failed export says so rather than downloading an error body", async () => {
+  // Without this the user gets a JSON file containing the error, named as if it
+  // were their data.
+  const { fetchImpl } = fakeFetch([errorResponse(503, { error: { message: "account export is not available" } })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const result = await client.exportAccountData();
+
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.error, "account export is not available");
+});
+
 // -------------------------------------------------------------- register
 
 test("register posts the credentials and returns the token and recovery code", async () => {
