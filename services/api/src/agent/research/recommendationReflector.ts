@@ -1,6 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { capAndTrim, wrapUserContent } from "../promptGuards.js";
+import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
@@ -75,6 +76,11 @@ export type CreateRecommendationReflectorOptions = {
   timeoutMs?: number;
   maxExtraQueries?: number;
   model?: string;
+  /**
+   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
+   * drive this factory's closure without a key or a network call.
+   */
+  modelClient?: ChatModelClient;
 };
 
 export async function createRecommendationReflector({
@@ -82,6 +88,7 @@ export async function createRecommendationReflector({
   timeoutMs = 6000,
   maxExtraQueries = 4,
   model = "gemini-2.5-flash",
+  modelClient: injectedModelClient,
 }: CreateRecommendationReflectorOptions): Promise<
   (input: {
     userQuery: string;
@@ -91,12 +98,13 @@ export async function createRecommendationReflector({
     searchBudgetRemaining: number;
   }) => Promise<ReflectionResult>
 > {
+  // An injected client stands in for Gemini entirely, so it needs no key.
   const trimmedKey = apiKey.trim();
-  if (!trimmedKey) {
+  if (!injectedModelClient && !trimmedKey) {
     throw new Error("apiKey is required for recommendation reflector");
   }
 
-  const modelClient = new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? new ChatGoogleGenerativeAI({
     model,
     apiKey: trimmedKey,
     temperature: 0.15,

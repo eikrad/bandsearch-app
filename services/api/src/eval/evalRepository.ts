@@ -150,7 +150,14 @@ export function createInMemoryEvalRepository(): EvalRepository {
         (s) => s.eventId === input.eventId && s.bandName === input.bandName,
       );
       if (existing) {
-        Object.assign(existing, input);
+        // Skip undefined values rather than Object.assign-ing them over the
+        // top: callers pass a partial slice, and an absent field means "leave
+        // it alone", matching the COALESCE in the SQLite adapter.
+        for (const [key, value] of Object.entries(input)) {
+          if (value !== undefined) {
+            (existing as Record<string, unknown>)[key] = value;
+          }
+        }
         return;
       }
       bandScores.push({ ...input, createdAt: new Date().toISOString() });
@@ -375,19 +382,23 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
            evidence_quality, discovery_value, judge_reasoning, judge_prompt_hash,
            model_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        -- COALESCE, not a plain assignment: each eval layer upserts only its own
+        -- slice of the row (obscurity, then heuristics, then the LLM judge), so
+        -- overwriting unconditionally would blank whatever the previous layer
+        -- wrote. A field the caller did set arrives non-null and still wins.
         ON CONFLICT(event_id, band_name) DO UPDATE SET
-          listeners            = excluded.listeners,
-          obscurity_tier       = excluded.obscurity_tier,
-          source_quality       = excluded.source_quality,
-          citation_support_rate = excluded.citation_support_rate,
-          generic_why_flag     = excluded.generic_why_flag,
-          relevance            = excluded.relevance,
-          obscurity_fit        = excluded.obscurity_fit,
-          evidence_quality     = excluded.evidence_quality,
-          discovery_value      = excluded.discovery_value,
-          judge_reasoning      = excluded.judge_reasoning,
-          judge_prompt_hash    = excluded.judge_prompt_hash,
-          model_id             = excluded.model_id
+          listeners            = COALESCE(excluded.listeners, listeners),
+          obscurity_tier       = COALESCE(excluded.obscurity_tier, obscurity_tier),
+          source_quality       = COALESCE(excluded.source_quality, source_quality),
+          citation_support_rate = COALESCE(excluded.citation_support_rate, citation_support_rate),
+          generic_why_flag     = COALESCE(excluded.generic_why_flag, generic_why_flag),
+          relevance            = COALESCE(excluded.relevance, relevance),
+          obscurity_fit        = COALESCE(excluded.obscurity_fit, obscurity_fit),
+          evidence_quality     = COALESCE(excluded.evidence_quality, evidence_quality),
+          discovery_value      = COALESCE(excluded.discovery_value, discovery_value),
+          judge_reasoning      = COALESCE(excluded.judge_reasoning, judge_reasoning),
+          judge_prompt_hash    = COALESCE(excluded.judge_prompt_hash, judge_prompt_hash),
+          model_id             = COALESCE(excluded.model_id, model_id)
       `).run(
         id, input.eventId, input.bandName,
         input.listeners ?? null,

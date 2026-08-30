@@ -2,6 +2,7 @@ import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import type { ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
@@ -25,6 +26,13 @@ export type ResearchGraphDeps = {
   maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
+  /**
+   * Chat model for every Gemini-backed node. Defaults to Gemini built from
+   * `geminiApiKey`; supply one to run the graph without a key or a network call.
+   */
+  modelClient?: ChatModelClient;
+  /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
+  fetchImpl?: typeof fetch;
   onLog?: (
     level: "info" | "warn",
     event: string,
@@ -64,7 +72,7 @@ export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
 async function runBraveQueries(
-  config: { apiKey: string; dedupCache: BraveDedupCache; budget: ResearchBudget },
+  config: { apiKey: string; dedupCache: BraveDedupCache; budget: ResearchBudget; fetchImpl?: typeof fetch },
   queries: string[],
   budgetLeft: number,
   perQueryCount: number,
@@ -74,6 +82,7 @@ async function runBraveQueries(
     timeoutMs: config.budget.allocate(10000),
     retries: 1,
     dedupCache: config.dedupCache,
+    fetchImpl: config.fetchImpl,
   });
   const hits: SearchHitInput[] = [];
   let calls = 0;
@@ -94,15 +103,16 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   const mb = createMusicBrainzClient({
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
+    fetchImpl: deps.fetchImpl,
   });
 
   const lastFm: LastFmClient | null = deps.lastFmApiKey
-    ? createLastFmClient({ apiKey: deps.lastFmApiKey, timeoutMs: 5000 })
+    ? createLastFmClient({ apiKey: deps.lastFmApiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl })
     : null;
 
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
-    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget }, queries, budgetLeft, perQueryCount);
+    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
     geminiApiKey: deps.geminiApiKey,
@@ -114,6 +124,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     targetVerifiedCount: deps.targetVerifiedCount,
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
+    modelClient: deps.modelClient,
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
@@ -121,6 +132,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(20000),
+        modelClient: deps.modelClient,
       });
       const plan = await planWeb({
         userQuery: state.userQuery,
@@ -144,6 +156,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(18000),
+        modelClient: deps.modelClient,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       // Cap hits so the model emits a manageable candidate list within the timeout.
@@ -225,6 +238,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
         timeoutMs: Math.max(budget.allocate(12000), 12000),
+        modelClient: deps.modelClient,
       });
       const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
       log("info", "research_obscurity_filter", {

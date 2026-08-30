@@ -3,6 +3,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
+import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
@@ -153,6 +154,11 @@ export type CreateRecommendationRankerOptions = {
   apiKey: string;
   timeoutMs?: number;
   model?: string;
+  /**
+   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
+   * drive this factory's closure without a key or a network call.
+   */
+  modelClient?: ChatModelClient;
 };
 
 export type RankInput = {
@@ -190,15 +196,17 @@ export async function createRecommendationRanker({
   apiKey,
   timeoutMs = 12000,
   model = "gemini-2.5-flash",
+  modelClient: injectedModelClient,
 }: CreateRecommendationRankerOptions): Promise<
   (input: RankInput) => Promise<{ recommendations: unknown[]; assistantReply: string }>
 > {
+  // An injected client stands in for Gemini entirely, so it needs no key.
   const trimmedKey = apiKey.trim();
-  if (!trimmedKey) {
+  if (!injectedModelClient && !trimmedKey) {
     throw new Error("apiKey is required for recommendation ranker");
   }
 
-  const modelClient = new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? new ChatGoogleGenerativeAI({
     model,
     apiKey: trimmedKey,
     temperature: 0.35,

@@ -121,6 +121,12 @@ export function createPreferenceMemory() {
       }
 
       const [deleted] = savedBands.splice(index, 1);
+      // Matches ON DELETE CASCADE on artist_group_members.saved_band_id in the
+      // SQLite and Turso schemas. Without it listGroups reports members that no
+      // longer exist.
+      for (const group of groups) {
+        group.memberIds.delete(deleted.id);
+      }
       return { ok: true, deletedId: deleted.id };
     },
 
@@ -150,7 +156,12 @@ export function createPreferenceMemory() {
     },
 
     async listGroups(userId = DEFAULT_USER) {
-      return groups.filter((g) => g.userId === userId).map(toGroupView);
+      return groups
+        .filter((g) => g.userId === userId)
+        // The SQLite and Turso adapters both `ORDER BY name ASC`, which SQLite
+        // resolves with its BINARY collation — so compare raw, not by locale.
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+        .map(toGroupView);
     },
 
     async createGroup(name: string, userId = DEFAULT_USER) {
