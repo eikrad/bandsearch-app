@@ -425,3 +425,83 @@ test("ChatAppView does not render retry button when loading", () => {
 
   assert.equal(html.includes(">retry<"), false, "retry button not shown while loading");
 });
+
+test("a user is told they are talking to an AI before they type anything", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [],
+        messages: [],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.match(
+    html,
+    /AI-generated recommendations/i,
+    "empty state discloses that recommendations come from an AI",
+  );
+  assert.match(html, /Gemini/, "the disclosure names the model provider");
+});
+
+test("the AI disclosure stays visible while results are on screen", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [cardViewProps({ title: "Fen", why: "Atmospheric overlap" })],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.match(html, /AI-generated recommendations/i, "disclosure persists once results are shown");
+});
+
+test("each recommendation is visibly marked as AI-generated", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [cardViewProps({ title: "Fen", why: "Atmospheric overlap" })],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  const card = html.slice(html.indexOf('<article class="recommendation-card"'));
+  const cardMarkup = card.slice(0, card.indexOf("</article>"));
+  assert.match(
+    cardMarkup,
+    /AI-generated/,
+    "the card itself carries a visible AI-generated marking, not just the composer",
+  );
+});
+
+test("recommendation prose is machine-readably marked as AI-generated", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        cards: [cardViewProps({ title: "Fen", why: "Atmospheric overlap" })],
+        actionStatus: null,
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.match(
+    html,
+    /data-ai-generated="true"/,
+    "the card article is machine-readably marked per Art. 50(2)",
+  );
+});

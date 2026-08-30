@@ -219,3 +219,19 @@ test("routed mount settingsHandlers.onSaveTursoConfig calls provided saveTursoCo
   assert.equal(calls[0].url, "libsql://test.turso.io");
   assert.equal(calls[0].token, "mytoken");
 });
+
+test("routed mount calls render with PrivacyPolicyView when route is privacy", async () => {
+  const renders: ReactElement[] = [];
+  const mount = createDesktopReactMount({
+    shell: makeShell(),
+    router: makeRouter("privacy"),
+    savedArtistsShell: makeSavedArtistsShell(),
+    createRootImpl: () => recordingRoot(renders),
+    resolveContainer: () => fakeContainer(),
+  });
+
+  await mount.mount();
+
+  assert.equal(renders.length, 1);
+  assert.equal(renderedComponentName(renders[0]), "PrivacyPolicyView");
+});

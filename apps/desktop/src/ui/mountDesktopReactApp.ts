@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ChatAppView } from "./ChatAppView.js";
 import { SavedArtistsView } from "./SavedArtistsView.js";
 import { SettingsView } from "./SettingsView.js";
+import { PrivacyPolicyView } from "./PrivacyPolicyView.js";
 import { WelcomeView } from "./WelcomeView.js";
 import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
@@ -66,6 +67,8 @@ export interface DesktopReactMountOptions {
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
+  onExportAccountData?: () => Promise<Record<string, unknown>>;
+  onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -85,6 +88,8 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
+  onExportAccountData,
+  onDeleteAccount,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
@@ -145,6 +150,16 @@ export function createDesktopReactMount({
         }),
       );
       return viewProps;
+    }
+
+    if (route === "privacy") {
+      root.render(
+        React.createElement(PrivacyPolicyView as unknown as ViewComponentLike, {
+          viewProps: {},
+          handlers: privacyHandlers,
+        }),
+      );
+      return {};
     }
 
     if (route === "settings") {
@@ -242,6 +257,39 @@ export function createDesktopReactMount({
     },
     onSaveApiEndpointUrl: async (url: string) => {
       await saveApiEndpointUrl(url);
+      return renderCurrent();
+    },
+    onNavigatePrivacy: async () => {
+      if (router) router.navigate("privacy");
+      return renderCurrent();
+    },
+    onExportAccountData: async () => {
+      if (!onExportAccountData) return;
+      // Same Blob + a.download path the saved-artists export already uses:
+      // the Tauri webview blocks nothing here and it needs no new dependency.
+      const bundle = await onExportAccountData();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bandsearch-account-data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onDeleteAccount: async (password: string) => {
+      if (!onDeleteAccount) return;
+      const result = await onDeleteAccount(password);
+      if (!result.ok) return renderCurrent();
+      // Erasing the only account puts the install back to zero users, which is
+      // the first-run state — so send them where a fresh install starts.
+      if (router) router.navigate("register");
+      return renderCurrent();
+    },
+  };
+
+  const privacyHandlers = {
+    onBack: async () => {
+      if (router) router.navigate("settings");
       return renderCurrent();
     },
   };

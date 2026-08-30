@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { createAuthApiClient } from "../src/authApiClient.js";
 import { errorResponse, jsonResponse } from "./helpers/fakeResponse.js";
 
-type FetchCall = { url: string; method?: string; body?: unknown };
+type FetchCall = {
+  url: string;
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
 
 /**
  * Records what the client asked for and replies with a scripted queue.
@@ -20,6 +25,7 @@ function fakeFetch(responses: Response[]) {
       url: String(url),
       method: init?.method,
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      headers: init?.headers as Record<string, string> | undefined,
     });
     const next = queue.shift();
     if (!next) throw new Error(`unexpected fetch call to ${url}`);
@@ -181,4 +187,42 @@ test("resetPassword falls back to a generic message when the API sends no messag
   const result = await client.resetPassword({ email: "a@b.c", recoveryCode: "no", newPassword: "pw2" });
 
   assert.equal(result.ok === false && result.error, "reset failed");
+});
+
+// ------------------------------------------------------------ delete account
+
+test("deleting an account sends the password to the delete endpoint", async () => {
+  const { fetchImpl, calls } = fakeFetch([jsonResponse({ ok: true, erased: { users: 1 } })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const result = await client.deleteAccount({ password: "hunter2" });
+
+  assert.equal(result.ok, true);
+  assert.match(calls[0].url, /\/account\/delete$/);
+  assert.deepEqual(calls[0].body, { password: "hunter2" });
+});
+
+test("deleting an account is authenticated", async () => {
+  const { fetchImpl, calls } = fakeFetch([jsonResponse({ ok: true, erased: {} })]);
+  const client = createAuthApiClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl,
+    getToken: () => "tok-123",
+  });
+
+  await client.deleteAccount({ password: "hunter2" });
+
+  assert.equal(calls[0].headers?.authorization, "Bearer tok-123", "the caller is identified by their token");
+});
+
+test("a failed deletion surfaces the reason to the user", async () => {
+  const { fetchImpl } = fakeFetch([
+    errorResponse(401, { error: { message: "invalid credentials" } }),
+  ]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const result = await client.deleteAccount({ password: "wrong" });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.error, "invalid credentials");
 });

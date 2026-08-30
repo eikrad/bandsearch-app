@@ -7,6 +7,7 @@ const ROUTE_MAP: Record<string, string> = {
   "#/login": "login",
   "#/register": "register",
   "#/reset-password": "reset-password",
+  "#/privacy": "privacy",
 };
 
 function hashToRoute(hash: string): string {
@@ -20,6 +21,7 @@ function routeToHash(route: string): string {
   if (route === "login") return "#/login";
   if (route === "register") return "#/register";
   if (route === "reset-password") return "#/reset-password";
+  if (route === "privacy") return "#/privacy";
   return "#/";
 }
 

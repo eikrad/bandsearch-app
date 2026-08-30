@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createInMemoryEvalRepository, createNoOpEvalRepository } from "../../src/eval/evalRepository.js";
+import Database from "better-sqlite3";
+import {
+  createInMemoryEvalRepository,
+  createNoOpEvalRepository,
+  createSqliteEvalRepository,
+} from "../../src/eval/evalRepository.js";
 
 const sampleDiagnostics = {
   braveHitCount: 10,
@@ -110,4 +115,54 @@ test("createNoOpEvalRepository: band score methods are safe no-ops", async () =>
   const repo = createNoOpEvalRepository();
   await repo.upsertBandEvalScore({ eventId: "x", bandName: "y" });
   assert.deepEqual(await repo.listBandEvalScores("x"), []);
+});
+
+/** Insert an event with an explicit age — logEvent always stamps "now". */
+function seedEvent(db: InstanceType<typeof Database>, id: string, createdAt: string) {
+  db.prepare(
+    `INSERT INTO recommendation_events (id, query, mode, pipeline_version, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(id, "post-black metal", "fresh", "0.0.0-test", createdAt);
+}
+
+test("recommendation events past the retention period are purged", async () => {
+  const db = new Database(":memory:");
+  const repo = createSqliteEvalRepository({ db });
+  seedEvent(db, "ev-old", new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString());
+  seedEvent(db, "ev-new", new Date().toISOString());
+
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const purged = await repo.purgeEventsOlderThan(cutoff);
+
+  assert.equal(purged, 1);
+  const remaining = await repo.listEvents(100);
+  assert.deepEqual(remaining.map((e) => e.id), ["ev-new"], "only the expired event is gone");
+});
+
+test("events inside the retention period are kept", async () => {
+  const db = new Database(":memory:");
+  const repo = createSqliteEvalRepository({ db });
+  seedEvent(db, "ev-recent", new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString());
+
+  await repo.purgeEventsOlderThan(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
+
+  const remaining = await repo.listEvents(100);
+  assert.equal(remaining.length, 1, "a ten-day-old event survives a ninety-day window");
+});
+
+test("purging an event removes its scores and feedback", async () => {
+  const db = new Database(":memory:");
+  const repo = createSqliteEvalRepository({ db });
+  seedEvent(db, "ev-old", new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString());
+  await repo.upsertBandEvalScore({ eventId: "ev-old", bandName: "Fen", relevance: 1 });
+  await repo.logFeedback({ eventId: "ev-old", userId: "u-1", feedbackType: "good" });
+
+  await repo.purgeEventsOlderThan(new Date().toISOString());
+
+  const scores = await repo.listBandEvalScores("ev-old");
+  assert.deepEqual(scores, [], "child scores go with the purged event");
+  const feedback = db
+    .prepare("SELECT COUNT(*) n FROM recommendation_feedback WHERE event_id = ?")
+    .get("ev-old") as { n: number };
+  assert.equal(feedback.n, 0, "child feedback goes with the purged event");
 });
