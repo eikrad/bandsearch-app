@@ -4,6 +4,9 @@ import { startDesktopBrowserApp } from "../src/startDesktopBrowserApp.js";
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "../src/index.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
 import { fakeMediaQueryList, fakeWindow } from "./helpers/fakeDom.js";
+import { fakeUpdateStorage } from "./helpers/fakeStorage.js";
+import type { UpdateAvailablePayload, UpdateDismissalStorage } from "../src/updateNotification.js";
+import type { UpdateBannerHandlers } from "../src/ui/viewTypes.js";
 
 // One flat record instead of a discriminated union: the assertions read a single
 // field per call and stay free of narrowing noise.
@@ -127,4 +130,92 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
 
   assert.equal(calls[0].type, "bootstrapReact");
   assert.equal(calls[0].viewport, "mobile");
+});
+
+/**
+ * Boots the app with the update collaborators injected, and hands back the
+ * banner calls, the banner handlers, and a `fire` that plays an
+ * `update-available` event through whatever listener the app subscribed.
+ */
+async function startWithUpdateDeps(
+  overrides: {
+    updateDismissalStorage?: UpdateDismissalStorage;
+    invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+  } = {},
+) {
+  let listener: ((payload: UpdateAvailablePayload) => void) | undefined;
+  let updateBannerHandlers: UpdateBannerHandlers | undefined;
+  const showUpdateBannerCalls: Array<UpdateAvailablePayload | null> = [];
+
+  await startDesktopBrowserApp({
+    listenUpdateAvailable: (handler) => { listener = handler; },
+    updateDismissalStorage: overrides.updateDismissalStorage ?? fakeUpdateStorage(),
+    invokeTauri: overrides.invokeTauri ?? (async () => ({})),
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        updateBannerHandlers = options.updateBannerHandlers;
+        return fakeReactApp({
+          mount: async () => ({}),
+          showUpdateBanner: (payload) => { showUpdateBannerCalls.push(payload); },
+        });
+      },
+    },
+  });
+
+  return {
+    showUpdateBannerCalls,
+    updateBannerHandlers,
+    fire: (payload: UpdateAvailablePayload) => listener?.(payload),
+  };
+}
+
+const AN_UPDATE: UpdateAvailablePayload = { version: "0.5.0", canAutoInstall: true };
+
+test("an update-available payload makes the banner appear", async () => {
+  const app = await startWithUpdateDeps();
+
+  app.fire(AN_UPDATE);
+
+  assert.deepEqual(app.showUpdateBannerCalls, [AN_UPDATE]);
+});
+
+test("the app subscribes before bootstrap finishes, so no update is dropped", async () => {
+  // Regression guard: the Rust check is spawned from .setup() and Tauri's emit
+  // has no replay buffer. Subscribing only after the bootstrap/auth awaits used
+  // to mean an update that arrived first was lost for that whole launch.
+  const app = await startWithUpdateDeps();
+  assert.equal(typeof app.fire, "function", "a listener must be registered by the time start resolves");
+
+  app.fire(AN_UPDATE);
+  assert.deepEqual(app.showUpdateBannerCalls, [AN_UPDATE], "the update still reaches the banner");
+});
+
+test("dismissing the banner persists and it does not reappear on the next start", async () => {
+  const storage = fakeUpdateStorage();
+
+  const first = await startWithUpdateDeps({ updateDismissalStorage: storage });
+  first.fire(AN_UPDATE);
+  assert.equal(first.showUpdateBannerCalls.length, 1, "banner should appear on first start");
+  first.updateBannerHandlers?.onDismiss?.();
+
+  const second = await startWithUpdateDeps({ updateDismissalStorage: storage });
+  second.fire(AN_UPDATE);
+
+  assert.equal(second.showUpdateBannerCalls.length, 0, "dismissed version should not reappear");
+});
+
+test("clicking Install invokes the install_update command", async () => {
+  const invokedCommands: string[] = [];
+  const app = await startWithUpdateDeps({
+    invokeTauri: async (cmd) => {
+      invokedCommands.push(cmd);
+      return {};
+    },
+  });
+  app.fire(AN_UPDATE);
+
+  await app.updateBannerHandlers?.onInstall?.();
+
+  assert.ok(invokedCommands.includes("install_update"), "expected install_update to be invoked");
 });

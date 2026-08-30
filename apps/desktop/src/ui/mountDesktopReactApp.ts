@@ -8,6 +8,8 @@ import { WelcomeView } from "./WelcomeView.js";
 import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
+import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
+import type { UpdateBannerHandlers } from "./viewTypes.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -69,6 +71,7 @@ export interface DesktopReactMountOptions {
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
   onExportAccountData?: () => Promise<Record<string, unknown>>;
   onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
+  updateBannerHandlers?: UpdateBannerHandlers;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -95,6 +98,7 @@ export function createDesktopReactMount({
   onLogin,
   onRegister,
   onResetPassword,
+  updateBannerHandlers = {},
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }: DesktopReactMountOptions) {
@@ -103,28 +107,57 @@ export function createDesktopReactMount({
 
   // Whether the saved screen has fetched since the route was last entered.
   let savedArtistsLoaded = false;
+  // Set by showUpdateBanner; null means no banner is showing.
+  let updateBannerViewProps: UpdateBannerViewProps | null = null;
+  // The last routed element, so the banner can be toggled on top of it without
+  // re-running the route — re-rendering `settings` would repeat its
+  // gemini_config_status IPC just to paint an overlay.
+  let routedView: React.ReactNode = null;
+
+  // Always the same Fragment shape, banner or not: rendering the bare view when
+  // no banner is present would change the root element's shape the moment one
+  // appears, and React would unmount and remount the whole routed view.
+  function paint() {
+    root.render(
+      React.createElement(
+        React.Fragment,
+        null,
+        updateBannerViewProps &&
+          React.createElement(UpdateBanner, { viewProps: updateBannerViewProps, handlers: updateBannerHandlers }),
+        routedView,
+      ),
+    );
+  }
+
+  // Every route branch renders through here so the banner — when present —
+  // stays layered above whichever view is routed, instead of each branch
+  // needing to know about it.
+  function renderRoot(nextRoutedView: React.ReactNode) {
+    routedView = nextRoutedView;
+    paint();
+  }
 
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
     if (route !== "saved") savedArtistsLoaded = false;
 
     if (route === "login") {
-      root.render(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
+      renderRoot(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
       return {};
     }
 
     if (route === "register") {
-      root.render(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
+      renderRoot(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
       return {};
     }
 
     if (route === "reset-password") {
-      root.render(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
+      renderRoot(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
       return {};
     }
 
     if (route === "welcome") {
-      root.render(
+      renderRoot(
         React.createElement(WelcomeView as unknown as ViewComponentLike, {
           viewProps: {},
           handlers: welcomeHandlers,
@@ -143,7 +176,7 @@ export function createDesktopReactMount({
         await savedArtistsShell.loadSavedArtists?.();
       }
       const viewProps = savedArtistsShell.getViewProps();
-      root.render(
+      renderRoot(
         React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: savedHandlers,
@@ -153,7 +186,7 @@ export function createDesktopReactMount({
     }
 
     if (route === "privacy") {
-      root.render(
+      renderRoot(
         React.createElement(PrivacyPolicyView as unknown as ViewComponentLike, {
           viewProps: {},
           handlers: privacyHandlers,
@@ -164,7 +197,7 @@ export function createDesktopReactMount({
 
     if (route === "settings") {
       const viewProps = await Promise.resolve(getSettingsViewProps());
-      root.render(
+      renderRoot(
         React.createElement(SettingsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: settingsHandlers,
@@ -174,7 +207,7 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
-    root.render(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
+    renderRoot(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -403,6 +436,10 @@ export function createDesktopReactMount({
     handlers,
     mount() {
       return renderCurrent();
+    },
+    showUpdateBanner(viewProps: UpdateBannerViewProps | null) {
+      updateBannerViewProps = viewProps;
+      paint();
     },
   };
 }

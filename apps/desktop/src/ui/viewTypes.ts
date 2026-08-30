@@ -70,3 +70,8 @@ export type WelcomeHandlers = {
   onGoToSettings?(): unknown;
   onSkip?(): unknown;
 };
+
+export type UpdateBannerHandlers = {
+  onInstall?(): unknown;
+  onDismiss?(): unknown;
+};

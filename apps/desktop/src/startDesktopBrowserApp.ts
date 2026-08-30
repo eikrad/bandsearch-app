@@ -6,6 +6,11 @@ import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
+import {
+  createUpdateNotificationController,
+  type UpdateAvailablePayload,
+  type UpdateDismissalStorage,
+} from "./updateNotification.js";
 
 const VIEWPORT_BREAKPOINT_MAX_PX = 767;
 
@@ -48,6 +53,43 @@ function createDefaultTauriInvoke(): ((cmd: string, args?: Record<string, string
   }
 }
 
+/** Production default: subscribe to main.rs's `update-available` event. Absent (returns
+ * undefined) outside a Tauri host, same fallback shape as createDefaultTauriInvoke. */
+function createDefaultUpdateListener(): ((handler: (payload: UpdateAvailablePayload) => void) => void) | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { listen } = require("@tauri-apps/api/event") as {
+      listen: (event: string, handler: (event: { payload: UpdateAvailablePayload }) => void) => Promise<unknown>;
+    };
+    return (handler: (payload: UpdateAvailablePayload) => void) => {
+      // No Tauri host answering (browser dev, tests) rejects asynchronously;
+      // there is nothing to subscribe to, so the rejection is not surfaced.
+      listen("update-available", (event) => handler(event.payload)).catch(() => {});
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function createDefaultUpdateDismissalStorage(): UpdateDismissalStorage {
+  return {
+    getItem: (key: string) => {
+      try {
+        return globalThis.localStorage?.getItem(key) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        globalThis.localStorage?.setItem(key, value);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
 export type ActionHandlers = {
   onSave?: (artistName: string) => void;
   onRate?: (artistName: string) => void;
@@ -70,6 +112,8 @@ export type StartDesktopBrowserAppOptions = {
   viewport?: string;
   actionHandlers?: ActionHandlers;
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+  listenUpdateAvailable?: (handler: (payload: UpdateAvailablePayload) => void) => void;
+  updateDismissalStorage?: UpdateDismissalStorage;
   deps?: StartDesktopBrowserAppDeps;
 };
 
@@ -79,6 +123,8 @@ export async function startDesktopBrowserApp({
   viewport = "desktop",
   actionHandlers = {},
   invokeTauri,
+  listenUpdateAvailable,
+  updateDismissalStorage,
   deps = {},
 }: StartDesktopBrowserAppOptions = {}): Promise<ReturnType<typeof bootstrapDesktopReactApp>> {
   const {
@@ -86,7 +132,22 @@ export async function startDesktopBrowserApp({
     bootstrapDesktopReactApp: bootstrapReactApp = bootstrapDesktopReactApp,
   } = deps;
   const resolvedInvoke = typeof invokeTauri === "function" ? invokeTauri : createDefaultTauriInvoke();
+  const resolvedListenUpdateAvailable = listenUpdateAvailable ?? createDefaultUpdateListener();
+  const updateStorage = updateDismissalStorage ?? createDefaultUpdateDismissalStorage();
   const resolvedFetch = fetchImpl ?? fetch;
+
+  // Subscribed before any await below. The backend check is spawned from Rust's
+  // .setup() and Tauri's emit has no replay buffer, so subscribing after the
+  // bootstrap/auth round trips would silently drop an update that arrived
+  // first. The controller buffers until the UI attaches after mount.
+  const updateNotifications = createUpdateNotificationController({
+    storage: updateStorage,
+    installUpdate: async () => { await resolvedInvoke?.("install_update"); },
+    onInstallError: (error) => {
+      console.error("[bandsearch] update install failed", error);
+    },
+  });
+  resolvedListenUpdateAvailable?.((payload) => updateNotifications.updateAvailable(payload));
   const router = createHashRouter();
   const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => {
     clearAuthToken();
@@ -179,10 +240,15 @@ export async function startDesktopBrowserApp({
     onLogin,
     onRegister,
     onResetPassword,
+    updateBannerHandlers: updateNotifications.handlers,
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
     subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
   }
+
+  // The UI can paint now; flushes an update that was reported during bootstrap.
+  updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
+
   return reactApp;
 }
