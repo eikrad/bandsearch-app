@@ -1,5 +1,33 @@
 # Bandsearch Roadmap
 
+## How to read this document
+
+**Phase numbers are history, not order.** They record when something was
+written down, not when it is due. Phases 8, 9 and 10 all carry open items
+simultaneously, and Phase 10 was built while Phase 9.5 — which blocks more than
+anything else here — had never been run.
+
+The sections below are kept in their original numbering so the record stays
+intact. For what is actually next, use the dependency order:
+
+```
+9.5  verify Render + Turso end-to-end   ← the bottleneck, never done
+ ├─→ Phase 11  Android (cannot work without a reachable API)
+ ├─→ 9.6       CI/CD deploy gate (optional)
+ └─→ Phase 8   "Future" search_quality_check (needs production eval data)
+
+Phase 10  signing key + GitHub secrets
+ └─→ Phase 10  first versioned release v0.4.0
+      └─→ first real proof the updater works
+
+Independent, can start any time:
+ · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
+ · Phase 10 macOS check      · the card-action defects (#151-#155)
+```
+
+When an entry moves, say so in place rather than deleting it — an entry that
+turned out to sit in the wrong phase is itself worth recording.
+
 ## Completed (Phase 0-5)
 
 - Monorepo foundation, CI baseline, Apache-2.0 licensing.
@@ -74,15 +102,19 @@ No native binary is published for `darwin-x64`; Apple Silicon, Linux (x64/arm64)
 
 Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users → pass-through, 1 user → auto-attach, ≥2 users → 401. Recovery codes (20 random bytes hex). `InMemoryUserRepository`, `SqliteUserRepository`, `TursoUserRepository`. `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password`, `GET /auth/status`. Desktop auth gate in `startDesktopBrowserApp.ts`: checks `/auth/status` on startup, redirects to `#/register` (0 users) or `#/login` (users exist, no token). `LoginView`, `RegisterView`, `ResetPasswordView` using React.createElement. Token stored via `authTokenStore.ts` (localStorage); injected as `Authorization: Bearer` header by `chatClient.ts`. All source files converted to TypeScript; no `any` types remain in touched files.
 
-## Phase 7 — Platform Expansion
+## Phase 7 — Platform Expansion ✓ Done
+
+**Android was moved out of this phase on 2026-08-30 — see Phase 11.** It was
+bundled here because Windows and Android are both "a new platform", but the two
+never shared a dependency shape: Windows was self-contained and shipped, while
+Android cannot run the Node sidecar and therefore depends on a hosted API
+(Phase 9.5). Grouping by topic rather than by dependency is what put it in the
+wrong place, and the mistake only became visible once the sidecar limitation was
+found. With Android extracted, the remaining work in this phase is complete.
 
 - Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI. ✓ Done: `externalBin: ["binaries/node"]` added to `tauri.conf.json`; `sidecar_name()` uses `env!("TARGET")` so the binary name always matches the compile-time Rust target triple; `windows-latest` runner added to CI matrix with `fail-fast: false` and `shell: bash`.
 - Windows release pipeline: add a CI job (`release.yml`) that runs on `windows-latest`, downloads the official Node.js binary for `x86_64-pc-windows-msvc`, renames it to `node-x86_64-pc-windows-msvc.exe`, places it in `src-tauri/binaries/`, then runs `tauri build` to produce the `.msi` / `.exe` installer. Same job needed for `ubuntu-latest` (`node-x86_64-unknown-linux-gnu`) and `macos-latest` (`node-aarch64-apple-darwin` + `node-x86_64-apple-darwin` for universal binary). Artifacts should be uploaded per-platform and attached to a GitHub Release on version tags. ✓ Done: `.github/workflows/release.yml` builds on `ubuntu-latest` / `windows-latest` / `macos-latest` (ARM sidecar), signs updater artifacts via `TAURI_SIGNING_*` secrets, and attaches a draft prerelease with `tauri-action`. macOS Intel sidecar deferred.
-- Android: **planned 2026-08-30**, see [`docs/superpowers/plans/2026-08-30-phase7-android.md`](superpowers/plans/2026-08-30-phase7-android.md). Tauri's Android target (`tauri android init`), compiled-in API endpoint with Settings override, native microphone button (Kotlin plugin) with a Settings toggle, distribution via an own F-Droid repository. Blocked on Phase 9.5: Android cannot run the Node sidecar, so it is remote-API-only.
-
-  **Two claims in the previous version of this entry were false and are corrected there:**
-  - *"Voice input … via the Web Speech API, which works natively in Chromium-based Android webviews — no native plugin needed."* It does not work: in Android WebView the object exists but no callbacks fire ([Chromium 487255](https://issues.chromium.org/issues/40417848), open since 2015). It works in Chrome on Android, which is not what Tauri embeds. Hence the native plugin.
-  - *"Requires responsive layout review"* understated the work. Only `ChatAppView` has any mobile handling; the other seven views have none, including the whole onboarding and auth path.
+- Android: **moved to Phase 11** on 2026-08-30 (dependency on 9.5, see the note above).
 
 ## Parallel Track — TypeScript Migration ✓ Done
 
@@ -112,7 +144,9 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input ✓ Done
 - [x] Step 9: Golden dataset — `services/eval/golden-set.json` with 10 curated queries including `nuggets` and `antiBands`; `run-golden.ts` computing `antiBandRate@8` (CI fail if > 50%), `nuggetCoverage@8`, and `precision@8` (informational trend); `--strict` flag for zero-tolerance anti-band gate ✓ Done
 
-**Future (after data exists):**
+**Future (after data exists) — blocked by Phase 9.5:** the data this depends on only
+accumulates once the eval layer runs against a real deployment.
+
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
 
 **Polish — deferred from the 2026-06-01 implementation review** (see `docs/architecture/2026-05-30-phase8-implementation-plan.md`, findings F1–F8; F1–F5 already fixed):
@@ -217,7 +251,37 @@ Tester werden direkt in der App über neue Versionen informiert. Windows & Linux
 - [x] Einheitlicher Update-Banner im Frontend — als React-Komponente (`UpdateBanner.ts`) statt „kein neues File": das restliche UI ist durchgehend `React.createElement` mit eigenem File pro View, `innerHTML` kommt sonst nirgends vor ✓ Done
 - [x] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`) — bereits vor diesem Zyklus erledigt (Phase 7, `.github/workflows/release.yml`) ✓ Done
 - [ ] Signing-Key generieren + GitHub Secrets konfigurieren — manueller Schritt, außerhalb Scope
-- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf — manueller Schritt, außerhalb Scope
+- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf — manueller Schritt, außerhalb Scope. **Setzt den Signing-Key eine Zeile darüber voraus.** Dies ist der erste echte Beweis, dass der Updater funktioniert: die Release-Pipeline lief bisher nur gegen einen Wegwerf-Tag `v0.2.1-test` (2026-08-11), nie gegen aktuellen Code.
+
+---
+
+## Phase 11 — Android
+
+**Spec:** [`docs/superpowers/plans/2026-08-30-android.md`](superpowers/plans/2026-08-30-android.md)
+
+**Moved here from Phase 7 on 2026-08-30.** It sat under "Platform Expansion"
+next to Windows on the assumption that Android would be self-contained like the
+desktop — its own sidecar, no cloud dependency. That assumption is false:
+Tauri's shell plugin cannot spawn processes on mobile, so Android is
+remote-API-only and **blocked by Phase 9.5**.
+
+Two claims in the old Phase 7 entry were also wrong and are corrected in the
+plan: the Web Speech API does *not* work in Android WebView (the object exists,
+no callbacks fire — [Chromium 487255](https://issues.chromium.org/issues/40417848)),
+and "responsive layout review" understated the work — only `ChatAppView` has any
+mobile handling, the other seven views have none.
+
+- [ ] #159 — platform-conditional API endpoint default (compiled-in production
+      URL, Settings override kept so self-hosting works)
+- [ ] #156 — mobile layout for the seven views that have none; largest item
+- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
+- [ ] #158 — own F-Droid repository; this also closes the update path, since
+      `tauri-plugin-updater` does not support Android
+- [ ] Android CI: signing keys, `minSdkVersion`, NDK in the release workflow
+
+Undecided: offline behaviour (Android has no local fallback at all, discarding
+what Phase 5.5 built for the desktop) and hosting. Measured while planning: the
+API idles at 61 MB RSS, so a 256MB instance suffices.
 
 ---
 
@@ -333,7 +397,9 @@ Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE
 
 ---
 
-### 9. `services/api` is CommonJS in an increasingly ESM ecosystem ← **next up**
+### 9. `services/api` is CommonJS in an increasingly ESM ecosystem
+
+*(Was marked "← next up" until 2026-08-30. It is independent and blocks nothing, whereas 9.5 blocks Android, the deploy gate and the eval data — so it is not the next thing. Kept as a ready-to-start item.)*
 
 **Files:** `services/api/package.json`, `services/api/tsconfig.json`, and every `.ts` file under `services/api/src`
 
