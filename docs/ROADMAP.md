@@ -7,8 +7,36 @@ written down, not when it is due. Phases 8, 9 and 10 all carry open items
 simultaneously, and Phase 10 was built while Phase 9.5 — which blocks more than
 anything else here — had never been run.
 
-The sections below are kept in their original numbering so the record stays
-intact. For what is actually next, use the dependency order:
+A phase number is an **identity** ("which body of work is this"), not a
+position in a queue. The two were previously conflated into one number, which
+is why the document misled. They are now written separately: the queue below
+says what to do, the numbered sections say what it belongs to.
+
+## Work queue — in order
+
+Revisit this list whenever something lands or a new blocker appears; it is a
+plan, not a second permanent structure.
+
+1. **#155 — `getAuthStatus` fails open.** Before 9.5, not after: a 502 during a
+   cold start currently reads as "auth disabled", so the app would silently
+   enter pass-through mode during the very test 9.5 is meant to be. Fixing it
+   afterwards means not trusting the result.
+2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
+   Android, the deploy gate and the eval data, and it is the one thing claimed
+   as infrastructure that has never actually been run.
+3. **#151–#154 — the card action defects.** Cheap, and three of them are live on
+   desktop today (a dead `···` button on every card, Rate silently writing 5).
+   Independent of everything else, so they can also fill gaps while waiting on
+   infrastructure.
+4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
+   This is the first real proof the updater works; the pipeline has only ever
+   run against a throwaway `v0.2.1-test` tag.
+5. **Phase 11 — Android.** Unblocked once 9.5 passes. Start with #159 (endpoint
+   default), then #156 (the seven views, the largest item).
+6. **Whenever there is room:** Phase 8 F6/F7/F8, Architecture 9 (ESM),
+   Phase 10's macOS check (#145).
+
+The constraints this order satisfies:
 
 ```
 9.5  verify Render + Turso end-to-end   ← the bottleneck, never done
@@ -22,11 +50,17 @@ Phase 10  signing key + GitHub secrets
 
 Independent, can start any time:
  · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
- · Phase 10 macOS check      · the card-action defects (#151-#155)
+ · Phase 10 macOS check      · the card-action defects (#151-#154)
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that
 turned out to sit in the wrong phase is itself worth recording.
+
+## The numbered record
+
+Everything below is the history: what was built, what was decided, and where
+earlier entries turned out to be wrong. The numbers identify the work; they do
+not order it. For order, use the queue above.
 
 ## Completed (Phase 0-5)
 
