@@ -141,10 +141,24 @@ Card visual spec:
 - Border radius: 8px
 - Padding: 10px
 
-Action row policy (desktop MVP):
-- Always visible: Save, Rate (text-label buttons)
-- Compact overflow: "···" button for Category/Note
-- Copy shortcut: `⎘` icon-only button with `title="Copy"` tooltip, at row end
+Action row policy (locked, all viewports):
+
+| Control | Visibility | Behaviour |
+|---|---|---|
+| Rating stars (1–5) | Always | Tapping star *n* saves the band **with rating *n***. Rating implies saving. |
+| Save | Always | Saves without a rating, for "remember this, undecided". |
+| `···` overflow | Always | Category / Note. Must open something — see the rule below. |
+| Copy `⎘` | Always, row end | Icon-only, `title="Copy"` tooltip. |
+
+- **Save and the stars are primary and never collapse**, on any screen size.
+  Saving is what makes `preference-aware` mode work, so it is the one action
+  that must always be one tap away. Only Category/Note and Copy are secondary.
+- **Rating implies saving.** There is no state where a band is rated but not
+  saved. A separate "Rate" text button is not used — it cannot express *which*
+  rating is being given, which is why the previous one silently always wrote 5.
+- **No control may render without an action behind it.** If Category/Note is not
+  implemented, the `···` button is not rendered at all. A visible control that
+  does nothing on click is a defect, not a placeholder.
 
 ## Interaction and State Design
 
@@ -222,9 +236,33 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 
 ## Responsiveness Policy
 
-- MVP target: desktop-first.
-- Mobile adaptation is next step, not blocked in MVP.
-- For mobile, move non-primary actions behind compact affordances.
+Mobile is a first-class target as of Phase 7 (Android), not a later adaptation.
+
+### Locked values
+
+| Rule | Value |
+|---|---|
+| Mobile breakpoint | `max-width: 767px` |
+| Minimum touch target | **44 × 44 px** for every interactive control on mobile |
+| Page horizontal padding | 32px desktop / 16px mobile |
+| Card action row | wraps on mobile (`flex-wrap: wrap`), never scrolls horizontally |
+
+### What may and may not collapse
+
+- **Never collapsed, any viewport:** rating stars, Save, the query input, the
+  mode toggle, primary navigation.
+- **May collapse into the `···` overflow on mobile:** Category, Note, Copy.
+
+"Non-primary" previously appeared here without a definition, and was read as
+including Save and Rate — which the Recommendation Card section lists as always
+visible. The two lists above replace that ambiguity; when adding a control,
+place it in one of them.
+
+### Views
+
+Every view must be usable at 360px width, not only `ChatAppView`. The
+onboarding path a new mobile user hits first — Welcome → Register/Login →
+Settings → Chat → Saved Artists — is part of this requirement, not a follow-up.
 
 ## Roadmap UI Ideas
 
