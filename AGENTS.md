@@ -1,7 +1,7 @@
 # Agent instructions
 
 ## Agent skills
-
+Use /feature-worklfow when useful
 ### Issue tracker
 
 Issues are tracked in GitHub Issues for this repository using the `gh` CLI. See `docs/agents/issue-tracker.md`.
@@ -24,10 +24,6 @@ When working on Roadmap items update Roadmap corresponfingly.
 any UI change. Read them before touching a view, and follow the values marked
 `(locked)` exactly rather than re-deriving them.
 
-Two rules that exist because both were broken at once (see the card action row,
-fixed 2026-08-30 — the spec was written 15 minutes *before* the code that
-contradicted it, and stayed contradicted for four months):
-
 - **Changing the design means changing the spec in the same PR.** If the
   implementation should differ from the spec, update the spec — never leave the
   two disagreeing. A code change that silently deviates is a bug even when the
@@ -36,9 +32,6 @@ contradicted it, and stayed contradicted for four months):
   whatever the code happens to do will lock a spec violation in place and defend
   it against correction. That is worse than having no test.
 
-If a spec rule is prose rather than a number, it will be interpreted and
-therefore eventually ignored — when you rely on such a rule, pin it to a
-concrete value and mark it `(locked)`.
 
 ### TypeScript
 
@@ -50,7 +43,7 @@ Application, test, and JS-toolchain config code is TypeScript only (`strict` + `
 
 ## Git & PR Workflow
 
-**Sequentiell arbeiten, nicht parallel.**
+**Work sequential not parrallel.**
 
 ### Branching workflow
 
