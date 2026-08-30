@@ -95,7 +95,10 @@ export function runPreferenceRepositoryContract(adapterName: string, createRepos
     const repo = await createRepository();
     const result = await repo.importSavedBands([
       bandInput({ musicbrainzArtistId: "mb-1", name: "Fen" }),
-      { musicbrainzArtistId: "mb-bad", name: "No Rating", categories: [], note: "" },
+      // A rating outside 1-5. A *missing* rating used to stand in for "invalid"
+      // here, but an unrated band is now a legitimate state (CONTEXT.md), so the
+      // example had to become something genuinely rejectable.
+      { musicbrainzArtistId: "mb-bad", name: "Bad Rating", rating: 9, categories: [], note: "" },
       bandInput({ musicbrainzArtistId: "mb-3", name: "Wolves in the Throne Room" }),
     ]);
 
