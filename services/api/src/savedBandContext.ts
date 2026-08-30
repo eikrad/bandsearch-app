@@ -9,7 +9,7 @@
 export type SavedBandForContext = {
   id: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: string[];
   note: string;
 };
@@ -20,7 +20,15 @@ export type SavedBandContextSource = {
 };
 
 export function formatSavedBandContextLine(band: SavedBandForContext): string {
-  return `${band.name} (rating ${band.rating}/5) tags: ${band.categories.join(", ")} note: ${band.note}`;
+  // An unrated band is still a signal — the user chose to keep it — so it stays
+  // in the context. What it must not do is claim a rating: interpolating null
+  // would emit "rating null/5", and a 0 would read as a strong dislike the user
+  // never expressed.
+  const judgement =
+    band.rating === null || band.rating === undefined
+      ? "not yet rated"
+      : `rating ${band.rating}/5`;
+  return `${band.name} (${judgement}) tags: ${band.categories.join(", ")} note: ${band.note}`;
 }
 
 export type SavedBandContextOptions = {

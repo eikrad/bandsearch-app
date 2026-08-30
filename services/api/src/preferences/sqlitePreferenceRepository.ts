@@ -10,7 +10,7 @@ type SavedBandRow = {
   user_id: string;
   musicbrainz_artist_id: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: string;
   note: string;
   created_at: string;
@@ -24,12 +24,12 @@ type MusicbrainzIdRow = { musicbrainz_artist_id: string };
 type SavedBandInput = {
   musicbrainzArtistId: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: unknown[];
   note: string;
 };
 
-type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+type BandUpdates = { rating?: number | null; categories?: string[]; note?: string };
 
 function mapRowToSavedBand(row: SavedBandRow) {
   return {
@@ -62,7 +62,7 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }): Pref
         `INSERT INTO saved_bands
           (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, userId, musicbrainzArtistId, name, bandInput.rating, categories, note, now, now);
+      ).run(id, userId, musicbrainzArtistId, name, bandInput.rating ?? null, categories, note, now, now);
 
       const row = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id) as SavedBandRow;
       return { ok: true, savedBand: mapRowToSavedBand(row) };

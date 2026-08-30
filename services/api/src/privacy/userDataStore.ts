@@ -114,7 +114,9 @@ export function rowToSavedBand(row: Record<string, unknown>): SavedBand {
     id: String(row.id),
     musicbrainzArtistId: String(row.musicbrainz_artist_id),
     name: String(row.name),
-    rating: Number(row.rating),
+    // Number(null) is 0 — a rating the user never gave, in their own data
+    // export. An absent rating has to stay absent.
+    rating: row.rating === null || row.rating === undefined ? null : Number(row.rating),
     categories: parseCategories(row.categories),
     note: String(row.note ?? ""),
     createdAt: String(row.created_at),

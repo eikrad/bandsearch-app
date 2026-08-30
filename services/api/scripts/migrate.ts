@@ -14,12 +14,17 @@ async function migrateTurso(): Promise<void> {
     authToken: process.env.TURSO_AUTH_TOKEN ?? "",
   });
 
-  const migrationPath = path.join(__dirname, "..", "migrations", "002_full_schema.sql");
-  const sql = await fs.readFile(migrationPath, "utf8");
+  // Every .sql in the folder, in filename order. Listing them here instead
+  // would mean editing this file for each new migration and forgetting to.
+  const migrationsDir = path.join(__dirname, "..", "migrations");
+  const files = (await fs.readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
 
   try {
-    await client.executeMultiple(sql);
-    console.log("Migration applied: 002_full_schema.sql");
+    for (const file of files) {
+      const sql = await fs.readFile(path.join(migrationsDir, file), "utf8");
+      await client.executeMultiple(sql);
+      console.log(`Migration applied: ${file}`);
+    }
   } finally {
     client.close();
   }

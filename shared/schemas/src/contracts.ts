@@ -93,8 +93,12 @@ export function validateSavedBand(input: unknown): ValidateSavedBandResult {
   if (!isNonEmptyString(band.name)) {
     return { ok: false, error: "name is required" };
   }
-  if (!Number.isInteger(band.rating) || (band.rating as number) < 1 || (band.rating as number) > 5) {
-    return { ok: false, error: "rating must be an integer between 1 and 5" };
+  // Absent or null means "saved, not yet rated" — a real state, not a missing
+  // field. Only a rating that is actually present has to be in range.
+  if (band.rating !== undefined && band.rating !== null) {
+    if (!Number.isInteger(band.rating) || (band.rating as number) < 1 || (band.rating as number) > 5) {
+      return { ok: false, error: "rating must be an integer between 1 and 5" };
+    }
   }
   if (!Array.isArray(band.categories)) {
     return { ok: false, error: "categories must be an array" };
