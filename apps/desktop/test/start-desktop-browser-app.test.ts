@@ -151,6 +151,10 @@ async function startWithUpdateDeps(
     listenUpdateAvailable: (handler) => { listener = handler; },
     updateDismissalStorage: overrides.updateDismissalStorage ?? fakeUpdateStorage(),
     invokeTauri: overrides.invokeTauri ?? (async () => ({})),
+    // Without this the helper fell through to the global fetch and really tried
+    // to reach localhost:3001. Harmless while an unreachable API failed fast;
+    // now that startup retries a waking API, a unit test must never get there.
+    fetchImpl: async () => jsonResponse({ enabled: false, userCount: 0 }),
     deps: {
       bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
       bootstrapDesktopReactApp: (options) => {

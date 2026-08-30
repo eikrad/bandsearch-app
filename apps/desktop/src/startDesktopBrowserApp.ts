@@ -6,6 +6,7 @@ import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { decideAuthRoute } from "./authGate.js";
+import { waitForAuthStatus } from "./waitForApi.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
   createUpdateNotificationController,
@@ -115,6 +116,9 @@ export type StartDesktopBrowserAppOptions = {
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
   listenUpdateAvailable?: (handler: (payload: UpdateAvailablePayload) => void) => void;
   updateDismissalStorage?: UpdateDismissalStorage;
+  /** Injected by tests so the API wait is driven rather than waited out. */
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
   deps?: StartDesktopBrowserAppDeps;
 };
 
@@ -126,6 +130,8 @@ export async function startDesktopBrowserApp({
   invokeTauri,
   listenUpdateAvailable,
   updateDismissalStorage,
+  sleep,
+  now,
   deps = {},
 }: StartDesktopBrowserAppOptions = {}): Promise<ReturnType<typeof bootstrapDesktopReactApp>> {
   const {
@@ -136,6 +142,8 @@ export async function startDesktopBrowserApp({
   const resolvedListenUpdateAvailable = listenUpdateAvailable ?? createDefaultUpdateListener();
   const updateStorage = updateDismissalStorage ?? createDefaultUpdateDismissalStorage();
   const resolvedFetch = fetchImpl ?? fetch;
+  const resolvedSleep = sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const resolvedNow = now ?? (() => Date.now());
 
   // Subscribed before any await below. The backend check is spawned from Rust's
   // .setup() and Tauri's emit has no replay buffer, so subscribing after the
@@ -190,14 +198,23 @@ export async function startDesktopBrowserApp({
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
   async function runAuthGate(): Promise<void> {
-    const status = await authClient.getAuthStatus();
+    // Retries while the API wakes; returns immediately when it is already up, so
+    // this costs a healthy start nothing.
+    const status = await waitForAuthStatus({
+      getStatus: () => authClient.getAuthStatus(),
+      sleep: resolvedSleep,
+      now: resolvedNow,
+      onAttempt: ({ attempt, elapsedMs }) => {
+        if (attempt > 1) console.info(`[bandsearch] waiting for API, attempt ${attempt} (${elapsedMs}ms)`);
+      },
+    });
     const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
     if (route === "app") return;
     if (route === "unavailable") {
       // Interim: send the user somewhere that does not pretend to work, rather
       // than into a chat whose every request will fail. Phase 3 replaces this
-      // with a connecting state that retries while the API wakes up.
-      console.warn("[bandsearch] auth status unavailable:", status.reachable === false && status.reason);
+      // with a visible connecting state.
+      console.warn("[bandsearch] API unreachable:", status.reachable === false && status.reason);
       router.navigate("login");
       return;
     }
