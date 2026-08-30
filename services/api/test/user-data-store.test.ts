@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { createSqliteUserDataStore, USER_SCOPED_TABLES } from "../src/privacy/userDataStore.js";
+import { createSqliteUserDataStore, USER_SCOPED_TABLES, rowToSavedBand } from "../src/privacy/userDataStore.js";
 
 const SCHEMA_PATH = path.join(__dirname, "..", "migrations", "002_full_schema.sql");
 
@@ -164,4 +164,37 @@ test("exporting an unknown user yields an empty bundle rather than throwing", as
 
   assert.equal(bundle.user, null);
   assert.deepEqual(bundle.savedBands, []);
+});
+
+test("an unrated band is exported as unrated, not as a zero", () => {
+  // `Number(null)` is 0, which is outside the 1-5 range the rest of the system
+  // enforces — and this lands in a user-facing GDPR export, the worst place to
+  // invent a value the user never chose (#167).
+  const band = rowToSavedBand({
+    id: "b1",
+    musicbrainz_artist_id: "mb-1",
+    name: "Codeine",
+    rating: null,
+    categories: "[]",
+    note: "",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+
+  assert.equal(band.rating, null);
+});
+
+test("a rated band still exports its rating", () => {
+  const band = rowToSavedBand({
+    id: "b1",
+    musicbrainz_artist_id: "mb-1",
+    name: "Codeine",
+    rating: 4,
+    categories: "[]",
+    note: "",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+
+  assert.equal(band.rating, 4);
 });
