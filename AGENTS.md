@@ -56,6 +56,12 @@ feature branch  →  staging  →  main
 - When creating a feature branch or fixing a bug, set `base = staging` in the PR
 - `staging` acts as the integration/QA gate before production (`main`)
 
+**Issues do not close themselves here.** GitHub honours `Closes #123` only when a
+PR merges into the *default* branch — `main`. Since PRs target `staging`, the
+keyword never fires, and a finished issue stays open until someone closes it by
+hand. Still write `Closes #123` in the PR so the link is recorded, then close the
+issue manually once the PR is merged.
+
 ## Testing
 
 TDD-Ansatz: erst Tests schreiben (rot), dann implementieren (grün), dann refactoren.

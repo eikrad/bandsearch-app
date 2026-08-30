@@ -17,10 +17,9 @@ says what to do, the numbered sections say what it belongs to.
 Revisit this list whenever something lands or a new blocker appears; it is a
 plan, not a second permanent structure.
 
-1. **#155 — `getAuthStatus` fails open.** Before 9.5, not after: a 502 during a
-   cold start currently reads as "auth disabled", so the app would silently
-   enter pass-through mode during the very test 9.5 is meant to be. Fixing it
-   afterwards means not trusting the result.
+1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161). It had to come first:
+   a 502 during a cold start read as "auth disabled", so the app would have
+   entered pass-through mode during the very test 9.5 is meant to be.
 2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
    Android, the deploy gate and the eval data, and it is the one thing claimed
    as infrastructure that has never actually been run.
