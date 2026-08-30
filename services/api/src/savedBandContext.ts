@@ -9,7 +9,7 @@
 export type SavedBandForContext = {
   id: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: string[];
   note: string;
 };

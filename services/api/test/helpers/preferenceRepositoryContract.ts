@@ -91,6 +91,30 @@ export function runPreferenceRepositoryContract(adapterName: string, createRepos
     assert.equal((await repo.listSavedBands()).length, 1);
   });
 
+  test(label("a band can be saved with no rating at all"), async () => {
+    // Every backend must agree that "saved, not yet rated" is storable — the
+    // schema previously forbade it (NOT NULL CHECK 1..5), which is what forced
+    // the UI to invent a rating behind the user's back.
+    const repo = await createRepository();
+
+    await addBand(repo, { musicbrainzArtistId: "mb-1", name: "Codeine", rating: undefined });
+
+    const [band] = await repo.listSavedBands();
+    assert.equal(band.name, "Codeine");
+    assert.equal(band.rating ?? null, null, "an unrated band must not come back carrying a number");
+  });
+
+  test(label("a rating can be cleared again without unsaving the band"), async () => {
+    const repo = await createRepository();
+    const saved = await addBand(repo, { musicbrainzArtistId: "mb-1", name: "Codeine", rating: 4 });
+
+    await repo.updateSavedBand(saved.id, { rating: null });
+
+    const [band] = await repo.listSavedBands();
+    assert.equal(band.rating ?? null, null, "clearing the rating must not remove the band");
+    assert.equal(band.name, "Codeine");
+  });
+
   test(label("importSavedBands counts invalid bands as failed and keeps going"), async () => {
     const repo = await createRepository();
     const result = await repo.importSavedBands([

@@ -11,7 +11,7 @@ type SavedBand = {
   userId: string;
   musicbrainzArtistId: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: string[];
   note: string;
   createdAt: string;
@@ -28,12 +28,12 @@ type Group = {
 type SavedBandInput = {
   musicbrainzArtistId: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: unknown[];
   note: string;
 };
 
-type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+type BandUpdates = { rating?: number | null; categories?: string[]; note?: string };
 
 function withoutUserId({ userId: _uid, ...rest }: SavedBand) {
   void _uid;
@@ -62,7 +62,7 @@ export function createPreferenceMemory() {
         userId,
         musicbrainzArtistId: bandInput.musicbrainzArtistId.trim(),
         name: bandInput.name.trim(),
-        rating: bandInput.rating,
+        rating: bandInput.rating ?? null,
         categories: bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
         note: bandInput.note.trim(),
         createdAt: now,
