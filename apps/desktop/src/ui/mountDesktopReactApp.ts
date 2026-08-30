@@ -9,7 +9,8 @@ import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
 import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
-import type { UpdateBannerHandlers } from "./viewTypes.js";
+import { ConnectingView } from "./ConnectingView.js";
+import type { UpdateBannerHandlers, ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -72,6 +73,8 @@ export interface DesktopReactMountOptions {
   onExportAccountData?: () => Promise<Record<string, unknown>>;
   onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
   updateBannerHandlers?: UpdateBannerHandlers;
+  connectingHandlers?: ConnectingHandlers;
+  getConnectingViewProps?: () => ConnectingViewProps;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -99,6 +102,8 @@ export function createDesktopReactMount({
   onRegister,
   onResetPassword,
   updateBannerHandlers = {},
+  connectingHandlers = {},
+  getConnectingViewProps,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }: DesktopReactMountOptions) {
@@ -153,6 +158,16 @@ export function createDesktopReactMount({
 
     if (route === "reset-password") {
       renderRoot(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
+      return {};
+    }
+
+    if (route === "connecting") {
+      renderRoot(
+        React.createElement(ConnectingView as unknown as ViewComponentLike, {
+          viewProps: getConnectingViewProps?.() ?? { state: "waiting" },
+          handlers: connectingHandlers,
+        }),
+      );
       return {};
     }
 

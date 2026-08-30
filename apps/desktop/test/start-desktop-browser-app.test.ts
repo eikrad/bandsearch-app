@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { startDesktopBrowserApp } from "../src/startDesktopBrowserApp.js";
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "../src/index.js";
-import { jsonResponse } from "./helpers/fakeResponse.js";
+import { jsonResponse, errorResponse } from "./helpers/fakeResponse.js";
 import { fakeMediaQueryList, fakeWindow } from "./helpers/fakeDom.js";
 import { fakeUpdateStorage } from "./helpers/fakeStorage.js";
 import type { UpdateAvailablePayload, UpdateDismissalStorage } from "../src/updateNotification.js";
@@ -222,4 +222,77 @@ test("clicking Install invokes the install_update command", async () => {
   await app.updateBannerHandlers?.onInstall?.();
 
   assert.ok(invokedCommands.includes("install_update"), "expected install_update to be invoked");
+});
+
+// --- the connecting screen (#155) -------------------------------------------
+
+/**
+ * Boots against an API that answers 502 the first `downFor` times, as a
+ * spun-down Render instance does, then comes up. Sleep is faked so the backoff
+ * costs the suite nothing.
+ */
+async function startAgainstWakingApi(downFor: number) {
+  let calls = 0;
+  // The hash router reads globalThis.location; without one, navigate() is a
+  // no-op and every route would read as "home".
+  const prevLocation = globalThis.location;
+  Object.defineProperty(globalThis, "location", {
+    value: { hash: "" }, configurable: true, writable: true,
+  });
+  const routes: string[] = [];
+  let connectingProps: (() => { state: string; attempt?: number }) | undefined;
+
+  await startDesktopBrowserApp({
+    // Onboarding complete, otherwise the welcome gate short-circuits the auth
+    // gate and no status check happens at all.
+    invokeTauri: async (cmd) =>
+      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+    updateDismissalStorage: fakeUpdateStorage(),
+    fetchImpl: async (url) => {
+      if (!String(url).endsWith("/auth/status")) return jsonResponse({});
+      calls += 1;
+      return calls <= downFor
+        ? errorResponse(502, {})
+        : jsonResponse({ enabled: true, userCount: 2 });
+    },
+    sleep: async () => {},
+    now: () => 0,
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        connectingProps = options.getConnectingViewProps;
+        routes.push(options.router?.getRoute() ?? "");
+        return fakeReactApp({
+          mount: async () => { routes.push(options.router?.getRoute() ?? ""); return {}; },
+          showUpdateBanner: () => {},
+        });
+      },
+    },
+  });
+
+  Object.defineProperty(globalThis, "location", {
+    value: prevLocation, configurable: true, writable: true,
+  });
+  return { routes, statusCalls: calls, connectingProps };
+}
+
+test("a cold API puts the user on the connecting screen, not into a broken app", async () => {
+  const { routes, connectingProps } = await startAgainstWakingApi(3);
+
+  assert.ok(routes.includes("connecting"), `expected a connecting route, saw: ${routes.join(", ")}`);
+  assert.notEqual(connectingProps?.().state, "failed", "it should still have been waiting, not given up");
+});
+
+test("once the API wakes, the user is routed on rather than left connecting", async () => {
+  const { routes, statusCalls } = await startAgainstWakingApi(3);
+
+  assert.ok(statusCalls > 3, `expected retries past the outage, got ${statusCalls} calls`);
+  assert.equal(routes.at(-1), "login", `should have landed on login, saw: ${routes.join(", ")}`);
+});
+
+test("a healthy API never shows the connecting screen", async () => {
+  const { routes, statusCalls } = await startAgainstWakingApi(0);
+
+  assert.equal(statusCalls, 1, "a healthy start must cost exactly one status check");
+  assert.equal(routes.includes("connecting"), false, "no detour through connecting");
 });

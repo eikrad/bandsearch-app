@@ -71,6 +71,8 @@ export type BootstrapDesktopReactAppOptions = {
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
   updateBannerHandlers?: UpdateBannerHandlers;
+  connectingHandlers?: DesktopReactMountOptions["connectingHandlers"];
+  getConnectingViewProps?: DesktopReactMountOptions["getConnectingViewProps"];
 };
 
 function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
@@ -91,6 +93,8 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
     onRegister,
     onResetPassword,
     updateBannerHandlers,
+    connectingHandlers,
+    getConnectingViewProps,
   } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
   const mountApi = createDesktopReactMount({
@@ -108,6 +112,8 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
     onRegister,
     onResetPassword,
     updateBannerHandlers,
+    connectingHandlers,
+    getConnectingViewProps,
   });
   return {
     ...mountApi,

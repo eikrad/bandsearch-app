@@ -7,6 +7,7 @@ import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js"
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { decideAuthRoute } from "./authGate.js";
 import { waitForAuthStatus } from "./waitForApi.js";
+import type { ConnectingViewProps } from "./ui/viewTypes.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
   createUpdateNotificationController,
@@ -197,28 +198,50 @@ export async function startDesktopBrowserApp({
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
+  // Drives the connecting screen. Read by the mount each time it renders.
+  let connectingViewProps: ConnectingViewProps = { state: "waiting" };
+
+  /**
+   * Routes on one quick check, so a healthy API reaches the right screen with no
+   * detour. Only when that first check finds nothing does the connecting screen
+   * appear — and the remaining retries then happen with something on screen,
+   * which is the part `waitForAuthStatus` alone could not provide: the gate runs
+   * before `mount()`, so waiting there would show a blank window.
+   */
   async function runAuthGate(): Promise<void> {
-    // Retries while the API wakes; returns immediately when it is already up, so
-    // this costs a healthy start nothing.
+    const first = await authClient.getAuthStatus();
+    const route = decideAuthRoute({ status: first, hasToken: Boolean(getAuthToken()) });
+    if (route === "unavailable") {
+      connectingViewProps = { state: "waiting", attempt: 1 };
+      router.navigate("connecting");
+      return;
+    }
+    if (route !== "app") router.navigate(route);
+  }
+
+  /** Keeps polling after mount, then routes to wherever the answer says. */
+  async function finishConnecting(): Promise<void> {
     const status = await waitForAuthStatus({
       getStatus: () => authClient.getAuthStatus(),
       sleep: resolvedSleep,
       now: resolvedNow,
-      onAttempt: ({ attempt, elapsedMs }) => {
-        if (attempt > 1) console.info(`[bandsearch] waiting for API, attempt ${attempt} (${elapsedMs}ms)`);
+      onAttempt: ({ attempt }) => {
+        connectingViewProps = { state: "waiting", attempt: attempt + 1 };
+        void reactApp?.mount();
       },
     });
     const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
-    if (route === "app") return;
     if (route === "unavailable") {
-      // Interim: send the user somewhere that does not pretend to work, rather
-      // than into a chat whose every request will fail. Phase 3 replaces this
-      // with a visible connecting state.
       console.warn("[bandsearch] API unreachable:", status.reachable === false && status.reason);
-      router.navigate("login");
+      connectingViewProps = { state: "failed" };
+      await reactApp?.mount();
       return;
     }
-    router.navigate(route);
+    // Render explicitly rather than relying on the browser firing `hashchange`
+    // for our own navigation — that is an implicit dependency, and it does not
+    // exist outside a real browser at all.
+    router.navigate(route === "app" ? "home" : route);
+    await reactApp?.mount();
   }
 
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
@@ -264,6 +287,13 @@ export async function startDesktopBrowserApp({
     onRegister,
     onResetPassword,
     updateBannerHandlers: updateNotifications.handlers,
+    getConnectingViewProps: () => connectingViewProps,
+    connectingHandlers: {
+      onRetry: () => {
+        connectingViewProps = { state: "waiting", attempt: 1 };
+        void reactApp.mount().then(() => finishConnecting());
+      },
+    },
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
@@ -272,6 +302,10 @@ export async function startDesktopBrowserApp({
 
   // The UI can paint now; flushes an update that was reported during bootstrap.
   updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
+
+  // Something is on screen now, so the remaining retries are visible rather than
+  // spent behind a blank window.
+  if (router.getRoute() === "connecting") await finishConnecting();
 
   return reactApp;
 }
