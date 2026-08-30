@@ -5,6 +5,7 @@ import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
+import { decideAuthRoute } from "./authGate.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
   createUpdateNotificationController,
@@ -189,13 +190,18 @@ export async function startDesktopBrowserApp({
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
   async function runAuthGate(): Promise<void> {
-    const authStatus = await authClient.getAuthStatus();
-    if (!authStatus.enabled) return;
-    if (authStatus.userCount === 0) {
-      router.navigate("register");
-    } else if (!getAuthToken()) {
+    const status = await authClient.getAuthStatus();
+    const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
+    if (route === "app") return;
+    if (route === "unavailable") {
+      // Interim: send the user somewhere that does not pretend to work, rather
+      // than into a chat whose every request will fail. Phase 3 replaces this
+      // with a connecting state that retries while the API wakes up.
+      console.warn("[bandsearch] auth status unavailable:", status.reachable === false && status.reason);
       router.navigate("login");
+      return;
     }
+    router.navigate(route);
   }
 
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
