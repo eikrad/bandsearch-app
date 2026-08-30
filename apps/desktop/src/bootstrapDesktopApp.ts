@@ -1,3 +1,4 @@
+import { formatRatingForPrompt } from "../../../shared/schemas/src/contracts.js";
 import type { SavedBand } from "./domain.js";
 import type { ChatMessage } from "./chatClient.js";
 import {
@@ -18,7 +19,7 @@ function buildPriorityContext(savedBands: SavedBand[], selectedArtistIds: string
   if (!selectedArtistIds.length) return "";
   const selected = savedBands.filter((b) => selectedArtistIds.includes(b.id));
   if (!selected.length) return "";
-  const names = selected.map((b) => `${b.name} (rating ${b.rating}/5)`).join(", ");
+  const names = selected.map((b) => `${b.name} (${formatRatingForPrompt(b.rating)})`).join(", ");
   return `Priority style references: ${names}`;
 }
 

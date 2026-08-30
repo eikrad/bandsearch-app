@@ -191,3 +191,16 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     obscurityTarget: validateObscurityTarget(b.obscurityTarget),
   };
 }
+
+/**
+ * How a saved band's rating is stated to the model.
+ *
+ * Shared because two call sites format saved bands for a prompt — the API's
+ * preference context and the desktop's priority-style-reference line — and they
+ * drifted: one said "not yet rated" while the other interpolated the absence
+ * straight in as "rating null/5". A missing judgement must never be reported as
+ * a number: 0 reads as a strong dislike the user never expressed.
+ */
+export function formatRatingForPrompt(rating: number | null | undefined): string {
+  return rating == null ? "not yet rated" : `rating ${rating}/5`;
+}

@@ -219,29 +219,38 @@ export async function startDesktopBrowserApp({
     if (route !== "app") router.navigate(route);
   }
 
+  // Guards the retry button: root.render commits asynchronously, so a double
+  // click would otherwise start a second polling loop writing the same state.
+  let connecting = false;
+
   /** Keeps polling after mount, then routes to wherever the answer says. */
   async function finishConnecting(): Promise<void> {
+    if (connecting) return;
+    connecting = true;
+    try {
     const status = await waitForAuthStatus({
       getStatus: () => authClient.getAuthStatus(),
       sleep: resolvedSleep,
       now: resolvedNow,
       onAttempt: ({ attempt }) => {
         connectingViewProps = { state: "waiting", attempt: attempt + 1 };
-        void reactApp?.mount();
+        void reactApp.mount();
       },
     });
-    const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
-    if (route === "unavailable") {
-      console.warn("[bandsearch] API unreachable:", status.reachable === false && status.reason);
-      connectingViewProps = { state: "failed" };
-      await reactApp?.mount();
-      return;
+      const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
+      if (route === "unavailable") {
+        if (!status.reachable) console.warn("[bandsearch] API unreachable:", status.reason);
+        connectingViewProps = { state: "failed" };
+      } else {
+        // Render explicitly rather than relying on the browser firing
+        // `hashchange` for our own navigation — that is an implicit dependency,
+        // and it does not exist outside a real browser at all.
+        router.navigate(route === "app" ? "home" : route);
+      }
+      await reactApp.mount();
+    } finally {
+      connecting = false;
     }
-    // Render explicitly rather than relying on the browser firing `hashchange`
-    // for our own navigation — that is an implicit dependency, and it does not
-    // exist outside a real browser at all.
-    router.navigate(route === "app" ? "home" : route);
-    await reactApp?.mount();
   }
 
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
@@ -291,7 +300,7 @@ export async function startDesktopBrowserApp({
     connectingHandlers: {
       onRetry: () => {
         connectingViewProps = { state: "waiting", attempt: 1 };
-        void reactApp.mount().then(() => finishConnecting());
+        void finishConnecting();
       },
     },
   });

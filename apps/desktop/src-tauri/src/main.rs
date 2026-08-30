@@ -863,7 +863,6 @@ mod tests {
         };
         let value = serde_json::to_value(&payload).expect("payload must serialize");
         assert_eq!(value["canAutoInstall"], cfg!(not(target_os = "macos")));
-        assert_eq!(value["canAutoInstall"].as_bool(), Some(!cfg!(target_os = "macos")));
     }
 
     #[test]

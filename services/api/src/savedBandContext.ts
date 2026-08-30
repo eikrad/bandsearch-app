@@ -6,6 +6,8 @@
 // it belongs next to the recommendation pipeline that consumes it. Adapters are
 // left with plain CRUD, and there is one place to change the prompt format.
 
+import { formatRatingForPrompt } from "../../../shared/schemas/src/contracts.js";
+
 export type SavedBandForContext = {
   id: string;
   name: string;
@@ -21,14 +23,8 @@ export type SavedBandContextSource = {
 
 export function formatSavedBandContextLine(band: SavedBandForContext): string {
   // An unrated band is still a signal — the user chose to keep it — so it stays
-  // in the context. What it must not do is claim a rating: interpolating null
-  // would emit "rating null/5", and a 0 would read as a strong dislike the user
-  // never expressed.
-  const judgement =
-    band.rating === null || band.rating === undefined
-      ? "not yet rated"
-      : `rating ${band.rating}/5`;
-  return `${band.name} (${judgement}) tags: ${band.categories.join(", ")} note: ${band.note}`;
+  // in the context, stating only that no judgement was given.
+  return `${band.name} (${formatRatingForPrompt(band.rating)}) tags: ${band.categories.join(", ")} note: ${band.note}`;
 }
 
 export type SavedBandContextOptions = {

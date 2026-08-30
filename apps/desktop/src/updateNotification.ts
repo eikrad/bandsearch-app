@@ -57,9 +57,11 @@ export function createUpdateNotificationController({
   onInstallError,
 }: UpdateNotificationControllerOptions) {
   let showBanner: ((viewProps: UpdateAvailablePayload | null) => void) | undefined;
-  /** Reported while no renderer was attached yet; flushed by attach(). */
-  let buffered: UpdateAvailablePayload | undefined;
-  /** The update currently on display, needed to persist the right dismissal. */
+  /**
+   * The update worth showing. Doubles as the buffer: reported before a renderer
+   * attached, it simply waits here until attach() replays it — a separate
+   * `buffered` field only ever held a copy of this same value.
+   */
   let current: UpdateAvailablePayload | undefined;
 
   return {
@@ -68,17 +70,13 @@ export function createUpdateNotificationController({
       const dismissedVersion = getDismissedUpdateVersion(storage);
       if (!shouldShowUpdateBanner({ availableVersion: payload.version, dismissedVersion })) return;
       current = payload;
-      if (showBanner) showBanner(payload);
-      else buffered = payload;
+      showBanner?.(payload);
     },
 
     /** Connect the renderer once the UI can paint, flushing anything buffered. */
     attach(show: (viewProps: UpdateAvailablePayload | null) => void): void {
       showBanner = show;
-      if (buffered) {
-        show(buffered);
-        buffered = undefined;
-      }
+      if (current) show(current);
     },
 
     handlers: {
