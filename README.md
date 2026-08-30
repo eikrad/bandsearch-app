@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
-![Version: 0.4.0-alpha.0](https://img.shields.io/badge/version-0.4.0--alpha.0-blue)
+![Version: 0.4.0-alpha.0](https://img.shields.io/badge/version-0.4.0-blue)
 
 AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by Gemini.
 
