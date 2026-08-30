@@ -52,14 +52,14 @@ export function ConnectingView({
     React.createElement(
       "h1",
       { style: { fontSize: "15px", fontWeight: 700, letterSpacing: "-0.01em" } },
-      waiting ? "Starting the server" : "Could not reach the server",
+      waiting ? (longWait ? "Still starting…" : "Starting the server") : "Could not reach the server",
     ),
     React.createElement(
       "p",
       { style: { fontSize: "13px", color: palette.textSecondary, maxWidth: "36ch", lineHeight: 1.5 } },
       waiting
         ? longWait
-          ? "Still starting. A server that has been idle can take up to a minute to wake up."
+          ? "A server that has been idle can take up to a minute to wake up."
           : "This can take a moment if the server has been idle."
         : "The server did not respond. Check your connection, or the API endpoint in Settings.",
     ),

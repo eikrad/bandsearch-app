@@ -28,7 +28,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Artist group** — a named collection of saved bands, with its own identity, used to browse and organise a collection. A group **does not influence recommendations**; it never reaches the preference context. The rule of thumb: a category says something about a band's character, a group says where the user filed it.
 
-- **Note** — free text on a saved band. Only a note the user has actually written or edited counts as their own preference signal and reaches the recommendation prompt. A note left at the value the system pre-filled — the model's own explanation of why it recommended the artist — stays visible to the user but is kept out of the prompt, so the model cannot read its own words back as if the user had said them. See ADR 0002.
+- **Note** — free text on a saved band. It is pre-filled with the model's own explanation of why it recommended the artist, and the user can edit it.
+
+  **Decided but not yet built (ADR 0002, tracked in #166):** only a note the user has actually written or edited *should* count as their own preference signal and reach the recommendation prompt; one left at its pre-filled value *should* stay visible but out of the prompt, so the model cannot read its own words back as if the user had said them. **Today every note reaches the prompt regardless of who wrote it.** Stated here in the conditional deliberately: this entry described the intended rule in the present tense for a while, which made the glossary assert behaviour the code does not have.
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event.
 

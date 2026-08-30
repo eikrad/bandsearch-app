@@ -22,12 +22,16 @@ test("while waiting, no retry button is offered", () => {
   assert.equal(render({ state: "waiting", attempt: 3 }).includes("<button"), false);
 });
 
-test("a long wait is acknowledged rather than looking hung", () => {
+test("a long wait changes the heading, per the locked spec", () => {
+  // UI_GUIDELINES.md locks the Heading column: "Starting the server" while
+  // waiting, "Still starting…" from the fourth attempt. The first version of
+  // this test only checked for /still/i anywhere in the markup, which the body
+  // paragraph satisfied — so it passed while the heading never changed.
   const early = render({ state: "waiting", attempt: 1 });
   const late = render({ state: "waiting", attempt: 6 });
 
-  assert.notEqual(early, late, "the screen must change as attempts pile up");
-  assert.match(late, /still/i);
+  assert.match(early, /<h1[^>]*>Starting the server<\/h1>/);
+  assert.match(late, /<h1[^>]*>Still starting/);
 });
 
 test("giving up offers a way to try again", () => {

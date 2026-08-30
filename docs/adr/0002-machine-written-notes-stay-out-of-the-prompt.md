@@ -1,7 +1,11 @@
 # ADR 0002 — Machine-written notes stay out of the recommendation prompt
 
-**Status:** Accepted
+**Status:** Accepted — **not yet implemented**, tracked in #166
 **Date:** 2026-08-30
+
+> The decision below stands; the code does not do it yet. Every note still
+> reaches the prompt regardless of who wrote it. Read "does" in the Decision
+> section as "will".
 
 ## Context
 
