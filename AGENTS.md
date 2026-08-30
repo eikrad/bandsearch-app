@@ -28,6 +28,13 @@ any UI change. Read them before touching a view, and follow the values marked
   implementation should differ from the spec, update the spec — never leave the
   two disagreeing. A code change that silently deviates is a bug even when the
   new behaviour is better.
+- **A spec written ahead of the code must say so.** Designing before building is
+  fine and often right, but the document must then mark the part that is not
+  built yet and link the issue tracking it. Otherwise the spec asserts behaviour
+  the product does not have, and the next reader — human or agent — takes it as
+  description rather than intent. This bit twice on 2026-08-30: the card action
+  row and ADR 0002 both stated future behaviour in the present tense, and
+  `CONTEXT.md` repeated one of them as fact.
 - **Tests assert the spec, not the implementation.** A test written to match
   whatever the code happens to do will lock a spec violation in place and defend
   it against correction. That is worse than having no test.

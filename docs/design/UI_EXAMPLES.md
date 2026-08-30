@@ -11,6 +11,7 @@ This file provides practical examples that translate `UI_GUIDELINES.md` into imp
 - "Why selected" is concise and specific.
 - Country/genres are short metadata lines.
 - Connection text references prior bands in plain language.
+- *(Not yet built — see the note in UI_GUIDELINES.md. The shipped card still shows Save / Rate / ···.)*
 - Rating stars and Save are always visible, on every screen size; Category/Note are compact actions.
 - Tapping a star saves the band with that rating — rating implies saving.
 - Saving does not imply rating: Save alone keeps a band unrated, which is a real state.

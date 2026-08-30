@@ -143,6 +143,11 @@ Card visual spec:
 
 Action row policy (locked, all viewports):
 
+> **Not yet built.** The card still renders the old `Save` / `Rate` / `···` text
+> buttons. This section is the target, not a description of the shipped UI —
+> tracked in #151, #152, #154 and #165. `rating` being optional (#164) is done;
+> the controls below are not.
+
 | Control | Visibility | Behaviour |
 |---|---|---|
 | Rating stars (1–5) | Always | Tapping star *n* saves the band **with rating *n***. Tapping the currently active star clears the rating — the band stays saved, now unrated. |
