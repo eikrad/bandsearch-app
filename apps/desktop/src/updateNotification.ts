@@ -6,6 +6,12 @@ export interface UpdateDismissalStorage {
   setItem(key: string, value: string): void;
 }
 
+/** The `update-available` Tauri event payload emitted from main.rs's setup hook. */
+export type UpdateAvailablePayload = {
+  version: string;
+  canAutoInstall: boolean;
+};
+
 /**
  * Show the banner when an update was reported and its version was not the
  * one the user last dismissed. Dismissal is per-version, so a later update

@@ -6,6 +6,13 @@ import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
+import {
+  shouldShowUpdateBanner,
+  getDismissedUpdateVersion,
+  dismissUpdateVersion,
+  type UpdateAvailablePayload,
+  type UpdateDismissalStorage,
+} from "./updateNotification.js";
 
 const VIEWPORT_BREAKPOINT_MAX_PX = 767;
 
@@ -48,6 +55,43 @@ function createDefaultTauriInvoke(): ((cmd: string, args?: Record<string, string
   }
 }
 
+/** Production default: subscribe to main.rs's `update-available` event. Absent (returns
+ * undefined) outside a Tauri host, same fallback shape as createDefaultTauriInvoke. */
+function createDefaultUpdateListener(): ((handler: (payload: UpdateAvailablePayload) => void) => void) | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { listen } = require("@tauri-apps/api/event") as {
+      listen: (event: string, handler: (event: { payload: UpdateAvailablePayload }) => void) => Promise<unknown>;
+    };
+    return (handler: (payload: UpdateAvailablePayload) => void) => {
+      // No Tauri host answering (browser dev, tests) rejects asynchronously;
+      // there is nothing to subscribe to, so the rejection is not surfaced.
+      listen("update-available", (event) => handler(event.payload)).catch(() => {});
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function createDefaultUpdateDismissalStorage(): UpdateDismissalStorage {
+  return {
+    getItem: (key: string) => {
+      try {
+        return globalThis.localStorage?.getItem(key) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        globalThis.localStorage?.setItem(key, value);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
 export type ActionHandlers = {
   onSave?: (artistName: string) => void;
   onRate?: (artistName: string) => void;
@@ -70,6 +114,8 @@ export type StartDesktopBrowserAppOptions = {
   viewport?: string;
   actionHandlers?: ActionHandlers;
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+  listenUpdateAvailable?: (handler: (payload: UpdateAvailablePayload) => void) => void;
+  updateDismissalStorage?: UpdateDismissalStorage;
   deps?: StartDesktopBrowserAppDeps;
 };
 
@@ -79,6 +125,8 @@ export async function startDesktopBrowserApp({
   viewport = "desktop",
   actionHandlers = {},
   invokeTauri,
+  listenUpdateAvailable,
+  updateDismissalStorage,
   deps = {},
 }: StartDesktopBrowserAppOptions = {}): Promise<ReturnType<typeof bootstrapDesktopReactApp>> {
   const {
@@ -86,6 +134,8 @@ export async function startDesktopBrowserApp({
     bootstrapDesktopReactApp: bootstrapReactApp = bootstrapDesktopReactApp,
   } = deps;
   const resolvedInvoke = typeof invokeTauri === "function" ? invokeTauri : createDefaultTauriInvoke();
+  const resolvedListenUpdateAvailable = listenUpdateAvailable ?? createDefaultUpdateListener();
+  const updateStorage = updateDismissalStorage ?? createDefaultUpdateDismissalStorage();
   const resolvedFetch = fetchImpl ?? fetch;
   const router = createHashRouter();
   const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => {
@@ -163,6 +213,23 @@ export async function startDesktopBrowserApp({
     return { newRecoveryCode: result.newRecoveryCode };
   }
 
+  // Set when update-available fires; onDismiss needs the version to persist it.
+  // Declared before reactApp so the handlers below can close over it — both are
+  // only invoked later, after reactApp is assigned, once mount() has resolved.
+  let currentUpdatePayload: UpdateAvailablePayload | undefined;
+  const updateBannerHandlers = {
+    onDismiss: () => {
+      if (currentUpdatePayload) dismissUpdateVersion(updateStorage, currentUpdatePayload.version);
+      currentUpdatePayload = undefined;
+      reactApp.showUpdateBanner?.(null);
+    },
+    onInstall: async () => {
+      if (typeof resolvedInvoke === "function") {
+        await resolvedInvoke("install_update");
+      }
+    },
+  };
+
   const reactApp = bootstrapReactApp({
     app,
     viewport: initialViewport,
@@ -179,10 +246,21 @@ export async function startDesktopBrowserApp({
     onLogin,
     onRegister,
     onResetPassword,
+    updateBannerHandlers,
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
     subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
   }
+
+  if (resolvedListenUpdateAvailable) {
+    resolvedListenUpdateAvailable((payload) => {
+      const dismissedVersion = getDismissedUpdateVersion(updateStorage);
+      if (!shouldShowUpdateBanner({ availableVersion: payload.version, dismissedVersion })) return;
+      currentUpdatePayload = payload;
+      reactApp.showUpdateBanner?.(payload);
+    });
+  }
+
   return reactApp;
 }

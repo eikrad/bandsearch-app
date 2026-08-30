@@ -3,7 +3,7 @@ import { createDesktopReactShell } from "./ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "./ui/mountDesktopReactApp.js";
 import type { DesktopReactMountOptions } from "./ui/mountDesktopReactApp.js";
 import type { ChatAppCollaborator } from "./chatAppModel.js";
-import type { ChatHandlers } from "./ui/viewTypes.js";
+import type { ChatHandlers, UpdateBannerHandlers } from "./ui/viewTypes.js";
 import { createDesktopChatUiStack } from "./desktopChatUiStack.js";
 import { bootstrapDesktopApp } from "./bootstrapDesktopApp.js";
 
@@ -70,6 +70,7 @@ export type BootstrapDesktopReactAppOptions = {
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
+  updateBannerHandlers?: UpdateBannerHandlers;
 };
 
 function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
@@ -89,6 +90,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
     onLogin,
     onRegister,
     onResetPassword,
+    updateBannerHandlers,
   } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
   const mountApi = createDesktopReactMount({
@@ -105,6 +107,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
     onLogin,
     onRegister,
     onResetPassword,
+    updateBannerHandlers,
   });
   return {
     ...mountApi,

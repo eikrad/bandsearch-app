@@ -4,6 +4,7 @@ import { startDesktopBrowserApp } from "../src/startDesktopBrowserApp.js";
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "../src/index.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
 import { fakeMediaQueryList, fakeWindow } from "./helpers/fakeDom.js";
+import type { UpdateAvailablePayload, UpdateDismissalStorage } from "../src/updateNotification.js";
 
 // One flat record instead of a discriminated union: the assertions read a single
 // field per call and stay free of narrowing noise.
@@ -127,4 +128,104 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
 
   assert.equal(calls[0].type, "bootstrapReact");
   assert.equal(calls[0].viewport, "mobile");
+});
+
+function fakeUpdateStorage(initial: Record<string, string> = {}): UpdateDismissalStorage {
+  const data = new Map(Object.entries(initial));
+  return {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value);
+    },
+  };
+}
+
+/** Captures the subscription so a test can fire the event itself. */
+function capturingUpdateListener() {
+  let handler: ((payload: UpdateAvailablePayload) => void) | undefined;
+  return {
+    listenUpdateAvailable: (h: (payload: UpdateAvailablePayload) => void) => { handler = h; },
+    fire: (payload: UpdateAvailablePayload) => handler?.(payload),
+  };
+}
+
+async function startWithUpdateDeps(overrides: {
+  listenUpdateAvailable: (handler: (payload: UpdateAvailablePayload) => void) => void;
+  updateDismissalStorage: UpdateDismissalStorage;
+  invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+}) {
+  let capturedUpdateBannerHandlers: { onInstall?: () => void; onDismiss?: () => void } | undefined;
+  const showUpdateBannerCalls: Array<UpdateAvailablePayload | null> = [];
+
+  await startDesktopBrowserApp({
+    listenUpdateAvailable: overrides.listenUpdateAvailable,
+    updateDismissalStorage: overrides.updateDismissalStorage,
+    invokeTauri: overrides.invokeTauri ?? (async () => ({})),
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        capturedUpdateBannerHandlers = (options as { updateBannerHandlers?: typeof capturedUpdateBannerHandlers }).updateBannerHandlers;
+        return {
+          mount: async () => ({}),
+          showUpdateBanner: (payload: UpdateAvailablePayload | null) => {
+            showUpdateBannerCalls.push(payload);
+          },
+        } as unknown as ReturnType<typeof bootstrapDesktopReactApp>;
+      },
+    },
+  });
+
+  return { showUpdateBannerCalls, updateBannerHandlers: capturedUpdateBannerHandlers };
+}
+
+test("an update-available payload makes the banner appear", async () => {
+  const listener = capturingUpdateListener();
+  const { showUpdateBannerCalls } = await startWithUpdateDeps({
+    listenUpdateAvailable: listener.listenUpdateAvailable,
+    updateDismissalStorage: fakeUpdateStorage(),
+  });
+
+  listener.fire({ version: "0.5.0", canAutoInstall: true });
+
+  assert.deepEqual(showUpdateBannerCalls, [{ version: "0.5.0", canAutoInstall: true }]);
+});
+
+test("dismissing the banner persists and it does not reappear on the next start", async () => {
+  const storage = fakeUpdateStorage();
+
+  const listenerA = capturingUpdateListener();
+  const first = await startWithUpdateDeps({
+    listenUpdateAvailable: listenerA.listenUpdateAvailable,
+    updateDismissalStorage: storage,
+  });
+  listenerA.fire({ version: "0.5.0", canAutoInstall: true });
+  assert.equal(first.showUpdateBannerCalls.length, 1, "banner should appear on first start");
+  first.updateBannerHandlers?.onDismiss?.();
+
+  const listenerB = capturingUpdateListener();
+  const second = await startWithUpdateDeps({
+    listenUpdateAvailable: listenerB.listenUpdateAvailable,
+    updateDismissalStorage: storage,
+  });
+  listenerB.fire({ version: "0.5.0", canAutoInstall: true });
+
+  assert.equal(second.showUpdateBannerCalls.length, 0, "dismissed version should not reappear");
+});
+
+test("clicking Install invokes the install_update command", async () => {
+  const invokedCommands: string[] = [];
+  const listener = capturingUpdateListener();
+  const { updateBannerHandlers } = await startWithUpdateDeps({
+    listenUpdateAvailable: listener.listenUpdateAvailable,
+    updateDismissalStorage: fakeUpdateStorage(),
+    invokeTauri: async (cmd) => {
+      invokedCommands.push(cmd);
+      return {};
+    },
+  });
+  listener.fire({ version: "0.5.0", canAutoInstall: true });
+
+  await updateBannerHandlers?.onInstall?.();
+
+  assert.ok(invokedCommands.includes("install_update"), "expected install_update to be invoked");
 });
