@@ -4,7 +4,7 @@
 // two fields, so a full DOM implementation would be noise. These helpers keep
 // the narrowing in one place instead of casting at every call site.
 
-import { Fragment, type ReactElement, type ReactNode } from "react";
+import { Fragment, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { Root } from "react-dom/client";
 
 /** A mount container. React roots are faked in these tests, so nothing reads it. */
@@ -46,4 +46,26 @@ export function fakeMediaQueryList(matches: boolean): MediaQueryList {
     addEventListener: () => {},
     removeEventListener: () => {},
   } as unknown as MediaQueryList;
+}
+
+/**
+ * First element in a rendered tree matching `predicate`, or undefined.
+ *
+ * View tests need a handle on one control to fire its `onClick` — markup alone
+ * cannot show which handler a view actually assigned. Shared because two tests
+ * grew their own near-identical walker before this existed.
+ */
+export function findElement(
+  node: unknown,
+  predicate: (element: ReactElement) => boolean,
+): ReactElement | undefined {
+  if (!isValidElement(node)) return undefined;
+  const element = node as ReactElement<{ children?: ReactNode }>;
+  if (predicate(element)) return element;
+  const children = element.props.children;
+  for (const child of Array.isArray(children) ? children : [children]) {
+    const found = findElement(child, predicate);
+    if (found) return found;
+  }
+  return undefined;
 }
