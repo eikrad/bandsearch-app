@@ -268,7 +268,7 @@ One-time signing setup (required before the first tag):
    - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/bandsearch.key`
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password used at generation (empty string if none)
 
-In-app update UI is still Phase 10; this pipeline already produces signed updater artifacts (`createUpdaterArtifacts`) and `latest.json` for that work.
+**In-app update notification (Windows/Linux):** on every launch the app checks `latest.json` in the background; if a newer version is available, a dismissible banner appears with a one-click Install (`install_update` downloads, verifies the signature, and installs). Dismissing is per-version — a later release shows the banner again even if an earlier one was dismissed. **macOS is not covered**: without a signed macOS build there is no macOS entry in `latest.json`, so macOS testers never see the banner and must download releases manually from the GitHub Releases page.
 
 ---
 

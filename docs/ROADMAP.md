@@ -204,16 +204,16 @@ Render auto-deploys on every push to the connected branch, so no separate deploy
 
 **Spec:** [`docs/architecture/2026-06-03-auto-update-plan.md`](architecture/2026-06-03-auto-update-plan.md)
 
-Tester werden direkt in der App über neue Versionen informiert. Windows & Linux: vollautomatischer Ein-Klick-Update via `tauri-plugin-updater`. macOS: Banner mit Link zur GitHub-Releases-Seite (kein Code-Signing nötig).
+Tester werden direkt in der App über neue Versionen informiert. Windows & Linux: vollautomatischer Ein-Klick-Update via `tauri-plugin-updater`. macOS: kein Update-Pfad in diesem Zyklus (siehe Deviations im Plan) — ohne Code-Signing liefert der Rust-Updater keinen macOS-Eintrag in `latest.json`, daher kein Banner für macOS-Tester vorerst.
 
-- [ ] `tauri-plugin-updater` einbinden, Version auf `0.4.0` synchronisieren
-- [ ] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben)
-- [ ] `install_update` Tauri-Command (Windows & Linux)
-- [ ] macOS: Frontend-seitiger GitHub-API-Check
-- [ ] Einheitlicher Update-Banner im Frontend (kein neues File)
-- [ ] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`)
-- [ ] Signing-Key generieren + GitHub Secrets konfigurieren
-- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf
+- [x] `tauri-plugin-updater` einbinden — bereits vor diesem Zyklus erledigt (Dependency, Plugin-Registrierung, `pubkey` + Endpoint in `tauri.conf.json`); Version auf `0.4.0` synchronisiert (dieser Zyklus, `apps/desktop/test/app-version.test.ts`) ✓ Done
+- [x] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben, ein Check pro Start statt Polling) ✓ Done
+- [x] `install_update` Tauri-Command (Windows & Linux) ✓ Done
+- [ ] macOS: Frontend-seitiger GitHub-API-Check — bewusst zurückgestellt (zweiter Code-Pfad mit eigenem Versionsvergleich/Error-Handling, noch nicht die Fläche wert)
+- [x] Einheitlicher Update-Banner im Frontend — als React-Komponente (`UpdateBanner.ts`) statt „kein neues File": das restliche UI ist durchgehend `React.createElement` mit eigenem File pro View, `innerHTML` kommt sonst nirgends vor ✓ Done
+- [x] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`) — bereits vor diesem Zyklus erledigt (Phase 7, `.github/workflows/release.yml`) ✓ Done
+- [ ] Signing-Key generieren + GitHub Secrets konfigurieren — manueller Schritt, außerhalb Scope
+- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf — manueller Schritt, außerhalb Scope
 
 ---
 
