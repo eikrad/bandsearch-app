@@ -7,7 +7,8 @@ use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
-use tauri::{Manager, State, WindowEvent};
+use tauri::{Emitter, Manager, State, WindowEvent};
+use tauri_plugin_updater::UpdaterExt;
 
 struct ApiProcess(Mutex<Option<Child>>);
 
@@ -30,6 +31,13 @@ struct BandsearchConfig {
     jwt_secret: String,
     #[serde(default)]
     api_endpoint_url: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct UpdateAvailablePayload {
+    version: String,
+    can_auto_install: bool,
 }
 
 #[derive(Serialize)]
@@ -410,6 +418,33 @@ fn reconcile_sidecar(api: &ApiProcess, workspace_root: &Path) {
     }
 }
 
+/// Checks the configured updater endpoint once and, on a hit, emits `update-available`
+/// with the new version and whether this platform can auto-install it. macOS has no
+/// signed updater artifact (see the auto-update plan's deviations), so it never gets
+/// `canAutoInstall: true` here even though the frontend banner is Windows/Linux only.
+async fn check_for_update_and_notify(app: tauri::AppHandle) {
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("[bandsearch] updater unavailable: {e}");
+            return;
+        }
+    };
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let payload = UpdateAvailablePayload {
+                version: update.version.clone(),
+                can_auto_install: cfg!(not(target_os = "macos")),
+            };
+            if let Err(e) = app.emit("update-available", payload) {
+                eprintln!("[bandsearch] failed to emit update-available: {e}");
+            }
+        }
+        Ok(None) => {}
+        Err(e) => eprintln!("[bandsearch] update check failed: {e}"),
+    }
+}
+
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let quit = PredefinedMenuItem::quit(app, Some("Quit Bandsearch"))?;
     let about = PredefinedMenuItem::about(app, Some("About Bandsearch"), None)?;
@@ -533,11 +568,26 @@ fn complete_onboarding() -> Result<(), String> {
     persist_config(&cfg)
 }
 
+/// Re-checks for an update (rather than trusting the earlier `update-available` event)
+/// so install always acts on a fresh, signature-verified release.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    match update {
+        Some(update) => update
+            .download_and_install(|_, _| {}, || {})
+            .await
+            .map_err(|e| e.to_string()),
+        None => Err("no update available".to_string()),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding])
+        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding, install_update])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
@@ -556,6 +606,14 @@ fn main() {
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));
+
+            // Event-driven, not polled: one check per app launch is enough for a
+            // tester-facing notification, and it keeps the untestable surface (the
+            // actual network round trip) to a single spawned task.
+            let update_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                check_for_update_and_notify(update_handle).await;
+            });
 
             Ok(())
         })
@@ -778,6 +836,27 @@ mod tests {
                 .expect("config with api_endpoint_url must parse");
         assert_eq!(cfg.api_endpoint_url, "https://remote.example");
         assert!(!should_run_local_sidecar(&cfg.api_endpoint_url));
+    }
+
+    #[test]
+    fn update_available_payload_serializes_camel_case() {
+        let payload = UpdateAvailablePayload {
+            version: "0.5.0".to_string(),
+            can_auto_install: true,
+        };
+        let value = serde_json::to_value(&payload).expect("payload must serialize");
+        assert_eq!(value["version"], "0.5.0");
+        assert_eq!(value["canAutoInstall"], true);
+    }
+
+    #[test]
+    fn can_auto_install_is_false_on_macos_true_elsewhere() {
+        let can_auto_install = cfg!(not(target_os = "macos"));
+        if cfg!(target_os = "macos") {
+            assert!(!can_auto_install, "macOS must not offer auto-install");
+        } else {
+            assert!(can_auto_install, "Windows/Linux must offer auto-install");
+        }
     }
 
     #[test]
