@@ -1,6 +1,6 @@
 {
   "name": "@bandsearch/api",
-  "version": "0.4.0-alpha.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Bandsearch Express API",
   "scripts": {
