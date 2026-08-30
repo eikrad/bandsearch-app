@@ -17,17 +17,22 @@ says what to do, the numbered sections say what it belongs to.
 Revisit this list whenever something lands or a new blocker appears; it is a
 plan, not a second permanent structure.
 
-1. **#155 — `getAuthStatus` fails open.** Before 9.5, not after: a 502 during a
-   cold start currently reads as "auth disabled", so the app would silently
-   enter pass-through mode during the very test 9.5 is meant to be. Fixing it
-   afterwards means not trusting the result.
+1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161). It had to come first:
+   a 502 during a cold start read as "auth disabled", so the app would have
+   entered pass-through mode during the very test 9.5 is meant to be.
 2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
    Android, the deploy gate and the eval data, and it is the one thing claimed
    as infrastructure that has never actually been run.
-3. **#151–#154 — the card action defects.** Cheap, and three of them are live on
-   desktop today (a dead `···` button on every card, Rate silently writing 5).
-   Independent of everything else, so they can also fill gaps while waiting on
-   infrastructure.
+3. **The card action work — #151–#154 and #163–#167.** Designed in
+   `docs/adr/0002-*` and the action-row policy; not yet built. Start with
+   #164 (rating becomes nullable), since #151, #152 and #165 all sit on top of
+   it. Independent of the infrastructure work, so it can fill gaps while
+   waiting on a deployment.
+
+   Six of these are live defects, not future work: a dead `···` button on
+   every card, Save and Rate writing hidden ratings, the same artist storable
+   twice and then double-counted in the prompt, and the model reading its own
+   text back as the user's preference.
 4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
    This is the first real proof the updater works; the pipeline has only ever
    run against a throwaway `v0.2.1-test` tag.
@@ -50,7 +55,7 @@ Phase 10  signing key + GitHub secrets
 
 Independent, can start any time:
  · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
- · Phase 10 macOS check      · the card-action defects (#151-#154)
+ · Phase 10 macOS check      · the card-action work (#151-#154, #163-#167)
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that

@@ -13,6 +13,8 @@ This file provides practical examples that translate `UI_GUIDELINES.md` into imp
 - Connection text references prior bands in plain language.
 - Rating stars and Save are always visible, on every screen size; Category/Note are compact actions.
 - Tapping a star saves the band with that rating — rating implies saving.
+- Saving does not imply rating: Save alone keeps a band unrated, which is a real state.
+- Both are reversible on the card: the active star clears the rating, Saved removes the band.
 
 Example content structure:
 
@@ -27,6 +29,7 @@ Example content structure:
 - Don't hide all actions behind menus on desktop.
 - Don't hide Save or the rating stars on mobile — saving is the core loop, not a secondary action.
 - Don't render a control that has no handler behind it.
+- Don't write a rating the user did not pick — no silent defaults behind Save.
 - Don't show long generic AI paragraphs as rationale text.
 
 ## Iconography Example

@@ -145,20 +145,36 @@ Action row policy (locked, all viewports):
 
 | Control | Visibility | Behaviour |
 |---|---|---|
-| Rating stars (1–5) | Always | Tapping star *n* saves the band **with rating *n***. Rating implies saving. |
-| Save | Always | Saves without a rating, for "remember this, undecided". |
-| `···` overflow | Always | Category / Note. Must open something — see the rule below. |
+| Rating stars (1–5) | Always | Tapping star *n* saves the band **with rating *n***. Tapping the currently active star clears the rating — the band stays saved, now unrated. |
+| Save / Saved | Always | A toggle. Unsaved → saves **without** a rating ("remember this, undecided"). Saved → removes it again. Label and state are visible, never implied. |
+| `···` overflow | Always | Category and Note. Must open something — see the rule below. |
 | Copy `⎘` | Always, row end | Icon-only, `title="Copy"` tooltip. |
 
-- **Save and the stars are primary and never collapse**, on any screen size.
+- **The stars and Save are primary and never collapse**, on any screen size.
   Saving is what makes `preference-aware` mode work, so it is the one action
   that must always be one tap away. Only Category/Note and Copy are secondary.
-- **Rating implies saving.** There is no state where a band is rated but not
-  saved. A separate "Rate" text button is not used — it cannot express *which*
-  rating is being given, which is why the previous one silently always wrote 5.
+- **Rating implies saving, and saving does not imply rating.** "Saved but not
+  yet rated" is a real state (see `CONTEXT.md`), which is why both controls
+  exist and neither is redundant.
+- **Every write is reversible from the card.** Tapping an active star clears the
+  rating; tapping Saved removes the band. A mis-tap must never require going to
+  another screen to undo — on a phone that is an expensive detour.
+- **No hidden default values.** A control must never write a value the user did
+  not choose. The previous row had two: Save silently wrote rating 3 and Rate
+  silently wrote 5, neither shown anywhere.
 - **No control may render without an action behind it.** If Category/Note is not
   implemented, the `···` button is not rendered at all. A visible control that
   does nothing on click is a defect, not a placeholder.
+
+Category/Note sheet (behind `···`):
+
+- **Category** shapes what gets recommended; the sheet says so in as many words.
+  A user cannot be expected to infer that from the label, and the distinction
+  from an artist group — which does *not* affect recommendations — is otherwise
+  invisible.
+- **Note** is pre-filled with the model's explanation of why the artist was
+  recommended. It is shown as such, and only counts as the user's own input once
+  they edit it. See ADR 0002.
 
 ## Connecting State (locked)
 
