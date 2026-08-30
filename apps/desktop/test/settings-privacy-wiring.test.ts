@@ -35,7 +35,15 @@ async function renderSettings(
 
   await mount.mount();
   if (!rendered) throw new Error("expected the settings screen to render");
-  return rendered.props;
+  return {
+    ...rendered.props,
+    /** Re-renders and returns the props the view gets the second time round. */
+    async rerender() {
+      await mount.mount();
+      if (!rendered) throw new Error("expected the settings screen to render");
+      return rendered.props;
+    },
+  };
 }
 
 test("with no collaborator injected, the screen gets no export handler at all", async () => {
@@ -90,4 +98,38 @@ test("the screen is told whether an account exists", async () => {
   const { viewProps } = await renderSettings({}, { accountsEnabled: true });
 
   assert.equal(viewProps.accountsEnabled, true);
+});
+
+test("a failed export tells the user instead of throwing into nothing", async () => {
+  // It used to reject into the click handler and surface as an uncaught page
+  // error. Playwright caught exactly that: `pageerror: account export is not
+  // available`, with nothing shown on screen — on a control the privacy policy
+  // points users at for Art. 15.
+  const screen = await renderSettings({
+    onExportAccountData: async () => { throw new Error("account export is not available"); },
+  });
+
+  await (screen.handlers.onExportAccountData as () => Promise<void>)();
+  const after = await screen.rerender();
+
+  assert.deepEqual(after.viewProps.statusMessage, {
+    type: "error",
+    message: "account export is not available",
+  });
+});
+
+test("a wrong password on deletion reports itself", async () => {
+  // Redrawing the screen unchanged reads as "nothing happened" rather than
+  // "that password was wrong".
+  const screen = await renderSettings({
+    onDeleteAccount: async () => ({ ok: false, error: "invalid credentials" }),
+  });
+
+  await (screen.handlers.onDeleteAccount as (p: string) => Promise<void>)("wrong");
+  const after = await screen.rerender();
+
+  assert.deepEqual(after.viewProps.statusMessage, {
+    type: "error",
+    message: "invalid credentials",
+  });
 });
