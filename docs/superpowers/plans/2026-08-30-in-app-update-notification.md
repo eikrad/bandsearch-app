@@ -95,10 +95,10 @@ Conventions in `AGENTS.md` and the existing code win over the spec, which predat
 
 ### Phase 1: One version across the whole repo 🟡
 
-- [ ] **Red** — `apps/desktop/test/app-version.test.ts`: the version in `Cargo.toml`, `tauri.conf.json` and every workspace `package.json` is the same string. Fails today (`0.2.0` vs `0.4.0-alpha.0` vs `0.2.0-alpha.1` vs `0.1.0`).
-- [ ] **Green** — set all seven to `0.4.0`.
-- [ ] `npm test` green.
-- [ ] **Commit** — `chore: sync the app version across npm, Cargo and Tauri`
+- [x] **Red** — `apps/desktop/test/app-version.test.ts`: the version in `Cargo.toml`, `tauri.conf.json` and every workspace `package.json` is the same string. Fails today (`0.2.0` vs `0.4.0-alpha.0` vs `0.2.0-alpha.1` vs `0.1.0`).
+- [x] **Green** — set all seven to `0.4.0`.
+- [x] `npm test` green.
+- [x] **Commit** — `chore: sync the app version across npm, Cargo and Tauri`
 
 Not a tautology: it cross-checks independent files that must agree because the updater compares `tauri.conf.json`'s version against `latest.json`. It would have caught the bug that exists right now.
 
@@ -108,13 +108,13 @@ Not a tautology: it cross-checks independent files that must agree because the u
 
 ### Phase 2: Decide when a banner is shown 🟢
 
-- [ ] **Red** — `apps/desktop/test/update-notification.test.ts`, at the seam:
+- [x] **Red** — `apps/desktop/test/update-notification.test.ts`, at the seam:
   - shows the banner for a newer version that was never dismissed
   - stays hidden for a version the user already dismissed
   - shows again for a *different* version after an earlier dismissal
   - stays hidden when no update was reported
-- [ ] **Green** — `apps/desktop/src/updateNotification.ts`: pure decision + a dismissal store against injected storage. No DOM, no Tauri, no `fetch`.
-- [ ] **Commit** — `feat(desktop): decide when an update banner is shown`
+- [x] **Green** — `apps/desktop/src/updateNotification.ts`: pure decision + a dismissal store against injected storage. No DOM, no Tauri, no `fetch`.
+- [x] **Commit** — `feat(desktop): decide when an update banner is shown`
 
 **Depends on:** nothing. Isolated.
 
@@ -122,14 +122,14 @@ Not a tautology: it cross-checks independent files that must agree because the u
 
 ### Phase 3: Background check and install command 🔴
 
-- [ ] **Red** — Rust test in `main.rs`'s existing `#[cfg(test)]` module asserting the config/command surface.
-- [ ] **Green** — in `main.rs`:
+- [x] **Red** — Rust test in `main.rs`'s existing `#[cfg(test)]` module asserting the config/command surface.
+- [x] **Green** — in `main.rs`:
   - `use tauri::Emitter`
   - spawn the updater check in the `.setup()` hook, after `app.manage(...)`; on a hit emit `update-available` with `{ version, canAutoInstall }` (`canAutoInstall = cfg!(not(target_os = "macos"))`)
   - `install_update` command: check, then `download_and_install`
   - register `install_update` in `generate_handler![...]`
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` green; `npm test` green.
-- [ ] **Commit** — `feat(desktop): check for updates on startup and expose install_update` (🔴 → commit body: why event-driven over polling, what stays unverified)
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` green; `npm test` green.
+- [x] **Commit** — `feat(desktop): check for updates on startup and expose install_update` (🔴 → commit body: why event-driven over polling, what stays unverified)
 
 **Depends on:** Phase 1 — the version is what the updater compares.
 
@@ -139,9 +139,9 @@ Not a tautology: it cross-checks independent files that must agree because the u
 
 ### Phase 4: The banner 🟡
 
-- [ ] **Red** — `apps/desktop/test/update-banner.test.ts`: renders the version; shows an Install button when `canAutoInstall`; calls the dismiss handler on "Later".
-- [ ] **Green** — `apps/desktop/src/ui/UpdateBanner.ts` (`React.createElement`, existing `palette`, English strings, `position: fixed` + high `z-index`); `UpdateBannerHandlers` added to `viewTypes.ts`.
-- [ ] **Commit** — `feat(desktop): add the update notification banner`
+- [x] **Red** — `apps/desktop/test/update-banner.test.ts`: renders the version; shows an Install button when `canAutoInstall`; calls the dismiss handler on "Later".
+- [x] **Green** — `apps/desktop/src/ui/UpdateBanner.ts` (`React.createElement`, existing `palette`, English strings, `position: fixed` + high `z-index`); `UpdateBannerHandlers` added to `viewTypes.ts`.
+- [x] **Commit** — `feat(desktop): add the update notification banner`
 
 **Depends on:** nothing at runtime; slots into Phase 5.
 
@@ -151,10 +151,10 @@ Not a tautology: it cross-checks independent files that must agree because the u
 
 ### Phase 5: Wire it through the app 🔴
 
-- [ ] **Red** — extend `apps/desktop/test/start-desktop-browser-app.test.ts` with an injected event listener: an `update-available` payload makes the banner appear; "Later" persists and it does not reappear on the next start; "Install" invokes `install_update`.
-- [ ] **Green** — `startDesktopBrowserApp.ts` subscribes (injectable, so tests need no Tauri) and feeds the Phase 2 decision; `mountDesktopReactApp.ts` renders the banner above the routed view.
-- [ ] `npm test` + `npm run typecheck` + `npm run lint` green.
-- [ ] **Commit** — `feat(desktop): show the update banner when a new version is available` (🔴 → commit body)
+- [x] **Red** — extend `apps/desktop/test/start-desktop-browser-app.test.ts` with an injected event listener: an `update-available` payload makes the banner appear; "Later" persists and it does not reappear on the next start; "Install" invokes `install_update`.
+- [x] **Green** — `startDesktopBrowserApp.ts` subscribes (injectable, so tests need no Tauri) and feeds the Phase 2 decision; `mountDesktopReactApp.ts` renders the banner above the routed view.
+- [x] `npm test` + `npm run typecheck` + `npm run lint` green.
+- [x] **Commit** — `feat(desktop): show the update banner when a new version is available` (🔴 → commit body)
 
 **Depends on:** Phases 2, 3, 4.
 
@@ -162,10 +162,10 @@ Not a tautology: it cross-checks independent files that must agree because the u
 
 ### Phase 6: Docs 🟢
 
-- [ ] `docs/ROADMAP.md` — tick the Phase 10 boxes that are now true, and correct the entry: the plugin/pubkey/workflow items were already done before this cycle.
-- [ ] `docs/architecture/2026-06-03-auto-update-plan.md` — record the deviations above and the macOS deferral, so the doc stops describing an implementation that was never built this way.
-- [ ] `README.md` — how updates reach testers, and that macOS is not covered.
-- [ ] **Commit** — `docs: record the in-app update notification behaviour`
+- [x] `docs/ROADMAP.md` — tick the Phase 10 boxes that are now true, and correct the entry: the plugin/pubkey/workflow items were already done before this cycle.
+- [x] `docs/architecture/2026-06-03-auto-update-plan.md` — record the deviations above and the macOS deferral, so the doc stops describing an implementation that was never built this way.
+- [x] `README.md` — how updates reach testers, and that macOS is not covered.
+- [x] **Commit** — `docs: record the in-app update notification behaviour`
 
 ---
 
