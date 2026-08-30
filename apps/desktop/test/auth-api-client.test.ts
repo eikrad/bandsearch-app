@@ -53,7 +53,7 @@ test("getAuthStatus returns the reported enabled flag and user count", async () 
   const { fetchImpl, calls } = fakeFetch([jsonResponse({ enabled: true, userCount: 3 })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { enabled: true, userCount: 3 });
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 3 });
   assert.equal(calls[0].method, "GET");
 });
 
@@ -61,25 +61,40 @@ test("getAuthStatus coerces a missing user count to zero", async () => {
   const { fetchImpl } = fakeFetch([jsonResponse({ enabled: true })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { enabled: true, userCount: 0 });
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 0 });
 });
 
-test("getAuthStatus reports auth disabled on a non-2xx response", async () => {
+test("a 5xx means the API could not answer, not that auth is disabled", async () => {
   const { fetchImpl } = fakeFetch([errorResponse(500, { error: { message: "boom" } })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  // The desktop client routes on this before it can show anything, so an API
-  // that is down must not strand the user on a login screen it cannot satisfy.
-  assert.deepEqual(await client.getAuthStatus(), { enabled: false, userCount: 0 });
+  // Render answers 5xx while a spun-down instance wakes. Reporting that as
+  // "auth is disabled" put the user into pass-through mode during a cold start.
+  const status = await client.getAuthStatus();
+
+  assert.equal(status.reachable, false);
+  assert.equal(status.reachable === false && status.reason, "http_500");
 });
 
-test("getAuthStatus reports auth disabled when the request throws", async () => {
+test("a failed request means the API could not answer, not that auth is disabled", async () => {
   const fetchImpl = (async () => {
     throw new Error("connection refused");
   }) as unknown as typeof fetch;
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { enabled: false, userCount: 0 });
+  const status = await client.getAuthStatus();
+
+  assert.equal(status.reachable, false);
+  assert.equal(status.reachable === false && status.reason, "network_error");
+});
+
+test("auth being genuinely disabled is reported as a reachable answer", async () => {
+  // The single-user bypass: the server is up and says no auth is needed. This
+  // must stay distinguishable from the two cases above, which is the whole point.
+  const { fetchImpl } = fakeFetch([jsonResponse({ enabled: false, userCount: 0 })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: false, userCount: 0 });
 });
 
 // -------------------------------------------------------------- register

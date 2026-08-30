@@ -1,6 +1,21 @@
 export type AuthUser = { id: string; email: string; displayName: string; createdAt: string };
 
-export type AuthStatus = { enabled: boolean; userCount: number };
+/**
+ * What `/auth/status` told us — or that it told us nothing.
+ *
+ * A union rather than a flag, because "unreachable" and "auth is disabled" are
+ * not two values of one property: only a 2xx answer says anything about auth at
+ * all. Modelling them separately makes the contradictory state unrepresentable
+ * and forces every caller to handle the third case, which is what went wrong
+ * before: an unreachable API collapsed into `{ enabled: false }`, and the
+ * startup gate read that as "no auth needed" and waved the user through.
+ */
+export type AuthStatus =
+  | { reachable: true; enabled: boolean; userCount: number }
+  | { reachable: false; reason: AuthStatusUnreachableReason };
+
+/** `http_<status>` for an answer we cannot use, `network_error` for no answer. */
+export type AuthStatusUnreachableReason = `http_${number}` | "network_error";
 
 export type RegisterResult =
   | { ok: true; user: AuthUser; token: string; recoveryCode: string }
@@ -62,11 +77,17 @@ export function createAuthApiClient({
     async getAuthStatus(): Promise<AuthStatus> {
       try {
         const res = await fetchImpl(`${base}/auth/status`, { method: "GET" });
-        if (!res.ok) return { enabled: false, userCount: 0 };
-        const data = (await res.json()) as AuthStatus;
-        return { enabled: Boolean(data.enabled), userCount: Number(data.userCount) || 0 };
+        // Render serves 502/503 while a spun-down instance wakes, so a non-2xx
+        // is "ask again", never an answer about auth.
+        if (!res.ok) return { reachable: false, reason: `http_${res.status}` };
+        const data = (await res.json()) as { enabled?: unknown; userCount?: unknown };
+        return {
+          reachable: true,
+          enabled: Boolean(data.enabled),
+          userCount: Number(data.userCount) || 0,
+        };
       } catch {
-        return { enabled: false, userCount: 0 };
+        return { reachable: false, reason: "network_error" };
       }
     },
 

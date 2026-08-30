@@ -5,6 +5,9 @@ import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
+import { decideAuthRoute } from "./authGate.js";
+import { waitForAuthStatus } from "./waitForApi.js";
+import type { ConnectingViewProps } from "./ui/viewTypes.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
   createUpdateNotificationController,
@@ -114,6 +117,9 @@ export type StartDesktopBrowserAppOptions = {
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
   listenUpdateAvailable?: (handler: (payload: UpdateAvailablePayload) => void) => void;
   updateDismissalStorage?: UpdateDismissalStorage;
+  /** Injected by tests so the API wait is driven rather than waited out. */
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
   deps?: StartDesktopBrowserAppDeps;
 };
 
@@ -125,6 +131,8 @@ export async function startDesktopBrowserApp({
   invokeTauri,
   listenUpdateAvailable,
   updateDismissalStorage,
+  sleep,
+  now,
   deps = {},
 }: StartDesktopBrowserAppOptions = {}): Promise<ReturnType<typeof bootstrapDesktopReactApp>> {
   const {
@@ -135,6 +143,8 @@ export async function startDesktopBrowserApp({
   const resolvedListenUpdateAvailable = listenUpdateAvailable ?? createDefaultUpdateListener();
   const updateStorage = updateDismissalStorage ?? createDefaultUpdateDismissalStorage();
   const resolvedFetch = fetchImpl ?? fetch;
+  const resolvedSleep = sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const resolvedNow = now ?? (() => Date.now());
 
   // Subscribed before any await below. The backend check is spawned from Rust's
   // .setup() and Tauri's emit has no replay buffer, so subscribing after the
@@ -188,14 +198,50 @@ export async function startDesktopBrowserApp({
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
+  // Drives the connecting screen. Read by the mount each time it renders.
+  let connectingViewProps: ConnectingViewProps = { state: "waiting" };
+
+  /**
+   * Routes on one quick check, so a healthy API reaches the right screen with no
+   * detour. Only when that first check finds nothing does the connecting screen
+   * appear — and the remaining retries then happen with something on screen,
+   * which is the part `waitForAuthStatus` alone could not provide: the gate runs
+   * before `mount()`, so waiting there would show a blank window.
+   */
   async function runAuthGate(): Promise<void> {
-    const authStatus = await authClient.getAuthStatus();
-    if (!authStatus.enabled) return;
-    if (authStatus.userCount === 0) {
-      router.navigate("register");
-    } else if (!getAuthToken()) {
-      router.navigate("login");
+    const first = await authClient.getAuthStatus();
+    const route = decideAuthRoute({ status: first, hasToken: Boolean(getAuthToken()) });
+    if (route === "unavailable") {
+      connectingViewProps = { state: "waiting", attempt: 1 };
+      router.navigate("connecting");
+      return;
     }
+    if (route !== "app") router.navigate(route);
+  }
+
+  /** Keeps polling after mount, then routes to wherever the answer says. */
+  async function finishConnecting(): Promise<void> {
+    const status = await waitForAuthStatus({
+      getStatus: () => authClient.getAuthStatus(),
+      sleep: resolvedSleep,
+      now: resolvedNow,
+      onAttempt: ({ attempt }) => {
+        connectingViewProps = { state: "waiting", attempt: attempt + 1 };
+        void reactApp?.mount();
+      },
+    });
+    const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
+    if (route === "unavailable") {
+      console.warn("[bandsearch] API unreachable:", status.reachable === false && status.reason);
+      connectingViewProps = { state: "failed" };
+      await reactApp?.mount();
+      return;
+    }
+    // Render explicitly rather than relying on the browser firing `hashchange`
+    // for our own navigation — that is an implicit dependency, and it does not
+    // exist outside a real browser at all.
+    router.navigate(route === "app" ? "home" : route);
+    await reactApp?.mount();
   }
 
   if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
@@ -241,6 +287,13 @@ export async function startDesktopBrowserApp({
     onRegister,
     onResetPassword,
     updateBannerHandlers: updateNotifications.handlers,
+    getConnectingViewProps: () => connectingViewProps,
+    connectingHandlers: {
+      onRetry: () => {
+        connectingViewProps = { state: "waiting", attempt: 1 };
+        void reactApp.mount().then(() => finishConnecting());
+      },
+    },
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
@@ -249,6 +302,10 @@ export async function startDesktopBrowserApp({
 
   // The UI can paint now; flushes an update that was reported during bootstrap.
   updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
+
+  // Something is on screen now, so the remaining retries are visible rather than
+  // spent behind a blank window.
+  if (router.getRoute() === "connecting") await finishConnecting();
 
   return reactApp;
 }

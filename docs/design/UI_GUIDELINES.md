@@ -160,6 +160,27 @@ Action row policy (locked, all viewports):
   implemented, the `···` button is not rendered at all. A visible control that
   does nothing on click is a defect, not a placeholder.
 
+## Connecting State (locked)
+
+Shown at startup while the API is being polled, and when polling gives up. It
+exists because an unreachable API was previously indistinguishable from "auth is
+switched off", which dropped the user into an app whose every request then
+failed.
+
+| State | Heading | Controls |
+|---|---|---|
+| `waiting` | "Starting the server" | **None.** A manual retry is meaningless while an automatic one is running. |
+| `waiting`, 4+ attempts | "Still starting…" | None. The copy must change, so a long wait cannot be mistaken for a hang. |
+| `failed` | "Could not reach the server" | "Try again" button, min 44px tall. |
+
+- **Never show a bare spinner here.** A spinner looks identical at second 1 and
+  second 60; a hosted instance that has spun down takes 30–60s to wake, so the
+  screen must say what is happening and acknowledge a long wait.
+- **Only reached when the first status check fails.** A healthy API routes
+  straight to its destination — no detour, no flash of this screen.
+- The `failed` copy points at Settings, since a wrong API endpoint produces the
+  same symptom as an unreachable one.
+
 ## Interaction and State Design
 
 ### Chat and request states
