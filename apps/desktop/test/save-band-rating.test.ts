@@ -49,3 +49,32 @@ test("a rating of 1 is not mistaken for no rating", async () => {
 
   assert.equal(posted[0].rating, 1, "the lowest rating must survive");
 });
+
+test("an unrated style reference does not claim a rating in the prompt", async () => {
+  // buildPriorityContext is the second place a saved band is formatted for the
+  // model. savedBandContext.ts on the API side was fixed for #164; this copy was
+  // missed and interpolated `rating null/5` straight into the prompt.
+  const sent: Array<Record<string, unknown>> = [];
+  const app = bootstrapDesktopApp({
+    apiBaseUrl: "http://api.test",
+    fetchImpl: (async (url: string, init?: RequestInit) => {
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (String(url).endsWith("/recommendations")) {
+        sent.push(body);
+        return jsonResponse({ items: [], assistantReply: "" });
+      }
+      if (String(url).endsWith("/preferences") && init?.method === "POST") {
+        return jsonResponse({ savedBand: { id: "b1", name: body.name, rating: null, categories: [], note: "" } });
+      }
+      return jsonResponse({ savedBands: [] });
+    }) as unknown as typeof fetch,
+  });
+
+  await app.saveBand("Codeine");
+  app.toggleArtistSelection("b1");
+  await app.requestRecommendations("something like that");
+
+  const priorityContext = String(sent[0]?.priorityContext ?? "");
+  assert.doesNotMatch(priorityContext, /rating (null|undefined|0)/, priorityContext);
+  assert.match(priorityContext, /Codeine/);
+});

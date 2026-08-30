@@ -17,7 +17,7 @@ export type WaitForAuthStatusOptions = {
   sleep: (ms: number) => Promise<void>;
   now: () => number;
   /** Fires before each attempt, so a connecting view can show progress. */
-  onAttempt?: (info: { attempt: number; elapsedMs: number }) => void;
+  onAttempt?: (info: { attempt: number }) => void;
   budgetMs?: number;
 };
 
@@ -41,7 +41,7 @@ export async function waitForAuthStatus({
 
   for (;;) {
     attempt += 1;
-    onAttempt?.({ attempt, elapsedMs: now() - startedAt });
+    onAttempt?.({ attempt });
 
     const status = await getStatus();
     if (status.reachable) return status;

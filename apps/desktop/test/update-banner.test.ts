@@ -3,34 +3,9 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { UpdateBanner } from "../src/ui/UpdateBanner.js";
+import { findElement } from "./helpers/fakeDom.js";
 
-type ButtonElement = React.ReactElement<{
-  className?: string;
-  children?: React.ReactNode;
-  onClick?: () => void;
-}>;
 
-/**
- * UpdateBanner has no internal state, so it is called directly (not mounted)
- * and its returned element tree is walked to find the button to click — the
- * only way to exercise a click handler without a DOM/testing-library setup,
- * which this codebase does not have.
- */
-function findByClassName(node: unknown, className: string): ButtonElement | null {
-  if (!node || typeof node !== "object") return null;
-  const el = node as ButtonElement;
-  if (el.props?.className === className) return el;
-  const children = el.props?.children;
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      const found = findByClassName(child, className);
-      if (found) return found;
-    }
-  } else if (children) {
-    return findByClassName(children, className);
-  }
-  return null;
-}
 
 test("UpdateBanner renders the available version", () => {
   const html = renderToStaticMarkup(
@@ -68,9 +43,9 @@ test("UpdateBanner calls the dismiss handler when Later is clicked", () => {
     viewProps: { version: "0.5.0", canAutoInstall: true },
     handlers: { onDismiss: () => { dismissed = true; } },
   });
-  const laterBtn = findByClassName(element, "update-banner-dismiss-btn");
+  const laterBtn = findElement(element, (el) => (el.props as { className?: string }).className === "update-banner-dismiss-btn");
   assert.ok(laterBtn, "expected a Later button");
-  laterBtn!.props.onClick?.();
+  (laterBtn.props as { onClick?: () => void }).onClick?.();
   assert.equal(dismissed, true);
 });
 
@@ -80,8 +55,8 @@ test("UpdateBanner calls the install handler when Install is clicked", () => {
     viewProps: { version: "0.5.0", canAutoInstall: true },
     handlers: { onInstall: () => { installed = true; } },
   });
-  const installBtn = findByClassName(element, "update-banner-install-btn");
+  const installBtn = findElement(element, (el) => (el.props as { className?: string }).className === "update-banner-install-btn");
   assert.ok(installBtn, "expected an Install button");
-  installBtn!.props.onClick?.();
+  (installBtn.props as { onClick?: () => void }).onClick?.();
   assert.equal(installed, true);
 });

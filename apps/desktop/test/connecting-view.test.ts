@@ -4,6 +4,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ConnectingView } from "../src/ui/ConnectingView.js";
+import { findElement } from "./helpers/fakeDom.js";
 
 const render = (viewProps: Parameters<typeof ConnectingView>[0]["viewProps"], onRetry = () => {}) =>
   renderToStaticMarkup(React.createElement(ConnectingView, { viewProps, handlers: { onRetry } }));
@@ -45,22 +46,9 @@ test("the retry button is wired to the handler", () => {
     handlers: { onRetry: () => { retried += 1; } },
   });
 
-  const button = findButton(tree);
+  const button = findElement(tree, (el) => el.type === "button");
   assert.ok(button, "expected a retry button");
-  button.props.onClick?.();
+  (button.props as { onClick?: () => void }).onClick?.();
   assert.equal(retried, 1);
 });
 
-type El = React.ReactElement<{ onClick?: () => void; children?: unknown }>;
-
-function findButton(node: unknown): El | undefined {
-  if (!React.isValidElement(node)) return undefined;
-  const el = node as El;
-  if (el.type === "button") return el;
-  const kids = el.props.children;
-  for (const child of Array.isArray(kids) ? kids : [kids]) {
-    const found = findButton(child);
-    if (found) return found;
-  }
-  return undefined;
-}
