@@ -51,6 +51,13 @@ export function createPreferenceTestDb(): Database.Database {
 
 /** better-sqlite3 binds numbers and strings; libSQL also accepts booleans and Dates. */
 function toBindable(value: TursoValue): string | number | bigint | null | Uint8Array {
+  // libSQL rejects undefined with "Unsupported type of value"; better-sqlite3
+  // quietly turns it into NULL. Left permissive, this double would accept an
+  // adapter bug that 500s against a real Turso database — which is exactly what
+  // it did for an omitted rating.
+  if (value === undefined) {
+    throw new TypeError("Unsupported type of value: undefined (libSQL rejects it; bind null instead)");
+  }
   if (typeof value === "boolean") return value ? 1 : 0;
   if (value instanceof Date) return value.toISOString();
   return value;
