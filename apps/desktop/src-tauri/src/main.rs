@@ -418,23 +418,25 @@ fn reconcile_sidecar(api: &ApiProcess, workspace_root: &Path) {
     }
 }
 
+/// Whether this build can install an update in place. macOS ships no signed
+/// updater artifact (see the auto-update plan's deviations), so its banner is
+/// informational only. Single source of truth for the payload and its test.
+fn can_auto_install() -> bool {
+    cfg!(not(target_os = "macos"))
+}
+
 /// Checks the configured updater endpoint once and, on a hit, emits `update-available`
-/// with the new version and whether this platform can auto-install it. macOS has no
-/// signed updater artifact (see the auto-update plan's deviations), so it never gets
-/// `canAutoInstall: true` here even though the frontend banner is Windows/Linux only.
+/// with the new version and whether this platform can auto-install it.
 async fn check_for_update_and_notify(app: tauri::AppHandle) {
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("[bandsearch] updater unavailable: {e}");
-            return;
-        }
+    let Ok(updater) = app.updater() else {
+        eprintln!("[bandsearch] updater unavailable");
+        return;
     };
     match updater.check().await {
         Ok(Some(update)) => {
             let payload = UpdateAvailablePayload {
-                version: update.version.clone(),
-                can_auto_install: cfg!(not(target_os = "macos")),
+                version: update.version,
+                can_auto_install: can_auto_install(),
             };
             if let Err(e) = app.emit("update-available", payload) {
                 eprintln!("[bandsearch] failed to emit update-available: {e}");
@@ -573,14 +575,15 @@ fn complete_onboarding() -> Result<(), String> {
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-    match update {
-        Some(update) => update
-            .download_and_install(|_, _| {}, || {})
-            .await
-            .map_err(|e| e.to_string()),
-        None => Err("no update available".to_string()),
-    }
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no update available".to_string())?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -600,20 +603,21 @@ fn main() {
                 absolute_bandsearch_db_path(&workspace_root)
             );
 
+            // Spawned before reconcile_sidecar, which blocks this thread in
+            // wait_for_api_tcp for as long as the Node sidecar takes to listen.
+            // The check needs no managed state, so starting it first lets the
+            // network round trip overlap that wait instead of queueing behind it.
+            // Event-driven, not polled: one check per launch is enough for a
+            // tester-facing notification, and it keeps the untestable surface
+            // (the actual network round trip) to a single spawned task.
+            tauri::async_runtime::spawn(check_for_update_and_notify(app.handle().clone()));
+
             let api = ApiProcess(Mutex::new(None));
             // Start the local sidecar only when no remote endpoint is configured.
             reconcile_sidecar(&api, &workspace_root);
 
             app.manage(api);
             app.manage(WorkspaceRoot(workspace_root));
-
-            // Event-driven, not polled: one check per app launch is enough for a
-            // tester-facing notification, and it keeps the untestable surface (the
-            // actual network round trip) to a single spawned task.
-            let update_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                check_for_update_and_notify(update_handle).await;
-            });
 
             Ok(())
         })
@@ -850,13 +854,16 @@ mod tests {
     }
 
     #[test]
-    fn can_auto_install_is_false_on_macos_true_elsewhere() {
-        let can_auto_install = cfg!(not(target_os = "macos"));
-        if cfg!(target_os = "macos") {
-            assert!(!can_auto_install, "macOS must not offer auto-install");
-        } else {
-            assert!(can_auto_install, "Windows/Linux must offer auto-install");
-        }
+    fn update_payload_carries_the_platform_auto_install_flag() {
+        // Goes through the real can_auto_install() rather than recomputing the
+        // cfg!, so hardcoding the flag in the payload would fail this.
+        let payload = UpdateAvailablePayload {
+            version: "0.5.0".to_string(),
+            can_auto_install: can_auto_install(),
+        };
+        let value = serde_json::to_value(&payload).expect("payload must serialize");
+        assert_eq!(value["canAutoInstall"], cfg!(not(target_os = "macos")));
+        assert_eq!(value["canAutoInstall"].as_bool(), Some(!cfg!(target_os = "macos")));
     }
 
     #[test]

@@ -6,7 +6,7 @@ import {
   createDesktopReactMount,
   type DesktopReactMountOptions,
 } from "../src/ui/mountDesktopReactApp.js";
-import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
+import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
 
 type MountShell = DesktopReactMountOptions["shell"];
 type MountRouter = NonNullable<DesktopReactMountOptions["router"]>;
@@ -21,7 +21,8 @@ function recordingRoot(renders: ReactElement[]): Root {
 
 // The mount picks a view component per route; these tests assert on that choice.
 function renderedComponentName(element: ReactElement): string | undefined {
-  return typeof element.type === "function" ? element.type.name : undefined;
+  const view = routedViewOf(element);
+  return typeof view.type === "function" ? view.type.name : undefined;
 }
 
 function makeShell(overrides: Partial<MountShell> = {}): MountShell {

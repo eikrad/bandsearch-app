@@ -109,23 +109,32 @@ export function createDesktopReactMount({
   let savedArtistsLoaded = false;
   // Set by showUpdateBanner; null means no banner is showing.
   let updateBannerViewProps: UpdateBannerViewProps | null = null;
+  // The last routed element, so the banner can be toggled on top of it without
+  // re-running the route — re-rendering `settings` would repeat its
+  // gemini_config_status IPC just to paint an overlay.
+  let routedView: React.ReactNode = null;
 
-  // Every route branch renders through here so the banner — when present —
-  // stays layered above whichever view is routed, instead of each branch
-  // needing to know about it.
-  function renderRoot(routedView: React.ReactNode) {
-    if (!updateBannerViewProps) {
-      root.render(routedView);
-      return;
-    }
+  // Always the same Fragment shape, banner or not: rendering the bare view when
+  // no banner is present would change the root element's shape the moment one
+  // appears, and React would unmount and remount the whole routed view.
+  function paint() {
     root.render(
       React.createElement(
         React.Fragment,
         null,
-        React.createElement(UpdateBanner, { viewProps: updateBannerViewProps, handlers: updateBannerHandlers }),
+        updateBannerViewProps &&
+          React.createElement(UpdateBanner, { viewProps: updateBannerViewProps, handlers: updateBannerHandlers }),
         routedView,
       ),
     );
+  }
+
+  // Every route branch renders through here so the banner — when present —
+  // stays layered above whichever view is routed, instead of each branch
+  // needing to know about it.
+  function renderRoot(nextRoutedView: React.ReactNode) {
+    routedView = nextRoutedView;
+    paint();
   }
 
   async function renderCurrent() {
@@ -430,7 +439,7 @@ export function createDesktopReactMount({
     },
     showUpdateBanner(viewProps: UpdateBannerViewProps | null) {
       updateBannerViewProps = viewProps;
-      return renderCurrent();
+      paint();
     },
   };
 }

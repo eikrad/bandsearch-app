@@ -7,9 +7,7 @@ import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js"
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
-  shouldShowUpdateBanner,
-  getDismissedUpdateVersion,
-  dismissUpdateVersion,
+  createUpdateNotificationController,
   type UpdateAvailablePayload,
   type UpdateDismissalStorage,
 } from "./updateNotification.js";
@@ -137,6 +135,19 @@ export async function startDesktopBrowserApp({
   const resolvedListenUpdateAvailable = listenUpdateAvailable ?? createDefaultUpdateListener();
   const updateStorage = updateDismissalStorage ?? createDefaultUpdateDismissalStorage();
   const resolvedFetch = fetchImpl ?? fetch;
+
+  // Subscribed before any await below. The backend check is spawned from Rust's
+  // .setup() and Tauri's emit has no replay buffer, so subscribing after the
+  // bootstrap/auth round trips would silently drop an update that arrived
+  // first. The controller buffers until the UI attaches after mount.
+  const updateNotifications = createUpdateNotificationController({
+    storage: updateStorage,
+    installUpdate: async () => { await resolvedInvoke?.("install_update"); },
+    onInstallError: (error) => {
+      console.error("[bandsearch] update install failed", error);
+    },
+  });
+  resolvedListenUpdateAvailable?.((payload) => updateNotifications.updateAvailable(payload));
   const router = createHashRouter();
   const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => {
     clearAuthToken();
@@ -213,23 +224,6 @@ export async function startDesktopBrowserApp({
     return { newRecoveryCode: result.newRecoveryCode };
   }
 
-  // Set when update-available fires; onDismiss needs the version to persist it.
-  // Declared before reactApp so the handlers below can close over it — both are
-  // only invoked later, after reactApp is assigned, once mount() has resolved.
-  let currentUpdatePayload: UpdateAvailablePayload | undefined;
-  const updateBannerHandlers = {
-    onDismiss: () => {
-      if (currentUpdatePayload) dismissUpdateVersion(updateStorage, currentUpdatePayload.version);
-      currentUpdatePayload = undefined;
-      reactApp.showUpdateBanner?.(null);
-    },
-    onInstall: async () => {
-      if (typeof resolvedInvoke === "function") {
-        await resolvedInvoke("install_update");
-      }
-    },
-  };
-
   const reactApp = bootstrapReactApp({
     app,
     viewport: initialViewport,
@@ -246,21 +240,15 @@ export async function startDesktopBrowserApp({
     onLogin,
     onRegister,
     onResetPassword,
-    updateBannerHandlers,
+    updateBannerHandlers: updateNotifications.handlers,
   });
   await reactApp.mount();
   if (reactApp.desktopUi) {
     subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
   }
 
-  if (resolvedListenUpdateAvailable) {
-    resolvedListenUpdateAvailable((payload) => {
-      const dismissedVersion = getDismissedUpdateVersion(updateStorage);
-      if (!shouldShowUpdateBanner({ availableVersion: payload.version, dismissedVersion })) return;
-      currentUpdatePayload = payload;
-      reactApp.showUpdateBanner?.(payload);
-    });
-  }
+  // The UI can paint now; flushes an update that was reported during bootstrap.
+  updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
 
   return reactApp;
 }

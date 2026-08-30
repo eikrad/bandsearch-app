@@ -4,7 +4,7 @@
 // two fields, so a full DOM implementation would be noise. These helpers keep
 // the narrowing in one place instead of casting at every call site.
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactElement, type ReactNode } from "react";
 import type { Root } from "react-dom/client";
 
 /** A mount container. React roots are faked in these tests, so nothing reads it. */
@@ -23,6 +23,20 @@ export function fakeReactRoot(onRender: (element: ReactNode) => void = () => {})
     render: onRender,
     unmount: () => {},
   };
+}
+
+/**
+ * The mount always renders `<Fragment>[banner?, routedView]</Fragment>` — a
+ * fixed shape, so the routed view keeps its React identity (and its DOM state)
+ * when the update banner appears or is dismissed. Tests assert on the routed
+ * view, so unwrap it from that envelope.
+ */
+export function routedViewOf(rendered: ReactNode): ReactElement {
+  const element = rendered as ReactElement<{ children?: ReactNode }>;
+  if (element?.type !== Fragment) return element;
+  const children = element.props.children;
+  const list = Array.isArray(children) ? children : [children];
+  return list[list.length - 1] as ReactElement;
 }
 
 /** A matchMedia result; only `matches` and the listener hooks are exercised. */
