@@ -8,7 +8,7 @@ import {
 import type { SavedBandForContext } from "../src/savedBandContext.js";
 
 function savedBand(overrides: Partial<SavedBandForContext> = {}): SavedBandForContext {
-  return { id: "b1", name: "Alcest", rating: 5, categories: [], note: "", ...overrides };
+  return { id: "b1", name: "Alcest", rating: 5, categories: [], note: "", noteEdited: false, ...overrides };
 }
 
 test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
@@ -50,7 +50,7 @@ test("resolveRecommendationFacadeInput preference-aware merges priority with the
   );
 
   assert.equal(result.mode, "preference-aware");
-  assert.equal(result.preferenceContext, "note\nAlcest (rating 5/5) tags:  note: ");
+  assert.equal(result.preferenceContext, "note\nAlcest (rating 5/5) tags: ");
 });
 
 test("resolveRecommendationFacadeInput preference-aware narrows the context to the selected ids", async () => {
