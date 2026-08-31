@@ -27,12 +27,14 @@ export type BootstrapDesktopAppOptions = {
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
   getToken?: (() => string | null) | null;
+  onSessionResolved?: ((sessionId: string) => void) | null;
 };
 
 export function bootstrapDesktopApp({
   apiBaseUrl = "http://localhost:3001",
   fetchImpl,
   getToken = null,
+  onSessionResolved = null,
 }: BootstrapDesktopAppOptions = {}) {
   const chatClient = createChatClient({ apiBaseUrl, fetchImpl: fetchImpl ?? fetch, getToken });
   let state: DesktopAppState = {
@@ -43,6 +45,24 @@ export function bootstrapDesktopApp({
   };
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
+
+  // Created lazily on the first message rather than at app boot: creating one
+  // eagerly on every launch would leave orphaned empty sessions for anyone who
+  // opens the app and never chats, and would need a network round trip before
+  // the window can even render. Not memoized across calls: a failed or
+  // aborted attempt must be retried on the next message, not cached as a
+  // permanent "no session" result.
+  async function ensureSession(signal?: AbortSignal): Promise<string | null> {
+    if (state.currentSessionId) return state.currentSessionId;
+    try {
+      const created = await chatClient.createSession(undefined, signal);
+      state = { ...state, currentSessionId: created.session.id };
+      onSessionResolved?.(created.session.id);
+      return created.session.id;
+    } catch {
+      return null; // chat still works this run, just without persistence
+    }
+  }
 
   function findLatestRecommendationByName(artistName: string) {
     const messages = state.messages || [];
@@ -76,6 +96,25 @@ export function bootstrapDesktopApp({
       const result = await chatClient.listSessions();
       return result.sessions;
     },
+    /**
+     * Hydrates the conversation from a previously persisted session id (e.g.
+     * one restored from local storage after an app restart). A missing or
+     * unreadable session is not an error — the caller keeps a blank chat and
+     * a fresh session gets created lazily on the next message.
+     */
+    async resumeSession(sessionId: string): Promise<boolean> {
+      const existing = await chatClient.getSession(sessionId).catch(() => null);
+      if (!existing) return false;
+      state = {
+        ...state,
+        currentSessionId: existing.session.id,
+        messages: existing.messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content,
+        })),
+      };
+      return true;
+    },
     async requestRecommendations(query: string, mode = "fresh", obscurityTarget?: string) {
       const effectiveIds =
         pendingSelectedArtistIds.length > 0 ? [...pendingSelectedArtistIds] : state.selectedArtistIds;
@@ -99,10 +138,29 @@ export function bootstrapDesktopApp({
       const controller = new AbortController();
       currentAbortController = controller;
       try {
+        const sessionId = await ensureSession(controller.signal);
+        // A cancel that landed while ensureSession was in flight leaves the
+        // signal permanently aborted; starting another fetch on it here would
+        // wait on an "abort" event that already fired and will not fire
+        // again, so bail out the same way a mid-flight cancel would.
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        // Persistence is best-effort: a failed write here must not break the
+        // chat, so errors are swallowed rather than surfaced to the caller.
+        if (sessionId) {
+          await chatClient
+            .appendSessionMessage(sessionId, { role: "user", content: query }, controller.signal)
+            .catch(() => {});
+        }
         const result = await chatClient.fetchRecommendations(
           query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget, controller.signal,
         );
         state = applyAssistantMessage(state, result);
+        if (sessionId) {
+          const assistantMessage = state.messages[state.messages.length - 1];
+          await chatClient
+            .appendSessionMessage(sessionId, { role: "assistant", content: assistantMessage.content }, controller.signal)
+            .catch(() => {});
+        }
         return result;
       } catch (error) {
         if ((error as Error).name === "AbortError") {

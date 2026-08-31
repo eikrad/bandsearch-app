@@ -78,7 +78,13 @@ function GenreChips({ genres, textTertiary, border }: { genres: string[] | null 
   );
 }
 
-function PlatformLinks({ links }: { links: PlatformLink[] | null | undefined }) {
+function PlatformLinks({
+  links,
+  onOpenLink,
+}: {
+  links: PlatformLink[] | null | undefined;
+  onOpenLink?: (url: string) => unknown;
+}) {
   if (!links?.length) return null;
   return React.createElement(
     "div",
@@ -92,6 +98,16 @@ function PlatformLinks({ links }: { links: PlatformLink[] | null | undefined }) 
           target: "_blank",
           rel: "noopener noreferrer",
           title: link.label,
+          // target="_blank" opens nothing inside the Tauri webview — there is no
+          // browser tab for it to go to. onOpenLink routes through the Tauri
+          // opener plugin (or window.open outside Tauri); href stays for
+          // right-click/copy-link and as a fallback if onOpenLink is absent.
+          onClick: onOpenLink
+            ? (event: { preventDefault: () => void }) => {
+                event.preventDefault();
+                onOpenLink(link.url);
+              }
+            : undefined,
           style: {
             fontSize: "11px",
             color: "#6b7a90",
@@ -257,7 +273,7 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
     card.connection
       ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),
-    React.createElement(PlatformLinks, { links: card.platformLinks }),
+    React.createElement(PlatformLinks, { links: card.platformLinks, onOpenLink: handlers.onOpenLink }),
     React.createElement("div", { style: cardStyles.actions }, renderCardActions(card, theme, handlers)),
   );
 }
