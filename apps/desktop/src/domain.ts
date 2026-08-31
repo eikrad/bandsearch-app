@@ -36,6 +36,9 @@ export type SavedBand = {
   name: string;
   rating?: number | null;
   note?: string;
+  // False for a note still at its model-written default; only edited notes
+  // are the user's own input (ADR 0002 / #166).
+  noteEdited?: boolean;
   categories?: string[];
   musicbrainzArtistId?: string;
 };
