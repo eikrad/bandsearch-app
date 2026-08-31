@@ -58,3 +58,17 @@ test("render.yaml declares required secrets without hardcoding values", () => {
     assert.ok(re.test(renderYaml), `Expected ${key} declared with sync: false`);
   }
 });
+
+test("root prepare script tolerates a missing husky binary", () => {
+  // render.yaml sets NODE_ENV=production, which makes `npm install` skip
+  // devDependencies (husky included) — a bare `husky` prepare script then
+  // fails the whole build on Render. See github.com/typicode/husky/blob/main/docs/how-to.md
+  const pkg = JSON.parse(
+    readFileSync(resolve(__dirname, "../../../package.json"), "utf8"),
+  );
+  assert.equal(
+    pkg.scripts?.prepare,
+    "husky || true",
+    'Expected root package.json scripts.prepare = "husky || true"',
+  );
+});
