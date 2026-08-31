@@ -18,6 +18,9 @@ export type RenderableRecommendation = {
   saved: boolean;
   rating: number | null;
   savedBandId: string | null;
+  categories: string[];
+  note: string;
+  noteEdited: boolean;
 };
 
 export type ConversationMessage =
@@ -38,11 +41,24 @@ export type ChatAppCollaborator = {
   cancelSearch?(): void;
 };
 
+function findSavedBandForItem(item: RecommendationItem, savedBands: SavedBand[]): SavedBand | null {
+  // musicbrainzArtistId is the same id saveBand/rateBand key their own lookups
+  // on (#163) — matching by name here too let two different artists sharing a
+  // name show one's saved/rated state on the other's card. Not every card
+  // carries an mbid (e.g. a deterministic fallback), so name stays the
+  // fallback rather than the rule.
+  if (item.musicbrainzArtistId) {
+    const byId = savedBands.find((s) => s.musicbrainzArtistId === item.musicbrainzArtistId);
+    if (byId) return byId;
+  }
+  return savedBands.find((s) => s.name === item.artist) ?? null;
+}
+
 function toRenderableRecommendation(
   item: RecommendationItem,
   savedBands: SavedBand[],
 ): RenderableRecommendation {
-  const savedBand = savedBands.find((s) => s.name === item.artist) ?? null;
+  const savedBand = findSavedBandForItem(item, savedBands);
   return {
     title: item.artist,
     why: item.why || "",
@@ -54,6 +70,9 @@ function toRenderableRecommendation(
     saved: savedBand !== null,
     rating: savedBand?.rating ?? null,
     savedBandId: savedBand?.id ?? null,
+    categories: savedBand?.categories ?? [],
+    note: savedBand?.note ?? "",
+    noteEdited: savedBand?.noteEdited ?? false,
   };
 }
 

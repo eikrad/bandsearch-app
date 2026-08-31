@@ -36,6 +36,10 @@ const BASE_CARD: CardViewProps = {
   imageUrl: null,
   saved: false,
   rating: null,
+  savedBandId: null,
+  categories: [],
+  note: "",
+  noteEdited: false,
   actions: {
     save: { visible: true },
     rate: { visible: true },

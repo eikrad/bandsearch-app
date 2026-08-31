@@ -7,7 +7,7 @@ const MODE_OPTIONS = [
   { value: "preference-aware", label: "Preference-aware" },
 ];
 
-function buildCardViewProps(card: RenderableRecommendation, isMobile: boolean) {
+function buildCardViewProps(card: RenderableRecommendation) {
   return {
     title: card.title,
     why: card.why,
@@ -18,16 +18,23 @@ function buildCardViewProps(card: RenderableRecommendation, isMobile: boolean) {
     imageUrl: card.imageUrl,
     saved: card.saved,
     rating: card.rating,
+    savedBandId: card.savedBandId,
+    categories: card.categories,
+    note: card.note,
+    noteEdited: card.noteEdited,
+    // Rating stars, Save/Saved, and the ··· overflow are primary controls
+    // that never collapse on any viewport (UI_GUIDELINES.md, "Action row
+    // policy" — #152 was this gated behind `!isMobile`).
     actions: {
-      save: { visible: !isMobile },
-      rate: { visible: !isMobile },
+      save: { visible: true },
+      rate: { visible: true },
       more: { visible: true },
     },
     platformLinks: buildPlatformLinks(card.title),
   };
 }
 
-function buildMessageViewProps(messages: ConversationMessage[], isMobile: boolean) {
+function buildMessageViewProps(messages: ConversationMessage[]) {
   return messages.map((msg) => {
     if (msg.role === "user") {
       return { id: msg.id, role: "user" as const, content: msg.content };
@@ -36,17 +43,17 @@ function buildMessageViewProps(messages: ConversationMessage[], isMobile: boolea
       id: msg.id,
       role: "assistant" as const,
       content: msg.content,
-      cards: msg.cards.map((card) => buildCardViewProps(card, isMobile)),
+      cards: msg.cards.map((card) => buildCardViewProps(card)),
     };
   });
 }
 
-function getLatestCards(conversation: ConversationMessage[] | null, isMobile: boolean) {
+function getLatestCards(conversation: ConversationMessage[] | null) {
   if (!conversation) return [];
   for (let i = conversation.length - 1; i >= 0; i--) {
     const msg = conversation[i];
     if (msg.role === "assistant" && msg.cards.length > 0) {
-      return msg.cards.map((card) => buildCardViewProps(card, isMobile));
+      return msg.cards.map((card) => buildCardViewProps(card));
     }
   }
   return [];
@@ -61,12 +68,11 @@ export type ChatViewProps = ReturnType<typeof buildViewProps> & {
 
 function buildViewProps(desktopUi: DesktopChatUiStack) {
   const viewport = desktopUi.getViewport();
-  const isMobile = viewport === "mobile";
   const conversation = desktopUi.getConversation();
   const loading = desktopUi.isLoading();
 
-  const messageViewProps = conversation ? buildMessageViewProps(conversation, isMobile) : null;
-  const cards = getLatestCards(conversation, isMobile);
+  const messageViewProps = conversation ? buildMessageViewProps(conversation) : null;
+  const cards = getLatestCards(conversation);
 
   return {
     headerTitle: "Bandsearch",
