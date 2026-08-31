@@ -45,6 +45,61 @@ test("ChatAppView renders mode, query input, cards, and action buttons", () => {
   assert.equal(html.includes("Saved Fen."), true);
 });
 
+test("RecommendationCard renders 5 rating stars, filled up to the current rating", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        cards: [cardViewProps({ title: "Fen", rating: 3 })],
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  const filled = (html.match(/★/g) || []).length;
+  const empty = (html.match(/☆/g) || []).length;
+  assert.equal(filled, 3, "3 filled stars for a rating of 3");
+  assert.equal(empty, 2, "2 empty stars for the remainder");
+});
+
+test("RecommendationCard renders no filled stars when unrated", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        cards: [cardViewProps({ title: "Fen", rating: null })],
+      }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  assert.equal((html.match(/★/g) || []).length, 0);
+  assert.equal((html.match(/☆/g) || []).length, 5);
+});
+
+test("RecommendationCard's Save action reads Save when unsaved and Saved when saved", () => {
+  const unsavedHtml = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({ cards: [cardViewProps({ title: "Fen", saved: false })] }),
+      handlers: chatHandlers(),
+    }),
+  );
+  const savedHtml = renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({ cards: [cardViewProps({ title: "Fen", saved: true, savedBandId: "band-1" })] }),
+      handlers: chatHandlers(),
+    }),
+  );
+
+  // The header always has its own "Saved" nav button (see chatHandlers()'s
+  // onNavigateSaved), so ">Saved<" alone isn't specific to the card toggle —
+  // counting occurrences is: unsaved has only the header's, saved adds the
+  // card's on top of it.
+  const countOf = (html: string, needle: string) => html.split(needle).length - 1;
+  assert.equal(countOf(unsavedHtml, ">Save<"), 1, "card shows Save when unsaved");
+  assert.equal(countOf(unsavedHtml, ">Saved<"), 1, "only the header's Saved nav button");
+  assert.equal(countOf(savedHtml, ">Saved<"), 2, "header nav button plus the card's toggle");
+  assert.equal(countOf(savedHtml, ">Save<"), 0, "no standalone Save button when the card is saved");
+});
+
 test("RecommendationCard has CSS class for card styling", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {

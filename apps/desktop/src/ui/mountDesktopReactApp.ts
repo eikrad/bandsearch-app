@@ -19,7 +19,13 @@ export type MountShell = {
   updateMode(mode: string): Promise<unknown>;
   submitQuery(query: string): Promise<unknown> | unknown;
   saveBand?(artistName: string): Promise<unknown> | unknown;
-  rateBand?(artistName: string, rating?: number): Promise<unknown> | unknown;
+  rateBand?(artistName: string, rating: number | null): Promise<unknown> | unknown;
+  unsaveBand?(savedBandId: string, artistName: string): Promise<unknown> | unknown;
+  saveCategoryNote?(
+    artistName: string,
+    savedBandId: string | null,
+    updates: { categories: string[]; note: string },
+  ): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
   desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
@@ -256,16 +262,36 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onRate: async (artistName: string) => {
+    // No default rating here — #153 was this call hardcoding 5 regardless of
+    // what the user actually tapped. The star row always sends an explicit
+    // value (a number, or null to clear).
+    onRate: async (artistName: string, rating: number | null) => {
       try {
-        await shell.rateBand?.(artistName, 5);
+        await shell.rateBand?.(artistName, rating);
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }
       return renderCurrent();
     },
-    onMore: (artistName: string) => {
-      void artistName;
+    onUnsave: async (savedBandId: string, artistName: string) => {
+      try {
+        await shell.unsaveBand?.(savedBandId, artistName);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
+    },
+    onSaveCategoryNote: async (
+      artistName: string,
+      savedBandId: string | null,
+      updates: { categories: string[]; note: string },
+    ) => {
+      try {
+        await shell.saveCategoryNote?.(artistName, savedBandId, updates);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
     },
     onOpenLink: (url: string) => {
       openExternalLinkImpl(url);

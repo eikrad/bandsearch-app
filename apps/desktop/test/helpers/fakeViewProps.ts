@@ -74,7 +74,6 @@ const BASE_HANDLERS: ChatHandlers = {
   onQuerySubmit: () => {},
   onSave: () => {},
   onRate: () => {},
-  onMore: () => {},
 };
 
 export function chatHandlers(overrides: Partial<ChatHandlers> = {}): ChatHandlers {

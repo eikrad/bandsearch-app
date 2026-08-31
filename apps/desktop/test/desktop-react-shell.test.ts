@@ -40,7 +40,7 @@ test("desktop react shell renders HTML with recommendation card and actions", as
 });
 
 test("desktop react shell save and rate actions call app handlers", async () => {
-  const calls: Array<{ type: string; artistName: string; rating?: number }> = [];
+  const calls: Array<{ type: string; artistName: string; rating?: number | null }> = [];
   const shell = bootstrapDesktopReactShell({
     app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),

@@ -6,7 +6,7 @@ import type { MountShell } from "../src/ui/mountDesktopReactApp.js";
 import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 
 test("desktop react mount renders and wires interaction callbacks", async () => {
-  const calls: Array<{ type: string; element?: ReactNode; mode?: string; query?: string; artistName?: string; rating?: number }> = [];
+  const calls: Array<{ type: string; element?: ReactNode; mode?: string; query?: string; artistName?: string; rating?: number | null }> = [];
   const fakeRoot = fakeReactRoot((element) => {
     calls.push({ type: "render", element });
   });
@@ -42,7 +42,7 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
   await mount.handlers.onModeChange("preference-aware");
   await mount.handlers.onQuerySubmit("I like blackgaze");
   await mount.handlers.onSave("Fen");
-  await mount.handlers.onRate("Fen");
+  await mount.handlers.onRate("Fen", 4);
 
   assert.equal(calls.some((item) => item.type === "mode"), true);
   assert.equal(calls.some((item) => item.type === "query"), true);
@@ -101,9 +101,63 @@ test("onRate re-renders even when shell.rateBand rejects, so a failed rating is 
   mount.mount();
   const rendersBeforeRate = renders.length;
 
-  await mount.handlers.onRate("Fen");
+  await mount.handlers.onRate("Fen", 4);
 
   assert.ok(renders.length > rendersBeforeRate, "a render happened after the rejected rating");
+});
+
+test("onUnsave calls shell.unsaveBand and re-renders even when it rejects", async () => {
+  const renders: ReactNode[] = [];
+  const calls: Array<{ savedBandId: string; artistName: string }> = [];
+  const shell: MountShell = {
+    getViewProps: () => ({}),
+    updateMode: async () => {},
+    submitQuery: async () => {},
+    unsaveBand: async (savedBandId, artistName) => {
+      calls.push({ savedBandId, artistName });
+      throw new Error("network error");
+    },
+  };
+
+  const mount = createDesktopReactMount({
+    shell,
+    createRootImpl: () => fakeReactRoot((element) => renders.push(element)),
+    resolveContainer: () => fakeContainer(),
+  });
+
+  mount.mount();
+  const rendersBeforeUnsave = renders.length;
+  await mount.handlers.onUnsave("band-1", "Fen");
+
+  assert.deepEqual(calls, [{ savedBandId: "band-1", artistName: "Fen" }]);
+  assert.ok(renders.length > rendersBeforeUnsave, "a render happened after the rejected unsave");
+});
+
+test("onSaveCategoryNote calls shell.saveCategoryNote and re-renders even when it rejects", async () => {
+  const renders: ReactNode[] = [];
+  const calls: Array<{ artistName: string; savedBandId: string | null; updates: { categories: string[]; note: string } }> = [];
+  const shell: MountShell = {
+    getViewProps: () => ({}),
+    updateMode: async () => {},
+    submitQuery: async () => {},
+    saveCategoryNote: async (artistName, savedBandId, updates) => {
+      calls.push({ artistName, savedBandId, updates });
+      throw new Error("network error");
+    },
+  };
+
+  const mount = createDesktopReactMount({
+    shell,
+    createRootImpl: () => fakeReactRoot((element) => renders.push(element)),
+    resolveContainer: () => fakeContainer(),
+  });
+
+  mount.mount();
+  const rendersBeforeSave = renders.length;
+  await mount.handlers.onSaveCategoryNote("Fen", "band-1", { categories: ["blackgaze"], note: "My words" });
+
+  assert.deepEqual(calls, [{ artistName: "Fen", savedBandId: "band-1", updates: { categories: ["blackgaze"], note: "My words" } }]);
+  assert.ok(renders.length > rendersBeforeSave, "a render happened after the rejected save");
 });
 
 test("onOpenLink routes through the injected opener instead of a plain <a> navigation", () => {
