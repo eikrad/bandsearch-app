@@ -50,7 +50,6 @@ type AppRuntimeConfig = {
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
   mistralApiKey?: string;
-  anthropicApiKey?: string;
   evalDashboardPassword?: string;
   jwtSecret?: string;
   evalDashboardEnabled?: boolean;
@@ -250,7 +249,7 @@ export function createApp({
 
   const resolvedJudgeWorker = runtimeConfig.mistralApiKey
     ? createJudgeWorker({
-        anthropicApiKey: runtimeConfig.mistralApiKey, // Use Mistral API key
+        mistralApiKey: runtimeConfig.mistralApiKey,
         evalRepository: resolvedEvalRepository,
       })
     : createNoOpJudgeWorker();
