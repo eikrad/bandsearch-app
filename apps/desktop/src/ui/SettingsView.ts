@@ -599,18 +599,23 @@ function PrivacyCard({
         },
         "Privacy policy",
       ),
-      React.createElement(
+      // Omitted rather than rendered inert when nothing can serve it — the
+      // locked rule in UI_GUIDELINES.md: "No control may render without an
+      // action behind it." A dead "Export my data" is worse than none, because
+      // the privacy policy points users at it.
+      !onExportAccountData ? null : React.createElement(
         "button",
         {
           type: "button",
           className: "export-account-btn",
-          onClick: () => onExportAccountData?.(),
+          onClick: () => onExportAccountData(),
           style: {
             backgroundColor: palette.buttonBg,
             color: palette.buttonText,
             border: `1px solid ${palette.buttonBorder}`,
             borderRadius: "7px",
-            padding: "7px 14px",
+            minHeight: "44px",
+            padding: "0 14px",
             fontSize: "12px",
           },
         },

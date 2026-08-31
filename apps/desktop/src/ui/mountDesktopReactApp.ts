@@ -211,7 +211,11 @@ export function createDesktopReactMount({
     }
 
     if (route === "settings") {
-      const viewProps = await Promise.resolve(getSettingsViewProps());
+      // Merged over the injected props so an account action can report itself.
+      // The supplier owns Gemini/Brave status; nothing owned the outcome of an
+      // export or a deletion, so both failed in silence.
+      const supplied = await Promise.resolve(getSettingsViewProps()) as Record<string, unknown>;
+      const viewProps = accountStatus ? { ...supplied, statusMessage: accountStatus } : supplied;
       renderRoot(
         React.createElement(SettingsView as unknown as ViewComponentLike, {
           viewProps,
@@ -311,11 +315,24 @@ export function createDesktopReactMount({
       if (router) router.navigate("privacy");
       return renderCurrent();
     },
-    onExportAccountData: async () => {
-      if (!onExportAccountData) return;
+    // Left undefined when no collaborator was injected, rather than wrapped in a
+    // function that silently returns. A present-but-inert handler is exactly how
+    // #175 hid: the view could not tell the difference, so the button rendered
+    // and did nothing. Absent, the view omits the control instead.
+    onExportAccountData: !onExportAccountData ? undefined : async () => {
       // Same Blob + a.download path the saved-artists export already uses:
       // the Tauri webview blocks nothing here and it needs no new dependency.
-      const bundle = await onExportAccountData();
+      let bundle: Record<string, unknown>;
+      try {
+        bundle = await onExportAccountData();
+      } catch (error) {
+        // Previously this rejected into the click handler and surfaced as an
+        // uncaught page error — the user saw nothing at all, on a control the
+        // privacy policy points them at for Art. 15.
+        accountStatus = { type: "error", message: error instanceof Error ? error.message : "export failed" };
+        return renderCurrent();
+      }
+      accountStatus = null;
       const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -324,16 +341,24 @@ export function createDesktopReactMount({
       a.click();
       URL.revokeObjectURL(url);
     },
-    onDeleteAccount: async (password: string) => {
-      if (!onDeleteAccount) return;
+    onDeleteAccount: !onDeleteAccount ? undefined : async (password: string) => {
       const result = await onDeleteAccount(password);
-      if (!result.ok) return renderCurrent();
+      if (!result.ok) {
+        // A wrong password used to redraw the screen unchanged, which reads as
+        // "nothing happened" rather than "that password was wrong".
+        accountStatus = { type: "error", message: result.error ?? "account deletion failed" };
+        return renderCurrent();
+      }
+      accountStatus = null;
       // Erasing the only account puts the install back to zero users, which is
       // the first-run state — so send them where a fresh install starts.
       if (router) router.navigate("register");
       return renderCurrent();
     },
   };
+
+  // Outcome of the last export or deletion, shown in the privacy card.
+  let accountStatus: { type: "success" | "error"; message: string } | null = null;
 
   const privacyHandlers = {
     onBack: async () => {

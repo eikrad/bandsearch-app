@@ -198,6 +198,12 @@ export async function startDesktopBrowserApp({
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
+  // Whether there is an account to export or delete. Read from the auth status
+  // the gate already fetches, so no extra round trip. SettingsView renders the
+  // deletion section as `!accountsEnabled ? null : …`, so leaving this unset
+  // hides it entirely — which is how #175 shipped.
+  let accountsEnabled = false;
+
   // Drives the connecting screen. Read by the mount each time it renders.
   let connectingViewProps: ConnectingViewProps = { state: "waiting" };
 
@@ -208,8 +214,13 @@ export async function startDesktopBrowserApp({
    * which is the part `waitForAuthStatus` alone could not provide: the gate runs
    * before `mount()`, so waiting there would show a blank window.
    */
+  function rememberAccountsEnabled(status: Awaited<ReturnType<typeof authClient.getAuthStatus>>): void {
+    accountsEnabled = status.reachable && status.enabled && status.userCount > 0;
+  }
+
   async function runAuthGate(): Promise<void> {
     const first = await authClient.getAuthStatus();
+    rememberAccountsEnabled(first);
     const route = decideAuthRoute({ status: first, hasToken: Boolean(getAuthToken()) });
     if (route === "unavailable") {
       connectingViewProps = { state: "waiting", attempt: 1 };
@@ -237,6 +248,7 @@ export async function startDesktopBrowserApp({
         void reactApp.mount();
       },
     });
+      rememberAccountsEnabled(status);
       const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
       if (route === "unavailable") {
         if (!status.reachable) console.warn("[bandsearch] API unreachable:", status.reason);
@@ -285,7 +297,18 @@ export async function startDesktopBrowserApp({
     actionHandlers,
     router,
     savedArtistsShell,
-    getSettingsViewProps: () => gemini.getSettingsViewProps(),
+    getSettingsViewProps: async () => ({ ...(await gemini.getSettingsViewProps()), accountsEnabled }),
+    onExportAccountData: async () => {
+      const result = await authClient.exportAccountData();
+      if (result.ok === false) throw new Error(result.error);
+      return result.bundle;
+    },
+    onDeleteAccount: async (password: string) => {
+      const result = await authClient.deleteAccount({ password });
+      if (result.ok === false) return { ok: false, error: result.error };
+      clearAuthToken();
+      return { ok: true };
+    },
     saveGeminiApiKey: (key: string) => gemini.saveGeminiApiKey(key),
     saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
     saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),

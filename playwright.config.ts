@@ -35,7 +35,16 @@ export default defineConfig({
       // Its own database: the suite registers a user, and that must not land in
       // the developer's bandsearch.db (where it would also change the auth-status
       // user count the desktop client routes on).
-      env: { PORT: String(E2E_API_PORT), DATABASE_PATH: E2E_DATABASE_PATH },
+      env: {
+        PORT: String(E2E_API_PORT),
+        DATABASE_PATH: E2E_DATABASE_PATH,
+        // Pinned, not inherited. server.ts loads dotenv, so without this the
+        // suite runs against whatever store the developer happens to have in
+        // .env — and PREFERENCE_STORE=memory disables account export by design,
+        // which made the GDPR specs fail for a reason that had nothing to do
+        // with the code under test.
+        PREFERENCE_STORE: "sqlite",
+      },
     },
     {
       command: "npx tsx tests/e2e/serve-frontend.ts",
