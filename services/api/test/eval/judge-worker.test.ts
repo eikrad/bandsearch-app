@@ -59,10 +59,10 @@ const sampleBands = [
 ];
 
 const successResponseBody = {
-  content: [
+  choices: [
     {
-      type: "text",
-      text: JSON.stringify({
+      message: {
+        content: JSON.stringify({
         "Wolves in the Throne Room": {
           relevance: 0.9,
           obscurity_fit: 0.8,
@@ -77,7 +77,8 @@ const successResponseBody = {
           discovery_value: 0.6,
           reasoning: "Well-known band, generic why-text.",
         },
-      }),
+        }),
+      },
     },
   ],
 };
@@ -138,12 +139,12 @@ test("buildJudgePrompt: includes obscurity_tier per band when provided", () => {
   assert.equal(parsed[0].obscurity_tier, "cult");
 });
 
-test("createJudgeWorker: no-op when anthropicApiKey is empty", async () => {
+test("createJudgeWorker: no-op when mistralApiKey is empty", async () => {
   const fetchCalls: FetchCall[] = [];
   const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
   assert.equal(fetchCalls.length, 0, "no fetch call when API key is absent");
@@ -154,15 +155,17 @@ test("createJudgeWorker: sends all bands in one batched request (not per-band)",
   const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
   assert.equal(fetchCalls.length, 1, "exactly one API call for all bands");
   const body = requestBody(fetchCalls[0]);
-  assert.equal(body.model, "claude-opus-4-8");
+  assert.match(String(body.model), /mistral/i);
   assertArray(body.messages);
-  assertRecord(body.messages[0]);
-  const userContent = body.messages[0].content;
+  // messages[0] is the system prompt under Mistral's OpenAI-shaped API; the
+  // batched bands are in the user message that follows it.
+  assertRecord(body.messages[1]);
+  const userContent = body.messages[1].content;
   assert.ok(typeof userContent === "string", "user message content should be a string");
   assert.ok(userContent.includes("Wolves in the Throne Room"), "user message should contain WITTR");
   assert.ok(userContent.includes("Deafheaven"), "user message should contain Deafheaven");
@@ -186,7 +189,7 @@ test("createJudgeWorker: parses batch response and upserts scores per band", asy
     recommendationCount: 2,
   });
 
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent(eventId, sampleBands);
 
   const scores = await repo.listBandEvalScores(eventId);
@@ -213,7 +216,7 @@ test("createJudgeWorker: upsertBandEvalScore called once per band with parsed sc
   };
   const fetchStub = async () => jsonResponse(successResponseBody);
 
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repoStub, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repoStub, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", sampleBands);
 
   assert.equal(upsertCalls.length, 2, "upsert called once per band");
@@ -229,16 +232,16 @@ test("createJudgeWorker: does not throw on AbortError (timeout)", async () => {
   };
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
 
   await assert.doesNotReject(() => worker.judgeEvent("event-1", sampleBands));
 });
 
 test("createJudgeWorker: does not throw on malformed JSON response", async () => {
-  const fetchStub = async () => jsonResponse({ content: [{ type: "text", text: "not valid json {{{" }] });
+  const fetchStub = async () => jsonResponse({ choices: [{ message: { content: "not valid json {{{" } }] });
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
 
   await assert.doesNotReject(() => worker.judgeEvent("event-1", sampleBands));
 });
@@ -247,7 +250,7 @@ test("createJudgeWorker: does not throw on non-ok API response", async () => {
   const fetchStub = async () => jsonResponse({}, 429);
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
 
   await assert.doesNotReject(() => worker.judgeEvent("event-1", sampleBands));
 });
@@ -257,39 +260,70 @@ test("createJudgeWorker: does not call fetch when bands array is empty", async (
   const fetchStub = recordingFetch(fetchCalls, {});
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
   await worker.judgeEvent("event-1", []);
 
   assert.equal(fetchCalls.length, 0, "no fetch call for empty band list");
 });
 
-test("createJudgeWorker: prompt caching header is sent with request", async () => {
-  const fetchCalls: FetchCall[] = [];
-  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
+
+
+test("the judge calls Mistral, with the key it was given", async () => {
+  // The defect: MISTRAL_API_KEY was handed to a worker that POSTs to
+  // api.anthropic.com with x-api-key and anthropic-version headers. A Mistral
+  // key sent there can only ever 401, which is exactly what production logged.
+  // The env var name was right; the implementation was built against the wrong
+  // provider and the mismatch was recorded as a naming quirk.
+  const calls: Array<{ url: string; headers: Record<string, string>; body: Record<string, unknown> }> = [];
+  const fetchStub = (async (url: string, init: RequestInit) => {
+    calls.push({
+      url: String(url),
+      headers: init.headers as Record<string, string>,
+      body: JSON.parse(String(init.body)) as Record<string, unknown>,
+    });
+    return jsonResponse(successResponseBody);
+  }) as unknown as typeof fetch;
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
-  await worker.judgeEvent("event-1", sampleBands);
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  await worker.judgeEvent("e1", sampleBands);
 
-  assert.equal(fetchCalls.length, 1);
-  const headers = new Headers(fetchCalls[0].init.headers);
-  assert.ok(headers.get("anthropic-beta")?.includes("prompt-caching"), "prompt-caching beta header should be sent");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /^https:\/\/api\.(eu\.)?mistral\.ai\/v1\/chat\/completions$/);
+  assert.equal(calls[0].headers.Authorization, "Bearer test-key");
+  assert.equal(calls[0].headers["x-api-key"], undefined, "the Anthropic auth header must be gone");
+  assert.equal(calls[0].headers["anthropic-version"], undefined);
+  assert.match(String(calls[0].body.model), /mistral/i);
 });
 
-test("createJudgeWorker: system message has cache_control ephemeral", async () => {
-  const fetchCalls: FetchCall[] = [];
-  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
+test("the judge asks Mistral for JSON rather than hoping for it", async () => {
+  // Mistral supports response_format: json_object. The prompt already demands
+  // JSON, but asking the API for it too removes a class of parse failure the
+  // worker otherwise swallows silently.
+  const calls: Array<Record<string, unknown>> = [];
+  const fetchStub = (async (_url: string, init: RequestInit) => {
+    calls.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    return jsonResponse(successResponseBody);
+  }) as unknown as typeof fetch;
 
   const repo = createInMemoryEvalRepository();
-  const worker = createJudgeWorker({ anthropicApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
-  await worker.judgeEvent("event-1", sampleBands);
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  await worker.judgeEvent("e1", sampleBands);
 
-  const body = requestBody(fetchCalls[0]);
-  const systemBlocks: unknown[] = Array.isArray(body.system) ? body.system : [];
-  const cacheBlock = systemBlocks.find((block) => {
-    if (typeof block !== "object" || block === null) return false;
-    const { cache_control: cacheControl } = block as { cache_control?: { type?: unknown } };
-    return cacheControl?.type === "ephemeral";
-  });
-  assert.ok(cacheBlock, "system prompt should have cache_control: ephemeral block");
+  assert.deepEqual(calls[0].response_format, { type: "json_object" });
+});
+
+test("the system prompt is sent as a message, not an Anthropic system block", async () => {
+  const calls: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+  const fetchStub = (async (_url: string, init: RequestInit) => {
+    calls.push(JSON.parse(String(init.body)) as { messages: Array<{ role: string; content: string }> });
+    return jsonResponse(successResponseBody);
+  }) as unknown as typeof fetch;
+
+  const repo = createInMemoryEvalRepository();
+  const worker = createJudgeWorker({ mistralApiKey: "test-key", evalRepository: repo, fetchImpl: fetchStub });
+  await worker.judgeEvent("e1", sampleBands);
+
+  assert.equal(calls[0].messages[0].role, "system");
+  assert.equal(calls[0].messages[1].role, "user");
 });

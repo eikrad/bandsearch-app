@@ -85,16 +85,26 @@ export function createNoOpJudgeWorker(): JudgeWorker {
   return { async judgeEvent() {} };
 }
 
+/**
+ * Mistral's chat-completions endpoint.
+ *
+ * `MISTRAL_JUDGE_ENDPOINT` allows `https://api.eu.mistral.ai/...`, which Mistral
+ * offers for EU data residency — relevant here because the judge is sent the
+ * recommendation prose and the user's query context.
+ */
+const JUDGE_ENDPOINT = process.env.MISTRAL_JUDGE_ENDPOINT?.trim() || "https://api.mistral.ai/v1/chat/completions";
+const JUDGE_MODEL = process.env.MISTRAL_JUDGE_MODEL?.trim() || "mistral-large-latest";
+
 export function createJudgeWorker({
-  anthropicApiKey,
+  mistralApiKey,
   evalRepository,
   fetchImpl = globalThis.fetch,
 }: {
-  anthropicApiKey: string;
+  mistralApiKey: string;
   evalRepository: EvalRepository;
   fetchImpl?: typeof globalThis.fetch;
 }): JudgeWorker {
-  if (!anthropicApiKey) return createNoOpJudgeWorker();
+  if (!mistralApiKey) return createNoOpJudgeWorker();
 
   return {
     async judgeEvent(eventId, bands) {
@@ -104,28 +114,27 @@ export function createJudgeWorker({
       const promptHash = createHash("sha256").update(systemText + userText).digest("hex");
 
       const requestBody = {
-        model: "claude-opus-4-8",
+        model: JUDGE_MODEL,
         max_tokens: 4096,
-        system: [
-          {
-            type: "text",
-            text: systemText,
-            cache_control: { type: "ephemeral" },
-          },
+        // Mistral's API is OpenAI-shaped: the system prompt is a message, not a
+        // separate field, and there is no prompt-caching block to attach.
+        messages: [
+          { role: "system", content: systemText },
+          { role: "user", content: userText },
         ],
-        messages: [{ role: "user", content: userText }],
+        // The prompt already demands JSON; asking the API for it as well removes
+        // a class of parse failure this worker would otherwise swallow.
+        response_format: { type: "json_object" },
       };
 
       const controller = new AbortController();
       const timeoutHandle = setTimeout(() => controller.abort(), 10_000);
 
       try {
-        const response = await fetchImpl("https://api.anthropic.com/v1/messages", {
+        const response = await fetchImpl(JUDGE_ENDPOINT, {
           method: "POST",
           headers: {
-            "x-api-key": anthropicApiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "prompt-caching-2024-07-31",
+            Authorization: `Bearer ${mistralApiKey}`,
             "content-type": "application/json",
           },
           body: JSON.stringify(requestBody),
@@ -135,14 +144,14 @@ export function createJudgeWorker({
         if (!response.ok) {
           writeStructuredLog("warn", {
             component: "judge_worker",
-            message: `Anthropic API returned ${response.status}`,
+            message: `Mistral API returned ${response.status}`,
             eventId,
           });
           return;
         }
 
-        const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
-        const text = data?.content?.find((c) => c.type === "text")?.text ?? "";
+        const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        const text = data?.choices?.[0]?.message?.content ?? "";
 
         let scores: Record<string, JudgeScoreObject>;
         try {
