@@ -26,7 +26,7 @@
     "test:e2e": "playwright test --grep-invert @live",
     "test:e2e:live": "playwright test",
     "ci": "npm run lint && npm run typecheck && npm run test",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "tsx": "^4.23.12"
