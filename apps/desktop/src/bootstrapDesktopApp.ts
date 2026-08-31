@@ -71,6 +71,24 @@ export function bootstrapDesktopApp({
     return recommendations.find((item) => item.artist === artistName);
   }
 
+  // The same id saveBand sends the server, so a lookup against state.savedBands
+  // agrees with what actually got stored — matching by name instead let two
+  // different artists sharing a name collide, and missed a stale client cache
+  // entirely (#163).
+  function resolveMusicbrainzId(artistName: string): string {
+    const recommendation = findLatestRecommendationByName(artistName);
+    const mbFromCard =
+      recommendation?.musicbrainzArtistId && String(recommendation.musicbrainzArtistId).trim()
+        ? String(recommendation.musicbrainzArtistId).trim()
+        : null;
+    return mbFromCard || normalizeArtistId(artistName);
+  }
+
+  function findSavedBandByArtist(artistName: string): SavedBand | undefined {
+    const musicbrainzArtistId = resolveMusicbrainzId(artistName);
+    return state.savedBands.find((item) => item.musicbrainzArtistId === musicbrainzArtistId);
+  }
+
   function upsertSavedBand(savedBand: SavedBand) {
     const existingIndex = state.savedBands.findIndex((item) => item.id === savedBand.id);
     if (existingIndex >= 0) {
@@ -190,12 +208,8 @@ export function bootstrapDesktopApp({
     },
     async saveBand(artistName: string, options: { rating?: number; categories?: string[]; note?: string } = {}) {
       const recommendation = findLatestRecommendationByName(artistName);
-      const mbFromCard =
-        recommendation?.musicbrainzArtistId && String(recommendation.musicbrainzArtistId).trim()
-          ? String(recommendation.musicbrainzArtistId).trim()
-          : null;
       const payload = {
-        musicbrainzArtistId: mbFromCard || normalizeArtistId(artistName),
+        musicbrainzArtistId: resolveMusicbrainzId(artistName),
         name: artistName,
         // No rating unless the user gave one. This used to default to 3,
         // so every "just remember this" became a three-star judgement
@@ -204,16 +218,37 @@ export function bootstrapDesktopApp({
         categories: options.categories || [],
         note: options.note || recommendation?.why || "Saved from recommendation card.",
       };
+      // The server itself dedupes on (user, musicbrainzArtistId) (#163), so a
+      // repeat call updates the existing row rather than creating a second
+      // one — this just needs to hand back that same row, not skip the call.
       const result = await chatClient.createPreference(payload);
       upsertSavedBand(result.savedBand);
       return result.savedBand;
     },
-    async rateBand(artistName: string, rating = 5) {
-      let savedBand = state.savedBands.find((item) => item.name === artistName);
-      if (!savedBand) savedBand = await this.saveBand(artistName, { rating });
+    // Tapping a star implies saving (UI_GUIDELINES.md — "rating implies
+    // saving"); tapping the currently active star clears it via rating: null,
+    // which stays saved and only drops the judgement.
+    async rateBand(artistName: string, rating: number | null = 5) {
+      let savedBand = findSavedBandByArtist(artistName);
+      if (!savedBand) savedBand = await this.saveBand(artistName, rating != null ? { rating } : {});
       const result = await chatClient.updatePreference(savedBand.id, { rating });
       upsertSavedBand(result.savedBand);
       return result.savedBand;
+    },
+    // The ··· sheet's Category/Note edit. Editing implies saving, same as
+    // rating — an artist not yet saved gets created with these fields instead
+    // of failing for lack of a savedBandId.
+    async saveCategoryNote(
+      artistName: string,
+      savedBandId: string | null,
+      updates: { categories: string[]; note: string },
+    ) {
+      if (savedBandId) {
+        const result = await chatClient.updatePreference(savedBandId, updates);
+        upsertSavedBand(result.savedBand);
+        return result.savedBand;
+      }
+      return this.saveBand(artistName, updates);
     },
     async listSavedBands() {
       const bands = await chatClient.listPreferences();

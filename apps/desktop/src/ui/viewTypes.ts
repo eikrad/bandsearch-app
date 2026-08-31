@@ -10,8 +10,9 @@ export type ChatHandlers = {
   onModeChange(mode: string): unknown;
   onQuerySubmit(query: string): unknown;
   onSave(artistName: string): unknown;
-  onRate(artistName: string, rating?: number): unknown;
-  onMore(artistName: string): unknown;
+  // null clears an existing rating without unsaving the band — see
+  // cardActionLogic.ts's nextRatingForStarTap.
+  onRate(artistName: string, rating: number | null): unknown;
   onObscurityTargetChange?(target: string | undefined): unknown;
   onCopyCard?(title: string, why: string): unknown;
   onCopyAll?(text: string): unknown;
@@ -22,6 +23,10 @@ export type ChatHandlers = {
   onStop?(): unknown;
   onRetry?(): unknown;
   onOpenLink?(url: string): unknown;
+  /** Save toggled off — removes the band entirely (not the same as clearing a rating). */
+  onUnsave?(savedBandId: string, artistName: string): unknown;
+  /** The ··· sheet's persistence call. savedBandId is null when the artist isn't saved yet — editing implies saving. */
+  onSaveCategoryNote?(artistName: string, savedBandId: string | null, updates: { categories: string[]; note: string }): unknown;
 };
 
 /** One saved artist as the saved-artists screen renders it. */

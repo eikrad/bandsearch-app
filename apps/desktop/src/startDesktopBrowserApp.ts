@@ -96,8 +96,7 @@ function createDefaultUpdateDismissalStorage(): UpdateDismissalStorage {
 
 export type ActionHandlers = {
   onSave?: (artistName: string) => void;
-  onRate?: (artistName: string) => void;
-  onMore?: () => void;
+  onRate?: (artistName: string, rating: number | null) => void;
 };
 
 /**

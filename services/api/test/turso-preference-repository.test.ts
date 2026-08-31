@@ -31,6 +31,9 @@ test("turso repository adds and maps a saved band", async () => {
     client: {
       execute: async (stmt: ExecutedStatement) => {
         calls.push(stmt);
+        // addSavedBand checks for an existing row (musicbrainzArtistId, #163)
+        // before inserting; an empty result here means "not found yet".
+        if (stmt.sql.includes("SELECT")) return { rows: [], rowsAffected: 0 };
         return { rows: [makeRow()], rowsAffected: 1 };
       },
     },
@@ -52,8 +55,37 @@ test("turso repository adds and maps a saved band", async () => {
   assert.equal(result.savedBand.note, "Beautiful");
   assert.ok(result.savedBand.id, "id must be set");
   assert.ok(result.savedBand.createdAt, "createdAt must be set");
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].sql.includes("INSERT INTO saved_bands"), "must issue INSERT");
+  assert.equal(calls.length, 2, "a dedup SELECT, then the INSERT");
+  assert.ok(calls[0].sql.includes("SELECT"), "must check for an existing row first");
+  assert.ok(calls[1].sql.includes("INSERT INTO saved_bands"), "must issue INSERT when none exists");
+});
+
+test("turso repository updates rather than duplicates when the artist is already saved", async () => {
+  const calls: ExecutedStatement[] = [];
+  const existingRow = makeRow({ id: "t-1", rating: 3 });
+  const repo = createTursoPreferenceRepository({
+    client: {
+      execute: async (stmt: ExecutedStatement) => {
+        calls.push(stmt);
+        if (stmt.sql.startsWith("SELECT")) return { rows: [existingRow], rowsAffected: 0 };
+        return { rows: [makeRow({ id: "t-1", rating: 5 })], rowsAffected: 1 };
+      },
+    },
+  });
+
+  const result = await repo.addSavedBand({
+    musicbrainzArtistId: "mb-1",
+    name: "Alcest",
+    rating: 5,
+    categories: ["blackgaze", "shoegaze"],
+    note: "Beautiful",
+  });
+
+  assert.equal(result.ok, true);
+  assertRecord(result.savedBand);
+  assert.equal(result.savedBand.id, "t-1", "must update the existing row, not create a new one");
+  assert.equal(calls.length, 2, "a dedup SELECT, then an UPDATE — no INSERT");
+  assert.ok(calls[1].sql.includes("UPDATE saved_bands"), "must issue UPDATE when the artist already exists");
 });
 
 test("turso repository rejects invalid input without calling client", async () => {

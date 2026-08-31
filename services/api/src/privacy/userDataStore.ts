@@ -119,6 +119,7 @@ export function rowToSavedBand(row: Record<string, unknown>): SavedBand {
     rating: row.rating === null || row.rating === undefined ? null : Number(row.rating),
     categories: parseCategories(row.categories),
     note: String(row.note ?? ""),
+    noteEdited: Boolean(Number(row.note_edited ?? 0)),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };

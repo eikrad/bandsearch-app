@@ -24,6 +24,7 @@ export const PREFERENCE_SCHEMA = `
     rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
     categories TEXT NOT NULL DEFAULT '[]',
     note TEXT NOT NULL DEFAULT '',
+    note_edited INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );

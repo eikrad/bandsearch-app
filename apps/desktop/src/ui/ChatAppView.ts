@@ -6,6 +6,7 @@ import { validateObscurityTarget } from "../../../../shared/schemas/src/contract
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { FeedbackReactionBar } from "./FeedbackReactionBar.js";
+import { nextRatingForStarTap, parseCategoriesInput } from "../cardActionLogic.js";
 
 function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
@@ -124,7 +125,179 @@ function PlatformLinks({
   );
 }
 
-function renderCardActions(card: CardViewProps, theme: ReturnType<typeof getTheme>, handlers: ChatHandlers) {
+// UI_GUIDELINES.md, "Action row policy (locked, all viewports)": tapping star
+// n saves the band with rating n; tapping the active star clears it. Rating
+// implies saving — an unsaved artist gets created the moment a star is
+// tapped, same as the old Rate button, just with an actual value the user
+// chose instead of a hardcoded 5 (#153).
+function RatingStars({
+  rating,
+  theme,
+  onRate,
+}: {
+  rating: number | null;
+  theme: ReturnType<typeof getTheme>;
+  onRate: (rating: number | null) => void;
+}) {
+  return React.createElement(
+    "div",
+    { className: "rating-stars", style: { display: "flex", alignItems: "center" } },
+    [1, 2, 3, 4, 5].map((n) =>
+      React.createElement(
+        "button",
+        {
+          key: n,
+          type: "button",
+          className: "rating-star",
+          "aria-label": rating === n ? `Clear rating, currently ${n} of 5` : `Rate ${n} of 5`,
+          onClick: () => onRate(nextRatingForStarTap(rating, n)),
+          style: {
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px 1px",
+            fontSize: "14px",
+            lineHeight: 1,
+            color: rating !== null && n <= rating ? theme.accent : theme.textTertiary,
+          },
+        },
+        rating !== null && n <= rating ? "★" : "☆",
+      ),
+    ),
+  );
+}
+
+// The ··· overflow, behind Category/Note. UI_GUIDELINES.md: "Category shapes
+// what gets recommended... the distinction from an artist group — which does
+// not affect recommendations — is otherwise invisible," and a note stays
+// labelled as the model's own words until the user edits it (ADR 0002).
+function CategoryNoteSheet({
+  card,
+  theme,
+  onSave,
+  onClose,
+}: {
+  card: CardViewProps;
+  theme: ReturnType<typeof getTheme>;
+  onSave: (categories: string[], note: string) => void;
+  onClose: () => void;
+}) {
+  const [categoriesText, setCategoriesText] = React.useState(card.categories.join(", "));
+  const [note, setNote] = React.useState(card.note);
+  const isPrefilled = !card.noteEdited && card.note.length > 0;
+
+  const fieldLabelStyle: React.CSSProperties = {
+    display: "grid",
+    gap: "4px",
+    fontSize: "12px",
+    color: theme.textTertiary,
+  };
+  const fieldStyle = {
+    backgroundColor: theme.inputBg,
+    color: theme.textPrimary,
+    border: `1px solid ${theme.inputBorder}`,
+    borderRadius: "6px",
+    padding: "6px 10px",
+    fontSize: "13px",
+    fontFamily: "inherit",
+  };
+
+  return React.createElement(
+    "div",
+    {
+      className: "category-note-sheet",
+      style: {
+        marginTop: "8px",
+        padding: "10px",
+        border: `1px solid ${theme.border}`,
+        borderRadius: "8px",
+        backgroundColor: theme.pageBg,
+        display: "grid",
+        gap: "8px",
+      },
+    },
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", color: theme.textSecondary, margin: 0, lineHeight: 1.4 } },
+      "Category shapes what gets recommended next. An artist group is only for your own organizing — it does not affect recommendations.",
+    ),
+    React.createElement(
+      "label",
+      fieldLabelStyle,
+      "Category (comma-separated)",
+      React.createElement("input", {
+        type: "text",
+        value: categoriesText,
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => setCategoriesText(event.target.value),
+        style: fieldStyle,
+      }),
+    ),
+    React.createElement(
+      "label",
+      fieldLabelStyle,
+      "Note",
+      isPrefilled
+        ? React.createElement(
+            "span",
+            { style: { fontSize: "11px", fontStyle: "italic" } },
+            "AI-suggested — stays out of future recommendations until you edit it.",
+          )
+        : null,
+      React.createElement("textarea", {
+        value: note,
+        onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => setNote(event.target.value),
+        rows: 3,
+        style: { ...fieldStyle, resize: "vertical" as const },
+      }),
+    ),
+    React.createElement(
+      "div",
+      { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: onClose,
+          style: {
+            background: "transparent",
+            border: `1px solid ${theme.border}`,
+            borderRadius: "6px",
+            color: theme.textSecondary,
+            fontSize: "12px",
+            padding: "5px 12px",
+            cursor: "pointer",
+          },
+        },
+        "Cancel",
+      ),
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => onSave(parseCategoriesInput(categoriesText), note),
+          style: {
+            backgroundColor: theme.accent,
+            color: "#0a0d14",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "12px",
+            fontWeight: 600,
+            padding: "5px 12px",
+            cursor: "pointer",
+          },
+        },
+        "Save",
+      ),
+    ),
+  );
+}
+
+function renderCardActions(
+  card: CardViewProps,
+  theme: ReturnType<typeof getTheme>,
+  handlers: ChatHandlers,
+  onToggleSheet: () => void,
+) {
   const btnStyle = {
     backgroundColor: theme.buttonBg,
     color: theme.buttonText,
@@ -146,25 +319,45 @@ function renderCardActions(card: CardViewProps, theme: ReturnType<typeof getThem
     actions.push(
       React.createElement(
         "button",
-        { key: "save", type: "button", className: "action-btn", style: btnStyle, onClick: () => handlers.onSave(card.title) },
-        "Save",
+        {
+          key: "save",
+          type: "button",
+          className: "action-btn",
+          style: btnStyle,
+          // A toggle, not two states of the same write: unsaved -> saves
+          // without a rating; saved -> removes it. "Saved but not yet rated"
+          // stays a real state because this never implies a rating.
+          onClick: () =>
+            card.saved && card.savedBandId
+              ? handlers.onUnsave?.(card.savedBandId, card.title)
+              : handlers.onSave(card.title),
+        },
+        card.saved ? "Saved" : "Save",
       ),
     );
   }
   if (card.actions?.rate?.visible) {
     actions.push(
-      React.createElement(
-        "button",
-        { key: "rate", type: "button", className: "action-btn", style: btnStyle, onClick: () => handlers.onRate(card.title) },
-        "Rate",
-      ),
+      React.createElement(RatingStars, {
+        key: "rating-stars",
+        rating: card.rating,
+        theme,
+        onRate: (rating: number | null) => handlers.onRate(card.title, rating),
+      }),
     );
   }
   if (card.actions?.more?.visible) {
     actions.push(
       React.createElement(
         "button",
-        { key: "more", type: "button", className: "action-btn", style: btnStyle, onClick: () => handlers.onMore(card.title) },
+        {
+          key: "more",
+          type: "button",
+          className: "action-btn",
+          style: btnStyle,
+          "aria-label": "Edit category and note",
+          onClick: onToggleSheet,
+        },
         "···",
       ),
     );
@@ -187,6 +380,7 @@ function renderCardActions(card: CardViewProps, theme: ReturnType<typeof getThem
 }
 
 function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardViewProps; theme: ReturnType<typeof getTheme>; isMobile: boolean; handlers: ChatHandlers }) {
+  const [sheetOpen, setSheetOpen] = React.useState(false);
   const cardStyles = {
     article: {
       backgroundColor: theme.cardBg,
@@ -274,7 +468,22 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
       ? React.createElement("p", { style: cardStyles.connection }, card.connection)
       : React.createElement("div", { style: { marginBottom: "8px" } }),
     React.createElement(PlatformLinks, { links: card.platformLinks, onOpenLink: handlers.onOpenLink }),
-    React.createElement("div", { style: cardStyles.actions }, renderCardActions(card, theme, handlers)),
+    React.createElement(
+      "div",
+      { style: cardStyles.actions },
+      renderCardActions(card, theme, handlers, () => setSheetOpen((open) => !open)),
+    ),
+    sheetOpen
+      ? React.createElement(CategoryNoteSheet, {
+          card,
+          theme,
+          onSave: (categories: string[], note: string) => {
+            handlers.onSaveCategoryNote?.(card.title, card.savedBandId, { categories, note });
+            setSheetOpen(false);
+          },
+          onClose: () => setSheetOpen(false),
+        })
+      : null,
   );
 }
 
