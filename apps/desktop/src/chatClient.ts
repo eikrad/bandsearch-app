@@ -187,11 +187,12 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       return response.json() as Promise<{ artists: ArtistSearchResult[] }>;
     },
 
-    async createSession(title = "Untitled") {
+    async createSession(title = "Untitled", signal?: AbortSignal) {
       const response = await fetchImpl(`${baseUrl}/sessions`, {
         method: "POST",
         headers: jsonHeaders(),
         body: JSON.stringify({ title }),
+        signal,
       });
       await ensureOk(response);
       return response.json() as Promise<{ session: ChatSession }>;
@@ -203,11 +204,25 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       return response.json() as Promise<{ sessions: ChatSession[] }>;
     },
 
-    async appendSessionMessage(sessionId: string, message: unknown) {
+    async getSession(sessionId: string) {
+      const response = await fetchImpl(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "GET",
+        headers: jsonHeaders(),
+      });
+      if (response.status === 404) return null;
+      await ensureOk(response);
+      return response.json() as Promise<{
+        session: ChatSession;
+        messages: Array<{ id: string; role: string; content: string; createdAt: string }>;
+      }>;
+    },
+
+    async appendSessionMessage(sessionId: string, message: unknown, signal?: AbortSignal) {
       const response = await fetchImpl(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`, {
         method: "POST",
         headers: jsonHeaders(),
         body: JSON.stringify(message),
+        signal,
       });
       await ensureOk(response);
       return response.json();
