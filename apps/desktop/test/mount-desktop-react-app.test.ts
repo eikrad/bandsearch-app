@@ -50,6 +50,62 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
   assert.equal(calls.some((item) => item.type === "rate"), true);
 });
 
+test("onSave re-renders even when shell.saveBand rejects, so a failed save is not silently invisible", async () => {
+  const renders: ReactNode[] = [];
+  const fakeRoot = fakeReactRoot((element) => renders.push(element));
+  const container = fakeContainer();
+
+  const shell: MountShell = {
+    getViewProps: () => ({ actionStatus: renders.length > 1 ? { type: "error", message: "Save failed for Fen." } : null }),
+    updateMode: async () => {},
+    submitQuery: async () => {},
+    saveBand: async () => {
+      throw new Error("network error");
+    },
+  };
+
+  const mount = createDesktopReactMount({
+    shell,
+    createRootImpl: () => fakeRoot,
+    resolveContainer: () => container,
+  });
+
+  mount.mount();
+  const rendersBeforeSave = renders.length;
+
+  await mount.handlers.onSave("Fen");
+
+  assert.ok(renders.length > rendersBeforeSave, "a render happened after the rejected save");
+});
+
+test("onRate re-renders even when shell.rateBand rejects, so a failed rating is not silently invisible", async () => {
+  const renders: ReactNode[] = [];
+  const fakeRoot = fakeReactRoot((element) => renders.push(element));
+  const container = fakeContainer();
+
+  const shell: MountShell = {
+    getViewProps: () => ({}),
+    updateMode: async () => {},
+    submitQuery: async () => {},
+    rateBand: async () => {
+      throw new Error("network error");
+    },
+  };
+
+  const mount = createDesktopReactMount({
+    shell,
+    createRootImpl: () => fakeRoot,
+    resolveContainer: () => container,
+  });
+
+  mount.mount();
+  const rendersBeforeRate = renders.length;
+
+  await mount.handlers.onRate("Fen");
+
+  assert.ok(renders.length > rendersBeforeRate, "a render happened after the rejected rating");
+});
+
 test("onOpenLink routes through the injected opener instead of a plain <a> navigation", () => {
   const opened: string[] = [];
   const container = fakeContainer();

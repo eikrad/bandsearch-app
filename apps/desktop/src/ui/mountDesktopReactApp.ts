@@ -248,11 +248,21 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onSave: (artistName: string) => {
-      return Promise.resolve(shell.saveBand?.(artistName)).then(() => renderCurrent());
+    onSave: async (artistName: string) => {
+      try {
+        await shell.saveBand?.(artistName);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
     },
-    onRate: (artistName: string) => {
-      return Promise.resolve(shell.rateBand?.(artistName, 5)).then(() => renderCurrent());
+    onRate: async (artistName: string) => {
+      try {
+        await shell.rateBand?.(artistName, 5);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
     },
     onMore: (artistName: string) => {
       void artistName;
