@@ -238,7 +238,7 @@ See `.env.example` for all options including storage backends, timeouts, search 
 
 ## Deployment
 
-The API is a standalone Express service and can run anywhere Node.js 26+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option.
+The API is a standalone Express service and can run anywhere Node.js 26+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option, deploying from `main` — feature work happens on `staging` (see [`CONTRIBUTING.md`](CONTRIBUTING.md)) and only reaches production once merged to `main`.
 
 Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays stateless and all data (preferences, sessions, auth) lives in Turso/libSQL:
 
@@ -246,10 +246,10 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
    ```bash
    TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso --workspace @bandsearch/api
    ```
-2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`.
+2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
 3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
 
-Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds.
+**Free-tier limitations:** Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds, and it carries no SLA or uptime guarantee. For an always-on deployment, upgrade the service to the Starter plan ($7/month) in the Render dashboard.
 
 ---
 
