@@ -11,7 +11,11 @@ This file provides practical examples that translate `UI_GUIDELINES.md` into imp
 - "Why selected" is concise and specific.
 - Country/genres are short metadata lines.
 - Connection text references prior bands in plain language.
-- Save/Rate are always visible; Category/Note are compact actions.
+- *(Not yet built — see the note in UI_GUIDELINES.md. The shipped card still shows Save / Rate / ···.)*
+- Rating stars and Save are always visible, on every screen size; Category/Note are compact actions.
+- Tapping a star saves the band with that rating — rating implies saving.
+- Saving does not imply rating: Save alone keeps a band unrated, which is a real state.
+- Both are reversible on the card: the active star clears the rating, Saved removes the band.
 
 Example content structure:
 
@@ -19,11 +23,14 @@ Example content structure:
 - Why selected: `Strong atmospheric overlap with your recent blackgaze picks.`
 - Country/Genres: `UK · Post-black, atmospheric metal`
 - Connected to: `Similar mood progression to Alcest and Agalloch.`
-- Actions: `Save` `Rate` `More`
+- Actions: `★★★☆☆` `Save` `···` `⎘`
 
 ### Don't
 - Don't put country/genre above "why selected".
 - Don't hide all actions behind menus on desktop.
+- Don't hide Save or the rating stars on mobile — saving is the core loop, not a secondary action.
+- Don't render a control that has no handler behind it.
+- Don't write a rating the user did not pick — no silent defaults behind Save.
 - Don't show long generic AI paragraphs as rationale text.
 
 ## Iconography Example
@@ -101,7 +108,8 @@ Example content structure:
 - Inline card actions visible where practical.
 - Multi-column breathing room if layout supports it.
 
-### Mobile next step
+### Mobile (Phase 7, Android)
 - Keep field order unchanged.
-- Collapse secondary actions into compact sheet/menu.
-- Preserve readability first; avoid dense control rows.
+- Collapse **only** Category, Note and Copy into a compact sheet/menu. Rating stars and Save stay inline.
+- Every interactive control is at least 44 × 44 px.
+- Preserve readability first; let the action row wrap rather than shrinking targets.

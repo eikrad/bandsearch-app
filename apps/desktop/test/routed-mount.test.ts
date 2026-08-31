@@ -6,7 +6,7 @@ import {
   createDesktopReactMount,
   type DesktopReactMountOptions,
 } from "../src/ui/mountDesktopReactApp.js";
-import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
+import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
 
 type MountShell = DesktopReactMountOptions["shell"];
 type MountRouter = NonNullable<DesktopReactMountOptions["router"]>;
@@ -21,7 +21,8 @@ function recordingRoot(renders: ReactElement[]): Root {
 
 // The mount picks a view component per route; these tests assert on that choice.
 function renderedComponentName(element: ReactElement): string | undefined {
-  return typeof element.type === "function" ? element.type.name : undefined;
+  const view = routedViewOf(element);
+  return typeof view.type === "function" ? view.type.name : undefined;
 }
 
 function makeShell(overrides: Partial<MountShell> = {}): MountShell {
@@ -218,4 +219,20 @@ test("routed mount settingsHandlers.onSaveTursoConfig calls provided saveTursoCo
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "libsql://test.turso.io");
   assert.equal(calls[0].token, "mytoken");
+});
+
+test("routed mount calls render with PrivacyPolicyView when route is privacy", async () => {
+  const renders: ReactElement[] = [];
+  const mount = createDesktopReactMount({
+    shell: makeShell(),
+    router: makeRouter("privacy"),
+    savedArtistsShell: makeSavedArtistsShell(),
+    createRootImpl: () => recordingRoot(renders),
+    resolveContainer: () => fakeContainer(),
+  });
+
+  await mount.mount();
+
+  assert.equal(renders.length, 1);
+  assert.equal(renderedComponentName(renders[0]), "PrivacyPolicyView");
 });

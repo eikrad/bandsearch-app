@@ -93,8 +93,12 @@ export function validateSavedBand(input: unknown): ValidateSavedBandResult {
   if (!isNonEmptyString(band.name)) {
     return { ok: false, error: "name is required" };
   }
-  if (!Number.isInteger(band.rating) || (band.rating as number) < 1 || (band.rating as number) > 5) {
-    return { ok: false, error: "rating must be an integer between 1 and 5" };
+  // Absent or null means "saved, not yet rated" — a real state, not a missing
+  // field. Only a rating that is actually present has to be in range.
+  if (band.rating !== undefined && band.rating !== null) {
+    if (!Number.isInteger(band.rating) || (band.rating as number) < 1 || (band.rating as number) > 5) {
+      return { ok: false, error: "rating must be an integer between 1 and 5" };
+    }
   }
   if (!Array.isArray(band.categories)) {
     return { ok: false, error: "categories must be an array" };
@@ -186,4 +190,17 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     truncated,
     obscurityTarget: validateObscurityTarget(b.obscurityTarget),
   };
+}
+
+/**
+ * How a saved band's rating is stated to the model.
+ *
+ * Shared because two call sites format saved bands for a prompt — the API's
+ * preference context and the desktop's priority-style-reference line — and they
+ * drifted: one said "not yet rated" while the other interpolated the absence
+ * straight in as "rating null/5". A missing judgement must never be reported as
+ * a number: 0 reads as a strong dislike the user never expressed.
+ */
+export function formatRatingForPrompt(rating: number | null | undefined): string {
+  return rating == null ? "not yet rated" : `rating ${rating}/5`;
 }

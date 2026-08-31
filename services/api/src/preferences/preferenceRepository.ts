@@ -23,7 +23,7 @@ export type SavedBand = {
   id: string;
   musicbrainzArtistId: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: string[];
   note: string;
   createdAt: string;
@@ -33,7 +33,7 @@ export type SavedBand = {
 export type BandRepository = {
   addSavedBand: (input: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown }>;
   listSavedBands: (userId?: string) => Promise<SavedBand[]>;
-  updateSavedBand: (id: string, updates: { rating?: number; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
+  updateSavedBand: (id: string, updates: { rating?: number | null; categories?: string[]; note?: string }, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; savedBand?: unknown }>;
   deleteSavedBand: (id: string, userId?: string) => Promise<{ ok: boolean; error?: string; status?: number; deletedId?: string }>;
 };
 
@@ -155,7 +155,8 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
       user_id TEXT NOT NULL DEFAULT 'anonymous',
       musicbrainz_artist_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+      -- Nullable: a band can be saved before the user has judged it.
+      rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
       categories TEXT NOT NULL DEFAULT '[]',
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,

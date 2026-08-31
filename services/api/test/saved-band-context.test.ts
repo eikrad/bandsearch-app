@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSavedBandContext } from "../src/savedBandContext.js";
+import { buildSavedBandContext, formatSavedBandContextLine } from "../src/savedBandContext.js";
 import type { SavedBandContextSource } from "../src/savedBandContext.js";
 import { createInMemoryPreferenceRepository } from "../src/preferences/preferenceMemory.js";
 
@@ -25,6 +25,29 @@ function source(bands: Band[], seen: Array<string | undefined> = []): SavedBandC
     },
   };
 }
+
+test("an unrated band is described as unrated, not as a zero", () => {
+  // A band the user saved but has not judged. "rating 0/5" or "rating null/5"
+  // would both be lies the model would happily act on — 0 reads as a strong
+  // negative it never expressed.
+  const line = formatSavedBandContextLine(band({ rating: null }));
+
+  assert.match(line, /not yet rated/);
+  assert.doesNotMatch(line, /rating (0|null|undefined)/);
+});
+
+test("a rated band still states its rating", () => {
+  assert.match(formatSavedBandContextLine(band({ rating: 4 })), /rating 4\/5/);
+});
+
+test("an unrated band still carries its tags and note", () => {
+  // Saving is itself a signal; dropping the rest would throw away why the user
+  // kept the artist at all.
+  const line = formatSavedBandContextLine(band({ rating: null, categories: ["slowcore"], note: "sparse" }));
+
+  assert.match(line, /slowcore/);
+  assert.match(line, /sparse/);
+});
 
 test("buildSavedBandContext formats every saved band on its own line", async () => {
   const context = await buildSavedBandContext(

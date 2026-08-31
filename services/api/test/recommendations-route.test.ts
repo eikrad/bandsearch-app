@@ -506,3 +506,33 @@ test("POST /recommendations passes pre-generated eventId to processEvent", async
   assert.equal(processedContexts.length, 1);
   assert.equal(processedContexts[0].eventId, stringField(recordField(result.data, "meta"), "eventId"));
 });
+
+test("a recommendation response carries provenance for its generated text", async () => {
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({
+        recommendations: [
+          { artist: "Fen", why: "Stylistic overlap", sourceSignals: ["agent_reasoning"] },
+        ],
+        assistantReply: "One pick for you.",
+        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+      }),
+    },
+  });
+
+  const result = await makeRequest(app, "/recommendations", { query: "post-black metal" });
+
+  assert.equal(result.status, 200);
+  const meta = recordField(result.data, "meta");
+  assert.equal(meta.aiGenerated, true, "response marks its prose as AI-generated");
+  assert.equal(
+    typeof stringField(meta, "pipelineVersion"),
+    "string",
+    "response carries the pipeline version that produced it",
+  );
+  assert.match(
+    stringField(meta, "generatedAt"),
+    /^\d{4}-\d{2}-\d{2}T/,
+    "response carries an ISO timestamp for when the text was generated",
+  );
+});

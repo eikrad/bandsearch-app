@@ -8,19 +8,21 @@ const DEFAULT_USER = "anonymous";
 type SavedBandInput = {
   musicbrainzArtistId: string;
   name: string;
-  rating: number;
+  rating: number | null;
   categories: unknown[];
   note: string;
 };
 
-type BandUpdates = { rating?: number; categories?: string[]; note?: string };
+type BandUpdates = { rating?: number | null; categories?: string[]; note?: string };
 
 function mapRowToSavedBand(row: Row) {
   return {
     id: String(row.id),
     musicbrainzArtistId: String(row.musicbrainz_artist_id),
     name: String(row.name),
-    rating: Number(row.rating),
+    // Number(null) is 0, which is outside the 1-5 domain — an absent rating
+    // has to survive as absent rather than becoming a bogus zero.
+    rating: row.rating === null || row.rating === undefined ? null : Number(row.rating),
     categories: JSON.parse(String(row.categories || "[]")) as string[],
     note: String(row.note),
     createdAt: String(row.created_at),
@@ -47,7 +49,9 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
                 (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               RETURNING *`,
-        args: [id, userId, musicbrainzArtistId, name, bandInput.rating, categories, note, now, now],
+        // ?? null, not raw: libSQL rejects undefined outright, where SQLite
+        // would have coerced it. An omitted rating is legal (CONTEXT.md).
+        args: [id, userId, musicbrainzArtistId, name, bandInput.rating ?? null, categories, note, now, now],
       });
 
       return { ok: true, savedBand: mapRowToSavedBand(result.rows[0]) };

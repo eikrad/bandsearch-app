@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS saved_bands (
   user_id                TEXT NOT NULL DEFAULT 'anonymous',
   musicbrainz_artist_id  TEXT NOT NULL,
   name                   TEXT NOT NULL,
-  rating                 INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  rating                 INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
   categories             TEXT NOT NULL DEFAULT '[]',
   note                   TEXT NOT NULL DEFAULT '',
   created_at             TEXT NOT NULL,

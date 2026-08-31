@@ -4,6 +4,7 @@ import * as z from "zod";
 import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationReflector } from "./recommendationReflector.js";
+import type { ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
 
@@ -21,6 +22,8 @@ export type ReflectionSubgraphDeps = {
   targetVerifiedCount: number;
   totalSearchBudget: number;
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
+  /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
+  modelClient?: ChatModelClient;
 };
 
 export const REFLECTION_SCHEMA = new StateSchema({
@@ -45,6 +48,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         apiKey: deps.geminiApiKey,
         timeoutMs: deps.budget.allocate(6000),
         maxExtraQueries: deps.maxReflectionSearches,
+        modelClient: deps.modelClient,
       });
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
       const reflection = await reflector({
@@ -88,6 +92,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
         timeoutMs: deps.budget.allocate(12000),
+        modelClient: deps.modelClient,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });

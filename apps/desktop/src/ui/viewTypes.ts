@@ -70,3 +70,22 @@ export type WelcomeHandlers = {
   onGoToSettings?(): unknown;
   onSkip?(): unknown;
 };
+
+export type UpdateBannerHandlers = {
+  onInstall?(): unknown;
+  onDismiss?(): unknown;
+};
+
+export type ConnectingHandlers = {
+  onRetry?(): unknown;
+};
+
+/**
+ * `waiting` while the API is being polled, `failed` once the retry budget is
+ * spent. `attempt` lets the view acknowledge a long wait instead of showing a
+ * spinner that looks identical at second 1 and second 60.
+ */
+export type ConnectingViewProps = {
+  state: "waiting" | "failed";
+  attempt?: number;
+};

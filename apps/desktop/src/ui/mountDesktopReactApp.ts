@@ -3,10 +3,14 @@ import { createRoot } from "react-dom/client";
 import { ChatAppView } from "./ChatAppView.js";
 import { SavedArtistsView } from "./SavedArtistsView.js";
 import { SettingsView } from "./SettingsView.js";
+import { PrivacyPolicyView } from "./PrivacyPolicyView.js";
 import { WelcomeView } from "./WelcomeView.js";
 import { LoginView } from "./LoginView.js";
 import { RegisterView } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
+import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
+import { ConnectingView } from "./ConnectingView.js";
+import type { UpdateBannerHandlers, ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -66,6 +70,11 @@ export interface DesktopReactMountOptions {
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
+  onExportAccountData?: () => Promise<Record<string, unknown>>;
+  onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
+  updateBannerHandlers?: UpdateBannerHandlers;
+  connectingHandlers?: ConnectingHandlers;
+  getConnectingViewProps?: () => ConnectingViewProps;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
 }
@@ -85,11 +94,16 @@ export function createDesktopReactMount({
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
+  onExportAccountData,
+  onDeleteAccount,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
   onLogin,
   onRegister,
   onResetPassword,
+  updateBannerHandlers = {},
+  connectingHandlers = {},
+  getConnectingViewProps,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
 }: DesktopReactMountOptions) {
@@ -98,28 +112,67 @@ export function createDesktopReactMount({
 
   // Whether the saved screen has fetched since the route was last entered.
   let savedArtistsLoaded = false;
+  // Set by showUpdateBanner; null means no banner is showing.
+  let updateBannerViewProps: UpdateBannerViewProps | null = null;
+  // The last routed element, so the banner can be toggled on top of it without
+  // re-running the route — re-rendering `settings` would repeat its
+  // gemini_config_status IPC just to paint an overlay.
+  let routedView: React.ReactNode = null;
+
+  // Always the same Fragment shape, banner or not: rendering the bare view when
+  // no banner is present would change the root element's shape the moment one
+  // appears, and React would unmount and remount the whole routed view.
+  function paint() {
+    root.render(
+      React.createElement(
+        React.Fragment,
+        null,
+        updateBannerViewProps &&
+          React.createElement(UpdateBanner, { viewProps: updateBannerViewProps, handlers: updateBannerHandlers }),
+        routedView,
+      ),
+    );
+  }
+
+  // Every route branch renders through here so the banner — when present —
+  // stays layered above whichever view is routed, instead of each branch
+  // needing to know about it.
+  function renderRoot(nextRoutedView: React.ReactNode) {
+    routedView = nextRoutedView;
+    paint();
+  }
 
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
     if (route !== "saved") savedArtistsLoaded = false;
 
     if (route === "login") {
-      root.render(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
+      renderRoot(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
       return {};
     }
 
     if (route === "register") {
-      root.render(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
+      renderRoot(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
       return {};
     }
 
     if (route === "reset-password") {
-      root.render(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
+      renderRoot(React.createElement(ResetPasswordView as unknown as ViewComponentLike, { viewProps: {}, handlers: resetPasswordHandlers }));
+      return {};
+    }
+
+    if (route === "connecting") {
+      renderRoot(
+        React.createElement(ConnectingView as unknown as ViewComponentLike, {
+          viewProps: getConnectingViewProps?.() ?? { state: "waiting" },
+          handlers: connectingHandlers,
+        }),
+      );
       return {};
     }
 
     if (route === "welcome") {
-      root.render(
+      renderRoot(
         React.createElement(WelcomeView as unknown as ViewComponentLike, {
           viewProps: {},
           handlers: welcomeHandlers,
@@ -138,7 +191,7 @@ export function createDesktopReactMount({
         await savedArtistsShell.loadSavedArtists?.();
       }
       const viewProps = savedArtistsShell.getViewProps();
-      root.render(
+      renderRoot(
         React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: savedHandlers,
@@ -147,9 +200,23 @@ export function createDesktopReactMount({
       return viewProps;
     }
 
+    if (route === "privacy") {
+      renderRoot(
+        React.createElement(PrivacyPolicyView as unknown as ViewComponentLike, {
+          viewProps: {},
+          handlers: privacyHandlers,
+        }),
+      );
+      return {};
+    }
+
     if (route === "settings") {
-      const viewProps = await Promise.resolve(getSettingsViewProps());
-      root.render(
+      // Merged over the injected props so an account action can report itself.
+      // The supplier owns Gemini/Brave status; nothing owned the outcome of an
+      // export or a deletion, so both failed in silence.
+      const supplied = await Promise.resolve(getSettingsViewProps()) as Record<string, unknown>;
+      const viewProps = accountStatus ? { ...supplied, statusMessage: accountStatus } : supplied;
+      renderRoot(
         React.createElement(SettingsView as unknown as ViewComponentLike, {
           viewProps,
           handlers: settingsHandlers,
@@ -159,7 +226,7 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
-    root.render(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
+    renderRoot(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
 
@@ -242,6 +309,60 @@ export function createDesktopReactMount({
     },
     onSaveApiEndpointUrl: async (url: string) => {
       await saveApiEndpointUrl(url);
+      return renderCurrent();
+    },
+    onNavigatePrivacy: async () => {
+      if (router) router.navigate("privacy");
+      return renderCurrent();
+    },
+    // Left undefined when no collaborator was injected, rather than wrapped in a
+    // function that silently returns. A present-but-inert handler is exactly how
+    // #175 hid: the view could not tell the difference, so the button rendered
+    // and did nothing. Absent, the view omits the control instead.
+    onExportAccountData: !onExportAccountData ? undefined : async () => {
+      // Same Blob + a.download path the saved-artists export already uses:
+      // the Tauri webview blocks nothing here and it needs no new dependency.
+      let bundle: Record<string, unknown>;
+      try {
+        bundle = await onExportAccountData();
+      } catch (error) {
+        // Previously this rejected into the click handler and surfaced as an
+        // uncaught page error — the user saw nothing at all, on a control the
+        // privacy policy points them at for Art. 15.
+        accountStatus = { type: "error", message: error instanceof Error ? error.message : "export failed" };
+        return renderCurrent();
+      }
+      accountStatus = null;
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bandsearch-account-data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onDeleteAccount: !onDeleteAccount ? undefined : async (password: string) => {
+      const result = await onDeleteAccount(password);
+      if (!result.ok) {
+        // A wrong password used to redraw the screen unchanged, which reads as
+        // "nothing happened" rather than "that password was wrong".
+        accountStatus = { type: "error", message: result.error ?? "account deletion failed" };
+        return renderCurrent();
+      }
+      accountStatus = null;
+      // Erasing the only account puts the install back to zero users, which is
+      // the first-run state — so send them where a fresh install starts.
+      if (router) router.navigate("register");
+      return renderCurrent();
+    },
+  };
+
+  // Outcome of the last export or deletion, shown in the privacy card.
+  let accountStatus: { type: "success" | "error"; message: string } | null = null;
+
+  const privacyHandlers = {
+    onBack: async () => {
+      if (router) router.navigate("settings");
       return renderCurrent();
     },
   };
@@ -355,6 +476,10 @@ export function createDesktopReactMount({
     handlers,
     mount() {
       return renderCurrent();
+    },
+    showUpdateBanner(viewProps: UpdateBannerViewProps | null) {
+      updateBannerViewProps = viewProps;
+      paint();
     },
   };
 }

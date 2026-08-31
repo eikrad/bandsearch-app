@@ -14,6 +14,7 @@ import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
 import type { SavedBand } from "../preferences/preferenceRepository.js";
+import type { UserDataStore } from "../privacy/userDataStore.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -74,10 +75,12 @@ export type BandsearchRouteContext = {
     register: (input: { email: string; displayName: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; recoveryCode?: string; error?: string }>;
     login: (input: { email: string; password: string }) => Promise<{ ok: boolean; user?: Record<string, unknown>; token?: string; error?: string }>;
     resetPassword: (input: { email: string; recoveryCode: string; newPassword: string }) => Promise<{ ok: boolean; newRecoveryCode?: string; error?: string }>;
+    deleteAccount: (input: { userId: string; password: string }) => Promise<{ ok: boolean; erased?: Record<string, number>; error?: string; reason?: string }>;
     verifyToken: (token: string) => { ok: boolean; userId?: string; error?: string };
     getStatus: () => Promise<{ userCount: number }>;
   };
   authMiddleware?: RequestHandler;
+  resolvedUserDataStore?: UserDataStore | null;
 };
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
@@ -99,6 +102,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalDashboardPassword,
     resolvedAuthService,
     authMiddleware,
+    resolvedUserDataStore,
   } = ctx;
 
   // Always available: client needs this before any auth interaction
@@ -142,6 +146,42 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     app.use("/preferences", authMiddleware);
     app.use("/sessions", authMiddleware);
     app.use("/recommendations", authMiddleware);
+    app.use("/account", authMiddleware);
+  }
+
+  // GDPR Art. 17 (erasure) and Art. 15/20 (access and portability).
+  // Only mounted where accounts exist at all — a no-auth install has no
+  // account to erase, and per-record DELETE /preferences/:id already works.
+  if (resolvedAuthService && authMiddleware) {
+    app.post("/account/delete", async (req, res) => {
+      const password = typeof req.body?.password === "string" ? req.body.password : "";
+      if (!password) {
+        return sendError(res, 400, "validation_error", "password is required");
+      }
+      if (!req.userId) {
+        return sendError(res, 400, "account_deletion_unavailable", "there is no account to delete");
+      }
+      const result = await resolvedAuthService.deleteAccount({ userId: req.userId, password });
+      if (!result.ok) {
+        if (result.reason === "unavailable") {
+          return sendError(res, 503, "account_deletion_unavailable", result.error ?? "account deletion is not available");
+        }
+        return sendError(res, 401, "auth_error", result.error ?? "invalid credentials");
+      }
+      return res.status(200).json({ ok: true, erased: result.erased });
+    });
+
+    app.get("/account/export", async (req, res) => {
+      if (!resolvedUserDataStore) {
+        return sendError(res, 503, "account_export_unavailable", "account export is not available");
+      }
+      if (!req.userId) {
+        return sendError(res, 400, "account_export_unavailable", "there is no account to export");
+      }
+      const bundle = await resolvedUserDataStore.exportUserData(req.userId);
+      res.setHeader("Content-Disposition", 'attachment; filename="bandsearch-account-data.json"');
+      return res.status(200).json(bundle);
+    });
   }
 
   app.get("/health", (_req, res) => {
@@ -266,10 +306,21 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         });
       }
 
+      // EU AI Act Art. 50(2): layered provenance for the generated prose.
+      // Model id is deliberately absent — it is a per-node default across the
+      // agent files with no path into meta; tracked as a follow-up.
+      const provenance = {
+        aiGenerated: true,
+        generatedAt: new Date().toISOString(),
+        pipelineVersion: appVersion,
+      };
+
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: eventId !== undefined ? { ...publicMeta, eventId } : publicMeta,
+        meta: eventId !== undefined
+          ? { ...publicMeta, ...provenance, eventId }
+          : { ...publicMeta, ...provenance },
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";

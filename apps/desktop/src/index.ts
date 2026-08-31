@@ -54,58 +54,26 @@ function bootstrapDesktopReactShell({
   return shell;
 }
 
-export type BootstrapDesktopReactAppOptions = {
+/**
+ * Everything the mount takes, minus the shell it builds itself.
+ *
+ * Spelled as an Omit rather than a hand-written list: the list version had to be
+ * edited in three places for every new mount option — declare, destructure,
+ * forward — and a missed one failed silently, since the mount treats absent
+ * handlers as optional. That is how the account export and deletion handlers
+ * came to be declared and never passed (#175).
+ */
+export type BootstrapDesktopReactAppOptions = Omit<DesktopReactMountOptions, "shell"> & {
   app: DesktopAppCollaborator;
   viewport?: string;
   actionHandlers?: Record<string, unknown>;
-  router?: DesktopReactMountOptions["router"];
-  savedArtistsShell?: DesktopReactMountOptions["savedArtistsShell"];
-  getSettingsViewProps?: () => Promise<unknown>;
-  saveGeminiApiKey?: (apiKey: string) => Promise<void>;
-  saveBraveApiKey?: (apiKey: string) => Promise<void>;
-  saveTursoConfig?: (url: string, token: string) => Promise<void>;
-  clearTursoConfig?: () => Promise<void>;
-  saveApiEndpointUrl?: (url: string) => Promise<void>;
-  completeOnboarding?: () => Promise<void>;
-  onLogin?: (email: string, password: string) => Promise<void>;
-  onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
-  onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
 };
 
+
 function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
-  const {
-    app,
-    viewport = "desktop",
-    actionHandlers = {},
-    router = null,
-    savedArtistsShell = null,
-    getSettingsViewProps,
-    saveGeminiApiKey,
-    saveBraveApiKey,
-    saveTursoConfig,
-    clearTursoConfig,
-    saveApiEndpointUrl,
-    completeOnboarding,
-    onLogin,
-    onRegister,
-    onResetPassword,
-  } = options;
+  const { app, viewport = "desktop", actionHandlers = {}, ...mountOptions } = options;
   const shell = bootstrapDesktopReactShell({ app, viewport, actionHandlers });
-  const mountApi = createDesktopReactMount({
-    shell,
-    router,
-    savedArtistsShell,
-    getSettingsViewProps,
-    saveGeminiApiKey,
-    saveBraveApiKey,
-    saveTursoConfig,
-    clearTursoConfig,
-    saveApiEndpointUrl,
-    completeOnboarding,
-    onLogin,
-    onRegister,
-    onResetPassword,
-  });
+  const mountApi = createDesktopReactMount({ shell, ...mountOptions });
   return {
     ...mountApi,
     desktopUi: shell.desktopUi,

@@ -1,5 +1,72 @@
 # Bandsearch Roadmap
 
+## How to read this document
+
+**Phase numbers are history, not order.** They record when something was
+written down, not when it is due. Phases 8, 9 and 10 all carry open items
+simultaneously, and Phase 10 was built while Phase 9.5 — which blocks more than
+anything else here — had never been run.
+
+A phase number is an **identity** ("which body of work is this"), not a
+position in a queue. The two were previously conflated into one number, which
+is why the document misled. They are now written separately: the queue below
+says what to do, the numbered sections say what it belongs to.
+
+## Work queue — in order
+
+Revisit this list whenever something lands or a new blocker appears; it is a
+plan, not a second permanent structure.
+
+1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161). It had to come first:
+   a 502 during a cold start read as "auth disabled", so the app would have
+   entered pass-through mode during the very test 9.5 is meant to be.
+2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
+   Android, the deploy gate and the eval data, and it is the one thing claimed
+   as infrastructure that has never actually been run.
+3. **The card action work — #151–#154 and #163–#167.** Designed in
+   `docs/adr/0002-*` and the action-row policy; not yet built. Start with
+   #164 (rating becomes nullable), since #151, #152 and #165 all sit on top of
+   it. Independent of the infrastructure work, so it can fill gaps while
+   waiting on a deployment.
+
+   Six of these are live defects, not future work: a dead `···` button on
+   every card, Save and Rate writing hidden ratings, the same artist storable
+   twice and then double-counted in the prompt, and the model reading its own
+   text back as the user's preference.
+4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
+   This is the first real proof the updater works; the pipeline has only ever
+   run against a throwaway `v0.2.1-test` tag.
+5. **Phase 11 — Android.** Unblocked once 9.5 passes. Start with #159 (endpoint
+   default), then #156 (the seven views, the largest item).
+6. **Whenever there is room:** Phase 8 F6/F7/F8, Architecture 9 (ESM),
+   Phase 10's macOS check (#145).
+
+The constraints this order satisfies:
+
+```
+9.5  verify Render + Turso end-to-end   ← the bottleneck, never done
+ ├─→ Phase 11  Android (cannot work without a reachable API)
+ ├─→ 9.6       CI/CD deploy gate (optional)
+ └─→ Phase 8   "Future" search_quality_check (needs production eval data)
+
+Phase 10  signing key + GitHub secrets
+ └─→ Phase 10  first versioned release v0.4.0
+      └─→ first real proof the updater works
+
+Independent, can start any time:
+ · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
+ · Phase 10 macOS check      · the card-action work (#151-#154, #163-#167)
+```
+
+When an entry moves, say so in place rather than deleting it — an entry that
+turned out to sit in the wrong phase is itself worth recording.
+
+## The numbered record
+
+Everything below is the history: what was built, what was decided, and where
+earlier entries turned out to be wrong. The numbers identify the work; they do
+not order it. For order, use the queue above.
+
 ## Completed (Phase 0-5)
 
 - Monorepo foundation, CI baseline, Apache-2.0 licensing.
@@ -74,11 +141,19 @@ No native binary is published for `darwin-x64`; Apple Silicon, Linux (x64/arm64)
 
 Implemented: bcrypt (10 rounds) + JWT (30-day) auth. Single-user bypass: 0 users → pass-through, 1 user → auto-attach, ≥2 users → 401. Recovery codes (20 random bytes hex). `InMemoryUserRepository`, `SqliteUserRepository`, `TursoUserRepository`. `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password`, `GET /auth/status`. Desktop auth gate in `startDesktopBrowserApp.ts`: checks `/auth/status` on startup, redirects to `#/register` (0 users) or `#/login` (users exist, no token). `LoginView`, `RegisterView`, `ResetPasswordView` using React.createElement. Token stored via `authTokenStore.ts` (localStorage); injected as `Authorization: Bearer` header by `chatClient.ts`. All source files converted to TypeScript; no `any` types remain in touched files.
 
-## Phase 7 — Platform Expansion
+## Phase 7 — Platform Expansion ✓ Done
+
+**Android was moved out of this phase on 2026-08-30 — see Phase 11.** It was
+bundled here because Windows and Android are both "a new platform", but the two
+never shared a dependency shape: Windows was self-contained and shipped, while
+Android cannot run the Node sidecar and therefore depends on a hosted API
+(Phase 9.5). Grouping by topic rather than by dependency is what put it in the
+wrong place, and the mistake only became visible once the sidecar limitation was
+found. With Android extracted, the remaining work in this phase is complete.
 
 - Windows: Tauri already produces a Windows installer via `tauri build`; the main work is sidecar binary naming (`node-x86_64-pc-windows-msvc.exe` in `tauri.conf.json`) and adding a Windows runner to CI. ✓ Done: `externalBin: ["binaries/node"]` added to `tauri.conf.json`; `sidecar_name()` uses `env!("TARGET")` so the binary name always matches the compile-time Rust target triple; `windows-latest` runner added to CI matrix with `fail-fast: false` and `shell: bash`.
 - Windows release pipeline: add a CI job (`release.yml`) that runs on `windows-latest`, downloads the official Node.js binary for `x86_64-pc-windows-msvc`, renames it to `node-x86_64-pc-windows-msvc.exe`, places it in `src-tauri/binaries/`, then runs `tauri build` to produce the `.msi` / `.exe` installer. Same job needed for `ubuntu-latest` (`node-x86_64-unknown-linux-gnu`) and `macos-latest` (`node-aarch64-apple-darwin` + `node-x86_64-apple-darwin` for universal binary). Artifacts should be uploaded per-platform and attached to a GitHub Release on version tags. ✓ Done: `.github/workflows/release.yml` builds on `ubuntu-latest` / `windows-latest` / `macos-latest` (ARM sidecar), signs updater artifacts via `TAURI_SIGNING_*` secrets, and attaches a draft prerelease with `tauri-action`. macOS Intel sidecar deferred.
-- Android: use Tauri's Android target (`tauri android init`). Voice input as the primary chat input method via the Web Speech API (`SpeechRecognition`), which works natively in Chromium-based Android webviews — no native plugin needed. Requires responsive layout review and touch-friendly tap targets throughout the UI.
+- Android: **moved to Phase 11** on 2026-08-30 (dependency on 9.5, see the note above).
 
 ## Parallel Track — TypeScript Migration ✓ Done
 
@@ -101,14 +176,16 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [x] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log ✓ Done
 - [x] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed ✓ Done
-- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY` (env var name is a known mismatch — the key is actually sent to Anthropic's API, not Mistral's); silently skipped if absent ✓ Done
+- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY`. **Corrected 2026-08-31:** this entry used to call the variable name "a known mismatch" because the key was sent to Anthropic's API. The name was right and the implementation was wrong — a Mistral key posted to `api.anthropic.com` can only 401, which is what production logged. The judge now calls Mistral; silently skipped if absent ✓ Done
 - [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
 - [x] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input ✓ Done
 - [x] Step 9: Golden dataset — `services/eval/golden-set.json` with 10 curated queries including `nuggets` and `antiBands`; `run-golden.ts` computing `antiBandRate@8` (CI fail if > 50%), `nuggetCoverage@8`, and `precision@8` (informational trend); `--strict` flag for zero-tolerance anti-band gate ✓ Done
 
-**Future (after data exists):**
+**Future (after data exists) — blocked by Phase 9.5:** the data this depends on only
+accumulates once the eval layer runs against a real deployment.
+
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
 
 **Polish — deferred from the 2026-06-01 implementation review** (see `docs/architecture/2026-05-30-phase8-implementation-plan.md`, findings F1–F8; F1–F5 already fixed):
@@ -204,16 +281,46 @@ Render auto-deploys on every push to the connected branch, so no separate deploy
 
 **Spec:** [`docs/architecture/2026-06-03-auto-update-plan.md`](architecture/2026-06-03-auto-update-plan.md)
 
-Tester werden direkt in der App über neue Versionen informiert. Windows & Linux: vollautomatischer Ein-Klick-Update via `tauri-plugin-updater`. macOS: Banner mit Link zur GitHub-Releases-Seite (kein Code-Signing nötig).
+Tester werden direkt in der App über neue Versionen informiert. Windows & Linux: vollautomatischer Ein-Klick-Update via `tauri-plugin-updater`. macOS: kein Update-Pfad in diesem Zyklus (siehe Deviations im Plan) — ohne Code-Signing liefert der Rust-Updater keinen macOS-Eintrag in `latest.json`, daher kein Banner für macOS-Tester vorerst.
 
-- [ ] `tauri-plugin-updater` einbinden, Version auf `0.4.0` synchronisieren
-- [ ] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben)
-- [ ] `install_update` Tauri-Command (Windows & Linux)
-- [ ] macOS: Frontend-seitiger GitHub-API-Check
-- [ ] Einheitlicher Update-Banner im Frontend (kein neues File)
-- [ ] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`)
-- [ ] Signing-Key generieren + GitHub Secrets konfigurieren
-- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf
+- [x] `tauri-plugin-updater` einbinden — bereits vor diesem Zyklus erledigt (Dependency, Plugin-Registrierung, `pubkey` + Endpoint in `tauri.conf.json`); Version auf `0.4.0` synchronisiert (dieser Zyklus, `apps/desktop/test/app-version.test.ts`) ✓ Done
+- [x] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben, ein Check pro Start statt Polling) ✓ Done
+- [x] `install_update` Tauri-Command (Windows & Linux) ✓ Done
+- [ ] macOS: Frontend-seitiger GitHub-API-Check — bewusst zurückgestellt (zweiter Code-Pfad mit eigenem Versionsvergleich/Error-Handling, noch nicht die Fläche wert)
+- [x] Einheitlicher Update-Banner im Frontend — als React-Komponente (`UpdateBanner.ts`) statt „kein neues File": das restliche UI ist durchgehend `React.createElement` mit eigenem File pro View, `innerHTML` kommt sonst nirgends vor ✓ Done
+- [x] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`) — bereits vor diesem Zyklus erledigt (Phase 7, `.github/workflows/release.yml`) ✓ Done
+- [ ] Signing-Key generieren + GitHub Secrets konfigurieren — manueller Schritt, außerhalb Scope
+- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf — manueller Schritt, außerhalb Scope. **Setzt den Signing-Key eine Zeile darüber voraus.** Dies ist der erste echte Beweis, dass der Updater funktioniert: die Release-Pipeline lief bisher nur gegen einen Wegwerf-Tag `v0.2.1-test` (2026-08-11), nie gegen aktuellen Code.
+
+---
+
+## Phase 11 — Android
+
+**Spec:** [`docs/superpowers/plans/2026-08-30-android.md`](superpowers/plans/2026-08-30-android.md)
+
+**Moved here from Phase 7 on 2026-08-30.** It sat under "Platform Expansion"
+next to Windows on the assumption that Android would be self-contained like the
+desktop — its own sidecar, no cloud dependency. That assumption is false:
+Tauri's shell plugin cannot spawn processes on mobile, so Android is
+remote-API-only and **blocked by Phase 9.5**.
+
+Two claims in the old Phase 7 entry were also wrong and are corrected in the
+plan: the Web Speech API does *not* work in Android WebView (the object exists,
+no callbacks fire — [Chromium 487255](https://issues.chromium.org/issues/40417848)),
+and "responsive layout review" understated the work — only `ChatAppView` has any
+mobile handling, the other seven views have none.
+
+- [ ] #159 — platform-conditional API endpoint default (compiled-in production
+      URL, Settings override kept so self-hosting works)
+- [ ] #156 — mobile layout for the seven views that have none; largest item
+- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
+- [ ] #158 — own F-Droid repository; this also closes the update path, since
+      `tauri-plugin-updater` does not support Android
+- [ ] Android CI: signing keys, `minSdkVersion`, NDK in the release workflow
+
+Undecided: offline behaviour (Android has no local fallback at all, discarding
+what Phase 5.5 built for the desktop) and hosting. Measured while planning: the
+API idles at 61 MB RSS, so a 256MB instance suffices.
 
 ---
 
@@ -329,7 +436,9 @@ Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE
 
 ---
 
-### 9. `services/api` is CommonJS in an increasingly ESM ecosystem ← **next up**
+### 9. `services/api` is CommonJS in an increasingly ESM ecosystem
+
+*(Was marked "← next up" until 2026-08-30. It is independent and blocks nothing, whereas 9.5 blocks Android, the deploy gate and the eval data — so it is not the next thing. Kept as a ready-to-start item.)*
 
 **Files:** `services/api/package.json`, `services/api/tsconfig.json`, and every `.ts` file under `services/api/src`
 

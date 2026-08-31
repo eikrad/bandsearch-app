@@ -20,6 +20,18 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into Gemini prompts for `preference-aware` mode recommendations.
 
+- **Saved band** — an artist the user has kept in their preference memory. Saving is itself a signal of interest; it does not require the user to judge the artist. A saved band may carry a rating, categories and a note, all optional.
+
+- **Rating** — an optional 1–5 judgement on a saved band. A band that is saved but not yet rated is a distinct, legitimate state: "I want to remember this, I have not decided how much I like it." A rating expresses strength of preference only — it never determines ranking or ordering by itself; its whole effect is that it appears in the preference context the recommendation prompt reads.
+
+- **Category** — a free-text tag the user puts on one saved band. Categories **shape what gets recommended**: they are part of the preference context sent to the model. Distinct from an artist group despite the similar wording — see below.
+
+- **Artist group** — a named collection of saved bands, with its own identity, used to browse and organise a collection. A group **does not influence recommendations**; it never reaches the preference context. The rule of thumb: a category says something about a band's character, a group says where the user filed it.
+
+- **Note** — free text on a saved band. It is pre-filled with the model's own explanation of why it recommended the artist, and the user can edit it.
+
+  **Decided but not yet built (ADR 0002, tracked in #166):** only a note the user has actually written or edited *should* count as their own preference signal and reach the recommendation prompt; one left at its pre-filled value *should* stay visible but out of the prompt, so the model cannot read its own words back as if the user had said them. **Today every note reaches the prompt regardless of who wrote it.** Stated here in the conditional deliberately: this entry described the intended rule in the present tense for a while, which made the glossary assert behaviour the code does not have.
+
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event.
 
 - **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `MISTRAL_API_KEY`).

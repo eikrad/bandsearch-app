@@ -3,6 +3,30 @@
 **Datum:** 2026-06-03  
 **Ziel:** Tester sehen in der App sofort wenn eine neue Version verfügbar ist und können auf Windows/Linux per Klick aktualisieren. macOS bekommt einen Banner mit Download-Link.
 
+> **Status (2026-08-30):** Windows/Linux-Pfad ist umgesetzt, siehe
+> [`docs/superpowers/plans/2026-08-30-in-app-update-notification.md`](../superpowers/plans/2026-08-30-in-app-update-notification.md)
+> für den tatsächlichen Implementierungsplan. Die Umsetzung weicht in drei
+> Punkten von diesem Dokument ab:
+>
+> 1. **macOS zurückgestellt.** Kein Code-Signing für macOS-Builds → kein
+>    macOS-Eintrag in `latest.json`. Der unten beschriebene
+>    Frontend-seitige GitHub-API-Check (Abschnitt "B) macOS") ist ein
+>    zweiter Code-Pfad mit eigenem Versionsvergleich und Error-Handling —
+>    das war die Fläche noch nicht wert, solange niemand ihn testet.
+>    macOS-Tester sehen vorerst keinen Banner.
+> 2. **Banner als React-Komponente, nicht `innerHTML`.** Das restliche UI
+>    ist durchgehend `React.createElement` mit eigenem File pro View und
+>    einer inline `palette`; `innerHTML` kommt sonst nirgends im Code vor.
+>    Der Banner lebt in `apps/desktop/src/ui/UpdateBanner.ts` — "kein
+>    neues File" (unten) wurde nicht eingehalten.
+> 3. **Englische UI-Strings**, nicht "Jetzt installieren"/"Später": die
+>    gesamte UI (`WelcomeView`, `SettingsView`, ...) ist englisch.
+>
+> Der Rust-seitige Teil (Abschnitt `main.rs`), der Release-Workflow
+> (Abschnitt `.github/workflows/release.yml`, bereits vor diesem Zyklus in
+> Phase 7 gebaut) und der Windows/Linux-Event-Listener (Abschnitt "A)")
+> entsprechen im Kern dem, was tatsächlich gebaut wurde.
+
 ---
 
 ## Ansatz

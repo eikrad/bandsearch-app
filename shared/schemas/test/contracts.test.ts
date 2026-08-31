@@ -43,6 +43,46 @@ test("validateSavedBand accepts valid rating and fields", () => {
   assert.equal(result.ok, true);
 });
 
+test("a saved band may carry no rating at all", () => {
+  // "Saved but not yet rated" is a real state (CONTEXT.md): the user wanted to
+  // remember the artist without judging them yet. Requiring a rating here is
+  // what forced the UI to invent one behind the user's back.
+  const result = validateSavedBand({
+    musicbrainzArtistId: "a1",
+    name: "Codeine",
+    categories: [],
+    note: "",
+  });
+
+  assert.equal(result.ok, true);
+});
+
+test("an explicit null rating is accepted as unrated", () => {
+  // Clearing a rating sends null rather than omitting the field.
+  const result = validateSavedBand({
+    musicbrainzArtistId: "a1",
+    name: "Codeine",
+    rating: null,
+    categories: [],
+    note: "",
+  });
+
+  assert.equal(result.ok, true);
+});
+
+test("a rating that is present must still be an integer from 1 to 5", () => {
+  for (const rating of [0, 6, 2.5, "3"]) {
+    const result = validateSavedBand({
+      musicbrainzArtistId: "a1",
+      name: "Codeine",
+      rating,
+      categories: [],
+      note: "",
+    });
+    assert.equal(result.ok, false, `rating ${JSON.stringify(rating)} should be rejected`);
+  }
+});
+
 test("validateRecommendationMode defaults to fresh", () => {
   assert.equal(validateRecommendationMode(undefined), "fresh");
   assert.equal(validateRecommendationMode("invalid"), "fresh");

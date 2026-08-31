@@ -8,7 +8,7 @@ import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
 import { SavedArtistsView } from "../src/ui/SavedArtistsView.js";
 import type { SavedArtistsHandlers } from "../src/ui/viewTypes.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "../src/domain.js";
-import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
+import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
 
 // These tests pair the real shell with the real view. Every other saved-artists
 // test feeds the view a hand-written prop object, which is how the shell's
@@ -156,7 +156,7 @@ function mountSavedScreen(app: SavedArtistsShellCollaborator) {
       onRouteChange: () => {},
     },
     savedArtistsShell: shell,
-    createRootImpl: () => fakeReactRoot((element) => { lastRender = element as RenderedScreen; }),
+    createRootImpl: () => fakeReactRoot((element) => { lastRender = routedViewOf(element) as RenderedScreen; }),
     resolveContainer: () => fakeContainer(),
   });
   return {

@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { startDesktopBrowserApp } from "../src/startDesktopBrowserApp.js";
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "../src/index.js";
-import { jsonResponse } from "./helpers/fakeResponse.js";
+import { jsonResponse, errorResponse } from "./helpers/fakeResponse.js";
 import { fakeMediaQueryList, fakeWindow } from "./helpers/fakeDom.js";
+import { fakeUpdateStorage } from "./helpers/fakeStorage.js";
+import type { UpdateAvailablePayload, UpdateDismissalStorage } from "../src/updateNotification.js";
+import type { UpdateBannerHandlers } from "../src/ui/viewTypes.js";
 
 // One flat record instead of a discriminated union: the assertions read a single
 // field per call and stay free of narrowing noise.
@@ -127,4 +130,249 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
 
   assert.equal(calls[0].type, "bootstrapReact");
   assert.equal(calls[0].viewport, "mobile");
+});
+
+/**
+ * Boots the app with the update collaborators injected, and hands back the
+ * banner calls, the banner handlers, and a `fire` that plays an
+ * `update-available` event through whatever listener the app subscribed.
+ */
+async function startWithUpdateDeps(
+  overrides: {
+    updateDismissalStorage?: UpdateDismissalStorage;
+    invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
+  } = {},
+) {
+  let listener: ((payload: UpdateAvailablePayload) => void) | undefined;
+  let updateBannerHandlers: UpdateBannerHandlers | undefined;
+  const showUpdateBannerCalls: Array<UpdateAvailablePayload | null> = [];
+
+  await startDesktopBrowserApp({
+    listenUpdateAvailable: (handler) => { listener = handler; },
+    updateDismissalStorage: overrides.updateDismissalStorage ?? fakeUpdateStorage(),
+    invokeTauri: overrides.invokeTauri ?? (async () => ({})),
+    // Without this the helper fell through to the global fetch and really tried
+    // to reach localhost:3001. Harmless while an unreachable API failed fast;
+    // now that startup retries a waking API, a unit test must never get there.
+    fetchImpl: async () => jsonResponse({ enabled: false, userCount: 0 }),
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        updateBannerHandlers = options.updateBannerHandlers;
+        return fakeReactApp({
+          mount: async () => ({}),
+          showUpdateBanner: (payload) => { showUpdateBannerCalls.push(payload); },
+        });
+      },
+    },
+  });
+
+  return {
+    showUpdateBannerCalls,
+    updateBannerHandlers,
+    fire: (payload: UpdateAvailablePayload) => listener?.(payload),
+  };
+}
+
+const AN_UPDATE: UpdateAvailablePayload = { version: "0.5.0", canAutoInstall: true };
+
+test("an update-available payload makes the banner appear", async () => {
+  const app = await startWithUpdateDeps();
+
+  app.fire(AN_UPDATE);
+
+  assert.deepEqual(app.showUpdateBannerCalls, [AN_UPDATE]);
+});
+
+test("the app subscribes before bootstrap finishes, so no update is dropped", async () => {
+  // Regression guard: the Rust check is spawned from .setup() and Tauri's emit
+  // has no replay buffer. Subscribing only after the bootstrap/auth awaits used
+  // to mean an update that arrived first was lost for that whole launch.
+  const app = await startWithUpdateDeps();
+  assert.equal(typeof app.fire, "function", "a listener must be registered by the time start resolves");
+
+  app.fire(AN_UPDATE);
+  assert.deepEqual(app.showUpdateBannerCalls, [AN_UPDATE], "the update still reaches the banner");
+});
+
+test("dismissing the banner persists and it does not reappear on the next start", async () => {
+  const storage = fakeUpdateStorage();
+
+  const first = await startWithUpdateDeps({ updateDismissalStorage: storage });
+  first.fire(AN_UPDATE);
+  assert.equal(first.showUpdateBannerCalls.length, 1, "banner should appear on first start");
+  first.updateBannerHandlers?.onDismiss?.();
+
+  const second = await startWithUpdateDeps({ updateDismissalStorage: storage });
+  second.fire(AN_UPDATE);
+
+  assert.equal(second.showUpdateBannerCalls.length, 0, "dismissed version should not reappear");
+});
+
+test("clicking Install invokes the install_update command", async () => {
+  const invokedCommands: string[] = [];
+  const app = await startWithUpdateDeps({
+    invokeTauri: async (cmd) => {
+      invokedCommands.push(cmd);
+      return {};
+    },
+  });
+  app.fire(AN_UPDATE);
+
+  await app.updateBannerHandlers?.onInstall?.();
+
+  assert.ok(invokedCommands.includes("install_update"), "expected install_update to be invoked");
+});
+
+// --- the connecting screen (#155) -------------------------------------------
+
+/**
+ * Boots against an API that answers 502 the first `downFor` times, as a
+ * spun-down Render instance does, then comes up. Sleep is faked so the backoff
+ * costs the suite nothing.
+ */
+async function startAgainstWakingApi(downFor: number) {
+  let calls = 0;
+  // The hash router reads globalThis.location; without one, navigate() is a
+  // no-op and every route would read as "home".
+  const prevLocation = globalThis.location;
+  Object.defineProperty(globalThis, "location", {
+    value: { hash: "" }, configurable: true, writable: true,
+  });
+  const routes: string[] = [];
+  let connectingProps: (() => { state: string; attempt?: number }) | undefined;
+
+  await startDesktopBrowserApp({
+    // Onboarding complete, otherwise the welcome gate short-circuits the auth
+    // gate and no status check happens at all.
+    invokeTauri: async (cmd) =>
+      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+    updateDismissalStorage: fakeUpdateStorage(),
+    fetchImpl: async (url) => {
+      if (!String(url).endsWith("/auth/status")) return jsonResponse({});
+      calls += 1;
+      return calls <= downFor
+        ? errorResponse(502, {})
+        : jsonResponse({ enabled: true, userCount: 2 });
+    },
+    sleep: async () => {},
+    now: () => 0,
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        connectingProps = options.getConnectingViewProps;
+        routes.push(options.router?.getRoute() ?? "");
+        return fakeReactApp({
+          mount: async () => { routes.push(options.router?.getRoute() ?? ""); return {}; },
+          showUpdateBanner: () => {},
+        });
+      },
+    },
+  });
+
+  Object.defineProperty(globalThis, "location", {
+    value: prevLocation, configurable: true, writable: true,
+  });
+  return { routes, statusCalls: calls, connectingProps };
+}
+
+test("a cold API puts the user on the connecting screen, not into a broken app", async () => {
+  const { routes, connectingProps } = await startAgainstWakingApi(3);
+
+  assert.ok(routes.includes("connecting"), `expected a connecting route, saw: ${routes.join(", ")}`);
+  assert.notEqual(connectingProps?.().state, "failed", "it should still have been waiting, not given up");
+});
+
+test("once the API wakes, the user is routed on rather than left connecting", async () => {
+  const { routes, statusCalls } = await startAgainstWakingApi(3);
+
+  assert.ok(statusCalls > 3, `expected retries past the outage, got ${statusCalls} calls`);
+  assert.equal(routes.at(-1), "login", `should have landed on login, saw: ${routes.join(", ")}`);
+});
+
+test("a healthy API never shows the connecting screen", async () => {
+  const { routes, statusCalls } = await startAgainstWakingApi(0);
+
+  assert.equal(statusCalls, 1, "a healthy start must cost exactly one status check");
+  assert.equal(routes.includes("connecting"), false, "no detour through connecting");
+});
+
+// --- GDPR export and deletion reach the UI (#175) ----------------------------
+
+/**
+ * Boots with one account present and hands back what the app passed into the
+ * mount. The privacy policy promises Art. 15/17/20 through Settings, so these
+ * handlers existing is a compliance claim, not a convenience.
+ */
+async function startWithAccount(overrides: { userCount?: number; enabled?: boolean } = {}) {
+  const { userCount = 1, enabled = true } = overrides;
+  let mountOptions: Record<string, unknown> = {};
+
+  await startDesktopBrowserApp({
+    invokeTauri: async (cmd) =>
+      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+    updateDismissalStorage: fakeUpdateStorage(),
+    fetchImpl: async (url) => {
+      if (String(url).endsWith("/auth/status")) return jsonResponse({ enabled, userCount });
+      if (String(url).endsWith("/account/export")) return jsonResponse({ user: { id: "u1" }, savedBands: [] });
+      return jsonResponse({});
+    },
+    sleep: async () => {},
+    now: () => 0,
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        mountOptions = options as unknown as Record<string, unknown>;
+        return fakeReactApp({ mount: async () => ({}), showUpdateBanner: () => {} });
+      },
+    },
+  });
+
+  return mountOptions;
+}
+
+test("the app supplies an export handler, so 'Export my data' can work", async () => {
+  const options = await startWithAccount();
+
+  assert.equal(
+    typeof options.onExportAccountData,
+    "function",
+    "the privacy policy points users here for Art. 15 and Art. 20",
+  );
+});
+
+test("the app supplies a delete handler, so account deletion can work", async () => {
+  const options = await startWithAccount();
+
+  assert.equal(
+    typeof options.onDeleteAccount,
+    "function",
+    "the privacy policy points users here for Art. 17",
+  );
+});
+
+test("the export handler returns the bundle the API sent", async () => {
+  const options = await startWithAccount();
+
+  const bundle = await (options.onExportAccountData as () => Promise<Record<string, unknown>>)();
+
+  assert.deepEqual(bundle, { user: { id: "u1" }, savedBands: [] });
+});
+
+test("the settings screen is told an account exists, so the delete zone renders", async () => {
+  const options = await startWithAccount({ userCount: 1 });
+
+  const viewProps = await (options.getSettingsViewProps as () => Promise<{ accountsEnabled?: boolean }>)();
+
+  // SettingsView renders `!accountsEnabled ? null : dangerZone`, so leaving this
+  // undefined hides account deletion entirely.
+  assert.equal(viewProps.accountsEnabled, true);
+});
+
+test("with no account yet, the delete zone stays hidden", async () => {
+  const options = await startWithAccount({ userCount: 0 });
+
+  const viewProps = await (options.getSettingsViewProps as () => Promise<{ accountsEnabled?: boolean }>)();
+
+  assert.equal(viewProps.accountsEnabled, false, "nothing to delete before registering");
 });

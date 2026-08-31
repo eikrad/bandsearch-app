@@ -1,6 +1,21 @@
 export type AuthUser = { id: string; email: string; displayName: string; createdAt: string };
 
-export type AuthStatus = { enabled: boolean; userCount: number };
+/**
+ * What `/auth/status` told us — or that it told us nothing.
+ *
+ * A union rather than a flag, because "unreachable" and "auth is disabled" are
+ * not two values of one property: only a 2xx answer says anything about auth at
+ * all. Modelling them separately makes the contradictory state unrepresentable
+ * and forces every caller to handle the third case, which is what went wrong
+ * before: an unreachable API collapsed into `{ enabled: false }`, and the
+ * startup gate read that as "no auth needed" and waved the user through.
+ */
+export type AuthStatus =
+  | { reachable: true; enabled: boolean; userCount: number }
+  | { reachable: false; reason: AuthStatusUnreachableReason };
+
+/** `http_<status>` for an answer we cannot use, `network_error` for no answer. */
+export type AuthStatusUnreachableReason = `http_${number}` | "network_error";
 
 export type RegisterResult =
   | { ok: true; user: AuthUser; token: string; recoveryCode: string }
@@ -14,11 +29,21 @@ export type ResetPasswordResult =
   | { ok: true; newRecoveryCode: string }
   | { ok: false; error: string };
 
+export type ExportAccountDataResult =
+  | { ok: true; bundle: Record<string, unknown> }
+  | { ok: false; error: string };
+
+export type DeleteAccountResult =
+  | { ok: true; erased: Record<string, number> }
+  | { ok: false; error: string };
+
 export type AuthApiClient = {
   getAuthStatus(): Promise<AuthStatus>;
   register(input: { email: string; displayName: string; password: string }): Promise<RegisterResult>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
   resetPassword(input: { email: string; recoveryCode: string; newPassword: string }): Promise<ResetPasswordResult>;
+  exportAccountData(): Promise<ExportAccountDataResult>;
+  deleteAccount(input: { password: string }): Promise<DeleteAccountResult>;
 };
 
 type ApiErrorBody = { message?: string };
@@ -26,16 +51,22 @@ type ApiErrorBody = { message?: string };
 export function createAuthApiClient({
   apiBaseUrl,
   fetchImpl = fetch,
+  getToken = null,
 }: {
   apiBaseUrl: string;
   fetchImpl?: typeof fetch;
+  /** Supplies the bearer token for the routes that identify the caller. */
+  getToken?: (() => string | null) | null;
 }): AuthApiClient {
   const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
   async function post(path: string, body: Record<string, string>) {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const token = typeof getToken === "function" ? getToken() : null;
+    if (token) headers["authorization"] = `Bearer ${token}`;
     const res = await fetchImpl(`${base}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
     const data = (await res.json()) as Record<string, unknown>;
@@ -51,11 +82,17 @@ export function createAuthApiClient({
     async getAuthStatus(): Promise<AuthStatus> {
       try {
         const res = await fetchImpl(`${base}/auth/status`, { method: "GET" });
-        if (!res.ok) return { enabled: false, userCount: 0 };
-        const data = (await res.json()) as AuthStatus;
-        return { enabled: Boolean(data.enabled), userCount: Number(data.userCount) || 0 };
+        // Render serves 502/503 while a spun-down instance wakes, so a non-2xx
+        // is "ask again", never an answer about auth.
+        if (!res.ok) return { reachable: false, reason: `http_${res.status}` };
+        const data = (await res.json()) as { enabled?: unknown; userCount?: unknown };
+        return {
+          reachable: true,
+          enabled: Boolean(data.enabled),
+          userCount: Number(data.userCount) || 0,
+        };
       } catch {
-        return { enabled: false, userCount: 0 };
+        return { reachable: false, reason: "network_error" };
       }
     },
 
@@ -75,6 +112,28 @@ export function createAuthApiClient({
       const { ok, data } = await post("/auth/reset-password", { email, recoveryCode, newPassword });
       if (!ok) return { ok: false, error: extractError(data, "reset failed") };
       return { ok: true, newRecoveryCode: data.newRecoveryCode as string };
+    },
+
+    async exportAccountData(): Promise<ExportAccountDataResult> {
+      const headers: Record<string, string> = {};
+      const token = typeof getToken === "function" ? getToken() : null;
+      if (token) headers["authorization"] = `Bearer ${token}`;
+      try {
+        const res = await fetchImpl(`${base}/account/export`, { method: "GET", headers });
+        const data = (await res.json()) as Record<string, unknown>;
+        // A failed export must not be handed to the download path: the user
+        // would get a file named like their data containing an error body.
+        if (!res.ok) return { ok: false, error: extractError(data, "export failed") };
+        return { ok: true, bundle: data };
+      } catch {
+        return { ok: false, error: "could not reach the server" };
+      }
+    },
+
+    async deleteAccount({ password }): Promise<DeleteAccountResult> {
+      const { ok, data } = await post("/account/delete", { password });
+      if (!ok) return { ok: false, error: extractError(data, "account deletion failed") };
+      return { ok: true, erased: (data.erased as Record<string, number>) ?? {} };
     },
   };
 }

@@ -1,3 +1,4 @@
+import { formatRatingForPrompt } from "../../../shared/schemas/src/contracts.js";
 import type { SavedBand } from "./domain.js";
 import type { ChatMessage } from "./chatClient.js";
 import {
@@ -18,7 +19,7 @@ function buildPriorityContext(savedBands: SavedBand[], selectedArtistIds: string
   if (!selectedArtistIds.length) return "";
   const selected = savedBands.filter((b) => selectedArtistIds.includes(b.id));
   if (!selected.length) return "";
-  const names = selected.map((b) => `${b.name} (rating ${b.rating}/5)`).join(", ");
+  const names = selected.map((b) => `${b.name} (${formatRatingForPrompt(b.rating)})`).join(", ");
   return `Priority style references: ${names}`;
 }
 
@@ -138,7 +139,10 @@ export function bootstrapDesktopApp({
       const payload = {
         musicbrainzArtistId: mbFromCard || normalizeArtistId(artistName),
         name: artistName,
-        rating: options.rating || 3,
+        // No rating unless the user gave one. This used to default to 3,
+        // so every "just remember this" became a three-star judgement
+        // nobody made and nobody saw (#164).
+        rating: options.rating ?? null,
         categories: options.categories || [],
         note: options.note || recommendation?.why || "Saved from recommendation card.",
       };

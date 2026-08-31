@@ -141,10 +141,66 @@ Card visual spec:
 - Border radius: 8px
 - Padding: 10px
 
-Action row policy (desktop MVP):
-- Always visible: Save, Rate (text-label buttons)
-- Compact overflow: "···" button for Category/Note
-- Copy shortcut: `⎘` icon-only button with `title="Copy"` tooltip, at row end
+Action row policy (locked, all viewports):
+
+> **Not yet built.** The card still renders the old `Save` / `Rate` / `···` text
+> buttons. This section is the target, not a description of the shipped UI —
+> tracked in #151, #152, #154 and #165. `rating` being optional (#164) is done;
+> the controls below are not.
+
+| Control | Visibility | Behaviour |
+|---|---|---|
+| Rating stars (1–5) | Always | Tapping star *n* saves the band **with rating *n***. Tapping the currently active star clears the rating — the band stays saved, now unrated. |
+| Save / Saved | Always | A toggle. Unsaved → saves **without** a rating ("remember this, undecided"). Saved → removes it again. Label and state are visible, never implied. |
+| `···` overflow | Always | Category and Note. Must open something — see the rule below. |
+| Copy `⎘` | Always, row end | Icon-only, `title="Copy"` tooltip. |
+
+- **The stars and Save are primary and never collapse**, on any screen size.
+  Saving is what makes `preference-aware` mode work, so it is the one action
+  that must always be one tap away. Only Category/Note and Copy are secondary.
+- **Rating implies saving, and saving does not imply rating.** "Saved but not
+  yet rated" is a real state (see `CONTEXT.md`), which is why both controls
+  exist and neither is redundant.
+- **Every write is reversible from the card.** Tapping an active star clears the
+  rating; tapping Saved removes the band. A mis-tap must never require going to
+  another screen to undo — on a phone that is an expensive detour.
+- **No hidden default values.** A control must never write a value the user did
+  not choose. The previous row had two: Save silently wrote rating 3 and Rate
+  silently wrote 5, neither shown anywhere.
+- **No control may render without an action behind it.** If Category/Note is not
+  implemented, the `···` button is not rendered at all. A visible control that
+  does nothing on click is a defect, not a placeholder.
+
+Category/Note sheet (behind `···`):
+
+- **Category** shapes what gets recommended; the sheet says so in as many words.
+  A user cannot be expected to infer that from the label, and the distinction
+  from an artist group — which does *not* affect recommendations — is otherwise
+  invisible.
+- **Note** is pre-filled with the model's explanation of why the artist was
+  recommended. It is shown as such, and only counts as the user's own input once
+  they edit it. See ADR 0002.
+
+## Connecting State (locked)
+
+Shown at startup while the API is being polled, and when polling gives up. It
+exists because an unreachable API was previously indistinguishable from "auth is
+switched off", which dropped the user into an app whose every request then
+failed.
+
+| State | Heading | Controls |
+|---|---|---|
+| `waiting` | "Starting the server" | **None.** A manual retry is meaningless while an automatic one is running. |
+| `waiting`, 4+ attempts | "Still starting…" | None. The copy must change, so a long wait cannot be mistaken for a hang. |
+| `failed` | "Could not reach the server" | "Try again" button, min 44px tall. |
+
+- **Never show a bare spinner here.** A spinner looks identical at second 1 and
+  second 60; a hosted instance that has spun down takes 30–60s to wake, so the
+  screen must say what is happening and acknowledge a long wait.
+- **Only reached when the first status check fails.** A healthy API routes
+  straight to its destination — no detour, no flash of this screen.
+- The `failed` copy points at Settings, since a wrong API endpoint produces the
+  same symptom as an unreachable one.
 
 ## Interaction and State Design
 
@@ -222,9 +278,33 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 
 ## Responsiveness Policy
 
-- MVP target: desktop-first.
-- Mobile adaptation is next step, not blocked in MVP.
-- For mobile, move non-primary actions behind compact affordances.
+Mobile is a first-class target as of Phase 7 (Android), not a later adaptation.
+
+### Locked values
+
+| Rule | Value |
+|---|---|
+| Mobile breakpoint | `max-width: 767px` |
+| Minimum touch target | **44 × 44 px** for every interactive control on mobile |
+| Page horizontal padding | 32px desktop / 16px mobile |
+| Card action row | wraps on mobile (`flex-wrap: wrap`), never scrolls horizontally |
+
+### What may and may not collapse
+
+- **Never collapsed, any viewport:** rating stars, Save, the query input, the
+  mode toggle, primary navigation.
+- **May collapse into the `···` overflow on mobile:** Category, Note, Copy.
+
+"Non-primary" previously appeared here without a definition, and was read as
+including Save and Rate — which the Recommendation Card section lists as always
+visible. The two lists above replace that ambiguity; when adding a control,
+place it in one of them.
+
+### Views
+
+Every view must be usable at 360px width, not only `ChatAppView`. The
+onboarding path a new mobile user hits first — Welcome → Register/Login →
+Settings → Chat → Saved Artists — is part of this requirement, not a follow-up.
 
 ## Roadmap UI Ideas
 
