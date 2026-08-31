@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createTursoSyncRepositories } from "../src/turso/tursoSyncRepositories.js";
@@ -10,7 +10,7 @@ import { createTursoSyncRepositories } from "../src/turso/tursoSyncRepositories.
 // tests cannot make: that `tursoPreferenceRepository` and friends — written
 // against `@libsql/client`'s result shape — still behave on the sync client.
 
-const migrationPath = path.join(__dirname, "..", "migrations", "002_full_schema.sql");
+const migrationsDir = path.join(__dirname, "..", "migrations");
 
 async function withRepositories<T>(
   fn: (repos: Awaited<ReturnType<typeof createTursoSyncRepositories>>) => Promise<T>,
@@ -18,9 +18,14 @@ async function withRepositories<T>(
   const dir = await mkdtemp(path.join(tmpdir(), "turso-sync-repos-"));
   const repos = await createTursoSyncRepositories({ tursoSyncPath: path.join(dir, "replica.db") });
   try {
-    const schema = await readFile(migrationPath, "utf8");
-    for (const statement of schema.split(";").map((s) => s.trim()).filter(Boolean)) {
-      await repos.client.execute(statement);
+    // Every migration, in order — not just 002 — so this stays the real
+    // schema instead of quietly drifting behind whatever ships in production.
+    const files = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
+    for (const file of files) {
+      const schema = await readFile(path.join(migrationsDir, file), "utf8");
+      for (const statement of schema.split(";").map((s) => s.trim()).filter(Boolean)) {
+        await repos.client.execute(statement);
+      }
     }
     return await fn(repos);
   } finally {

@@ -115,6 +115,61 @@ export function runPreferenceRepositoryContract(adapterName: string, createRepos
     assert.equal(band.name, "Codeine");
   });
 
+  // -------------------------------------------------------- repeat saves (#163)
+
+  test(label("addSavedBand called twice for the same artist updates the existing row, not a second one"), async () => {
+    const repo = await createRepository();
+    const first = await addBand(repo, { musicbrainzArtistId: "mb-wiccid", name: "Wiccid", rating: undefined });
+
+    const second = await addBand(repo, { musicbrainzArtistId: "mb-wiccid", name: "Wiccid", rating: 4 });
+
+    assert.equal(second.id, first.id, "a repeat save must return the same row, not a new id");
+    const stored = await repo.listSavedBands();
+    assert.equal(stored.length, 1, "the artist must be stored once, not double-counted in the prompt");
+    assert.equal(stored[0].rating, 4);
+  });
+
+  test(label("a repeat save is scoped per user — a second user's save is a separate row"), async () => {
+    const repo = await createRepository();
+    await addBand(repo, { musicbrainzArtistId: "mb-wiccid", name: "Wiccid" });
+
+    await addBand(repo, { musicbrainzArtistId: "mb-wiccid", name: "Wiccid" }, OTHER_USER);
+
+    assert.equal((await repo.listSavedBands()).length, 1);
+    assert.equal((await repo.listSavedBands(OTHER_USER)).length, 1);
+  });
+
+  // ------------------------------------------------- note provenance (#166)
+
+  test(label("a freshly saved band's note is not marked as user-edited"), async () => {
+    const repo = await createRepository();
+    const saved = await addBand(repo, { note: "The model's explanation" });
+
+    assert.equal(saved.noteEdited, false, "a pre-filled note must not read as the user's own words");
+  });
+
+  test(label("updating the note marks it as user-edited"), async () => {
+    const repo = await createRepository();
+    const saved = await addBand(repo, { note: "The model's explanation" });
+
+    const result = await repo.updateSavedBand(saved.id, { note: "My own words about this band" });
+
+    assert.equal(result.ok, true);
+    assert.equal((result.savedBand as SavedBand).noteEdited, true);
+    const [stored] = await repo.listSavedBands();
+    assert.equal(stored.noteEdited, true, "the edited flag must persist, not just the response");
+  });
+
+  test(label("updating rating alone does not mark the note as user-edited"), async () => {
+    const repo = await createRepository();
+    const saved = await addBand(repo, { note: "The model's explanation", rating: undefined });
+
+    await repo.updateSavedBand(saved.id, { rating: 5 });
+
+    const [stored] = await repo.listSavedBands();
+    assert.equal(stored.noteEdited, false, "a rating-only update must not touch note provenance");
+  });
+
   test(label("importSavedBands counts invalid bands as failed and keeps going"), async () => {
     const repo = await createRepository();
     const result = await repo.importSavedBands([
