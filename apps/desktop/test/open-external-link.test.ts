@@ -37,3 +37,28 @@ test("resolveOpenUrl falls back to window.open outside a Tauri host", () => {
     delete (globalThis as unknown as { window?: unknown }).window;
   }
 });
+
+test("resolveOpenUrl falls back to window.open when openUrl itself rejects (require succeeded, invoke had no host to answer it)", async () => {
+  const calls: Array<{ url: string; target?: string }> = [];
+  (globalThis as unknown as { window: unknown }).window = {
+    open: (url: string, target?: string) => {
+      calls.push({ url, target });
+    },
+  };
+
+  try {
+    const openUrl = resolveOpenUrl(() => ({
+      openUrl: async () => {
+        throw new Error("invoke() had no Tauri host to answer it");
+      },
+    }));
+
+    await openUrl("https://soundcloud.com/search?q=Fen");
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://soundcloud.com/search?q=Fen");
+    assert.equal(calls[0].target, "_blank");
+  } finally {
+    delete (globalThis as unknown as { window?: unknown }).window;
+  }
+});
