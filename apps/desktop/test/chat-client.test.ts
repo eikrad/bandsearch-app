@@ -7,7 +7,7 @@ import {
   normalizeArtistId,
 } from "../src/chatClient.js";
 import type { ChatMessage } from "../src/chatClient.js";
-import { jsonResponse } from "./helpers/fakeResponse.js";
+import { jsonResponse, errorResponse } from "./helpers/fakeResponse.js";
 
 type FetchCall = { url: RequestInfo | URL; init?: RequestInit };
 
@@ -214,6 +214,36 @@ test("chat client lists sessions", async () => {
 
   const result = await client.listSessions();
   assert.equal(result.sessions.length, 1);
+});
+
+test("chat client fetches a session with its messages", async () => {
+  const calls: FetchCall[] = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        session: { id: "sess-1", title: "Post-black", createdAt: "2026-01-01T00:00:00Z" },
+        messages: [{ id: "msg-1", role: "user", content: "I like Alcest", createdAt: "2026-01-01T00:00:01Z" }],
+      });
+    },
+  });
+
+  const result = await client.getSession("sess-1");
+  assert.equal(calls[0].url, "http://localhost:3001/sessions/sess-1");
+  assert.equal(result?.session.id, "sess-1");
+  assert.equal(result?.messages.length, 1);
+  assert.equal(result?.messages[0].content, "I like Alcest");
+});
+
+test("chat client returns null for a session that no longer exists", async () => {
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async () => errorResponse(404, { error: { code: "not_found", message: "session not found" } }),
+  });
+
+  const result = await client.getSession("gone");
+  assert.equal(result, null);
 });
 
 test("chat client appends a message to a session", async () => {

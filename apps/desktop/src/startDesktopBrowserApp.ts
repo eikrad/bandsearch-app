@@ -4,6 +4,7 @@ import { createSavedArtistsShell } from "./createSavedArtistsShell.js";
 import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
+import { getChatSessionId, setChatSessionId } from "./chatSessionStore.js";
 import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
 import { decideAuthRoute } from "./authGate.js";
 import { waitForAuthStatus } from "./waitForApi.js";
@@ -191,7 +192,17 @@ export async function startDesktopBrowserApp({
   if (gate.apiEndpointUrl) resolvedBaseUrl = normalizeBase(gate.apiEndpointUrl);
 
   const authClient = createAuthApiClient({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch });
-  const app = bootstrapApp({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch, getToken: () => getAuthToken() });
+  const app = bootstrapApp({
+    apiBaseUrl: resolvedBaseUrl,
+    fetchImpl: authAwareFetch,
+    getToken: () => getAuthToken(),
+    onSessionResolved: (sessionId) => setChatSessionId(sessionId),
+  });
+  // Only attempt a resume when a prior session was actually persisted — on a
+  // first-ever launch (or in every test, which starts with no localStorage
+  // entry) this is a pure local check and makes no network call at all.
+  const persistedSessionId = getChatSessionId();
+  if (persistedSessionId) await app.resumeSession(persistedSessionId);
   const savedArtistsShell = createSavedArtistsShell({ app });
   const initialViewport = resolveInitialViewport(viewport);
 

@@ -21,6 +21,7 @@ export type ChatHandlers = {
   onNavigateSettings?(): unknown;
   onStop?(): unknown;
   onRetry?(): unknown;
+  onOpenLink?(url: string): unknown;
 };
 
 /** One saved artist as the saved-artists screen renders it. */

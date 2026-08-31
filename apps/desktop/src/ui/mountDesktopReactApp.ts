@@ -11,6 +11,7 @@ import { ResetPasswordView } from "./ResetPasswordView.js";
 import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
 import { ConnectingView } from "./ConnectingView.js";
 import type { UpdateBannerHandlers, ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
+import { openExternalLink } from "../openExternalLink.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -77,6 +78,7 @@ export interface DesktopReactMountOptions {
   getConnectingViewProps?: () => ConnectingViewProps;
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
+  openExternalLinkImpl?: (url: string) => unknown;
 }
 
 export function createDesktopReactMount({
@@ -106,6 +108,7 @@ export function createDesktopReactMount({
   getConnectingViewProps,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
+  openExternalLinkImpl = openExternalLink,
 }: DesktopReactMountOptions) {
   const container = resolveContainer();
   const root = createRootImpl(container);
@@ -245,14 +248,27 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onSave: (artistName: string) => {
-      return Promise.resolve(shell.saveBand?.(artistName)).then(() => renderCurrent());
+    onSave: async (artistName: string) => {
+      try {
+        await shell.saveBand?.(artistName);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
     },
-    onRate: (artistName: string) => {
-      return Promise.resolve(shell.rateBand?.(artistName, 5)).then(() => renderCurrent());
+    onRate: async (artistName: string) => {
+      try {
+        await shell.rateBand?.(artistName, 5);
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
     },
     onMore: (artistName: string) => {
       void artistName;
+    },
+    onOpenLink: (url: string) => {
+      openExternalLinkImpl(url);
     },
     onObscurityTargetChange: (target: string | undefined) => {
       shell.desktopUi?.setObscurityTarget?.(target);
