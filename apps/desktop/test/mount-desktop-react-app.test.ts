@@ -50,6 +50,28 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
   assert.equal(calls.some((item) => item.type === "rate"), true);
 });
 
+test("onOpenLink routes through the injected opener instead of a plain <a> navigation", () => {
+  const opened: string[] = [];
+  const container = fakeContainer();
+  const shell: MountShell = {
+    getViewProps: () => ({}),
+    updateMode: async () => {},
+    submitQuery: async () => {},
+  };
+
+  const mount = createDesktopReactMount({
+    shell,
+    createRootImpl: () => fakeReactRoot(() => {}),
+    resolveContainer: () => container,
+    openExternalLinkImpl: (url) => opened.push(url),
+  });
+
+  mount.mount();
+  mount.handlers.onOpenLink("https://bandcamp.com/search?q=Fen");
+
+  assert.deepEqual(opened, ["https://bandcamp.com/search?q=Fen"]);
+});
+
 test("createDesktopReactMount exposes onStop handler that calls shell.cancelSearch", async () => {
   let cancelled = false;
   const mountApi = createDesktopReactMount({
