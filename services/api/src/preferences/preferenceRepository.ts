@@ -26,6 +26,9 @@ export type SavedBand = {
   rating: number | null;
   categories: string[];
   note: string;
+  // False for a note still at its model-written default; only a note the user
+  // has explicitly edited counts as their own input (ADR 0002 / #166).
+  noteEdited: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -159,6 +162,9 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
       rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
       categories TEXT NOT NULL DEFAULT '[]',
       note TEXT NOT NULL DEFAULT '',
+      -- 0 until the user explicitly edits the note; a pre-filled note stays
+      -- visible but is excluded from the recommendation prompt (#166).
+      note_edited INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -177,6 +183,7 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
     );
   `);
   addColumnIfMissing(db, "saved_bands", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
+  addColumnIfMissing(db, "saved_bands", "note_edited", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "artist_groups", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
   return createSqlitePreferenceRepository({ db });
 }

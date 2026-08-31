@@ -16,7 +16,13 @@ export { bootstrapDesktopApp };
  */
 type DesktopAppCollaborator = ChatAppCollaborator & {
   saveBand?(artistName: string): unknown;
-  rateBand?(artistName: string, rating?: number): unknown;
+  rateBand?(artistName: string, rating: number | null): unknown;
+  deleteSavedBand?(savedBandId: string): unknown;
+  saveCategoryNote?(
+    artistName: string,
+    savedBandId: string | null,
+    updates: { categories: string[]; note: string },
+  ): unknown;
 };
 
 function bootstrapDesktopUi(options: { app: DesktopAppCollaborator; viewport?: string }) {
@@ -41,8 +47,20 @@ function bootstrapDesktopReactShell({
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
   const mergedActionHandlers = {
     onSave: actionHandlers.onSave || ((artistName: string) => app.saveBand?.(artistName)),
-    onRate: actionHandlers.onRate || ((artistName: string) => app.rateBand?.(artistName, 5)),
-    onMore: actionHandlers.onMore || (() => {}),
+    // Forwards whatever rating the star row sent — no default here. A
+    // hardcoded fallback is exactly how "Rate" used to always write 5 (#153).
+    onRate:
+      actionHandlers.onRate || ((artistName: string, rating: number | null) => app.rateBand?.(artistName, rating)),
+    onUnsave:
+      actionHandlers.onUnsave
+      || ((savedBandId: string, artistName: string) => {
+        void artistName;
+        return app.deleteSavedBand?.(savedBandId);
+      }),
+    onSaveCategoryNote:
+      actionHandlers.onSaveCategoryNote
+      || ((artistName: string, savedBandId: string | null, updates: { categories: string[]; note: string }) =>
+        app.saveCategoryNote?.(artistName, savedBandId, updates)),
   };
   const shell = createDesktopReactShell({
     renderAdapter,

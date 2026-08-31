@@ -14,6 +14,11 @@ export type SavedBandForContext = {
   rating: number | null;
   categories: string[];
   note: string;
+  // Only a note the user has written or edited counts as their own input; a
+  // note still at its model-written pre-fill must not read back to the model
+  // as the user's own confirmation of a preference the model introduced
+  // (ADR 0002 / #166).
+  noteEdited: boolean;
 };
 
 /** The only thing context building needs from a repository. */
@@ -24,7 +29,11 @@ export type SavedBandContextSource = {
 export function formatSavedBandContextLine(band: SavedBandForContext): string {
   // An unrated band is still a signal — the user chose to keep it — so it stays
   // in the context, stating only that no judgement was given.
-  return `${band.name} (${formatRatingForPrompt(band.rating)}) tags: ${band.categories.join(", ")} note: ${band.note}`;
+  const base = `${band.name} (${formatRatingForPrompt(band.rating)}) tags: ${band.categories.join(", ")}`;
+  // An unedited note is still the model's own words, not the user's — leaving
+  // it out of the prompt is what stops that text turning into a confirmation
+  // of a preference the model introduced itself (ADR 0002 / #166).
+  return band.noteEdited ? `${base} note: ${band.note}` : base;
 }
 
 export type SavedBandContextOptions = {

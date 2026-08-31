@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildSavedBandContext, formatSavedBandContextLine } from "../src/savedBandContext.js";
 import type { SavedBandContextSource } from "../src/savedBandContext.js";
 import { createInMemoryPreferenceRepository } from "../src/preferences/preferenceMemory.js";
+import { assertRecord } from "./helpers/typeAssertions.js";
 
 type Band = Awaited<ReturnType<SavedBandContextSource["listSavedBands"]>>[number];
 
@@ -13,6 +14,7 @@ function band(overrides: Partial<Band> = {}): Band {
     rating: 5,
     categories: ["slowcore"],
     note: "sparse",
+    noteEdited: true,
     ...overrides,
   } as Band;
 }
@@ -38,6 +40,21 @@ test("an unrated band is described as unrated, not as a zero", () => {
 
 test("a rated band still states its rating", () => {
   assert.match(formatSavedBandContextLine(band({ rating: 4 })), /rating 4\/5/);
+});
+
+test("a pre-filled note the user never edited does not reach the prompt (#166 / ADR 0002)", () => {
+  // The model wrote this text as its own explanation. Reading it back as if it
+  // were the user's confirmation would let the model's vocabulary reinforce
+  // itself across queries — see ADR 0002.
+  const line = formatSavedBandContextLine(band({ note: "The model's own explanation", noteEdited: false }));
+
+  assert.doesNotMatch(line, /model's own explanation/);
+});
+
+test("a note the user has edited does reach the prompt", () => {
+  const line = formatSavedBandContextLine(band({ note: "My own words", noteEdited: true }));
+
+  assert.match(line, /My own words/);
 });
 
 test("an unrated band still carries its tags and note", () => {
@@ -100,14 +117,23 @@ test("buildSavedBandContext scopes an id-filtered read to the given user too", a
 // implementation has to work against a real one.
 test("buildSavedBandContext works against a real repository", async () => {
   const repository = createInMemoryPreferenceRepository();
-  await repository.addSavedBand(
+  const { savedBand } = await repository.addSavedBand(
     { musicbrainzArtistId: "mb-1", name: "Codeine", rating: 5, categories: ["slowcore"], note: "sparse" },
     "user-7",
   );
+  assertRecord(savedBand);
 
+  // Fresh save: the note is still the model's pre-fill, so it stays out of
+  // the prompt (#166).
   const context = await buildSavedBandContext(repository, { userId: "user-7" });
-  assert.match(context, /Codeine \(rating 5\/5\) tags: slowcore note: sparse/);
+  assert.match(context, /Codeine \(rating 5\/5\) tags: slowcore/);
+  assert.doesNotMatch(context, /note: sparse/);
 
   const otherUser = await buildSavedBandContext(repository, { userId: "user-8" });
   assert.equal(otherUser, "", "context must not leak across users");
+
+  // Once the user edits the note, it reaches the prompt.
+  await repository.updateSavedBand(String(savedBand.id), { note: "My actual reason" }, "user-7");
+  const edited = await buildSavedBandContext(repository, { userId: "user-7" });
+  assert.match(edited, /note: My actual reason/);
 });

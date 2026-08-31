@@ -36,6 +36,10 @@ const BASE_CARD: CardViewProps = {
   imageUrl: null,
   saved: false,
   rating: null,
+  savedBandId: null,
+  categories: [],
+  note: "",
+  noteEdited: false,
   actions: {
     save: { visible: true },
     rate: { visible: true },
@@ -70,7 +74,6 @@ const BASE_HANDLERS: ChatHandlers = {
   onQuerySubmit: () => {},
   onSave: () => {},
   onRate: () => {},
-  onMore: () => {},
 };
 
 export function chatHandlers(overrides: Partial<ChatHandlers> = {}): ChatHandlers {

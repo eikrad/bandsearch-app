@@ -13,6 +13,7 @@ type SavedBandRow = {
   rating: number | null;
   categories: string;
   note: string;
+  note_edited: number;
   created_at: string;
   updated_at: string;
 };
@@ -39,6 +40,7 @@ function mapRowToSavedBand(row: SavedBandRow) {
     rating: row.rating,
     categories: JSON.parse(row.categories || "[]") as string[],
     note: row.note,
+    noteEdited: Boolean(row.note_edited),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -51,17 +53,34 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }): Pref
       if (validation.ok === false) return validation;
 
       const bandInput = input as SavedBandInput;
-      const id = randomUUID();
       const now = new Date().toISOString();
       const categories = JSON.stringify(bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
       const note = bandInput.note.trim();
       const name = bandInput.name.trim();
       const musicbrainzArtistId = bandInput.musicbrainzArtistId.trim();
 
+      // A repeat save of the same artist must not create a second row — it
+      // would double-count the artist in every recommendation prompt (#163).
+      // Checked here rather than enforced by a DB constraint: a unique index
+      // would need a one-time dedup of any rows already duplicated before
+      // this fix shipped, which is a data-loss judgement call this write path
+      // avoids entirely.
+      const existing = db
+        .prepare("SELECT * FROM saved_bands WHERE user_id = ? AND musicbrainz_artist_id = ?")
+        .get(userId, musicbrainzArtistId) as SavedBandRow | undefined;
+      if (existing) {
+        db.prepare(
+          `UPDATE saved_bands SET name = ?, rating = ?, categories = ?, note = ?, updated_at = ? WHERE id = ?`,
+        ).run(name, bandInput.rating ?? null, categories, note, now, existing.id);
+        const row = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(existing.id) as SavedBandRow;
+        return { ok: true, savedBand: mapRowToSavedBand(row) };
+      }
+
+      const id = randomUUID();
       db.prepare(
         `INSERT INTO saved_bands
-          (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, user_id, musicbrainz_artist_id, name, rating, categories, note, note_edited, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       ).run(id, userId, musicbrainzArtistId, name, bandInput.rating ?? null, categories, note, now, now);
 
       const row = db.prepare("SELECT * FROM saved_bands WHERE id = ?").get(id) as SavedBandRow;
@@ -92,12 +111,14 @@ export function createSqlitePreferenceRepository({ db }: { db: Database }): Pref
       if (validation.ok === false) return { ok: false, status: 400, error: validation.error };
 
       const updatedAt = new Date().toISOString();
+      const noteEdited = updates.note !== undefined ? 1 : (current.noteEdited ? 1 : 0);
       db.prepare(
-        `UPDATE saved_bands SET rating = ?, categories = ?, note = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+        `UPDATE saved_bands SET rating = ?, categories = ?, note = ?, note_edited = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
       ).run(
         next.rating,
         JSON.stringify(next.categories.map((c: unknown) => String(c).trim()).filter(Boolean)),
         String(next.note).trim(),
+        noteEdited,
         updatedAt,
         id,
         userId,

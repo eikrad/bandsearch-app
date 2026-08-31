@@ -25,6 +25,7 @@ function mapRowToSavedBand(row: Row) {
     rating: row.rating === null || row.rating === undefined ? null : Number(row.rating),
     categories: JSON.parse(String(row.categories || "[]")) as string[],
     note: String(row.note),
+    noteEdited: Boolean(Number(row.note_edited ?? 0)),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -37,17 +38,39 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
       if (validation.ok === false) return validation;
 
       const bandInput = input as SavedBandInput;
-      const id = randomUUID();
       const now = new Date().toISOString();
       const categories = JSON.stringify(bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
       const note = bandInput.note.trim();
       const name = bandInput.name.trim();
       const musicbrainzArtistId = bandInput.musicbrainzArtistId.trim();
 
+      // A repeat save of the same artist must not create a second row — it
+      // would double-count the artist in every recommendation prompt (#163).
+      // Checked here rather than enforced by a DB constraint: a unique index
+      // would need a one-time dedup of any rows already duplicated before
+      // this fix shipped, which is a data-loss judgement call this write path
+      // avoids entirely.
+      const existingResult = await client.execute({
+        sql: "SELECT * FROM saved_bands WHERE user_id = ? AND musicbrainz_artist_id = ?",
+        args: [userId, musicbrainzArtistId],
+      });
+      if (existingResult.rows.length > 0) {
+        const existingId = String(existingResult.rows[0].id);
+        const updateResult = await client.execute({
+          sql: `UPDATE saved_bands
+                SET name = ?, rating = ?, categories = ?, note = ?, updated_at = ?
+                WHERE id = ?
+                RETURNING *`,
+          args: [name, bandInput.rating ?? null, categories, note, now, existingId],
+        });
+        return { ok: true, savedBand: mapRowToSavedBand(updateResult.rows[0]) };
+      }
+
+      const id = randomUUID();
       const result = await client.execute({
         sql: `INSERT INTO saved_bands
-                (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, user_id, musicbrainz_artist_id, name, rating, categories, note, note_edited, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
               RETURNING *`,
         // ?? null, not raw: libSQL rejects undefined outright, where SQLite
         // would have coerced it. An omitted rating is legal (CONTEXT.md).
@@ -88,14 +111,15 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
 
       const normalizedCategories = JSON.stringify(next.categories.map((c: unknown) => String(c).trim()).filter(Boolean));
       const normalizedNote = String(next.note).trim();
+      const noteEdited = updates.note !== undefined ? 1 : (current.noteEdited ? 1 : 0);
       const updatedAt = new Date().toISOString();
 
       const updateResult = await client.execute({
         sql: `UPDATE saved_bands
-              SET rating = ?, categories = ?, note = ?, updated_at = ?
+              SET rating = ?, categories = ?, note = ?, note_edited = ?, updated_at = ?
               WHERE id = ? AND user_id = ?
               RETURNING *`,
-        args: [next.rating, normalizedCategories, normalizedNote, updatedAt, id, userId],
+        args: [next.rating, normalizedCategories, normalizedNote, noteEdited, updatedAt, id, userId],
       });
 
       return { ok: true, savedBand: mapRowToSavedBand(updateResult.rows[0]) };

@@ -14,6 +14,7 @@ type SavedBand = {
   rating: number | null;
   categories: string[];
   note: string;
+  noteEdited: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -56,15 +57,41 @@ export function createPreferenceMemory() {
       }
 
       const bandInput = input as SavedBandInput;
+      const musicbrainzArtistId = bandInput.musicbrainzArtistId.trim();
       const now = new Date().toISOString();
+
+      // A repeat save of the same artist must not create a second row — it
+      // would double-count the artist in every recommendation prompt (#163).
+      // Checked here rather than enforced by a DB constraint: a unique index
+      // would need a one-time dedup of any rows already duplicated before
+      // this fix shipped, which is a data-loss judgement call this write path
+      // avoids entirely.
+      const existingIndex = savedBands.findIndex(
+        (b) => b.userId === userId && b.musicbrainzArtistId === musicbrainzArtistId,
+      );
+      if (existingIndex >= 0) {
+        const existing = savedBands[existingIndex];
+        const updated: SavedBand = {
+          ...existing,
+          name: bandInput.name.trim(),
+          rating: bandInput.rating ?? null,
+          categories: bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
+          note: bandInput.note.trim(),
+          updatedAt: now,
+        };
+        savedBands[existingIndex] = updated;
+        return { ok: true, savedBand: withoutUserId(updated) };
+      }
+
       const savedBand: SavedBand = {
         id: randomUUID(),
         userId,
-        musicbrainzArtistId: bandInput.musicbrainzArtistId.trim(),
+        musicbrainzArtistId,
         name: bandInput.name.trim(),
         rating: bandInput.rating ?? null,
         categories: bandInput.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
         note: bandInput.note.trim(),
+        noteEdited: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -108,6 +135,7 @@ export function createPreferenceMemory() {
         rating: next.rating,
         categories: next.categories.map((c: unknown) => String(c).trim()).filter(Boolean),
         note: String(next.note).trim(),
+        noteEdited: updates.note !== undefined ? true : current.noteEdited,
         updatedAt: new Date().toISOString(),
       };
 

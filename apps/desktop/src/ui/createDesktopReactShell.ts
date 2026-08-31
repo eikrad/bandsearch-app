@@ -56,7 +56,8 @@ export function createDesktopReactShell({
     onObscurityTargetChange: (target: string | undefined) => renderAdapter.onObscurityTargetChange?.(target),
     onSave: actionHandlers.onSave || (() => {}),
     onRate: actionHandlers.onRate || (() => {}),
-    onMore: actionHandlers.onMore || (() => {}),
+    onUnsave: actionHandlers.onUnsave || (() => {}),
+    onSaveCategoryNote: actionHandlers.onSaveCategoryNote || (() => {}),
   };
 
   const shell = {
@@ -89,14 +90,45 @@ export function createDesktopReactShell({
         throw error;
       }
     },
-    async rateBand(artistName: string, rating = 5) {
+    async rateBand(artistName: string, rating: number | null) {
       try {
         const result = await handlers.onRate(artistName, rating);
-        actionStatus = { type: "success", message: `Rated ${artistName}: ${rating}/5.` };
+        actionStatus =
+          rating === null
+            ? { type: "success", message: `Cleared the rating for ${artistName}.` }
+            : { type: "success", message: `Rated ${artistName}: ${rating}/5.` };
         scheduleStatusClear();
         return result;
       } catch (error) {
         actionStatus = { type: "error", message: `Rating failed for ${artistName}.` };
+        scheduleStatusClear();
+        throw error;
+      }
+    },
+    async unsaveBand(savedBandId: string, artistName: string) {
+      try {
+        const result = await handlers.onUnsave(savedBandId, artistName);
+        actionStatus = { type: "success", message: `Removed ${artistName} from saved artists.` };
+        scheduleStatusClear();
+        return result;
+      } catch (error) {
+        actionStatus = { type: "error", message: `Could not remove ${artistName}.` };
+        scheduleStatusClear();
+        throw error;
+      }
+    },
+    async saveCategoryNote(
+      artistName: string,
+      savedBandId: string | null,
+      updates: { categories: string[]; note: string },
+    ) {
+      try {
+        const result = await handlers.onSaveCategoryNote(artistName, savedBandId, updates);
+        actionStatus = { type: "success", message: `Updated ${artistName}.` };
+        scheduleStatusClear();
+        return result;
+      } catch (error) {
+        actionStatus = { type: "error", message: `Could not update ${artistName}.` };
         scheduleStatusClear();
         throw error;
       }

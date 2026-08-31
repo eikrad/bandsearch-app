@@ -22,6 +22,9 @@ function makeCard(
     saved: false,
     rating: null,
     savedBandId: null,
+    categories: [],
+    note: "",
+    noteEdited: false,
     ...overrides,
   };
 }
@@ -92,32 +95,26 @@ test("render adapter preserves imageUrl from card", () => {
   assert.equal(props.cards[0].imageUrl, "https://example.com/alcest.jpg");
 });
 
-test("render adapter hides save/rate actions on mobile", () => {
-  const ui = makeDesktopUi({ getViewport: () => "mobile" });
-  ui._setConversation([
-    { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
-  ]);
+// UI_GUIDELINES.md, "Action row policy (locked, all viewports)": the rating
+// stars and Save are primary and never collapse, on any screen size — saving
+// is what makes preference-aware mode work at all, so it stays one tap away
+// everywhere. This used to be `!isMobile`-gated (#152), which contradicted a
+// spec written 15 minutes before the code that broke it.
+for (const viewport of ["mobile", "desktop"] as const) {
+  test(`render adapter keeps save/rate/more actions visible on ${viewport}`, () => {
+    const ui = makeDesktopUi({ getViewport: () => viewport });
+    ui._setConversation([
+      { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
+    ]);
 
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
-  const props = adapter.getViewProps();
+    const adapter = createChatRenderAdapter({ desktopUi: ui });
+    const props = adapter.getViewProps();
 
-  assert.equal(props.cards[0].actions.save.visible, false, "save hidden on mobile");
-  assert.equal(props.cards[0].actions.rate.visible, false, "rate hidden on mobile");
-  assert.equal(props.cards[0].actions.more.visible, true, "more always visible");
-});
-
-test("render adapter shows save/rate actions on desktop", () => {
-  const ui = makeDesktopUi();
-  ui._setConversation([
-    { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
-  ]);
-
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
-  const props = adapter.getViewProps();
-
-  assert.equal(props.cards[0].actions.save.visible, true, "save visible on desktop");
-  assert.equal(props.cards[0].actions.rate.visible, true, "rate visible on desktop");
-});
+    assert.equal(props.cards[0].actions.save.visible, true, `save visible on ${viewport}`);
+    assert.equal(props.cards[0].actions.rate.visible, true, `rate visible on ${viewport}`);
+    assert.equal(props.cards[0].actions.more.visible, true, `more visible on ${viewport}`);
+  });
+}
 
 test("onModeChange updates mode and returns refreshed view props", () => {
   const ui = makeDesktopUi();
