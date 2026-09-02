@@ -242,7 +242,8 @@ Two persistence domains, both backed by an abstract repository pattern to allow 
 |---------|--------|----------|
 | `sqlite` (default) | `DATABASE_PATH` | Local, zero-config |
 | `memory` | — | Ephemeral / testing |
-| `turso` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Cross-device cloud sync |
+| `turso` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Cross-device cloud sync — every statement over the network |
+| `turso-sync` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` + `TURSO_SYNC_PATH` | Local replica synced with Turso Cloud — reads/writes stay local, so the app keeps working offline |
 
 Tables: `saved_bands` (rating, categories, notes), `artist_groups`
 

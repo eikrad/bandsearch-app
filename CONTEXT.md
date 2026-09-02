@@ -28,9 +28,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Artist group** — a named collection of saved bands, with its own identity, used to browse and organise a collection. A group **does not influence recommendations**; it never reaches the preference context. The rule of thumb: a category says something about a band's character, a group says where the user filed it.
 
-- **Note** — free text on a saved band. It is pre-filled with the model's own explanation of why it recommended the artist, and the user can edit it.
+- **Note** — free text on a saved band. It is pre-filled with the model's own explanation of why it recommended the artist, and the user can edit it via the `···` Category/Note sheet on a recommendation card.
 
-  **Decided but not yet built (ADR 0002, tracked in #166):** only a note the user has actually written or edited *should* count as their own preference signal and reach the recommendation prompt; one left at its pre-filled value *should* stay visible but out of the prompt, so the model cannot read its own words back as if the user had said them. **Today every note reaches the prompt regardless of who wrote it.** Stated here in the conditional deliberately: this entry described the intended rule in the present tense for a while, which made the glossary assert behaviour the code does not have.
+  **Built (ADR 0002, #192, merged 2026-08-31):** only a note the user has actually written or edited counts as their own preference signal and reaches the recommendation prompt; one left at its pre-filled value stays visible but out of the prompt, so the model cannot read its own words back as if the user had said them. This is tracked in storage via `noteEdited` (`services/api/src/savedBandContext.ts` and the `note_edited` column added in migration `004_note_edited.sql`) and set `true` only when the user actually edits the sheet's textarea. Tracking issue #166 remains open on GitHub only because this repo's PRs target `staging`, where `Closes #166` never auto-fires — see `AGENTS.md`.
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event.
 
@@ -42,7 +42,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
 
-- **Preference repository** — the abstract storage interface for saved bands, artist groups, and user accounts. Concrete adapters: SQLite (`better-sqlite3`), Postgres, Turso/libSQL, and in-memory.
+- **Preference repository** — the abstract storage interface for saved bands, artist groups, and user accounts. Concrete adapters: SQLite (`better-sqlite3`), Turso/libSQL (direct, or a local replica synced via `turso-sync`), and in-memory. A Postgres adapter existed early on and was removed for lacking user scoping (see `docs/ROADMAP.md`, "Architecture — Pending Deepening" entry 8); `PREFERENCE_STORE=postgres` now throws on startup rather than connecting to anything.
 
 - **Session store** — separate from the preference store; holds `chat_sessions` and `chat_messages`. Adapters: SQLite (`better-sqlite3`), in-memory, and Turso/libSQL (`tursoChatSessionRepository`). Selected via `PREFERENCE_STORE` env var alongside the preference and user repositories.
 

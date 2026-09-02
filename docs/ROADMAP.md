@@ -23,16 +23,18 @@ plan, not a second permanent structure.
 2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
    Android, the deploy gate and the eval data, and it is the one thing claimed
    as infrastructure that has never actually been run.
-3. **The card action work — #151–#154 and #163–#167.** Designed in
-   `docs/adr/0002-*` and the action-row policy; not yet built. Start with
-   #164 (rating becomes nullable), since #151, #152 and #165 all sit on top of
-   it. Independent of the infrastructure work, so it can fill gaps while
-   waiting on a deployment.
-
-   Six of these are live defects, not future work: a dead `···` button on
-   every card, Save and Rate writing hidden ratings, the same artist storable
-   twice and then double-counted in the prompt, and the model reading its own
-   text back as the user's preference.
+3. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
+   (`feature/card-action-redesign`, merged 2026-08-31) built rating stars, the
+   Save/Saved toggle, and the Category/Note sheet behind the `···` button —
+   closing #151 (dead `···` button), #152 (Save/Rate hidden on mobile), #163
+   (duplicate saves), #165 (Category/Note uneditable) and #166 (ADR 0002: only
+   an edited note reaches the prompt). #153, #155, #164, #167 and #175 were
+   already closed on GitHub before that PR. **Still open: #154** (card action
+   touch targets are ~32px, below the 44px minimum) — no `minWidth`/`minHeight`
+   sizing was added for the action row in #192. Several of the closed-in-code
+   issues (#151, #152, #163, #165, #166) remain open on GitHub only because
+   this repo's PRs target `staging`, where `Closes #N` never auto-fires — see
+   `AGENTS.md`; close them by hand once this entry is read.
 4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
    This is the first real proof the updater works; the pipeline has only ever
    run against a throwaway `v0.2.1-test` tag.
@@ -55,7 +57,7 @@ Phase 10  signing key + GitHub secrets
 
 Independent, can start any time:
  · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
- · Phase 10 macOS check      · the card-action work (#151-#154, #163-#167)
+ · Phase 10 macOS check      · #154, the one card-action item left (44px touch targets)
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that

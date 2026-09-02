@@ -53,6 +53,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
 | [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
