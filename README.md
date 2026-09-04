@@ -228,7 +228,9 @@ Common optional variables:
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
+| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring (Mistral) |
+| `MISTRAL_JUDGE_ENDPOINT` | `https://api.mistral.ai/v1/chat/completions` | Set to `https://api.eu.mistral.ai/v1/chat/completions` to keep judge traffic in the EU |
+| `MISTRAL_JUDGE_MODEL` | `mistral-large-latest` | Judge model; also recorded as `model_id` on every score row |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
