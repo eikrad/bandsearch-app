@@ -73,7 +73,7 @@ graph TD
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval| CLAUDE[Anthropic Claude\nLLM-as-Judge]
+    API -.->|optional async eval| JUDGE[Mistral\nLLM-as-Judge]
 ```
 
 ---
@@ -189,7 +189,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
-| **Anthropic Claude** (optional, key supplied via `MISTRAL_API_KEY` — see note below) | Eval layer | Async LLM-as-Judge scoring — never on the critical path |
+| **Mistral** (optional, `MISTRAL_API_KEY`) | Eval layer | Async LLM-as-Judge scoring — never on the critical path; a different model family from Gemini to avoid self-evaluation bias |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
@@ -219,7 +219,7 @@ flowchart LR
 |-------|-----------|------|---------|
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Claude scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
 | **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
@@ -228,7 +228,9 @@ A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_E
 
 The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
 
-> **Note on `MISTRAL_API_KEY`:** despite the variable name, the judge worker (`eval/judgeWorker.ts`) sends this key to Anthropic's API (`claude-opus-4-8`), not Mistral's. The naming is a known mismatch in the code — worth renaming to `ANTHROPIC_API_KEY` in a follow-up, but documented here as the current, actual behavior.
+> **Note on the judge model (corrected 2026-09-04):** the judge worker (`eval/judgeWorker.ts`) posts `MISTRAL_API_KEY` to Mistral, as the name says — endpoint and model are overridable via `MISTRAL_JUDGE_ENDPOINT` / `MISTRAL_JUDGE_MODEL`, and `api.eu.mistral.ai` keeps judge traffic in the EU. Earlier revisions of this file described the key going to Anthropic; that was true before the 2026-08-31 migration. One leftover survived it: `model_id` on every score row was still hardcoded to `claude-opus-4-8`, and a test asserted that value, so the provenance recorded on eval data named a model that never scored it. Both are fixed; the test now asserts that `model_id` equals the model actually sent.
+>
+> **`run-calibration.ts` still calls Anthropic** and is therefore calibrated against a judge that is no longer the one in production. Recalibrating against Mistral is open work — see `docs/ROADMAP.md`.
 
 ---
 

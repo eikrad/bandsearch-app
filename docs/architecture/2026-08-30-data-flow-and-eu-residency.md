@@ -17,7 +17,7 @@ provider answers to). They have very different costs.
 | Database | EU selectable | 🇺🇸 Turso | accounts, e-mail addresses, password hashes, saved preferences, chat history |
 | LLM | US | 🇺🇸 Google (Gemini) | **query text + full conversation context** |
 | Web search | US | 🇺🇸 Brave | **search queries, retained 90 days** |
-| Judge (optional) | US | 🇺🇸 Anthropic | recommendation prose |
+| Judge (optional) | EU-capable | 🇫🇷 Mistral | recommendation prose |
 
 The compute layer — the only one a hosting migration would move — is the one
 carrying the least personal data. The user's actual queries and conversation go
@@ -64,9 +64,9 @@ research pipeline, since prompt formats, structured outputs and snippet parsing
 are all shaped by the current two.
 
 - **Hosting:** Hetzner (DE, ~4 €/month), Scaleway (FR), OVHcloud (FR), IONOS (DE)
-- **LLM:** Mistral (FR) — note the codebase already has a `MISTRAL_API_KEY`
-  env var, which per Phase 8 Step 5 actually points at Anthropic. The name is a
-  known mismatch, but the EU-provider shape is already there.
+- **LLM:** Mistral (FR) — the judge already runs on Mistral since the 2026-08-31
+  migration, and `MISTRAL_JUDGE_ENDPOINT` accepts `api.eu.mistral.ai` for EU
+  residency. The main pipeline (Gemini) is the part still to move.
 - **Web search:** Qwant (FR) is the closest equivalent to Brave with an API.
 
 ## Bearing on Phase 7 (Android)
