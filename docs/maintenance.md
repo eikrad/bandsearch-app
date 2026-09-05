@@ -4,6 +4,182 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-09-02
+
+### Checks performed
+- `git fetch origin staging` — the working branch (`claude/eloquent-volta-d6lrim`) again showed
+  `git merge --ff-only origin/staging` reporting "Already up to date," with `HEAD` seeded from
+  `origin/main`'s tip rather than `origin/staging`'s directly — same recurring pattern as every
+  prior cycle since 2026-07-15. Verified rather than trusted: `git merge-base --is-ancestor
+  origin/staging HEAD` confirmed `origin/staging` is a real ancestor, `git diff --stat
+  origin/staging HEAD` was empty, and `git rev-parse HEAD origin/staging origin/main` showed `HEAD`
+  and `origin/staging` at the **identical** commit (`9196b99`) — `origin/main` sits one no-diff
+  merge commit behind (`8497f1f`). Same "seeded from `main`, content-identical" situation as every
+  prior occurrence, not a real divergence. Working tree confirmed clean before starting.
+- Matched local toolchain to CI (`node-version: 26` in both jobs of `.github/workflows/ci.yml`,
+  `engines: ">=26"` in root `package.json`, `.nvmrc` → `26`): default sandbox Node was `v22.22.2`;
+  `nvm install 26` resolved `v26.8.1`. **This cycle's Node 26 build reports `process.version`
+  correctly as plain `v26.8.1`** — unlike 2026-08-26's `v26.8.0-alpha.0.0.0` mislabeling, no
+  `node-gyp`/`npm_config_target` workaround was needed this time. First `npm ci` attempt hit a
+  transient `ECONNRESET` ("network aborted") against `registry.npmjs.org`; a plain retry with no
+  changes succeeded cleanly, so this was ordinary network flakiness, not the sandbox Node-labeling
+  quirk from prior cycles — worth distinguishing the two failure modes if this reproduces again.
+- Baseline `npm ci` (no workaround needed this cycle) + `npm run ci` (lint+typecheck+test) + `npm
+  run build --workspace @bandsearch/desktop` — **fully green** before any changes: lint clean,
+  typecheck clean, tests 1148/1149 (desktop 390/391 pass + 1 pre-existing skip, api 708/708, eval
+  16/16, schemas 34/34), build clean. Test counts grew substantially since 2026-08-26 (722/723 →
+  1148/1149) from the already-merged card-action redesign, platform-links/session-persistence fix,
+  and render/deploy fixes (PRs #184–#193) — not from anything this cycle touched.
+- `npm audit` (workspace-wide), `uv export --format requirements-txt --no-hashes` + `pip-audit`,
+  `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (installed `cargo-audit` 0.22.2 fresh,
+  not cached in this sandbox) — all re-run rather than trusting last cycle.
+- `npm outdated` per workspace (root, `apps/desktop`, `services/api`, `services/eval`,
+  `shared/schemas`) — per-workspace form used again per the 2026-08-26 finding (the combined
+  `--workspaces --include-workspace-root` form's reliability wasn't re-tested this cycle; no reason
+  to risk it).
+- `uv pip list --outdated` — reconfirmed `pyproject.toml` still declares `dependencies = []` and
+  `uv.lock` resolves only the virtual root package (nothing installed, nothing to be outdated).
+- `cargo update --dry-run --manifest-path apps/desktop/src-tauri/Cargo.toml` — dozens of available
+  non-security patch/minor bumps across the `tauri` 2.x family and transitive deps (same category
+  as every prior cycle). Cross-referenced against the current `cargo audit` warning list: all 17
+  flagged crates (`atk`/`atk-sys`/`gdk`/`gdk-sys`/`gdkwayland-sys`/`gdkx11`/`gdkx11-sys`/`gtk`/
+  `gtk-sys`/`gtk3-macros` GTK3 bindings, `proc-macro-error`, 5× `unic-*`, `glib`) are already at
+  their latest available version (`cargo update --dry-run` shows no newer version for any of
+  them) — confirmed directly rather than assumed, unlike 2026-08-26 which found two (since fixed)
+  fixable ones. Nothing new to apply.
+- Re-verified the `typescript` v7 block specifically for this repo: `npm view
+  typescript-eslint@8.69.0 peerDependencies` (this cycle's own latest) still declares
+  `"typescript": ">=4.8.4 <6.1.0"` — identical range to every prior cycle, TS7 (`6.0.3` → `7.0.2`)
+  still out of range.
+- Checked `.github/dependabot.yml` — unchanged since 2026-07-08 (npm root, cargo at
+  `/apps/desktop/src-tauri`, uv at `/`, github-actions, all → `staging`).
+- **New finding — corrects the 2026-08-26 cycle's speculation about `pnpm-lock.yaml`.** That entry
+  guessed "someone outside this routine appears to be keeping it current by hand." `git log --
+  pnpm-lock.yaml` for the 8 most recent commits shows every one of them is `dependabot[bot]`,
+  each a routine single-package bump (`@langchain/langgraph` ×2, `@types/node` ×2, `tsx`,
+  `better-sqlite3`, `eslint`, `@langchain/google-genai`) that touched **both**
+  `package-lock.json` and `pnpm-lock.yaml` in the same commit (confirmed via `git show --stat` on
+  `5d68617`, the most recent one). So Dependabot's npm-ecosystem updater is itself keeping
+  `pnpm-lock.yaml` in sync per-PR now — not a human, and not this maintenance routine. See Notes
+  for what this means for `pnpm-lock.yaml`'s currency after this cycle's own bumps.
+- Verified `package.json`'s `allowScripts` allowlist (flagged stale by 2026-08-26) is now correct:
+  merged PR #188 (2026-08-31, outside this routine) re-pinned it to `better-sqlite3@13.0.3` /
+  `esbuild@0.28.2`, matching the resolved lockfile versions exactly — `npm ci` produces no
+  install-scripts warning this cycle. Confirmed resolved, not re-flagging.
+- Rust build/test verification: this sandbox again has the GTK3 pkg-config dev headers present
+  (`pkg-config --exists gdk-3.0` / `webkit2gtk-4.1` both succeed). Created the local-dev-only
+  Node sidecar symlink per `apps/desktop/src-tauri/binaries/README`'s documented command, ran
+  `cargo check` (green, ~5m23s cold) and `cargo test` (green, 23/23 — up from 21/21 last cycle,
+  new tests added by the merged platform-links/session-persistence and card-action-redesign work),
+  then **deleted the symlink again** before committing (`git status` confirmed no trace).
+- Re-ran the full `npm run ci` suite + desktop build (Node 26) after the npm changes — identical
+  pass counts to baseline, fully green.
+
+### CI health (staging)
+Confirmed clean independently this cycle (not just per task framing): `mcp__github__actions_list`
+shows the most recent `CI` run against `staging`'s content (`8497f1f`/`9196b99`, run `33433876260`)
+completed/success, and the run history back through late August is uniformly success. Zero open
+PRs (`list_pull_requests`, state=open → `[]`) and zero open `security-audit`-labelled issues
+(`list_issues`, label filter → 0 results) — both reverified fresh via the API, not assumed.
+
+### Fixes applied
+
+- **Security fix — npm, moderate, applied.** Baseline `npm audit` found 1 moderate-severity
+  finding: `qs` `2.2.5 - 6.15.3` (transitive, via `services/api`'s `express@5.2.1` →
+  `body-parser`/direct `qs` dep) — two advisories, GHSA-x5fp-wj9c-mxmx (array-limit bypass via
+  bracket-key comma parsing) and GHSA-4mjr-xmp4-gh2g (DoS via attacker-controlled `isBuffer`).
+  `npm audit fix` resolved it cleanly: `qs` `6.15.3` → `6.16.0`. Only `package-lock.json` changed;
+  no `package.json` edits needed (transitive dep, not direct). `npm audit` after: **0
+  vulnerabilities**. Reconfirmed the two vulnerabilities `npm audit fix` resolved on 2026-08-05
+  (`brace-expansion` 5.0.9, `ip-address` 10.4.0) have not regressed.
+
+- **Rust — no security fix needed this cycle.** `cargo audit` baseline: 0 vulnerabilities, 17
+  informational unmaintained/unsound warnings — identical set and count to 2026-08-26's post-fix
+  state (the `event-listener`/`anyhow` advisories that cycle resolved remain fixed, unregressed).
+  No new advisories this week, and (per Checks performed) all 17 flagged crates are already at
+  their latest available version — nothing left to bump. `Cargo.lock` untouched this cycle.
+
+- **Safe npm updates** — `npm update` targeted at the packages `npm outdated` (run per-workspace)
+  flagged as in-range, all already using caret ranges (no `package.json` edits needed):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `@types/node` | 26.4.0 | 26.4.1 |
+  | `services/api` | `express-rate-limit` | 8.6.2 | 8.7.0 |
+  | root | `globals` | 17.11.0 | 17.12.0 |
+  | root | `tsx` | 4.23.12 | 4.23.13 |
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.68.0 | 8.69.0 |
+  | `services/api` | `zod` | 4.4.3 | 4.5.4 |
+
+  `apps/desktop`, `services/eval`, `shared/schemas` had **nothing outdated** this cycle. `pg` /
+  `@types/pg` are no longer dependencies anywhere in the tree (removed since 2026-08-26, outside
+  this routine) — dropped from the outdated-survey scope accordingly. `@tursodatabase/sync`
+  unchanged at 0.7.2 (nothing available in-range).
+
+  Only `package-lock.json` changed (this cycle's total diff, including the `qs` security fix
+  above: 164 lines, 82 insertions / 82 deletions). `pnpm-lock.yaml` was **not** regenerated — see
+  Notes.
+
+### Majors / range-blocked — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 07-08 — still blocked. Re-verified this cycle: `typescript-eslint@8.69.0` (this cycle's own latest) still declares peer `"typescript": ">=4.8.4 <6.1.0"`. |
+| `@libsql/client` (`services/api`) | 0.17.4 | 0.18.0 | Not a semver major, but npm's caret semantics for `0.x` versions treat `^0.17.4` as `>=0.17.4 <0.18.0` — `npm outdated` reports `wanted` staying at `0.17.4` even with `0.18.0` available, so a plain `npm update` cannot reach it. Would need a `package.json` range edit (`^0.17.4` → `^0.18.0` or similar), which is outside this cycle's "lockfile-only" scope — flagging for the owner to evaluate the 0.18.0 changelog and decide, rather than reaching past the declared range unilaterally. |
+
+No other npm, Rust, or Python major was outstanding this cycle.
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | 1 moderate (`qs`, transitive via `express`/`body-parser`) → **0 after `npm audit fix`** |
+| Python | `pip-audit` (via `uv export`) | **0 vulnerabilities** — `dependencies = []` in `pyproject.toml`, nothing to audit, reconfirmed |
+| Rust | `cargo audit` 0.22.2 (518 crate deps scanned) | **0 vulnerabilities** before and after. 17 informational warnings (16 unmaintained + 1 unsound: GTK3 `gtk-rs` bindings ×10, `proc-macro-error`, `unic-*` ×5, `glib` iterator unsoundness), unchanged from 2026-08-26's post-fix state — all confirmed already at latest available version, no independent fix upstream. |
+| GitHub | `security-audit`-labeled issues | 0 open — reverified fresh via the API this cycle, not assumed. |
+
+### Notes
+
+- **`pnpm-lock.yaml` — corrected understanding, and a new drift source identified.** See Checks
+  performed for the evidence that Dependabot's npm-ecosystem updater (not a human) has been
+  keeping `pnpm-lock.yaml` in sync with `package-lock.json` for its own single-package PRs over
+  the past ~2 weeks. But that sync is necessarily partial: diffing `pnpm-lock.yaml`'s resolved
+  versions against this cycle's *pre-update* `package-lock.json` state shows it already lagged
+  behind on every package this manual maintenance routine (not Dependabot) had most recently
+  bumped — `express-rate-limit@8.5.2` (routine bumped `package-lock.json` to 8.6.2 on 08-26),
+  `typescript-eslint@8.67.0` (routine was already at 8.68.0), `qs@6.15.2` (routine's baseline was
+  6.15.3) — while matching exactly on packages only Dependabot had touched (`globals@17.11.0`,
+  `tsx@4.23.12`, `zod@4.4.3`). This cycle's own bumps (the table above) widen that same gap
+  further, since a plain `npm update`/`npm audit fix` never touches `pnpm-lock.yaml`. Net picture
+  for the owner: `pnpm-lock.yaml` is not abandoned (Dependabot actively maintains its slice), but
+  it will keep drifting specifically around this weekly routine's own changes unless this routine
+  starts running `pnpm install --lockfile-only` (or equivalent) after its own npm bumps too, or the
+  owner decides `pnpm-lock.yaml` isn't worth keeping given only `package-lock.json` is ever
+  actually installed from (`npm ci` in every workflow). Not regenerated this cycle — flagging the
+  more precise mechanism rather than acting on it unilaterally.
+- **`allowScripts` staleness (flagged 2026-08-26) is resolved** — PR #188, merged 2026-08-31
+  outside this routine, re-pinned the allowlist to `better-sqlite3@13.0.3` / `esbuild@0.28.2`.
+  Confirmed via a clean `npm ci` (no install-scripts warning) this cycle.
+- **`@libsql/client` 0.17.4 → 0.18.0 held back on a caret-range technicality, not a real major** —
+  see Majors table. Flagging distinctly from `typescript` since the fix here is a one-line
+  `package.json` edit rather than a compatibility migration, if the owner wants it.
+- Node 26 installed cleanly this cycle with correctly-labeled `process.version` (`v26.8.1`) — no
+  `npm_config_target` workaround needed, unlike 2026-08-26. The one `npm ci` hiccup (`ECONNRESET`)
+  was ordinary transient network flakiness (resolved on a bare retry), not the sandbox
+  Node-mislabeling quirk — worth keeping the two failure modes distinct if either recurs.
+- Rust build/test verified again this cycle (GTK3 dev headers present in this sandbox run) —
+  `cargo check` + `cargo test` both green, **23/23 unit tests** (up from 21/21 on 2026-08-26; new
+  tests landed with the merged platform-links/session-persistence and card-action-redesign PRs).
+  Sidecar symlink created and removed per the documented local-dev pattern; confirmed absent from
+  `git status` before committing.
+- Re-ran `npm run ci` (lint+typecheck+test, all workspaces) and `npm run build --workspace
+  @bandsearch/desktop` on Node 26 after all dependency updates — all still green, identical pass
+  counts to baseline: **1148/1149 tests** (desktop 390/391 pass + 1 pre-existing skip, api
+  708/708, eval 16/16, schemas 34/34); lint and typecheck clean. `test:e2e` was not run — no
+  user-facing code was touched this cycle (lockfile-only npm bumps).
+
+---
+
 ## 2026-08-26
 
 ### Checks performed
