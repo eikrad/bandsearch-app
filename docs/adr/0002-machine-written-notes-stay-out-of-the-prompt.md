@@ -1,11 +1,18 @@
 # ADR 0002 — Machine-written notes stay out of the recommendation prompt
 
-**Status:** Accepted — **not yet implemented**, tracked in #166
+**Status:** Accepted — **implemented** in `feature/card-action-redesign` (#192,
+merged 2026-08-31). Tracking issue #166 is still open on GitHub pending manual
+close (this repo's PRs target `staging`, so `Closes #166` never auto-fires —
+see `AGENTS.md`).
 **Date:** 2026-08-30
 
-> The decision below stands; the code does not do it yet. Every note still
-> reaches the prompt regardless of who wrote it. Read "does" in the Decision
-> section as "will".
+> Written a day before the fix landed. `formatSavedBandContextLine` (in
+> `services/api/src/savedBandContext.ts`) now omits the `note: …` segment
+> whenever `noteEdited` is `false`, and the Category/Note sheet
+> (`apps/desktop/src/ui/ChatAppView.ts`) lets the user actually edit a note,
+> setting `noteEdited: true` on save. The "Context" section below describes
+> the bug as it was before this landed; the "Decision" section is now the
+> live behaviour, not a plan.
 
 ## Context
 
@@ -24,9 +31,11 @@ many queries this narrows recommendations toward the model's own vocabulary,
 and the narrowing is invisible: nothing distinguishes a note the user wrote from
 one the system pre-filled.
 
-Notes are currently not editable anywhere in the UI, so in practice *every*
-note in the system is machine-written. The `···` overflow that the design spec
-assigns to Category/Note was never implemented, which is why this went unnoticed.
+At the time this ADR was written, notes were not editable anywhere in the UI,
+so in practice *every* note in the system was machine-written. The `···`
+overflow that the design spec assigns to Category/Note had not been
+implemented yet, which is why this went unnoticed. Both gaps closed in #192,
+the same change that implemented the decision below.
 
 ## Decision
 
