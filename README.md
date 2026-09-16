@@ -53,6 +53,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
 | [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
+| [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
@@ -228,7 +229,9 @@ Common optional variables:
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring — despite the name, it's sent to Anthropic's API (Claude judge model), not Mistral |
+| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring (Mistral) |
+| `MISTRAL_JUDGE_ENDPOINT` | `https://api.mistral.ai/v1/chat/completions` | Set to `https://api.eu.mistral.ai/v1/chat/completions` to keep judge traffic in the EU |
+| `MISTRAL_JUDGE_MODEL` | `mistral-large-latest` | Judge model; also recorded as `model_id` on every score row |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 

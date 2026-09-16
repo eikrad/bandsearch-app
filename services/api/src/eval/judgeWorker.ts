@@ -183,7 +183,7 @@ export function createJudgeWorker({
               discoveryValue: typeof score.discovery_value === "number" ? score.discovery_value : undefined,
               judgeReasoning: typeof score.reasoning === "string" ? score.reasoning : undefined,
               judgePromptHash: promptHash,
-              modelId: "claude-opus-4-8",
+              modelId: JUDGE_MODEL,
             });
           }),
         );

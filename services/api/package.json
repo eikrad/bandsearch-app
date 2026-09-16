@@ -15,16 +15,16 @@
   "dependencies": {
     "@langchain/langgraph": "^1.4.13",
     "@langchain/google-genai": "^2.3.0",
-    "@libsql/client": "^0.17.4",
+    "@libsql/client": "^0.18.0",
     "@tursodatabase/sync": "^0.7.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.5.2",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }

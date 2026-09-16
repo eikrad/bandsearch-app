@@ -23,16 +23,18 @@ plan, not a second permanent structure.
 2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
    Android, the deploy gate and the eval data, and it is the one thing claimed
    as infrastructure that has never actually been run.
-3. **The card action work — #151–#154 and #163–#167.** Designed in
-   `docs/adr/0002-*` and the action-row policy; not yet built. Start with
-   #164 (rating becomes nullable), since #151, #152 and #165 all sit on top of
-   it. Independent of the infrastructure work, so it can fill gaps while
-   waiting on a deployment.
-
-   Six of these are live defects, not future work: a dead `···` button on
-   every card, Save and Rate writing hidden ratings, the same artist storable
-   twice and then double-counted in the prompt, and the model reading its own
-   text back as the user's preference.
+3. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
+   (`feature/card-action-redesign`, merged 2026-08-31) built rating stars, the
+   Save/Saved toggle, and the Category/Note sheet behind the `···` button —
+   closing #151 (dead `···` button), #152 (Save/Rate hidden on mobile), #163
+   (duplicate saves), #165 (Category/Note uneditable) and #166 (ADR 0002: only
+   an edited note reaches the prompt). #153, #155, #164, #167 and #175 were
+   already closed on GitHub before that PR. **Still open: #154** (card action
+   touch targets are ~32px, below the 44px minimum) — no `minWidth`/`minHeight`
+   sizing was added for the action row in #192. Several of the closed-in-code
+   issues (#151, #152, #163, #165, #166) remain open on GitHub only because
+   this repo's PRs target `staging`, where `Closes #N` never auto-fires — see
+   `AGENTS.md`; close them by hand once this entry is read.
 4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
    This is the first real proof the updater works; the pipeline has only ever
    run against a throwaway `v0.2.1-test` tag.
@@ -55,7 +57,7 @@ Phase 10  signing key + GitHub secrets
 
 Independent, can start any time:
  · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
- · Phase 10 macOS check      · the card-action work (#151-#154, #163-#167)
+ · Phase 10 macOS check      · #154, the one card-action item left (44px touch targets)
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that
@@ -181,7 +183,8 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
 - [x] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input ✓ Done
-- [x] Step 9: Golden dataset — `services/eval/golden-set.json` with 10 curated queries including `nuggets` and `antiBands`; `run-golden.ts` computing `antiBandRate@8` (CI fail if > 50%), `nuggetCoverage@8`, and `precision@8` (informational trend); `--strict` flag for zero-tolerance anti-band gate ✓ Done
+- [x] Step 9: Golden dataset — `services/eval/golden-set.json` with 10 curated queries including sonic-property `nuggets` and `antiBands`; `run-golden.ts` computing `antiBandRate@8` (CI fail if > 50%; `--strict` for zero-tolerance) and `nuggetCoverage@8` against MusicBrainz tags/genres (fail below per-entry `minNuggetCoverage`) ✓ Done. **Corrected 2026-09-16:** (1) removed `precision@8`, which duplicated `nuggetCoverage@8` under a misnomer; (2) rewired `nuggets` from band names → sonic properties scored against MB tags — the band-name version was exact-match recall, which the design explicitly rejected. No `expectedBands` field; see `docs/architecture/2026-05-29-eval-architecture.md`
+- [ ] Step 9b: Persist golden-run snapshots — `run-golden.ts` currently prints PASS/FAIL and exits; there is no history of `nuggetCoverage@8` / `antiBandRate@8` to compare before/after prompt or pipeline changes. Live eval has `eval_baselines` + dashboard deltas; golden regression needs the same idea (JSON report and/or store + diff against previous run). See #209.
 
 **Future (after data exists) — blocked by Phase 9.5:** the data this depends on only
 accumulates once the eval layer runs against a real deployment.

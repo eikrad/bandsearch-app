@@ -172,7 +172,8 @@ test("createJudgeWorker: sends all bands in one batched request (not per-band)",
 });
 
 test("createJudgeWorker: parses batch response and upserts scores per band", async () => {
-  const fetchStub = async () => jsonResponse(successResponseBody);
+  const fetchCalls: FetchCall[] = [];
+  const fetchStub = recordingFetch(fetchCalls, successResponseBody);
 
   const repo = createInMemoryEvalRepository();
   const eventId = await repo.logEvent({
@@ -200,7 +201,11 @@ test("createJudgeWorker: parses batch response and upserts scores per band", asy
   assert.equal(wittr.evidenceQuality, 0.7);
   assert.equal(wittr.discoveryValue, 0.85);
   assert.ok(typeof wittr.judgePromptHash === "string" && wittr.judgePromptHash.length > 0, "judgePromptHash should be set");
-  assert.equal(wittr.modelId, "claude-opus-4-8");
+  // Recorded provenance must name the model that was actually called. This used
+  // to assert a hardcoded "claude-opus-4-8" and kept passing after the judge
+  // moved to Mistral, so every score row claimed a model that never saw it.
+  assert.equal(wittr.modelId, String(requestBody(fetchCalls[0]).model));
+  assert.match(String(wittr.modelId), /mistral/i);
 
   const deafheaven = scores.find((s) => s.bandName === "Deafheaven");
   assert.ok(deafheaven, "Deafheaven score should exist");
