@@ -552,18 +552,19 @@ _(can run in parallel with 8.3–8.8 immediately)_
 
 **Build:**
 1. `golden-set.json` — 10–15 entries:
-   `{ id, query, obscurityTarget, expectedBands, antiBands, nuggets, notes }`.
+   `{ id, query, obscurityTarget, antiBands, nuggets, minNuggetCoverage, notes }` (`expectedBands` dropped — see eval architecture doc, 2026-09-16).
    Cover: blackgaze, death-doom, drone, jazz-adjacent, folk-adjacent,
    noise rock — varied obscurity targets.
 2. `run-golden.ts` — exported pure metric functions (testable without API):
-   `computePrecisionAtK(expected, results, k)`,
    `computeAntiBandRate(antiBands, results, k)`,
-   `computeNuggetCoverage(nuggets, results, k)`.
+   `computeNuggetCoverage(nuggets, tagSets, k)` (nuggets = sonic properties;
+   tagSets = MusicBrainz tags/genres per top-k band).
    Script: reads `BANDSEARCH_API_URL` (default `http://localhost:3001`); calls
-   `POST /recommendations` per query; prints results table. Exits 1 only if
-   any `antiBandRate > 0.5` (catastrophic gate — softer than zero tolerance
-   until golden set matures). Warns (no exit) when `precision@8` drops >10%.
-   Use `--strict` flag to opt into zero-tolerance anti-band gate.
+   `POST /recommendations` per query; resolves MB tags via `musicbrainzArtistId`;
+   prints results table. Exits 1 if any `antiBandRate > 0.5` or
+   `nuggetCoverage < minNuggetCoverage`. Use `--strict` for zero-tolerance
+   anti-band gate. (`precision@8` / `computePrecisionAtK` removed 2026-09-16 —
+   see eval architecture doc.)
 3. `services/eval/package.json` + add to `pnpm-workspace.yaml`.
 
 **Tests (write first):**

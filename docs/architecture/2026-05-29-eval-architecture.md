@@ -27,7 +27,7 @@ The system must be observable in a developer dashboard, comparable across code c
 - Judge calibration / meta-evaluation (Step 5b)
 - Minimal user feedback signal (Layer 3)
 - Developer dashboard with baseline comparison, funnel panel, human–LLM alignment
-- Golden dataset for regression testing (P@8, antiBandRate, nuggetCoverage)
+- Golden dataset for regression testing (antiBandRate, nuggetCoverage against MB tags)
 - Obscurity target setting in the UI
 - Pipeline versioning on recommendation events
 
@@ -329,40 +329,38 @@ File: `services/eval/golden-set.json`
 ```json
 [
   {
-    "id": "gs-001",
-    "query": "Bands like Alcest and Deafheaven, dreamy black metal",
+    "id": "blackgaze-underground",
+    "query": "atmospheric black metal with shoegaze elements, dreamy and ethereal",
     "obscurityTarget": "underground",
-    "expectedBands": ["Lantlôs", "Amesoeurs", "Heretoir", "Harakiri for the Sky"],
-    "antiBands": ["Opeth", "Radiohead"],
-    "nuggets": ["post-black metal", "shoegaze-influenced", "French or Cascadian school"],
+    "nuggets": ["blackgaze", "shoegaze", "post-black metal"],
     "minNuggetCoverage": 0.5,
-    "notes": "Post-black metal, Cascadian/French school. Anti-bands signal lazy mainstream fallback."
+    "antiBands": ["Coldplay", "Radiohead", "Sigur Rós", "Deafheaven"],
+    "notes": "Deafheaven is mainstream enough to be an anti-band at underground target"
   }
 ]
 ```
 
-**`expectedBands`** — example bands that illustrate the direction a good pipeline should take. **Not used for automated pass/fail.** Many equally valid answers exist for any query; exact-match metrics against this list would penalise correct responses that happen to pick different but equivalent bands. Used as calibration anchors in `judge-calibration.json` so human labellers know what "good" looks like.
+**`antiBands`** — explicitly too well-known (or plainly off-genre) bands that reveal when the pipeline takes an easy path instead of searching. Hard negatives: a hit here is an unambiguous failure for the obscurity/genre target. Defensible because "this stadium act must not appear" is a claim we can stand behind; "these specific bands must appear" is not.
 
-**`antiBands`** — explicitly too well-known bands that reveal when the pipeline takes an easy path instead of searching. Hard constraint: any hit here is a clear, unambiguous failure.
+**`nuggets`** — atomic sonic properties (genre, era, trait) inspired by nugget evaluation (NuggetRecall / TREC methodology). Hand-written from the query's sonic intent, using vocabulary that can match real MusicBrainz tags/genres. This is the primary positive quality gate: it tests whether the pipeline covered the *right sonic space*, not whether it named specific bands. Manual curation for v1; full AutoNuggetizer pipeline deferred.
 
-**`nuggets`** — atomic sonic properties (genre, era, trait) inspired by nugget evaluation (NuggetRecall / TREC methodology). Evaluated against MusicBrainz genres/tags of recommended bands. This is the primary positive quality gate: it tests whether the pipeline covered the *right sonic space*, not whether it named specific bands. Manual curation for v1; full AutoNuggetizer pipeline deferred.
+**No `expectedBands`.** Earlier drafts carried a reference band list for calibration. That field was never a pass/fail gate, never fed `judge-calibration.json` (a separate dataset with no query overlap), and is indefensible over an open-ended search of all recorded music — many equally valid answers exist for any query. Dropped rather than kept as dead weight.
+
+**How `nuggetCoverage@8` is scored:** for each top-8 recommendation with a `musicbrainzArtistId`, the runner looks up that artist's MB tags+genres (memoized; spacing is enforced by `createMusicBrainzClient`'s process-wide ~1.1s gate). Golden entries run **sequentially**, and the runner waits ~1.2s after `/recommendations` returns before tag lookups so the API and eval don't stack on the same MusicBrainz IP. A nugget counts as covered when some tag *contains* it on whole-word boundaries after normalizing case/hyphens/punctuation — deliberately one-directional, so a "post-black metal" tag covers the nugget "black metal", but not the reverse. If no top-8 band yields any tags, the coverage gate is skipped (availability failure, not a quality failure).
 
 **Metrics for `run-golden.ts`:**
 
 | Metric | Description | CI gate |
 |--------|-------------|---------|
-| `antiBandRate@8` | Fraction of top-8 that hit `antiBands` | **Fail if > 0** |
-| `nuggetCoverage@8` | Fraction of `nuggets` covered by recommended bands' MB genres/tags | **Fail if below `minNuggetCoverage`** |
-| ~~`precision@8`~~ | ~~Fraction of `expectedBands` in top-8 (exact name match)~~ | **Removed 2026-09-16 — see below** |
-| `ndcg@8` (optional) | Ranking-aware partial credit for expected bands | Informational only |
+| `antiBandRate@8` | Fraction of top-8 that hit `antiBands` | **Fail if > 0.5**; `--strict` fails if > 0 |
+| `nuggetCoverage@8` | Fraction of `nuggets` covered by recommended bands' MB genres/tags | **Fail if below `minNuggetCoverage`** (default 0.5) |
+| ~~`precision@8`~~ | ~~Exact-name recall against a band list, misnamed as precision~~ | **Removed 2026-09-16 — see below** |
 
-**Rationale for demoting `precision@8`:** Band recommendations are an open-ended retrieval task — there is no single correct answer. A pipeline that returns Celeste and Les Discrets instead of Lantlôs and Amesoeurs may be equally correct. Exact-match precision against a predefined list would generate false regression failures and reward memorisation over genuine quality. `nuggetCoverage@8` and `antiBandRate@8` test the *properties* a response must have rather than comparing it to a reference answer.
+**Removed 2026-09-16 (`precision@8`).** The metric never worked as specified. An `expectedBands` field was never added to `GoldenEntry`, so `computePrecisionAtK` was called with `nuggets` — which at the time also held band names. It divided hits by the size of that set rather than by `k`, computing recall@k under a precision name and returning the exact same number as `nuggetCoverage@8`. Two names, one metric. Dividing by `k` would not have salvaged it, and exact-match band recall is the wrong shape for open-ended retrieval anyway. Removed.
 
-**Removed 2026-09-16.** The metric never worked as specified. `expectedBands` was never added to `GoldenEntry`, so `computePrecisionAtK` was called with `nuggets` — the same reference set `computeNuggetCoverage` uses. It also divided hits by the size of that set rather than by `k`, which is recall@k, not precision@k. The two functions therefore returned the same number for every entry, and the report printed it twice under different names.
+**Corrected 2026-09-16 (`nuggetCoverage@8`).** After removing `precision@8`, the surviving metric was still wrong: `golden-set.json` still stored band names in `nuggets`, and the runner still matched them against `result.artist`. That is exact-name recall — precisely the metric the design argued against. Rewired: `nuggets` are sonic properties; coverage is scored against MusicBrainz tags/genres fetched by the runner from each recommendation's `musicbrainzArtistId`.
 
-Dividing by `k` would not have salvaged it: with three nuggets and `k=8`, true precision@8 caps at 0.375, so the 0.5 warning threshold could never be reached. Given the rationale above already argues that exact-match precision is the wrong shape for this task, the duplicate was removed rather than repaired. `nuggetCoverage@8` and `antiBandRate@8` remain.
-
-**Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query and computes all metrics. Run manually before/after significant prompt changes; only `antiBandRate@8` and `nuggetCoverage@8` are hard pass/fail gates.
+**Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query, resolves MB tags for the top-8, and computes both metrics. Run manually before/after significant prompt changes.
 
 ---
 
@@ -388,7 +386,7 @@ POST /eval/baseline        — create a named snapshot of current aggregated met
 │ Relevance        │ Obscurity Fit    │ Evidence Quality  │ Discovery Value │
 │ 0.74  ↑ +0.06   │ 0.68  ↓ −0.03  │ 0.81  ↑ +0.02   │ 0.71  → +0.00  │
 ├──────────────────┼──────────────────┼───────────────────┼─────────────────┤
-│ Save Rate        │ "Too Mainstream" │ Search Src Quality│ Golden Set P@8  │
+│ Save Rate        │ "Too Mainstream" │ Search Src Quality│ Golden Nugget@8 │
 │ 23%   ↑ +4%     │ 18%             │ 0.64  ↓ −0.05   │ 5/10  →        │
 └──────────────────┴──────────────────┴───────────────────┴─────────────────┘
 ```
@@ -442,8 +440,8 @@ services/api/src/eval/
     dashboard.js           — Chart.js (CDN) + fetch calls, no build step
 
 services/eval/
-  golden-set.json          — manually curated query → expected bands + nuggets dataset
-  run-golden.ts            — CI-runnable regression script (P@8, antiBandRate, nuggetCoverage)
+  golden-set.json          — curated query → sonic nuggets + antiBands dataset
+  run-golden.ts            — regression script (antiBandRate, nuggetCoverage vs MB tags)
   judge-calibration.json   — hand-labeled set for meta-evaluation
   judge-unit-tests.json    — GroUSE-style edge cases for judge validation
 ```
@@ -477,7 +475,7 @@ Each step is independently deployable and builds on the previous one.
 | 6 | `eval_baselines` + snapshot endpoint | Small addition once judge scores exist to compare against. Filter by `pipeline_version`. |
 | 7 | Developer dashboard | HTML + Chart.js: overview, funnel panel, human–LLM alignment, trend charts. |
 | 8 | User feedback button | Minimal UI change. Enriches data but not required for earlier steps. |
-| 9 | Golden dataset (10–15 queries) | Manual curation. `run-golden.ts` with P@8, antiBandRate@8, nuggetCoverage@8 gates. |
+| 9 | Golden dataset (10–15 queries) | Manual curation. `run-golden.ts` with antiBandRate@8 and nuggetCoverage@8 (MB tags) gates. |
 
 ---
 
@@ -499,5 +497,5 @@ Valuable ideas from eval research, explicitly out of scope for Phase 8:
 
 - **Turso backing for eval tables?** Yes — eval tables follow the same store as preferences (`PREFERENCE_STORE=turso`) so data stays together across devices.
 - **First baseline seed size?** Wait for 30–50 events at a stable `pipeline_version` before the first snapshot is meaningful.
-- **Golden set in CI?** Start manual with binary pass/fail gates (`antiBandRate@8` = 0, `nuggetCoverage@8` ≥ threshold). Move to CI once the API is stable in a test environment.
+- **Golden set in CI?** Start manual with binary pass/fail gates (`antiBandRate@8` ≤ 0.5 by default / `= 0` under `--strict`, `nuggetCoverage@8` ≥ `minNuggetCoverage`). Move to CI once the API is stable in a test environment.
 - **Pipeline versioning?** Yes — log `pipeline_version`, prompt hashes, and model IDs on every event. Baseline labels should include version for apples-to-apples comparison.

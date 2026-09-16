@@ -69,9 +69,9 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   const researchMaxInitialSearches = parseNumber(env.RESEARCH_MAX_INITIAL_SEARCHES, 6);
   const researchMaxReflectionSearches = parseNumber(env.RESEARCH_MAX_REFLECTION_SEARCHES, 4);
   const researchTotalSearchBudget = parseNumber(env.RESEARCH_TOTAL_SEARCH_BUDGET, 10);
-  // Default budget is generous because the Brave Free plan throttles to 1 req/sec,
-  // so a multi-query research run spends several seconds just waiting between calls.
-  const researchTimeoutMs = parseNumber(env.RESEARCH_TIMEOUT_MS, 45000);
+  // Default budget must cover MusicBrainz's ~1 req/s IP limit: verifying ~25
+  // candidates is often search+lookup each (~55s) plus Brave + LLM work.
+  const researchTimeoutMs = parseNumber(env.RESEARCH_TIMEOUT_MS, 180000);
   const researchTargetVerifiedCandidates = parseNumber(env.RESEARCH_TARGET_VERIFIED_CANDIDATES, 8);
 
   return {

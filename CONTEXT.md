@@ -38,7 +38,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Only active when `MISTRAL_API_KEY` is set; never on the critical response path.
 
-- **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with expected `nuggets` (bands that should appear) and `antiBands` (bands that should not). The eval runner (`run-golden.ts`) computes `antiBandRate@8` and fails CI if it exceeds 50%.
+- **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with `nuggets` (atomic sonic properties — genre, era, trait) and `antiBands` (bands that must not appear). The eval runner (`run-golden.ts`) scores `nuggetCoverage@8` against MusicBrainz tags/genres of the top-8 recommendations (fail below per-entry `minNuggetCoverage`, default 0.5) and `antiBandRate@8` (fail if > 50%; `--strict` fails on any hit). There is no `expectedBands` list: open-ended retrieval has no single correct answer set.
 
 - **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
 

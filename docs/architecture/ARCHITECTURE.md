@@ -177,7 +177,7 @@ flowchart TD
 
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 45 s — generous because the Brave Search free plan throttles to 1 request/second). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 180 s — needs headroom for MusicBrainz's ~1 req/s IP limit when verifying many candidates, and for Brave Search's 1 req/s free-plan throttle). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
 
 ---
 

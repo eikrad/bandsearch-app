@@ -32,7 +32,7 @@ test("validateRuntimeEnv returns defaults for minimal env", () => {
   assert.equal(config.researchMaxInitialSearches, 6);
   assert.equal(config.researchMaxReflectionSearches, 4);
   assert.equal(config.researchTotalSearchBudget, 10);
-  assert.equal(config.researchTimeoutMs, 45000);
+  assert.equal(config.researchTimeoutMs, 180000);
   assert.equal(config.researchTargetVerifiedCandidates, 8);
   assert.equal(config.port, 3001);
   assert.equal(config.musicBrainzTimeoutMs, 5000);
