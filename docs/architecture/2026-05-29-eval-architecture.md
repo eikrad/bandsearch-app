@@ -353,10 +353,14 @@ File: `services/eval/golden-set.json`
 |--------|-------------|---------|
 | `antiBandRate@8` | Fraction of top-8 that hit `antiBands` | **Fail if > 0** |
 | `nuggetCoverage@8` | Fraction of `nuggets` covered by recommended bands' MB genres/tags | **Fail if below `minNuggetCoverage`** |
-| `precision@8` | Fraction of `expectedBands` in top-8 (exact name match) | Informational only — tracked as trend, never a CI gate |
+| ~~`precision@8`~~ | ~~Fraction of `expectedBands` in top-8 (exact name match)~~ | **Removed 2026-09-16 — see below** |
 | `ndcg@8` (optional) | Ranking-aware partial credit for expected bands | Informational only |
 
 **Rationale for demoting `precision@8`:** Band recommendations are an open-ended retrieval task — there is no single correct answer. A pipeline that returns Celeste and Les Discrets instead of Lantlôs and Amesoeurs may be equally correct. Exact-match precision against a predefined list would generate false regression failures and reward memorisation over genuine quality. `nuggetCoverage@8` and `antiBandRate@8` test the *properties* a response must have rather than comparing it to a reference answer.
+
+**Removed 2026-09-16.** The metric never worked as specified. `expectedBands` was never added to `GoldenEntry`, so `computePrecisionAtK` was called with `nuggets` — the same reference set `computeNuggetCoverage` uses. It also divided hits by the size of that set rather than by `k`, which is recall@k, not precision@k. The two functions therefore returned the same number for every entry, and the report printed it twice under different names.
+
+Dividing by `k` would not have salvaged it: with three nuggets and `k=8`, true precision@8 caps at 0.375, so the 0.5 warning threshold could never be reached. Given the rationale above already argues that exact-match precision is the wrong shape for this task, the duplicate was removed rather than repaired. `nuggetCoverage@8` and `antiBandRate@8` remain.
 
 **Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query and computes all metrics. Run manually before/after significant prompt changes; only `antiBandRate@8` and `nuggetCoverage@8` are hard pass/fail gates.
 

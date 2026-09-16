@@ -1,43 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computePrecisionAtK, computeAntiBandRate, computeNuggetCoverage } from "./run-golden.ts";
+import { computeAntiBandRate, computeNuggetCoverage } from "./run-golden.ts";
 
-// ─── computePrecisionAtK ──────────────────────────────────────────────────────
-
-test("computePrecisionAtK returns 1.0 when all expected bands found in top-k", () => {
-  const expected = ["Alcest", "Fen", "Les Discrets"];
-  const results = ["Alcest", "Fen", "Les Discrets", "Deafheaven", "Bosse-de-Nage"];
-  assert.equal(computePrecisionAtK(expected, results, 8), 1.0);
-});
-
-test("computePrecisionAtK returns 0 when no expected bands in top-k", () => {
-  const expected = ["Alcest", "Fen"];
-  const results = ["Deafheaven", "Bosse-de-Nage", "Wolves in the Throne Room"];
-  assert.equal(computePrecisionAtK(expected, results, 8), 0);
-});
-
-test("computePrecisionAtK returns partial match ratio", () => {
-  const expected = ["Alcest", "Fen", "Les Discrets", "Lantlôs"];
-  const results = ["Alcest", "Fen", "Deafheaven", "Bosse-de-Nage"];
-  assert.equal(computePrecisionAtK(expected, results, 8), 0.5);
-});
-
-test("computePrecisionAtK only looks at first k results", () => {
-  const expected = ["Alcest"];
-  const results = ["Deafheaven", "Fen", "Alcest", "Les Discrets"];
-  // k=2: only looks at Deafheaven, Fen — Alcest is at index 2, outside k=2
-  assert.equal(computePrecisionAtK(expected, results, 2), 0);
-  // k=3: Alcest is in top 3
-  assert.equal(computePrecisionAtK(expected, results, 3), 1.0);
-});
-
-test("computePrecisionAtK returns 0 for empty results", () => {
-  assert.equal(computePrecisionAtK(["Alcest"], [], 8), 0);
-});
-
-test("computePrecisionAtK returns 0 for empty expected", () => {
-  assert.equal(computePrecisionAtK([], ["Alcest"], 8), 0);
-});
+// computePrecisionAtK and its tests were removed: it divided hits by the size of
+// the reference set rather than by k, so it computed recall@k under a precision
+// name — and it was called with the same `nuggets` list as computeNuggetCoverage,
+// making the two functions return identical values. The cases below cover the
+// surviving metric.
 
 // ─── computeAntiBandRate ──────────────────────────────────────────────────────
 
@@ -97,6 +66,10 @@ test("computeNuggetCoverage only considers top-k results", () => {
   const results = ["Deafheaven", "Fen", "Alcest"];
   // k=2: Alcest is not in top 2
   assert.equal(computeNuggetCoverage(nuggets, results, 2), 0);
+});
+
+test("computeNuggetCoverage returns 0 for empty results", () => {
+  assert.equal(computeNuggetCoverage(["Alcest"], [], 8), 0);
 });
 
 test("computeNuggetCoverage returns 0 for empty nuggets", () => {

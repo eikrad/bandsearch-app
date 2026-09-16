@@ -17,20 +17,23 @@ export type GoldenResult = {
   id: string;
   query: string;
   resultNames: string[];
-  precisionAt8: number;
   antiBandRateAt8: number;
   nuggetCoverageAt8: number;
   passed: boolean;
   warnings: string[];
 };
 
-export function computePrecisionAtK(expected: string[], results: string[], k: number): number {
-  if (expected.length === 0 || results.length === 0) return 0;
-  const topK = results.slice(0, k);
-  const normalizedExpected = new Set(expected.map((n) => n.toLowerCase()));
-  const hits = topK.filter((r) => normalizedExpected.has(r.toLowerCase())).length;
-  return hits / expected.length;
-}
+// `precision@8` used to live here. It was designed (see
+// docs/architecture/2026-05-29-eval-architecture.md) to score an `expectedBands`
+// list, but that field was never added to GoldenEntry, so the call passed
+// `nuggets` instead — and since it divided hits by the size of the reference set
+// rather than by k, it computed recall@k under a precision name and returned the
+// exact same number as nuggetCoverage@8. Two names, one metric.
+//
+// Dividing by k instead would not rescue it: with three nuggets and k=8, true
+// precision@8 caps at 0.375, so the 0.5 warning threshold could never be met.
+// The design doc already argues that exact-match precision is the wrong shape
+// for open-ended retrieval, so the duplicate is removed rather than repaired.
 
 export function computeAntiBandRate(antiBands: string[], results: string[], k: number): number {
   if (results.length === 0) return 0;
@@ -90,19 +93,18 @@ async function runGoldenEntry(
   const nuggets = entry.nuggets ?? [];
   const antiBands = entry.antiBands ?? [];
 
-  const precisionAt8 = computePrecisionAtK(nuggets, resultNames, k);
   const antiBandRateAt8 = computeAntiBandRate(antiBands, resultNames, k);
   const nuggetCoverageAt8 = computeNuggetCoverage(nuggets, resultNames, k);
 
   const warnings: string[] = [];
-  if (precisionAt8 < 0.5 && nuggets.length > 0) {
-    warnings.push(`precision@8 ${(precisionAt8 * 100).toFixed(0)}% is below 50%`);
+  if (nuggetCoverageAt8 < 0.5 && nuggets.length > 0) {
+    warnings.push(`nuggetCoverage@8 ${(nuggetCoverageAt8 * 100).toFixed(0)}% is below 50%`);
   }
 
   // catastrophic gate: anti-band rate > 0.5 fails the entry
   const passed = antiBandRateAt8 <= 0.5;
 
-  return { id: entry.id, query: entry.query, resultNames, precisionAt8, antiBandRateAt8, nuggetCoverageAt8, passed, warnings };
+  return { id: entry.id, query: entry.query, resultNames, antiBandRateAt8, nuggetCoverageAt8, passed, warnings };
 }
 
 function printTable(results: GoldenResult[]): void {
@@ -112,7 +114,6 @@ function printTable(results: GoldenResult[]): void {
     console.log(`${status}  ${r.id}`);
     console.log(`  Query:       ${r.query}`);
     console.log(`  Results:     ${r.resultNames.slice(0, 5).join(", ")}${r.resultNames.length > 5 ? "…" : ""}`);
-    console.log(`  P@8:         ${(r.precisionAt8 * 100).toFixed(0)}%`);
     console.log(`  AntiBand@8:  ${(r.antiBandRateAt8 * 100).toFixed(0)}%`);
     console.log(`  Nugget@8:    ${(r.nuggetCoverageAt8 * 100).toFixed(0)}%`);
     for (const w of r.warnings) {
