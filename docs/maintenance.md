@@ -150,6 +150,16 @@ No other npm, Rust, or Python major was outstanding this cycle.
   was touched or regenerated — `pnpm` was not invoked, nothing in `pnpm-lock.yaml` was changed.
   Carrying the note forward again: still the repo owner's call whether to adopt pnpm for real or
   drop the file.
+- **`.husky/pre-commit` runs under whatever Node the shell defaults to, not whatever `nvm use`
+  selected earlier in the session — recurred this cycle, same as 2026-08-26.** The first commit
+  attempt ran the hook's `npm test` under this sandbox's default Node 22 (a separate shell
+  invocation from the one that had Node 26 on `PATH`), hit the exact `apps/desktop/test/
+  browser-entry.test.ts` `bootBrowserDesktopApp is not a function` `mock.module` failure documented
+  in 2026-08-19/2026-08-26, and aborted (`husky - pre-commit script failed (code 1)`) — a
+  session-mechanics quirk, not a new repo issue (`npm run ci` had passed clean under Node 26 moments
+  before). Re-ran the commit with Node 26 explicitly on `PATH` in the same invocation as `git
+  commit`, which let the hook pass and the commit land normally. Worth remembering for the commit
+  step specifically in future cycles, not just the baseline-check step.
 - **`.nvmrc` (`26`) and `.python-version` (`3.13`) both present and consistent with `ci.yml`** —
   matched without incident this cycle; sandbox Node install via `nvm install 26` resolved a
   correctly-labeled `v26.10.0` (no repeat of the 2026-08-26 alpha-mislabeling artifact).
