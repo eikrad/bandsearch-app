@@ -1,0 +1,106 @@
+name: Release
+
+# On every push to main, release-please keeps a release PR up to date: the next
+# version (from Conventional Commit prefixes) in every package.json,
+# tauri.conf.json, Cargo.toml and pyproject.toml, the lockfiles synced to it, and
+# the CHANGELOG entry. Merging that PR:
+#   1. tags vX.Y.Z and creates a draft GitHub release with the notes,
+#   2. builds the installers into it (release.yml),
+#   3. publishes it as the latest release once every build passed, which is when
+#      the in-app updater (releases/latest/download/latest.json) offers it,
+#   4. opens a PR that merges main back into staging.
+# See docs/releasing.md.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_id: ${{ steps.release_id.outputs.id }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          # A PAT, not GITHUB_TOKEN: pull requests opened with GITHUB_TOKEN do not
+          # trigger workflows, so CI would never run on the release PR.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Read the draft release's id
+        id: release_id
+        if: steps.release.outputs.release_created
+        run: |
+          # upload_url looks like https://uploads.github.com/repos/o/r/releases/<id>/assets{?name,label}
+          echo "id=$(sed -E 's#.*/releases/([0-9]+)/assets.*#\1#' <<< '${{ steps.release.outputs.upload_url }}')" >> "$GITHUB_OUTPUT"
+
+      # release-please edits the version files but not the lockfiles, which also
+      # record the workspace versions.
+      - name: Check out the release PR
+        if: steps.release.outputs.pr
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      - uses: actions/setup-node@v7
+        if: steps.release.outputs.pr
+        with:
+          node-version: 26
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.release.outputs.pr
+      - uses: astral-sh/setup-uv@v7
+        if: steps.release.outputs.pr
+      - name: Sync lockfiles with the new version
+        if: steps.release.outputs.pr
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          cargo update --workspace --manifest-path apps/desktop/src-tauri/Cargo.toml
+          uv lock
+          if git diff --quiet; then
+            echo "Lockfiles already match."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: sync lockfiles with the release version"
+          git push
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      release_id: ${{ needs.release-please.outputs.release_id }}
+    secrets: inherit
+
+  publish:
+    needs: [release-please, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release as latest
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          gh release edit "${{ needs.release-please.outputs.tag_name }}" \
+            --repo "${{ github.repository }}" --draft=false --prerelease=false --latest
+      - name: Open a PR to merge the release back into staging
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          gh pr create --repo "${{ github.repository }}" --base staging --head main \
+            --title "chore: merge release ${{ needs.release-please.outputs.tag_name }} back into staging" \
+            --body "Brings the version bump and CHANGELOG of ${{ needs.release-please.outputs.tag_name }} from main into staging." \
+            || echo "A back-merge PR is already open."
