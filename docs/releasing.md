@@ -22,6 +22,20 @@ messages. Nobody edits version numbers by hand.
       (`releases/latest/download/latest.json`) offer it to users.
    4. A pull request merging `main` back into `staging` is opened. Merge it too.
 
+Android (Phase 11, see `docs/superpowers/plans/2026-08-30-android.md`) rides the
+same pipeline once built — no separate release cycle:
+
+- Same workflow run, same `vX.Y.Z` tag: the signed APK is another artifact
+  alongside the Linux/Windows/macOS installers, not a second process.
+- `versionCode` is computed from that tag (`major*10000 + minor*100 + patch`),
+  never hand-set.
+- The F-Droid repo index entry reuses this release's `CHANGELOG.md` section
+  as its changelog, and the README's opening line as the short description —
+  no separate metadata file to update per release.
+- There is no in-app updater on Android (`tauri-plugin-updater` doesn't
+  support it); the F-Droid client on the tester's device handles update
+  notifications once the new index is published.
+
 If a build fails, the release stays a draft and no user sees it. Fix the problem, then
 either re-run the failed jobs or delete the draft and its tag and release again.
 

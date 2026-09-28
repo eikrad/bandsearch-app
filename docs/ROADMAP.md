@@ -325,7 +325,10 @@ mobile handling, the other seven views have none.
       permission denial, no auto-submit of the transcript — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Voice Input section.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
-      `tauri-plugin-updater` does not support Android
+      `tauri-plugin-updater` does not support Android. Release mechanics
+      decided: rides the same release-please pipeline and tag as desktop,
+      `versionCode` derived from semver, F-Droid metadata reused from
+      README.md/CHANGELOG.md — see the spec and `docs/releasing.md`.
 - [ ] Android CI: `minSdkVersion` 29, single production keystore in GitHub
       Actions secrets, pinned NDK version in the release workflow
 
