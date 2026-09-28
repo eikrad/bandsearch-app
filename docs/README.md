@@ -8,6 +8,7 @@ Navigation guide for the `docs/` folder.
 |------|----------------|
 | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | System architecture — graph pipeline, state fields, integrations, storage, auth — with Mermaid diagrams |
 | [ROADMAP.md](ROADMAP.md) | Phase-by-phase feature roadmap with completion status |
+| [superpowers/plans/2026-08-30-android.md](superpowers/plans/2026-08-30-android.md) | Android (Phase 11) spec — platform constraints, decisions and rationale for #156–#159; active, not historical |
 | [adr/0001-prompt-injection-guardrails.md](adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence — bracket-marker envelope and length caps |
 | [adr/0002-machine-written-notes-stay-out-of-the-prompt.md](adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt, not the model's own pre-filled explanation |
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |

@@ -321,8 +321,8 @@ mobile handling, the other seven views have none.
       section for the bug this surfaced).
 - [ ] #156 — mobile layout for the seven views that have none; largest item.
       Navigation decided: bottom tab bar (Chat/Saved/Settings only, back-arrow
-      on edge screens), Settings stays single-scroll, Saved Artists gets a
-      bottom action bar for bulk select — see the spec and
+      on edge screens), Settings stays single-scroll, Saved Artists' style-
+      reference selection bar moves to the bottom — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
 - [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
       Behaviour decided: visible by default, inline dismissible hint on
@@ -331,15 +331,16 @@ mobile handling, the other seven views have none.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android. Release mechanics
       decided: rides the same release-please pipeline and tag as desktop,
-      `versionCode` derived from semver, F-Droid metadata reused from
+      `versionCode` is Tauri's default (derived from semver), F-Droid metadata reused from
       README.md/CHANGELOG.md — see the spec and `docs/releasing.md`.
 - [ ] Android CI: `minSdkVersion` 29, single production keystore in GitHub
       Actions secrets, pinned NDK version in the release workflow
 
-Resolved 2026-09-28 (grilling session, see the spec): offline behaviour shows
-the existing error banner only — no cache, no dedicated screen, and no new
-code, since `apiErrorMessages.ts` already maps a dropped connection to a
-connectivity hint. Hosting is Render Free, accepting the 30–60s cold-start
+Resolved 2026-09-28 (grilling session, see the spec): offline behaviour uses
+the existing paths only (`ConnectingView` at launch, the chat error banner
+mid-session) — no cache, no dedicated screen — but both texts were written
+for the desktop sidecar and need Android-appropriate copy, part of #156.
+Hosting is Render Free, accepting the 30–60s cold-start
 over Fly.io's ~$0.15/month scale-to-zero. Measured while planning: the API
 idles at 61 MB RSS, so a 256MB instance suffices either way.
 

@@ -17,7 +17,8 @@ a cold-start-vs-cost decision, not a capacity one.
 
 **Render Free.** The 30–60s cold-start on a dropped-to-sleep instance is
 accepted as a known, deliberate trade-off in exchange for zero hosting cost,
-over paying Fly.io's ~$0.15/month for a nine-hundred-times-faster wake.
+over paying Fly.io's ~$0.15/month for a roughly 15–200× faster wake
+(~300ms–2s instead of 30–60s).
 
 ## Alternatives considered
 
@@ -45,7 +46,12 @@ remains a US-incorporated company).
   default rather than picking a new one.
 - If the cold-start proves worse in practice than expected (e.g. testers
   abandon the app before it wakes), revisiting this ADR in favour of Fly.io is
-  a config and secrets change, not a re-architecture.
+  a config and secrets change *for the server and the desktop*, not a
+  re-architecture. **Not for Android as long as it compiles in the
+  provider's own hostname** (`bandsearch-api.onrender.com`, #159): every
+  installed APK keeps pointing at the old host until its user updates. Whether
+  to compile in a provider-independent domain instead is open — see the
+  Android spec.
 
 ## Related
 

@@ -27,8 +27,11 @@ same pipeline once built — no separate release cycle:
 
 - Same workflow run, same `vX.Y.Z` tag: the signed APK is another artifact
   alongside the Linux/Windows/macOS installers, not a second process.
-- `versionCode` is computed from that tag (`major*10000 + minor*100 + patch`),
-  never hand-set.
+- `versionCode` is Tauri's default, derived from the version in
+  `tauri.conf.json` (`major*1000000 + minor*1000 + patch`); never hand-set.
+- Test builds (`v0.4.1-test`) are never published to the F-Droid repo: they
+  share the real release's `versionCode`, so a tester who installed one would
+  never be offered the real `v0.4.1`.
 - The F-Droid repo index entry reuses this release's `CHANGELOG.md` section
   as its changelog, and the README's opening line as the short description —
   no separate metadata file to update per release.

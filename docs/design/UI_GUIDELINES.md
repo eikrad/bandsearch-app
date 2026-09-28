@@ -308,12 +308,16 @@ Settings → Chat → Saved Artists — is part of this requirement, not a follo
 
 ### Mobile navigation (locked)
 
+> **Not yet built** — tracked in #156. No view renders a tab bar, back arrow
+> or bottom action bar today; the header still has the two small
+> "Settings" / "Saved" buttons. This section is the target.
+
 Decided in the 2026-09-28 grilling session for #156; mockup:
 [Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ).
 
 - **Bottom tab bar** — three tabs (Chat, Saved Artists, Settings), 44px+
-  touch targets each. Replaces the two small header buttons in
-  `ChatAppView.ts` ("Settings" / "Saved"), which were under the 44px minimum.
+  touch targets each. Is to replace the two small header buttons in
+  `ChatAppView.ts` ("Settings" / "Saved"), which are under the 44px minimum.
 - **Scope — the three tabs above only.** Login, Register, ResetPassword,
   Welcome, Connecting and PrivacyPolicy never show the tab bar.
 - **Back arrow on edge screens.** A single `←` button (44px, top-left of the
@@ -321,11 +325,17 @@ Decided in the 2026-09-28 grilling session for #156; mockup:
   ResetPassword → Login, PrivacyPolicy → Settings. Welcome and Connecting keep
   their own existing flows (Skip/Continue; the "Try again" retry button from
   the Connecting State spec above) and get no back arrow.
-- **Bulk-selection bottom action bar.** `SavedArtistsView`: tapping a card
-  selects it; with 1+ selected, an action bar (Delete / Group / Export)
-  appears directly above the tab bar rather than a top toolbar.
+- **Selection bar at the bottom.** `SavedArtistsView`'s selection exists for
+  one purpose — picking style references — and its bar has one action, "Use
+  as style reference" (`SelectionBar`). On mobile that bar ("N selected · Use
+  as style reference") sits directly above the tab bar instead of in the page
+  flow. Delete stays per card (×), Export and "Group by genre" stay page-level
+  actions; there are no bulk delete/group/export actions.
 
 ### Voice input (locked)
+
+> **Not yet built** — tracked in #157. No mic button, plugin or Settings
+> switch exists today. This section is the target.
 
 Decided in the 2026-09-28 grilling session for #157; mockup:
 [Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ), Chat screen.
