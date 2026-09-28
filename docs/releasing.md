@@ -38,11 +38,11 @@ longer starts a build.
 Before 1.0 (`bump-minor-pre-major` and `bump-patch-for-minor-pre-major` in
 `release-please-config.json`):
 
-| Commit | Next version |
-|---|---|
-| `fix: …` | 0.4.0 → 0.4.1 |
-| `feat: …` | 0.4.0 → 0.4.1 |
-| `feat!: …` or a `BREAKING CHANGE:` footer | 0.4.0 → 0.5.0 |
+| Commit                                                      | Next version          |
+| ----------------------------------------------------------- | --------------------- |
+| `fix: …`                                                    | 0.4.0 → 0.4.1         |
+| `feat: …`                                                   | 0.4.0 → 0.4.1         |
+| `feat!: …` or a `BREAKING CHANGE:` footer                   | 0.4.0 → 0.5.0         |
 | `docs`, `chore`, `build`, `ci`, `test`, `refactor`, `style` | no release on its own |
 
 `feat`, `fix`, `perf`, `security` and `revert` appear in the CHANGELOG; the other types are
