@@ -249,7 +249,7 @@ Deploy the Express API as a Render Web Service.
 The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
 
 **Action:**
-1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`)
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`) — **the example URL above is stale**, the real production host is `bandsearch-api.onrender.com`, confirmed 2026-09-28 while specifying Android's #159 (see `docs/superpowers/plans/2026-08-30-android.md`)
 2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials. ✓ Done (`api_endpoint_url` in `bandsearch/config.json`; localStorage fallback for browser dev)
 3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend. ✓ Done (single `reconcile_sidecar()` invariant: local sidecar runs iff no remote endpoint)
 4. Update `chatClient.ts` and all API callers to use the configured endpoint. ✓ Done (`startDesktopBrowserApp` resolves the endpoint before building the auth/chat clients; `chatClient` already took `apiBaseUrl`, so no change needed there)
@@ -314,7 +314,11 @@ and "responsive layout review" understated the work — only `ChatAppView` has a
 mobile handling, the other seven views have none.
 
 - [ ] #159 — platform-conditional API endpoint default (compiled-in production
-      URL, Settings override kept so self-hosting works)
+      URL, Settings override kept so self-hosting works). Confirmed
+      2026-09-28: the production URL is `https://bandsearch-api.onrender.com`
+      (not `bandsearch.onrender.com`, which several tests and this doc's own
+      Phase 9.4 example use as a placeholder — see the spec's API endpoint
+      section for the bug this surfaced).
 - [ ] #156 — mobile layout for the seven views that have none; largest item.
       Navigation decided: bottom tab bar (Chat/Saved/Settings only, back-arrow
       on edge screens), Settings stays single-scroll, Saved Artists gets a
