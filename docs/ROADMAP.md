@@ -325,7 +325,9 @@ mobile handling, the other seven views have none.
       reference selection bar moves to the bottom — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
 - [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
-      Behaviour decided: visible by default, inline dismissible hint on
+      Behaviour decided: the phone's own `SpeechRecognizer` (not a bundled
+      model), off by default with a third-party notice when turned on, hidden
+      where no recognition service exists, inline dismissible hint on
       permission denial, no auto-submit of the transcript — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Voice Input section.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since

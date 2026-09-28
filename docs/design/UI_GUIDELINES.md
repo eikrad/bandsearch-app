@@ -340,9 +340,20 @@ Decided in the 2026-09-28 grilling session for #156; mockup:
 Decided in the 2026-09-28 grilling session for #157; mockup:
 [Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ), Chat screen.
 
-- **Mic button, visible by default.** Sits in the composer next to Send,
-  44px target. `RECORD_AUDIO` is requested on first tap, never at launch. The
-  Settings voice-input switch is opt-out (hides the button), not opt-in.
+- **Off by default; opt-in with a notice.** The Settings voice-input switch
+  starts off, and the composer has no mic button until it is turned on.
+  Turning it on first shows a notice with "Cancel" / "Turn on": the phone's own
+  speech recognition processes the voice, and depending on the phone that
+  audio may go to a third party (on most phones, Google). Only "Turn on"
+  enables it. *(Revised 2026-09-28 — an earlier version of this section had
+  the button visible by default.)*
+- **Mic button.** Sits in the composer next to Send, 44px target.
+  `RECORD_AUDIO` is requested on the first tap after enabling, never at launch
+  or at the switch.
+- **No recognition service, no control.** If the phone has no speech
+  recognition service (`SpeechRecognizer.isRecognitionAvailable()` is false —
+  common on phones without Google services), neither the mic button nor the
+  Settings switch is rendered.
 - **Permission denied — inline hint, not a modal.** A dismissible banner
   above the composer: "Microphone access denied — enable it in Settings." The
   button stays visible but visibly inactive; tapping it again while still
