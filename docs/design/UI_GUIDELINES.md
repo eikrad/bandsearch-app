@@ -325,6 +325,22 @@ Decided in the 2026-09-28 grilling session for #156; mockup:
   selects it; with 1+ selected, an action bar (Delete / Group / Export)
   appears directly above the tab bar rather than a top toolbar.
 
+### Voice input (locked)
+
+Decided in the 2026-09-28 grilling session for #157; mockup:
+[Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ), Chat screen.
+
+- **Mic button, visible by default.** Sits in the composer next to Send,
+  44px target. `RECORD_AUDIO` is requested on first tap, never at launch. The
+  Settings voice-input switch is opt-out (hides the button), not opt-in.
+- **Permission denied — inline hint, not a modal.** A dismissible banner
+  above the composer: "Microphone access denied — enable it in Settings." The
+  button stays visible but visibly inactive; tapping it again while still
+  denied re-shows the hint if dismissed.
+- **No auto-submit.** Recognised text fills the composer input; the user
+  reviews and sends it. `SpeechRecognizer` misreads are common enough
+  (band names, slang) that sending straight through isn't safe.
+
 ## Roadmap UI Ideas
 
 - Artist relationship graph (node view) for collection exploration.

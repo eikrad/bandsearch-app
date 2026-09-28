@@ -320,7 +320,10 @@ mobile handling, the other seven views have none.
       on edge screens), Settings stays single-scroll, Saved Artists gets a
       bottom action bar for bulk select — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
-- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
+- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
+      Behaviour decided: visible by default, inline dismissible hint on
+      permission denial, no auto-submit of the transcript — see the spec and
+      `docs/design/UI_GUIDELINES.md`'s Voice Input section.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android
 - [ ] Android CI: `minSdkVersion` 29, single production keystore in GitHub
