@@ -319,11 +319,15 @@ mobile handling, the other seven views have none.
 - [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android
-- [ ] Android CI: signing keys, `minSdkVersion`, NDK in the release workflow
+- [ ] Android CI: `minSdkVersion` 29, single production keystore in GitHub
+      Actions secrets, pinned NDK version in the release workflow
 
-Undecided: offline behaviour (Android has no local fallback at all, discarding
-what Phase 5.5 built for the desktop) and hosting. Measured while planning: the
-API idles at 61 MB RSS, so a 256MB instance suffices.
+Resolved 2026-09-28 (grilling session, see the spec): offline behaviour shows
+the existing error banner only — no cache, no dedicated screen, and no new
+code, since `apiErrorMessages.ts` already maps a dropped connection to a
+connectivity hint. Hosting is Render Free, accepting the 30–60s cold-start
+over Fly.io's ~$0.15/month scale-to-zero. Measured while planning: the API
+idles at 61 MB RSS, so a 256MB instance suffices either way.
 
 ---
 

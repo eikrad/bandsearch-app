@@ -10,6 +10,7 @@ Navigation guide for the `docs/` folder.
 | [ROADMAP.md](ROADMAP.md) | Phase-by-phase feature roadmap with completion status |
 | [adr/0001-prompt-injection-guardrails.md](adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence — bracket-marker envelope and length caps |
 | [adr/0002-machine-written-notes-stay-out-of-the-prompt.md](adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt, not the model's own pre-filled explanation |
+| [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
 | [design/UI_GUIDELINES.md](design/UI_GUIDELINES.md) | UI design guidelines — layout, components, responsive behaviour |
 | [design/UI_EXAMPLES.md](design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
 | [maintenance.md](maintenance.md) | Dependency versions, upgrade notes, and periodic maintenance tasks |
