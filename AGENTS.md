@@ -78,6 +78,6 @@ TDD-Ansatz: erst Tests schreiben (rot), dann implementieren (grün), dann refact
 ## Commits
 
 - Refactor vor dem Commit
-- Beschreibende Commit-Messages auf Englisch
+- Beschreibende Commit-Messages auf Englisch, als Conventional Commits (`feat:`, `fix:`, `feat!:`, `docs:`, `chore:` …); daraus entstehen Version und CHANGELOG (`docs/releasing.md`). Versionsnummern nie von Hand ändern
 - Nach jeder abgeschlossenen Phase committen
 - Erledigte Punkte in `docs/ROADMAP.md` als `✓ Done` markieren

@@ -25,8 +25,14 @@ Thanks for contributing to Bandsearch.
 
 ## Commit style
 
-- Use concise, action-oriented commit messages.
+- Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`,
+  `feat!:` (breaking), `perf:`, `security:`, `revert:`, `docs:`, `chore:`, `build:`,
+  `ci:`, `test:`, `refactor:`, `style:`, optionally with a scope (`fix(api): …`).
+  Versions, the CHANGELOG and the release notes are generated from them (see
+  [docs/releasing.md](docs/releasing.md)), and a check fails pull requests with a
+  commit that lacks a prefix.
 - Keep commits focused and reviewable.
+- Never edit version numbers by hand; the release PR does it.
 
 ## Project conventions
 
