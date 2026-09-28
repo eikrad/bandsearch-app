@@ -47,11 +47,16 @@ remains a US-incorporated company).
 - If the cold-start proves worse in practice than expected (e.g. testers
   abandon the app before it wakes), revisiting this ADR in favour of Fly.io is
   a config and secrets change *for the server and the desktop*, not a
-  re-architecture. **Not for Android as long as it compiles in the
-  provider's own hostname** (`bandsearch-api.onrender.com`, #159): every
-  installed APK keeps pointing at the old host until its user updates. Whether
-  to compile in a provider-independent domain instead is open — see the
-  Android spec.
+  re-architecture. **Not for Android**: it compiles in the provider's own
+  hostname (`bandsearch-api.onrender.com`, #159), so every installed APK keeps
+  pointing at the old host until its user updates.
+- **That is accepted deliberately, not overlooked.** A provider-independent
+  domain (a CNAME such as `api.<own-domain>`) was considered and rejected for
+  now: there are no real users yet, and hosting will be revisited before a
+  public launch anyway — either switching provider or moving to a paid tier.
+  At that point only a handful of tester installs need an update. Revisit the
+  domain question together with this ADR before launch; once real users exist,
+  a hostname change is no longer cheap.
 
 ## Related
 

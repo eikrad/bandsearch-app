@@ -27,6 +27,10 @@ same pipeline once built — no separate release cycle:
 
 - Same workflow run, same `vX.Y.Z` tag: the signed APK is another artifact
   alongside the Linux/Windows/macOS installers, not a second process.
+- A failing Android build keeps the whole release a draft, desktop included.
+  That is deliberate — all platforms ship the same version or none does — but
+  it means an Android toolchain problem (NDK, signing) also holds back desktop
+  fixes until it is solved.
 - `versionCode` is Tauri's default, derived from the version in
   `tauri.conf.json` (`major*1000000 + minor*1000 + patch`); never hand-set.
 - Test builds (`v0.4.1-test`) are never published to the F-Droid repo: they

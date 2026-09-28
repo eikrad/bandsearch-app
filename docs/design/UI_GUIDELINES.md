@@ -312,12 +312,25 @@ Settings → Chat → Saved Artists — is part of this requirement, not a follo
 > or bottom action bar today; the header still has the two small
 > "Settings" / "Saved" buttons. This section is the target.
 
-Decided in the 2026-09-28 grilling session for #156; mockup:
-[Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ).
+Decided in the 2026-09-28 grilling session for #156. This text is the spec;
+the [mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ) is a private,
+non-authoritative illustration.
 
+- **Trigger: viewport, not platform.** Everything in this section applies at
+  the mobile breakpoint (`max-width: 767px`, the existing `matchMedia` in
+  `startDesktopBrowserApp.ts`), so it is testable in a narrow browser window.
+  Platform-specific behaviour — no storage switch, voice input — stays tied to
+  the Android build.
 - **Bottom tab bar** — three tabs (Chat, Saved Artists, Settings), 44px+
   touch targets each. Is to replace the two small header buttons in
   `ChatAppView.ts` ("Settings" / "Saved"), which are under the 44px minimum.
+- **Hidden while the keyboard is open**, so the composer sits directly above
+  the keyboard. The bar clears the system gesture/navigation bar (bottom
+  inset) — required, since Android 15 enforces edge-to-edge.
+- **System back (Android).** In order: an open sheet or hint closes first; an
+  edge screen behaves like its ← arrow; Saved Artists and Settings go to the
+  Chat tab; Chat leaves the app. Without handling, Tauri simply closes the app
+  on back.
 - **Scope — the three tabs above only.** Login, Register, ResetPassword,
   Welcome, Connecting and PrivacyPolicy never show the tab bar.
 - **Back arrow on edge screens.** A single `←` button (44px, top-left of the
@@ -337,8 +350,9 @@ Decided in the 2026-09-28 grilling session for #156; mockup:
 > **Not yet built** — tracked in #157. No mic button, plugin or Settings
 > switch exists today. This section is the target.
 
-Decided in the 2026-09-28 grilling session for #157; mockup:
-[Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ), Chat screen.
+Decided in the 2026-09-28 grilling session for #157. This text is the spec;
+the [mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ) (Chat and
+Settings screens) is a private, non-authoritative illustration.
 
 - **Off by default; opt-in with a notice.** The Settings voice-input switch
   starts off, and the composer has no mic button until it is turned on.
@@ -354,10 +368,11 @@ Decided in the 2026-09-28 grilling session for #157; mockup:
   recognition service (`SpeechRecognizer.isRecognitionAvailable()` is false —
   common on phones without Google services), neither the mic button nor the
   Settings switch is rendered.
-- **Permission denied — inline hint, not a modal.** A dismissible banner
-  above the composer: "Microphone access denied — enable it in Settings." The
-  button stays visible but visibly inactive; tapping it again while still
-  denied re-shows the hint if dismissed.
+- **Permission denied — inline hint, not a modal.** A banner above the
+  composer: "Microphone access denied", an "Open Android settings" button
+  (opens Android's app-info page for Bandsearch, where the permission lives)
+  and a × to dismiss. The mic button stays visible but visibly inactive;
+  tapping it again while still denied re-shows the hint if dismissed.
 - **No auto-submit.** Recognised text fills the composer input; the user
   reviews and sends it. `SpeechRecognizer` misreads are common enough
   (band names, slang) that sending straight through isn't safe.
