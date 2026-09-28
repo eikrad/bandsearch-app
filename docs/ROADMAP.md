@@ -315,7 +315,11 @@ mobile handling, the other seven views have none.
 
 - [ ] #159 — platform-conditional API endpoint default (compiled-in production
       URL, Settings override kept so self-hosting works)
-- [ ] #156 — mobile layout for the seven views that have none; largest item
+- [ ] #156 — mobile layout for the seven views that have none; largest item.
+      Navigation decided: bottom tab bar (Chat/Saved/Settings only, back-arrow
+      on edge screens), Settings stays single-scroll, Saved Artists gets a
+      bottom action bar for bulk select — see the spec and
+      `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
 - [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android

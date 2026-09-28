@@ -306,6 +306,25 @@ Every view must be usable at 360px width, not only `ChatAppView`. The
 onboarding path a new mobile user hits first — Welcome → Register/Login →
 Settings → Chat → Saved Artists — is part of this requirement, not a follow-up.
 
+### Mobile navigation (locked)
+
+Decided in the 2026-09-28 grilling session for #156; mockup:
+[Android mobile mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ).
+
+- **Bottom tab bar** — three tabs (Chat, Saved Artists, Settings), 44px+
+  touch targets each. Replaces the two small header buttons in
+  `ChatAppView.ts` ("Settings" / "Saved"), which were under the 44px minimum.
+- **Scope — the three tabs above only.** Login, Register, ResetPassword,
+  Welcome, Connecting and PrivacyPolicy never show the tab bar.
+- **Back arrow on edge screens.** A single `←` button (44px, top-left of the
+  header) is the only navigation those screens get: Register → Login,
+  ResetPassword → Login, PrivacyPolicy → Settings. Welcome and Connecting keep
+  their own existing flows (Skip/Continue; the "Try again" retry button from
+  the Connecting State spec above) and get no back arrow.
+- **Bulk-selection bottom action bar.** `SavedArtistsView`: tapping a card
+  selects it; with 1+ selected, an action bar (Delete / Group / Export)
+  appears directly above the tab bar rather than a top toolbar.
+
 ## Roadmap UI Ideas
 
 - Artist relationship graph (node view) for collection exploration.
