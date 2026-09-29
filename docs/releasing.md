@@ -22,6 +22,27 @@ messages. Nobody edits version numbers by hand.
       (`releases/latest/download/latest.json`) offer it to users.
    4. A pull request merging `main` back into `staging` is opened. Merge it too.
 
+Android (Phase 11, see `docs/superpowers/plans/2026-08-30-android.md`) rides the
+same pipeline once built — no separate release cycle:
+
+- Same workflow run, same `vX.Y.Z` tag: the signed APK is another artifact
+  alongside the Linux/Windows/macOS installers, not a second process.
+- A failing Android build keeps the whole release a draft, desktop included.
+  That is deliberate — all platforms ship the same version or none does — but
+  it means an Android toolchain problem (NDK, signing) also holds back desktop
+  fixes until it is solved.
+- `versionCode` is Tauri's default, derived from the version in
+  `tauri.conf.json` (`major*1000000 + minor*1000 + patch`); never hand-set.
+- Test builds (`v0.4.1-test`) are never published to the F-Droid repo: they
+  share the real release's `versionCode`, so a tester who installed one would
+  never be offered the real `v0.4.1`.
+- The F-Droid repo index entry reuses this release's `CHANGELOG.md` section
+  as its changelog, and the README's opening line as the short description —
+  no separate metadata file to update per release.
+- There is no in-app updater on Android (`tauri-plugin-updater` doesn't
+  support it); the F-Droid client on the tester's device handles update
+  notifications once the new index is published.
+
 If a build fails, the release stays a draft and no user sees it. Fix the problem, then
 either re-run the failed jobs or delete the draft and its tag and release again.
 

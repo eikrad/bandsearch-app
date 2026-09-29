@@ -249,7 +249,7 @@ Deploy the Express API as a Render Web Service.
 The desktop app currently assumes the API runs as a local Tauri sidecar on `localhost`. For a cloud deployment, users need to be able to point the app at a remote API URL.
 
 **Action:**
-1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`)
+1. Add an API endpoint field to the Settings screen (`#/settings`) — default to local sidecar, allow overriding with a remote URL (e.g. `https://bandsearch-api.onrender.com`). ✓ Done (`ApiEndpointCard` in `SettingsView.ts`). *(This example read `bandsearch.onrender.com` — a host that doesn't exist — until 2026-09-28; the same wrong host sat in the Settings placeholder and tests, fixed in #224.)*
 2. Persist the setting in the OS config directory alongside the existing Gemini/Turso credentials. ✓ Done (`api_endpoint_url` in `bandsearch/config.json`; localStorage fallback for browser dev)
 3. When a remote endpoint is configured, skip launching the local API sidecar in the Tauri backend. ✓ Done (single `reconcile_sidecar()` invariant: local sidecar runs iff no remote endpoint)
 4. Update `chatClient.ts` and all API callers to use the configured endpoint. ✓ Done (`startDesktopBrowserApp` resolves the endpoint before building the auth/chat clients; `chatClient` already took `apiBaseUrl`, so no change needed there)
@@ -314,16 +314,36 @@ and "responsive layout review" understated the work — only `ChatAppView` has a
 mobile handling, the other seven views have none.
 
 - [ ] #159 — platform-conditional API endpoint default (compiled-in production
-      URL, Settings override kept so self-hosting works)
-- [ ] #156 — mobile layout for the seven views that have none; largest item
-- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle
+      URL, Settings override kept so self-hosting works). Confirmed
+      2026-09-28: the production URL is `https://bandsearch-api.onrender.com`
+      (not `bandsearch.onrender.com`, which the Settings placeholder, several
+      tests and this doc's Phase 9.4 example used until #224).
+- [ ] #156 — mobile layout for the seven views that have none; largest item.
+      Navigation decided: bottom tab bar (Chat/Saved/Settings only, back-arrow
+      on edge screens), Settings stays single-scroll, Saved Artists' style-
+      reference selection bar moves to the bottom — see the spec and
+      `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
+- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
+      Behaviour decided: the phone's own `SpeechRecognizer` (not a bundled
+      model), off by default with a third-party notice when turned on, hidden
+      where no recognition service exists, inline dismissible hint on
+      permission denial, no auto-submit of the transcript — see the spec and
+      `docs/design/UI_GUIDELINES.md`'s Voice Input section.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
-      `tauri-plugin-updater` does not support Android
-- [ ] Android CI: signing keys, `minSdkVersion`, NDK in the release workflow
+      `tauri-plugin-updater` does not support Android. Release mechanics
+      decided: rides the same release-please pipeline and tag as desktop,
+      `versionCode` is Tauri's default (derived from semver), F-Droid metadata reused from
+      README.md/CHANGELOG.md — see the spec and `docs/releasing.md`.
+- [ ] Android CI: `minSdkVersion` 29, single production keystore in GitHub
+      Actions secrets, pinned NDK version in the release workflow
 
-Undecided: offline behaviour (Android has no local fallback at all, discarding
-what Phase 5.5 built for the desktop) and hosting. Measured while planning: the
-API idles at 61 MB RSS, so a 256MB instance suffices.
+Resolved 2026-09-28 (grilling session, see the spec): offline behaviour uses
+the existing paths only (`ConnectingView` at launch, the chat error banner
+mid-session) — no cache, no dedicated screen — but both texts were written
+for the desktop sidecar and need Android-appropriate copy, part of #156.
+Hosting is Render Free, accepting the 30–60s cold-start
+over Fly.io's ~$0.15/month scale-to-zero. Measured while planning: the API
+idles at 61 MB RSS, so a 256MB instance suffices either way.
 
 ---
 
