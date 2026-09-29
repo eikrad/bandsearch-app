@@ -353,7 +353,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
       autoComplete: "off",
       value: draft,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
-      placeholder: isRemote ? "Enter a new URL to replace the saved endpoint" : "https://bandsearch.onrender.com",
+      placeholder: isRemote ? "Enter a new URL to replace the saved endpoint" : "https://bandsearch-api.onrender.com",
       style: {
         width: "100%",
         boxSizing: "border-box",

@@ -180,14 +180,29 @@ test("SettingsView renders API endpoint URL input", () => {
   assert.equal(html.includes("api-endpoint-url"), true, "should render API endpoint input id");
 });
 
-test("SettingsView shows the configured remote URL when set", () => {
+test("SettingsView suggests the real production API as the endpoint placeholder", () => {
   const html = renderToStaticMarkup(
     React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, apiEndpointUrl: "https://bandsearch.onrender.com" },
+      viewProps: { ...baseViewProps, apiEndpointUrl: "" },
       handlers: baseHandlers,
     }),
   );
-  assert.equal(html.includes("https://bandsearch.onrender.com"), true, "should display the configured endpoint");
+  // render.yaml's service is `bandsearch-api`; bandsearch.onrender.com is not provisioned (#223).
+  assert.equal(
+    html.includes('placeholder="https://bandsearch-api.onrender.com"'),
+    true,
+    "placeholder should be the deployed production host",
+  );
+});
+
+test("SettingsView shows the configured remote URL when set", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SettingsView, {
+      viewProps: { ...baseViewProps, apiEndpointUrl: "https://bandsearch-api.onrender.com" },
+      handlers: baseHandlers,
+    }),
+  );
+  assert.equal(html.includes("https://bandsearch-api.onrender.com"), true, "should display the configured endpoint");
 });
 
 test("SettingsView shows Reset to local button when a remote endpoint is configured", () => {

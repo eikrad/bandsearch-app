@@ -244,10 +244,10 @@ test("createGeminiSettingsController saveTursoConfig rejects empty databaseUrl",
 
 test("getSettingsViewProps passes apiEndpointUrl from invoke", async () => {
   const ctrl = createGeminiSettingsController({
-    invokeTauri: async () => ({ hasStoredKey: true, apiEndpointUrl: "https://bandsearch.onrender.com" }),
+    invokeTauri: async () => ({ hasStoredKey: true, apiEndpointUrl: "https://bandsearch-api.onrender.com" }),
   });
   const props = await ctrl.getSettingsViewProps();
-  assert.equal(props.apiEndpointUrl, "https://bandsearch.onrender.com");
+  assert.equal(props.apiEndpointUrl, "https://bandsearch-api.onrender.com");
 });
 
 test("getSettingsViewProps apiEndpointUrl defaults to empty string when invoke omits it", async () => {
@@ -271,10 +271,10 @@ test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async ()
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
   });
-  await ctrl.saveApiEndpointUrl("  https://bandsearch.onrender.com  ");
+  await ctrl.saveApiEndpointUrl("  https://bandsearch-api.onrender.com  ");
   const saveCall = calls.find((c) => c.cmd === "save_api_endpoint_url");
   assert.ok(saveCall, "should call save_api_endpoint_url");
-  assert.equal(saveCall.args?.url, "https://bandsearch.onrender.com");
+  assert.equal(saveCall.args?.url, "https://bandsearch-api.onrender.com");
 });
 
 test("saveApiEndpointUrl accepts empty string to reset to local and reports success", async () => {
@@ -295,7 +295,7 @@ test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => 
   const ctrl = createGeminiSettingsController({
     invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
   });
-  await ctrl.saveApiEndpointUrl("bandsearch.onrender.com");
+  await ctrl.saveApiEndpointUrl("bandsearch-api.onrender.com");
   assert.equal(calls.includes("save_api_endpoint_url"), false, "should not invoke for a malformed URL");
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.apiEndpointStatusMessage?.type, "error");
