@@ -72,7 +72,7 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
     fetchImpl: fakeFetch,
     invokeTauri: async (cmd) => {
       if (cmd === "gemini_config_status") {
-        return { hasStoredKey: true, onboardingComplete: true, apiEndpointUrl: "https://bandsearch.onrender.com" };
+        return { hasStoredKey: true, onboardingComplete: true, apiEndpointUrl: "https://bandsearch-api.onrender.com" };
       }
       return {};
     },
@@ -95,7 +95,7 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
 
   const appCall = calls.find((c) => c.type === "bootstrapApp");
   assert.ok(appCall, "bootstrapDesktopApp should be called");
-  assert.equal(appCall.apiBaseUrl, "https://bandsearch.onrender.com");
+  assert.equal(appCall.apiBaseUrl, "https://bandsearch-api.onrender.com");
   const reactCall = calls.find((c) => c.type === "bootstrapReact");
   assert.equal(typeof reactCall?.saveApiEndpointUrl, "function", "should wire saveApiEndpointUrl through");
 });

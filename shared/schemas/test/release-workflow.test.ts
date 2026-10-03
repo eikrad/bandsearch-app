@@ -16,12 +16,30 @@ const releaseYml = existsSync(releasePath)
   ? readFileSync(releasePath, "utf8")
   : "";
 
-test("release workflow triggers on version tags", () => {
+const releasePleasePath = resolve(
+  __dirname,
+  "../../../.github/workflows/release-please.yml",
+);
+const releasePleaseYml = existsSync(releasePleasePath)
+  ? readFileSync(releasePleasePath, "utf8")
+  : "";
+
+test("release builds start from release-please or by hand, not from a tag push", () => {
   assert.ok(
-    /tags:\s*\n\s*-\s*['"]v\*['"]/.test(releaseYml) ||
-      releaseYml.includes("tags: ['v*']") ||
-      releaseYml.includes('tags: ["v*"]'),
-    "Expected push trigger on v* tags",
+    /workflow_call:/.test(releaseYml),
+    "Expected a workflow_call trigger",
+  );
+  assert.ok(
+    /workflow_dispatch:/.test(releaseYml),
+    "Expected a workflow_dispatch trigger for test builds",
+  );
+  assert.ok(
+    !/^\s*push:/m.test(releaseYml),
+    "A tag push must not build: release-please's own tag would start a second build",
+  );
+  assert.ok(
+    releasePleaseYml.includes("uses: ./.github/workflows/release.yml"),
+    "Expected release-please.yml to call release.yml",
   );
 });
 
@@ -82,10 +100,26 @@ test("release workflow signs updater artifacts via secrets", () => {
   );
 });
 
-test("release workflow creates a draft prerelease", () => {
+test("release builds go into a draft that is published only after every build", () => {
   assert.ok(
     /releaseDraft:\s*true/.test(releaseYml),
     "Expected releaseDraft: true",
   );
-  assert.ok(/prerelease:\s*true/.test(releaseYml), "Expected prerelease: true");
+  assert.ok(
+    /releaseId:\s*\$\{\{\s*inputs\.release_id/.test(releaseYml),
+    "Expected uploads into the draft release-please created (releaseId)",
+  );
+  assert.ok(
+    /needs:\s*\[release-please, build\]/.test(releasePleaseYml) &&
+      releasePleaseYml.includes("--draft=false") &&
+      releasePleaseYml.includes("--latest"),
+    "Expected a publish job that needs the builds and marks the release latest",
+  );
+});
+
+test("manual test builds create a draft prerelease", () => {
+  assert.ok(
+    /prerelease:\s*\$\{\{\s*!inputs\.release_id\s*\}\}/.test(releaseYml),
+    "Expected prerelease when no release_id is given",
+  );
 });

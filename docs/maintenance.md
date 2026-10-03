@@ -4,6 +4,178 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-09-23
+
+### Checks performed
+- `git fetch origin`: the designated branch (`claude/eloquent-volta-56037b`) had already been deleted
+  from the remote by the time this cycle started (`fetch` reported `[deleted] -> origin/claude/
+  eloquent-volta-56037b`) — i.e. it was a fresh seed with no unique commits, not a branch to compare
+  against `origin/staging`. Ran `git checkout -B claude/eloquent-volta-56037b origin/staging`
+  (`ec82aac`, merge of #206) per this cycle's own seeding instructions, confirmed clean working tree.
+- Matched local toolchain to CI (`node-version: 26` in both `ci.yml` jobs, `engines: ">=26"` in root
+  `package.json`, `.nvmrc` = `26`): sandbox default was Node `v22.22.2`; installed Node 26 via `nvm
+  install 26` → resolved `v26.10.0` (plain, correctly-labeled version this cycle, no alpha-mislabeling
+  artifact). Installed the Tauri Linux system deps fresh (`libwebkit2gtk-4.1-dev libgtk-3-dev
+  libayatana-appindicator3-dev librsvg2-dev patchelf`), as every cycle needs in this sandbox.
+- Baseline `npm ci` + `npm run ci` (lint+typecheck+test) + `npm run build --workspace
+  @bandsearch/desktop` — **fully green** before any changes: lint clean (including `lint:py` via
+  `ruff`/`black` on the placeholder `main.py` — one environment-only warning, see Notes), typecheck
+  clean, tests **1,160/1,161** (desktop 390/391 pass + 1 pre-existing skip, api 710/710, eval 26/26,
+  schemas 34/34 — `api` +2 and `eval` +10 over last cycle's counts, organic growth, not this cycle's
+  doing), build clean. `npm ci` surfaced no `allowScripts` warning.
+- `npm audit` (workspace-wide), `uv export --format requirements-txt --no-hashes` + `pip-audit`,
+  `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (`cargo-audit` 0.22.2, already present in
+  this sandbox — no fresh compile needed this cycle) — all re-run rather than trusting last week's
+  automated `weekly-audit.yml` run.
+- Rust build/test verification: `pkg-config --exists gdk-3.0` / `webkit2gtk-4.1` both succeeded after
+  installing the system deps above. Created the local-dev-only Node sidecar symlink per
+  `apps/desktop/src-tauri/binaries/README`'s documented command, ran `cargo check` and `cargo test`
+  (23/23 pass, same count as 2026-09-16), then **deleted the symlink again** before committing
+  (confirmed `git status` clean of it afterward).
+- Additionally ran `cargo clippy --all-targets -- -D warnings` in `apps/desktop/src-tauri`, which is
+  not part of `ci.yml` (CI has no Rust job at all — only the `checks` job's JS/Python lint+typecheck+
+  test and the separate `e2e` job; the task framing's assumption of "a Rust job and Python job" in
+  `ci.yml` does not match what's actually in the file) but was worth checking as extra baseline
+  signal — see Notes for the one finding.
+- `npm outdated` per workspace (root, `apps/desktop`, `services/api`, `services/eval`,
+  `shared/schemas`) — worked correctly per-workspace this cycle (npm 11.19.1); ran per-workspace
+  regardless, per standing precedent.
+- `uv pip list --outdated` / reconfirmed `pyproject.toml` still declares `dependencies = []` —
+  nothing installed, nothing outdated, `main.py` remains the trivial placeholder.
+- `cargo update --dry-run --manifest-path apps/desktop/src-tauri/Cargo.toml` — 184 packages have
+  newer in-range versions available (including `tauri 2.11.5→2.11.6`, `tauri-plugin-updater
+  2.11.0→2.12.0`, large transitive churn). None of the 7 informational-warning crates
+  (`proc-macro-error`, `unic-*` ×5, `glib`) appear in the diff — confirmed by grepping the dry-run
+  output for each — so none of them have a newer in-range version to fix the warning with; no
+  security-relevant bump was available this cycle, so — same precedent as every prior cycle — no
+  blanket `cargo update` was applied.
+- Fetched the 3 open PRs against `staging` via `list_pull_requests` and cross-referenced every
+  candidate bump against them: #211 (`zod` 4.5.4→4.6.5), #212 (`dotenv` 17.4.2→18.0.0, major — left
+  entirely untouched, Dependabot's own diff), #213 (`@types/react-dom` 19.2.7→19.3.0). Also confirmed
+  a 4th open PR, #214 (`eikrad`'s own docs fix, unrelated to dependencies) — left alone, not read
+  beyond confirming it exists and isn't a maintenance/Dependabot PR.
+- Checked `.github/workflows/weekly-audit.yml`'s most recent run (`35597005133`, 2026-09-21,
+  `success`) and confirmed 0 open `security-audit`-labelled issues via a fresh `list_issues` query —
+  consistent with this cycle's own from-scratch audit finding nothing.
+- Checked recent `CI` workflow runs on `staging`: most recent (`35153810577`, PR #206's merge,
+  2026-09-16) is `completed`/`success`; no runs since because nothing has merged to `staging` since.
+- Re-ran `npm run ci` + desktop build + `npm audit` (all Node 26) after applying updates.
+
+### CI health (staging)
+Confirmed clean via fresh `actions_list`/`list_issues` queries, not assumed from task framing: most
+recent `CI` run on `staging` (`35153810577`, tip `ec82aac`, PR #206) `completed`/`success`; most
+recent `Weekly Security Audit` run (`35597005133`, 2026-09-21) `completed`/`success`, and 0 open
+`security-audit`-labelled issues — consistent with this cycle's own audit (see below).
+
+### Fixes applied
+
+- **No new npm security vulnerabilities this cycle.** Baseline `npm audit`: **0 vulnerabilities**
+  (workspace-wide), unchanged after updates.
+
+- **No Rust security fix needed this cycle.** `cargo audit`: **0 vulnerabilities** before and after
+  (nothing changed in `Cargo.lock` this cycle — see Checks performed for why). 7 informational
+  unmaintained/unsound warnings remain, identical set and count to 2026-09-16
+  (`proc-macro-error`, `unic-char-property`/`unic-char-range`/`unic-common`/`unic-ucd-ident`/
+  `unic-ucd-version`, `glib` iterator unsoundness) — all transitive, no independently-fixable
+  upstream version available this week either.
+
+- **Safe npm updates** — applied only where **not** already covered by one of the 3 open Dependabot
+  PRs (`npm update` targeted at specific packages; all already used caret ranges, no `package.json`
+  edits needed):
+
+  | Workspace | Package | Before | After |
+  |---|---|---|---|
+  | root | `@types/node` | 26.6.1 | 26.6.2 |
+  | root | `eslint` | 10.10.0 | 10.11.0 |
+  | root | `tsx` | 4.23.13 | 4.23.15 |
+  | root | `typescript-eslint` (+ `@typescript-eslint/*` sub-packages) | 8.70.0 | 8.70.1 |
+  | `apps/desktop` | `@tauri-apps/cli` | 2.11.4 | 2.11.5 |
+  | `services/api` | `@langchain/langgraph` | 1.4.15 | 1.4.17 |
+
+  **Deliberately left untouched** (each already has an open Dependabot PR targeting the same or a
+  newer version): `zod` (4.5.4→4.6.5, PR #211), `@types/react-dom` (19.2.7→19.3.0, PR #213),
+  `dotenv` (17.4.2→18.0.3 available, but PR #212 already targets the major 17.4.2→18.0.0 — not
+  duplicated or superseded here regardless).
+
+  Only `package-lock.json` changed (142 insertions / 127 deletions). `pnpm-lock.yaml` was **not**
+  regenerated or touched — see Notes.
+
+  **Rust**: no targeted bump applied — no security-relevant crate needed one this cycle (see Checks
+  performed), and a blanket `cargo update` would pull in 184 unrelated packages, breaking with every
+  prior cycle's "keep the diff minimal" precedent. `Cargo.lock` is unchanged this cycle.
+
+### Majors — flagged, NOT applied
+
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` (root) | 6.0.3 | 7.0.2 | Major rewrite, flagged every cycle since 2026-07-08 — still blocked. `typescript-eslint@8.70.1` (this cycle's own latest) still declares peer `"typescript": ">=4.8.4 <6.1.0"`, so TS7 remains out of range; no indication upstream `typescript-eslint/typescript-eslint#10940` has landed since 2026-08-26. |
+| `dotenv` (`services/api`) | 17.4.2 | 18.0.3 | Major bump. Dependabot's own PR #212 already targets this exact major (17.4.2→18.0.0, one patch behind true latest 18.0.3) — not duplicated, superseded, or otherwise touched here; the "one patch behind" gap is the same category of note as prior cycles' near-miss Dependabot PRs, worth a glance by the owner when reviewing #212. |
+
+No other npm, Rust, or Python major was outstanding this cycle.
+
+### Security audit results
+
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm (all workspaces) | `npm audit` | **0 vulnerabilities** (baseline and after updates) |
+| Python | `pip-audit` (via `uv export`) | **0 vulnerabilities** — `dependencies = []` in `pyproject.toml`, nothing to audit, reconfirmed |
+| Rust | `cargo audit` 0.22.2 (523 crate deps scanned) | **0 vulnerabilities**, before and after. 7 informational unmaintained/unsound warnings, unchanged from 2026-09-16 (`proc-macro-error`, `unic-*` ×5, `glib` iterator unsoundness) — all transitive, no independently-fixable upstream version. Yanked-crate check hit `503` through the sandbox's outbound proxy again (`index.crates.io` reachable, `static.crates.io` returns 403 direct but proxies fine for `cargo fetch`/`cargo audit`'s advisory-db scan) — same as several prior cycles; the vulnerability/warning scan itself is unaffected. |
+| GitHub | `security-audit`-labeled issues | 0 open (reconfirmed fresh via `list_issues`; also cross-checked against `weekly-audit.yml`'s last run, 2026-09-21, `success`) |
+
+### Notes
+
+- **New finding — `cargo clippy --all-targets -- -D warnings` fails on `staging` as-is, pre-existing,
+  not introduced this cycle.** Not part of `ci.yml` (see Checks performed — this repo's CI has no
+  Rust job at all, only `cargo check`/`cargo test` are run manually by this maintenance routine as
+  extra signal), so it is not a CI regression, but flagging since the task framing for this cycle
+  assumed clippy was part of the baseline. One error: `apps/desktop/src-tauri/src/main.rs:595` —
+  `let menu = build_app_menu(&app.handle())?;` trips `clippy::needless_borrow` (`app.handle()`
+  already returns a reference; `&app.handle()` is redundant) under `-D warnings`. Left unfixed this
+  cycle — a one-line application-code change is outside "safe dependency bump" scope for this
+  routine, and the file isn't touched by anything else here — but it's a trivial fix
+  (`build_app_menu(&app.handle())` → `build_app_menu(app.handle())`) worth a human doing directly
+  rather than a dependency-maintenance PR carrying an unrelated source-code diff.
+- **Dependabot backlog — 3 PRs open against `staging`, all left untouched, cross-checked live via
+  `list_pull_requests` rather than trusted from task framing (which matched exactly).** #211 (`zod`
+  4.5.4→4.6.5), #212 (`dotenv` 17.4.2→18.0.0, major — Dependabot's own diff, not duplicated or
+  second-guessed), #213 (`@types/react-dom` 19.2.7→19.3.0). None were merged, closed, edited, or
+  duplicated this cycle. A 4th open PR, #214, is an unrelated docs fix by the repo owner — left
+  completely alone.
+- **Dual lock files (still open, carried forward again).** `package-lock.json` (root) and
+  `pnpm-lock.yaml` both still exist. `pnpm-lock.yaml` was last committed 2026-09-16 (the `@libsql/
+  client` 0.18.0 bump, PR #199) and still resolves `@types/node@26.4.0` / `eslint@10.8.1` /
+  `typescript-eslint@8.67.0`, all now stale against `package-lock.json`'s post-this-cycle state
+  (`26.6.2` / `10.11.0` / `8.70.1`). CI (`ci.yml`) uses `npm ci` exclusively, so `package-lock.json`
+  remains the sole tool of record. Per this cycle's explicit instruction, only `package-lock.json`
+  was touched or regenerated — `pnpm` was not invoked, nothing in `pnpm-lock.yaml` was changed.
+  Carrying the note forward again: still the repo owner's call whether to adopt pnpm for real or
+  drop the file.
+- **`.husky/pre-commit` runs under whatever Node the shell defaults to, not whatever `nvm use`
+  selected earlier in the session — recurred this cycle, same as 2026-08-26.** The first commit
+  attempt ran the hook's `npm test` under this sandbox's default Node 22 (a separate shell
+  invocation from the one that had Node 26 on `PATH`), hit the exact `apps/desktop/test/
+  browser-entry.test.ts` `bootBrowserDesktopApp is not a function` `mock.module` failure documented
+  in 2026-08-19/2026-08-26, and aborted (`husky - pre-commit script failed (code 1)`) — a
+  session-mechanics quirk, not a new repo issue (`npm run ci` had passed clean under Node 26 moments
+  before). Re-ran the commit with Node 26 explicitly on `PATH` in the same invocation as `git
+  commit`, which let the hook pass and the commit land normally. Worth remembering for the commit
+  step specifically in future cycles, not just the baseline-check step.
+- **`.nvmrc` (`26`) and `.python-version` (`3.13`) both present and consistent with `ci.yml`** —
+  matched without incident this cycle; sandbox Node install via `nvm install 26` resolved a
+  correctly-labeled `v26.10.0` (no repeat of the 2026-08-26 alpha-mislabeling artifact).
+  `scripts/lint-py.sh` (ruff + black on the placeholder `main.py`) passed clean; `black --check`
+  printed its own advisory-only warning that the sandbox's Python 3.11 can't safety-verify code
+  formatted for the repo's pinned 3.13 target — a sandbox/tooling note, not a repo defect (`black`
+  still reported "1 file would be left unchanged").
+- Re-ran `npm run ci` (lint+typecheck+test, all workspaces) and `npm run build --workspace
+  @bandsearch/desktop` on Node 26 after all dependency updates — all still green, identical pass
+  counts to baseline: **1,160/1,161 tests** (desktop 390/391 pass + 1 pre-existing skip, api
+  710/710, eval 26/26, schemas 34/34); lint and typecheck clean; `npm audit` still 0 vulnerabilities.
+  `test:e2e` was not run — no user-facing code was touched this cycle (lockfile-only npm bumps, no
+  `Cargo.lock` changes).
+
+---
+
 ## 2026-09-16
 
 ### Checks performed

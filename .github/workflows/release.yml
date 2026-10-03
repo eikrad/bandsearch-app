@@ -1,9 +1,28 @@
-name: Release
+name: Build desktop installers
 
+# Builds the installers and the updater manifest (latest.json) for a release.
+# Normally called by release-please.yml once a release PR is merged, with the draft
+# release it created; that workflow publishes the release after all builds pass,
+# so the in-app updater never sees a release without latest.json.
+# Run it by hand (Actions → Build desktop installers → Run workflow) to build a
+# test tag into a new draft release, as pushing a v* tag used to.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to build, e.g. v0.5.0
+        required: true
+        type: string
+      release_id:
+        description: Draft release to upload into
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build into a new draft release, e.g. v0.4.1-test
+        required: true
+        type: string
 
 jobs:
   build:
@@ -21,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -79,7 +100,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: Bandsearch ${{ github.ref_name }}
+          # With a release_id (from release-please) the assets go into that draft;
+          # without one (manual run) tauri-action creates a draft for the tag.
+          releaseId: ${{ inputs.release_id || '' }}
+          tagName: ${{ inputs.tag }}
+          releaseName: Bandsearch ${{ inputs.tag }}
           releaseDraft: true
-          prerelease: true
+          prerelease: ${{ !inputs.release_id }}
