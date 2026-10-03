@@ -62,6 +62,8 @@ feature branch  →  staging  →  main
 - `main` is only updated by merging `staging` → `main` after validation
 - When creating a feature branch or fixing a bug, set `base = staging` in the PR
 - `staging` acts as the integration/QA gate before production (`main`)
+- Feature PRs are merged with **Rebase and merge**; `staging` → `main` with a merge commit
+  and a `chore:` title. Otherwise the CHANGELOG lists changes twice (`docs/releasing.md`)
 
 **Issues do not close themselves here.** GitHub honours `Closes #123` only when a
 PR merges into the *default* branch — `main`. Since PRs target `staging`, the
