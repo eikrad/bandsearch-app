@@ -63,6 +63,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
       "Brave Search API: your search queries are sent to Brave to find candidate artists. Brave retains query records for up to 90 days for billing and troubleshooting purposes.",
       "MusicBrainz: artist names only — no account identifier and nothing about you — are sent to verify that a suggested artist exists.",
       "Last.fm (optional): if enabled, artist names are sent to fetch images and popularity data. This integration is off unless configured.",
+      "Scaleway (optional): if the server operator turns on quality scoring, your search text and the recommendations generated for it are sent to Scaleway's Generative APIs, hosted in France, where an AI model rates how well they fit. This carries no account identifier and is off unless configured.",
       "Turso: when a deployment is configured to use Turso, your account data and taste profile are stored in that database rather than locally.",
     ],
   },
