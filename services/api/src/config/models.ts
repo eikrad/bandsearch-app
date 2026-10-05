@@ -12,7 +12,12 @@ export type LlmProvider = "gemini" | "scaleway";
 
 export const LLM_PROVIDERS: readonly LlmProvider[] = ["gemini", "scaleway"];
 
-export type ModelRef = { provider: LlmProvider; model: string };
+export type ModelRef = {
+  provider: LlmProvider;
+  model: string;
+  /** Scaleway only: reasoning_effort sent with every call; "none" unless configured. */
+  reasoningEffort?: string;
+};
 
 /** Default research model on Gemini, the provider being migrated away from (#237). */
 export const DEFAULT_RESEARCH_MODEL = "gemini-2.5-flash";
@@ -80,10 +85,18 @@ export function resolveLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
   const research: ModelRef =
     provider === "gemini"
       ? { provider, model: trimmed(env.GEMINI_MODEL) || DEFAULT_RESEARCH_MODEL }
-      : { provider, model: trimmed(env.SCW_MODEL) || DEFAULT_SCALEWAY_RESEARCH_MODEL };
+      : {
+          provider,
+          model: trimmed(env.SCW_MODEL) || DEFAULT_SCALEWAY_RESEARCH_MODEL,
+          reasoningEffort: trimmed(env.SCW_REASONING_EFFORT) || "none",
+        };
 
   const judge: ModelRef | null = scalewayApiKey
-    ? { provider: "scaleway", model: trimmed(env.SCW_JUDGE_MODEL) || DEFAULT_SCALEWAY_JUDGE_MODEL }
+    ? {
+        provider: "scaleway",
+        model: trimmed(env.SCW_JUDGE_MODEL) || DEFAULT_SCALEWAY_JUDGE_MODEL,
+        reasoningEffort: trimmed(env.SCW_JUDGE_REASONING_EFFORT) || "none",
+      }
     : null;
 
   const warnings: string[] = [];

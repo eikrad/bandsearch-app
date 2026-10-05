@@ -17,7 +17,10 @@ export type ChatModelClient = {
 export function parseModelJsonResponse(raw: string): unknown {
   // Reasoning models (qwen3, deepseek, glm on Scaleway) may put their thinking
   // in a <think> block before the answer; braces in there are not the answer.
-  const text = raw
+  // A known Scaleway bug can drop the opening tag, so the answer is whatever
+  // follows the last closing tag.
+  const closing = raw.toLowerCase().lastIndexOf("</think>");
+  const text = (closing === -1 ? raw : raw.slice(closing + "</think>".length))
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .trim()
     .replace(/^```(?:json)?\s*/i, "")

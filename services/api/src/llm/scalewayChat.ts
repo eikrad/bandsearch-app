@@ -17,6 +17,12 @@ export type ScalewayChatOptions = {
   /** Ask the API for a JSON object (`response_format`), for callers that parse JSON. */
   json?: boolean;
   /**
+   * Scaleway turns reasoning on by default for every model that has it, which
+   * made one extraction take 101 s on gemma. "none" turns it off (all models
+   * except gpt-oss-120b, which needs "low" or higher); values differ by model.
+   */
+  reasoningEffort?: string;
+  /**
    * Retries after a failed call. Kept low on purpose: callers wrap each call in
    * a per-node time budget, and LangChain's default of several retries with
    * backoff can outlast that budget on its own.
@@ -39,6 +45,7 @@ export function createScalewayChatClient({
   baseUrl = SCALEWAY_DEFAULT_BASE_URL,
   temperature,
   json = false,
+  reasoningEffort = "none",
   maxRetries = 1,
   timeoutMs,
   fetchImpl,
@@ -54,7 +61,10 @@ export function createScalewayChatClient({
     ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
     // Scaleway speaks Chat Completions, not OpenAI's Responses API.
     useResponsesApi: false,
-    ...(json ? { modelKwargs: { response_format: { type: "json_object" } } } : {}),
+    modelKwargs: {
+      reasoning_effort: reasoningEffort,
+      ...(json ? { response_format: { type: "json_object" } } : {}),
+    },
     configuration: {
       baseURL: baseUrl.replace(/\/+$/, ""),
       ...(fetchImpl ? { fetch: fetchImpl } : {}),

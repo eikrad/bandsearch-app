@@ -172,7 +172,7 @@ test("an unknown LLM_PROVIDER is rejected, not silently replaced", () => {
 
 test("the judge runs on Scaleway whenever a Scaleway key is set", () => {
   const { llm } = validateRuntimeEnv({ ...REQUIRED, SCW_SECRET_KEY: "scw" });
-  assert.deepEqual(llm.judge, { provider: "scaleway", model: "mistral-medium-3.5-128b" });
+  assert.deepEqual(llm.judge, { provider: "scaleway", model: "mistral-medium-3.5-128b", reasoningEffort: "none" });
 });
 
 test("SCW_JUDGE_MODEL chooses the judge model", () => {
@@ -206,4 +206,16 @@ test("a judge from the research model's family is allowed with a warning", () =>
     llm.warnings.some((w) => /same model family \(google\)/.test(w)),
     `expected a family warning, got ${JSON.stringify(llm.warnings)}`,
   );
+});
+
+test("reasoning is off for both roles unless configured per role", () => {
+  const { llm } = validateRuntimeEnv({
+    ...BRAVE,
+    LLM_PROVIDER: "scaleway",
+    SCW_SECRET_KEY: "scw",
+    SCW_JUDGE_MODEL: "gpt-oss-120b",
+    SCW_JUDGE_REASONING_EFFORT: "low",
+  });
+  assert.equal(llm.research.reasoningEffort, "none");
+  assert.equal(llm.judge?.reasoningEffort, "low");
 });

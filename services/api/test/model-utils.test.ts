@@ -53,3 +53,9 @@ test("parseModelJsonResponse ignores a reasoning model's <think> block", () => {
   const raw = '<think>Maybe {"draft": true}? No.</think>\n{"final": 1}';
   assert.deepEqual(parseModelJsonResponse(raw), { final: 1 });
 });
+
+test("parseModelJsonResponse ignores reasoning whose opening <think> tag is missing", () => {
+  // A known Scaleway bug can drop the opening tag; the answer follows the last </think>.
+  const raw = 'weighing {"draft": true} first</think>{"final": 2}';
+  assert.deepEqual(parseModelJsonResponse(raw), { final: 2 });
+});

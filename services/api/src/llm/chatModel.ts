@@ -36,6 +36,7 @@ export function createChatModelFactory(ref: ModelRef, keys: ChatModelKeys): Chat
       baseUrl: keys.scalewayBaseUrl || SCALEWAY_DEFAULT_BASE_URL,
       temperature,
       json,
+      reasoningEffort: ref.reasoningEffort,
       fetchImpl: keys.fetchImpl,
     });
 }

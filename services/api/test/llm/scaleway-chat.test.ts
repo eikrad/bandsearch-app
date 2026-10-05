@@ -93,3 +93,17 @@ test("a failing call is retried at most as often as configured, so node budgets 
 test("a Scaleway chat model needs a key", () => {
   assert.throws(() => createScalewayChatClient({ apiKey: "  ", model: "m" }), /SCW_SECRET_KEY/);
 });
+
+test("reasoning is off unless asked for, so pipeline calls stay fast", async () => {
+  // Scaleway enables reasoning by default on every model that has it; one
+  // extraction took gemma 101 s with it on.
+  const { fetchImpl, requests } = fakeScaleway();
+  await createScalewayChatClient({ apiKey: "k", model: "m", fetchImpl }).invoke(prompt);
+  assert.equal(requests[0]!.body.reasoning_effort, "none");
+});
+
+test("a reasoning effort can be asked for, e.g. for a model that cannot turn it off", async () => {
+  const { fetchImpl, requests } = fakeScaleway();
+  await createScalewayChatClient({ apiKey: "k", model: "gpt-oss-120b", reasoningEffort: "low", fetchImpl }).invoke(prompt);
+  assert.equal(requests[0]!.body.reasoning_effort, "low");
+});
