@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "monday"
     open-pull-requests-limit: 5
     target-branch: "staging"
@@ -15,7 +15,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "monday"
     open-pull-requests-limit: 3
     target-branch: "staging"
@@ -26,7 +26,7 @@ updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "monday"
     open-pull-requests-limit: 3
     target-branch: "staging"
@@ -37,7 +37,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "monday"
     open-pull-requests-limit: 3
     target-branch: "staging"
