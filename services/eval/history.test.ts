@@ -168,3 +168,22 @@ test("a history with a damaged line names the line instead of skipping it", () =
   writeFileSync(path, `${JSON.stringify(record([result({ id: "blackgaze" })]))}\n{not json\n`);
   assert.throws(() => loadRuns(path), /line 2/);
 });
+
+test("queries with unknown coverage stay out of the coverage mean", () => {
+  const run = record([
+    result({ id: "blackgaze", nuggetCoverageAt8: 1 }),
+    result({ id: "dungeon-synth", nuggetCoverageAt8: null }),
+    result({ id: "zeuhl", nuggetCoverageAt8: 0.5 }),
+  ]);
+
+  assert.equal(run.summary.nuggetCoverageMean, 0.75);
+  assert.equal(run.results[1]!.metrics?.nuggetCoverageAt8, null);
+});
+
+test("a golden run reports how many bands the API returned per query", () => {
+  const run = record([
+    result({ id: "blackgaze", resultNames: ["A", "B", "C"] }),
+    result({ id: "dungeon-synth", resultNames: ["A", "B", "C", "D", "E", "F", "G", "H", "I"] }),
+  ]);
+  assert.equal(run.summary.resultCountMean, 6, "counts what the API returned, not only the top 8");
+});

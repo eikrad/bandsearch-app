@@ -340,3 +340,21 @@ test("one failing query does not stop the golden run", async () => {
   assert.match(failed.error ?? "", /API error 502/);
   assert.deepEqual(failed.uncoveredNuggets, ["drone"]);
 });
+
+test("a query whose bands have no MusicBrainz tags has unknown coverage, not zero", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [{ artist: "Obscure Act", musicbrainzArtistId: "mbid-x" }],
+    meta: { model: "m" },
+  });
+  const untagged = { resolve: async () => [] as string[] };
+
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "x", query: "q", nuggets: ["funeral doom"] },
+    untagged,
+    { fetchImpl, mbCooldownMs: 0 },
+  );
+
+  assert.equal(result.nuggetCoverageAt8, null);
+  assert.equal(result.status, "pass", "the anti-band gate still decides pass/fail");
+});

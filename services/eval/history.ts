@@ -41,10 +41,13 @@ export type GoldenRunRecord = {
   summary: {
     /** Over answered queries; null when none was answered. */
     passRate: number | null;
+    /** Over queries whose coverage could be known. */
     nuggetCoverageMean: number | null;
     antiBandRateMean: number | null;
     /** Share of queries the runner got no answer to. */
     errorRate: number;
+    /** Bands the API returned per answered query (all of them, not only the top 8). */
+    resultCountMean: number | null;
     latencyMsMedian: number | null;
     latencyMsMax: number | null;
   };
@@ -56,7 +59,8 @@ export type GoldenRunResult = {
   query: string;
   status: GoldenResult["status"];
   /** Null for an errored query: it has no score, which is not a score of zero. */
-  metrics: { nuggetCoverageAt8: number; antiBandRateAt8: number } | null;
+  /** Null for an errored query; `nuggetCoverageAt8` null alone means coverage was unknown. */
+  metrics: { nuggetCoverageAt8: number | null; antiBandRateAt8: number } | null;
   latencyMs: number | null;
   model: string | null;
   top8: string[];
@@ -152,9 +156,10 @@ export function buildGoldenRunRecord({
     durationSec: Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
     summary: {
       passRate: answered.length === 0 ? null : answered.filter((r) => r.passed).length / answered.length,
-      nuggetCoverageMean: mean(answered.map((r) => r.nuggetCoverageAt8)),
+      nuggetCoverageMean: mean(answered.map((r) => r.nuggetCoverageAt8).filter((c): c is number => c !== null)),
       antiBandRateMean: mean(answered.map((r) => r.antiBandRateAt8)),
       errorRate: results.length === 0 ? 0 : (results.length - answered.length) / results.length,
+      resultCountMean: mean(answered.map((r) => r.resultNames.length)),
       latencyMsMedian: median(latencies),
       latencyMsMax: latencies.length === 0 ? null : Math.max(...latencies),
     },

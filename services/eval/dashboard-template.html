@@ -265,10 +265,11 @@ const METRIC_LABELS = {
   nuggetCoverageMean: "Nugget coverage @8",
   antiBandRateMean: "Anti-bands in top 8",
   errorRate: "Queries without answer",
+  resultCountMean: "Bands per answer",
   latencyMsMedian: "Median latency",
 };
-// "ms" values are shown in seconds; everything else is a 0–1 rate.
-const METRIC_KIND = { latencyMsMedian: "ms" };
+// "ms" values are shown in seconds, "count" as a plain number; everything else is a 0–1 rate.
+const METRIC_KIND = { latencyMsMedian: "ms", resultCountMean: "count" };
 // For these a rise is bad news, so deltas are coloured the other way round.
 const LOWER_IS_BETTER = new Set(["antiBandRateMean", "errorRate", "latencyMsMedian", "latencyMsMax"]);
 const MAX_COLUMNS = 16;
@@ -311,9 +312,16 @@ function deltaEl(v, asPct, lowerIsBetter = false) {
 }
 const seconds = (ms) => (ms == null ? "—" : `${(ms / 1000).toFixed(1)} s`);
 function fmtMetric(metric, v) {
-  return METRIC_KIND[metric] === "ms" ? seconds(v) : pct(v);
+  if (METRIC_KIND[metric] === "ms") return seconds(v);
+  if (METRIC_KIND[metric] === "count") return v == null ? "—" : v.toFixed(1);
+  return pct(v);
 }
 function metricDelta(metric, v) {
+  if (METRIC_KIND[metric] === "count") {
+    const flat = v == null || Math.abs(v) < 0.05;
+    const text = v == null ? "—" : flat ? "±0.0" : `${v > 0 ? "▲ +" : "▼ −"}${Math.abs(v).toFixed(1)}`;
+    return el("span", { class: `delta ${flat ? "flat" : v > 0 ? "up" : "down"}` }, text);
+  }
   if (METRIC_KIND[metric] !== "ms") return deltaEl(v, true, LOWER_IS_BETTER.has(metric));
   const flat = v == null || Math.abs(v) < 50;
   const good = !flat && (v > 0) !== LOWER_IS_BETTER.has(metric);
@@ -624,7 +632,9 @@ function drawPanels(panels, runs, set) {
     const yFor = (v) => inner.b - (v / max) * (inner.b - inner.t);
     const tickLabel = METRIC_KIND[metric] === "ms"
       ? (v) => `${(v / 1000).toFixed(stepDecimals(step / 1000))}s`
-      : (v) => `${Math.round(v * 100)}%`;
+      : METRIC_KIND[metric] === "count"
+        ? (v) => v.toFixed(stepDecimals(step))
+        : (v) => `${Math.round(v * 100)}%`;
     const svg = svgEl("svg", { viewBox: `0 0 ${width} ${PLOT_H}`, height: PLOT_H, "aria-hidden": "true" });
 
     // Run labels: both ends flush to their edge, the runs between centred
@@ -892,7 +902,8 @@ function questionGrid(set) {
         }, r.status === "error" ? "!" : r.status === "pass" ? "✓" : "✗");
         const tip = () => [
           el("div", { class: "t-head" }, `${runName(run)} · ${outcome(r)}`),
-          r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.nuggetCoverageAt8)), "nugget coverage @8") : null,
+          r.metrics ? el("div", { class: "t-row" }, el("strong", {}, r.metrics.nuggetCoverageAt8 == null ? "?" : pct(r.metrics.nuggetCoverageAt8)),
+            r.metrics.nuggetCoverageAt8 == null ? "nugget coverage unknown (no MusicBrainz tags)" : "nugget coverage @8") : null,
           r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.antiBandRateAt8)), "anti-bands in top 8") : null,
           r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
           r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,

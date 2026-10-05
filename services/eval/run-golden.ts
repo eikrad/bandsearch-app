@@ -53,7 +53,12 @@ export type GoldenResult = {
   status: "pass" | "fail" | "error";
   resultNames: string[];
   antiBandRateAt8: number;
-  nuggetCoverageAt8: number;
+  /**
+   * Null when coverage cannot be known: the entry has no nuggets, or no top-8
+   * band has any MusicBrainz tags. Unknown is not zero — counting it as zero
+   * would let tag availability pose as recommendation quality.
+   */
+  nuggetCoverageAt8: number | null;
   uncoveredNuggets: string[];
   passed: boolean;
   warnings: string[];
@@ -339,7 +344,7 @@ export async function runGoldenEntry(
     status: passed ? "pass" : "fail",
     resultNames,
     antiBandRateAt8,
-    nuggetCoverageAt8,
+    nuggetCoverageAt8: coverageGateApplies ? nuggetCoverageAt8 : null,
     uncoveredNuggets,
     passed,
     warnings,
@@ -358,7 +363,7 @@ export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResul
     status: "error",
     resultNames: [],
     antiBandRateAt8: 0,
-    nuggetCoverageAt8: 0,
+    nuggetCoverageAt8: null,
     uncoveredNuggets: entry.nuggets ?? [],
     passed: false,
     warnings: [`runner error: ${message}`],
@@ -369,6 +374,10 @@ export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResul
   };
 }
 
+function formatPct(value: number | null): string {
+  return value === null ? "unknown" : `${(value * 100).toFixed(0)}%`;
+}
+
 function printTable(results: GoldenResult[]): void {
   console.log("\n=== Golden Dataset Results ===\n");
   for (const r of results) {
@@ -377,7 +386,7 @@ function printTable(results: GoldenResult[]): void {
     console.log(`  Query:       ${r.query}`);
     console.log(`  Results:     ${r.resultNames.slice(0, 5).join(", ")}${r.resultNames.length > 5 ? "…" : ""}`);
     console.log(`  AntiBand@8:  ${(r.antiBandRateAt8 * 100).toFixed(0)}%`);
-    console.log(`  Nugget@8:    ${(r.nuggetCoverageAt8 * 100).toFixed(0)}%`);
+    console.log(`  Nugget@8:    ${formatPct(r.nuggetCoverageAt8)}`);
     for (const w of r.warnings) {
       console.log(`  ⚠  ${w}`);
     }
@@ -458,7 +467,7 @@ async function main(): Promise<void> {
       const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
       const status = result.passed ? "PASS" : "FAIL";
       console.log(
-        `  ${status}  anti=${(result.antiBandRateAt8 * 100).toFixed(0)}%  nugget=${(result.nuggetCoverageAt8 * 100).toFixed(0)}%` +
+        `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
           `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
           (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
       );
