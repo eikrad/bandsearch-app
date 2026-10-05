@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -6,7 +5,7 @@ import { parseArgs } from "node:util";
 
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
 import { writeDashboard } from "./dashboard.ts";
-import { appendRun, buildGoldenRunRecord, type GitState } from "./history.ts";
+import { appendRun, buildGoldenRunRecord, readGitState } from "./history.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -397,26 +396,6 @@ function printTable(results: GoldenResult[]): void {
 /** Where committed run history lives; reports and the dashboard stay local. */
 export const GOLDEN_HISTORY_PATH = join(__dirname, "history", "golden-runs.jsonl");
 
-/**
- * Commit, branch and whether tracked files differ from it. The history file
- * itself is excluded: appending to it is what every run does.
- */
-function readGitState(): GitState | null {
-  const git = (args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8" }).trim();
-  try {
-    const changed = git(["status", "--porcelain", "--untracked-files=no"])
-      .split("\n")
-      .filter((line) => line.trim() !== "" && !line.endsWith("services/eval/history/golden-runs.jsonl"));
-    return {
-      commit: git(["rev-parse", "--short", "HEAD"]),
-      branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
-      dirty: changed.length > 0,
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function main(): Promise<void> {
   const { values: args } = parseArgs({
     options: {
@@ -433,7 +412,7 @@ async function main(): Promise<void> {
 
   // A run on uncommitted code cannot be traced back to what ran, so it only
   // enters the history when the operator says so explicitly.
-  const git = readGitState();
+  const git = readGitState([GOLDEN_HISTORY_PATH]);
   if (recordHistory && git?.dirty && !args["allow-dirty"]) {
     console.error(
       "Tracked files have uncommitted changes, so this run's commit would not say what ran.\n" +
