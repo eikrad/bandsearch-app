@@ -17,6 +17,8 @@ export const GOLDEN_METRICS_VERSION = 3;
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
 
+export type GoldenJudgeConfig = { model: string; reasoningEffort: string; votes: number };
+
 /** One line of `history/golden-runs.jsonl`: what was tested and what came out. */
 export type GoldenRunRecord = {
   schema: 1;
@@ -41,6 +43,8 @@ export type GoldenRunRecord = {
     pipelineVersion: string | null;
     /** Whether the API replayed recorded Brave/MusicBrainz/Last.fm answers (#250). */
     replay: boolean | "mixed" | null;
+    /** The judge that scored the top bands; null for an unjudged run. */
+    judge: GoldenJudgeConfig | null;
     metricsVersion: number;
   };
   durationSec: number;
@@ -54,6 +58,8 @@ export type GoldenRunRecord = {
     constraintRateMean: number | null;
     /** Share of queries the runner got no answer to. */
     errorRate: number;
+    /** Mean judge scores over judged queries; null for an unjudged run. */
+    judgeMeans: GoldenResult["judgeScores"];
     /** Failed queries per gate; a query can fail more than one. */
     failuresByGate: Record<GoldenResult["failedGates"][number], number>;
     /** Bands the API returned per answered query (all of them, not only the top 8). */
@@ -77,6 +83,7 @@ export type GoldenRunResult = {
   tagSources: GoldenResult["tagSources"];
   constraintVerdicts: GoldenResult["constraintVerdicts"];
   failedGates: GoldenResult["failedGates"];
+  judgeScores: GoldenResult["judgeScores"];
   uncoveredNuggets: string[];
   warnings: string[];
   error?: string;
@@ -132,6 +139,19 @@ function reportedValue(values: Array<string | null>): string | null {
   return reported.length === 1 ? reported[0]! : `mixed: ${reported.join(", ")}`;
 }
 
+function judgeMeansOf(results: GoldenResult[]): GoldenResult["judgeScores"] {
+  const judged = results.map((r) => r.judgeScores).filter((j): j is NonNullable<typeof j> => j != null);
+  if (judged.length === 0) return null;
+  const meanOf = (key: keyof NonNullable<GoldenResult["judgeScores"]>) =>
+    mean(judged.map((j) => j[key]).filter((v): v is number => v !== null));
+  return {
+    relevance: meanOf("relevance"),
+    obscurityFit: meanOf("obscurityFit"),
+    evidenceQuality: meanOf("evidenceQuality"),
+    discoveryValue: meanOf("discoveryValue"),
+  };
+}
+
 function replayValue(values: Array<boolean | null>): GoldenRunRecord["config"]["replay"] {
   const reported = distinct(values.filter((v): v is boolean => v !== null));
   if (reported.length === 0) return null;
@@ -147,7 +167,9 @@ export function buildGoldenRunRecord({
   notes,
   git,
   apiUrl,
+  judge = null,
 }: {
+  judge?: GoldenJudgeConfig | null;
   entries: GoldenEntry[];
   results: GoldenResult[];
   startedAt: Date;
@@ -173,6 +195,7 @@ export function buildGoldenRunRecord({
       researchModel: reportedValue(answered.map((r) => r.model)),
       pipelineVersion: reportedValue(answered.map((r) => r.pipelineVersion)),
       replay: replayValue(answered.map((r) => r.replay)),
+      judge,
       metricsVersion: GOLDEN_METRICS_VERSION,
     },
     durationSec: Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
@@ -183,6 +206,7 @@ export function buildGoldenRunRecord({
       constraintRateMean: mean(answered.map((r) => r.constraintRateAt8).filter((c): c is number => c !== null)),
       errorRate: results.length === 0 ? 0 : (results.length - answered.length) / results.length,
       resultCountMean: mean(answered.map((r) => r.resultNames.length)),
+      judgeMeans: judgeMeansOf(answered),
       failuresByGate: {
         antiBand: results.filter((r) => r.failedGates.includes("antiBand")).length,
         coverage: results.filter((r) => r.failedGates.includes("coverage")).length,
@@ -210,6 +234,7 @@ export function buildGoldenRunRecord({
       tagSources: r.tagSources,
       constraintVerdicts: r.constraintVerdicts,
       failedGates: r.failedGates,
+      judgeScores: r.judgeScores,
       uncoveredNuggets: r.uncoveredNuggets,
       warnings: r.warnings,
       ...(r.error !== undefined ? { error: r.error } : {}),

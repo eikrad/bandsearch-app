@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+
+import type { ChatModelClient } from "../api/src/agent/modelUtils.js";
 import {
   computeAntiBandRate,
   computeNuggetCoverage,
@@ -245,6 +247,7 @@ test("runGoldenEntriesSequentially does not start the next entry until the previ
         constraintRateAt8: null,
         constraintVerdicts: null,
         failedGates: [],
+        judgeScores: null,
       };
     },
   );
@@ -529,4 +532,81 @@ test("an answer without any band fails the query instead of skipping every check
   );
   assert.equal(result.status, "fail");
   assert.deepEqual(result.failedGates, ["noResults"]);
+});
+
+// ─── judge scores in golden runs (#237 step 3) ───────────────────────────────
+
+function judgeRecording(score: number, seen: Array<Record<string, unknown>> = []): ChatModelClient {
+  return {
+    async invoke(prompt) {
+      const sent = JSON.parse(prompt.find((m) => m.role === "user")!.content) as Array<Record<string, unknown>>;
+      seen.push(...sent);
+      return {
+        content: JSON.stringify(
+          Object.fromEntries(
+            sent.map((b) => [b.band_name, { relevance: score, obscurity_fit: score, evidence_quality: score, discovery_value: score }]),
+          ),
+        ),
+      };
+    },
+  };
+}
+
+const judgedAnswer = {
+  recommendations: [
+    { artist: "Fen", musicbrainzArtistId: "m1", why: "Post-black from the fens, see https://fen.bandcamp.com", sourceSignals: ["https://fen.bandcamp.com"] },
+    { artist: "Ghost Bath", musicbrainzArtistId: "m2", why: "Similar to Alcest.", sourceSignals: [] },
+  ],
+  meta: { model: "gemma-4-26b-a4b-it" },
+};
+
+test("a judged golden query records the judge's mean scores over its top bands", async () => {
+  const { fetchImpl } = apiReturning(judgedAnswer);
+  const result = await runGoldenEntry("http://api.test", { id: "x", query: "blackgaze", obscurityTarget: "underground" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    judge: { model: judgeRecording(0.75), modelId: "llama-3.3-70b-instruct" },
+  });
+  assert.deepEqual(result.judgeScores, { relevance: 0.75, obscurityFit: 0.75, evidenceQuality: 0.75, discoveryValue: 0.75 });
+});
+
+test("the golden judge sees what the live judge sees: why, sources, listeners and evidence checks", async () => {
+  const { fetchImpl } = apiReturning(judgedAnswer);
+  const seen: Array<Record<string, unknown>> = [];
+  await runGoldenEntry("http://api.test", { id: "x", query: "blackgaze", obscurityTarget: "underground" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    judge: { model: judgeRecording(0.5, seen), modelId: "llama", listenersOf: async (name) => (name === "Fen" ? 12000 : null) },
+  });
+
+  const fen = seen.find((b) => b.band_name === "Fen")!;
+  assert.equal(fen.query, "blackgaze");
+  assert.equal(fen.obscurity_target, "underground");
+  assert.match(String(fen.why), /fens/);
+  assert.deepEqual(fen.source_signals, ["https://fen.bandcamp.com"]);
+  assert.equal(fen.listeners, 12000);
+  assert.equal(fen.obscurity_tier, "underground");
+  assert.equal(fen.citation_support_rate, 1);
+});
+
+test("a judge that fails leaves the query's judge scores unknown, with a warning", async () => {
+  const { fetchImpl } = apiReturning(judgedAnswer);
+  const broken: ChatModelClient = { invoke: async () => ({ content: "nope" }) };
+  const result = await runGoldenEntry("http://api.test", { id: "x", query: "q" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    judge: { model: broken, modelId: "llama" },
+  });
+  assert.equal(result.judgeScores, null);
+  assert.ok(result.warnings.some((w) => /judge/.test(w)));
+});
+
+test("a judge from the research model's own family is flagged on the query", async () => {
+  const { fetchImpl } = apiReturning(judgedAnswer);
+  const result = await runGoldenEntry("http://api.test", { id: "x", query: "q" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    judge: { model: judgeRecording(0.9), modelId: "gemini-2.5-pro" },
+  });
+  assert.ok(result.warnings.some((w) => /same model family \(google\)/.test(w)));
 });

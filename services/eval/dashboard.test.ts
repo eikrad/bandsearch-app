@@ -40,6 +40,7 @@ function result(id: string, outcome: Outcome, top: string[] = ["Fen", "Ghost Bat
     constraintRateAt8: null,
     constraintVerdicts: null,
     failedGates: outcome === "fail" ? ["coverage"] : [],
+    judgeScores: null,
     ...(outcome === "error" ? { error: "API error 502" } : {}),
   };
 }
@@ -319,4 +320,24 @@ test("setups are also compared on how often their bands meet hard constraints", 
   assert.equal(cmp.constraintRate.nQueries, 2);
   assert.equal(cmp.constraintRate.meanDiff, 0.5);
   assert.equal(groupSetups(candidate)[0]!.constraintRateMean, 1);
+});
+
+test("judged setups are compared on the judge's mean quality per query", () => {
+  const judged = (id: string, v: number): GoldenResult => ({
+    ...result(id, "pass"),
+    judgeScores: { relevance: v, obscurityFit: v, evidenceQuality: v, discoveryValue: v },
+  });
+  const base = [runWith([judged("blackgaze", 0.4), judged("zeuhl", 0.6)], "gemini")];
+  const candidate = [runWith([judged("blackgaze", 0.8), judged("zeuhl", 0.8)], "gemma")];
+
+  assert.equal(compareSetups(base, candidate).judgeQuality.meanDiff?.toFixed(2), "0.30");
+});
+
+test("a run comparison reports the change in each judge dimension", () => {
+  const judged = (v: number): GoldenResult => ({
+    ...result("blackgaze", "pass"),
+    judgeScores: { relevance: v, obscurityFit: v, evidenceQuality: v, discoveryValue: v },
+  });
+  const cmp = compareRuns(runWith([judged(0.5)], "gemini"), runWith([judged(0.75)], "gemma"));
+  assert.equal(cmp.summaryDelta["judgeMeans.relevance"], 0.25);
 });

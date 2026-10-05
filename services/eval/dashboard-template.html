@@ -265,6 +265,10 @@ const METRIC_LABELS = {
   nuggetCoverageMean: "Nugget coverage @8",
   antiBandRateMean: "Anti-bands in top 8",
   constraintRateMean: "Constraint hits",
+  "judgeMeans.relevance": "Judge: relevance",
+  "judgeMeans.obscurityFit": "Judge: obscurity fit",
+  "judgeMeans.evidenceQuality": "Judge: evidence",
+  "judgeMeans.discoveryValue": "Judge: discovery",
   errorRate: "Queries without answer",
   resultCountMean: "Bands per answer",
   latencyMsMedian: "Median latency",
@@ -348,7 +352,10 @@ function significanceText(sig) {
 }
 const runName = (run) => (run.label ? `${run.label} · ${runDate(run)}` : runDate(run));
 const shortLabel = (run) => run.label || runDate(run, false);
-const summaryValue = (run, metric) => run.summary[metric];
+// Dotted keys reach into nested summaries (judgeMeans.relevance); runs that lack
+// a field (older metrics versions, unjudged runs) read as no value.
+const summaryValue = (run, metric) =>
+  metric.split(".").reduce((value, key) => (value == null ? null : value[key] ?? null), run.summary);
 const shownMetrics = () => Object.keys(METRIC_LABELS);
 
 // ---------- shared tooltip ----------
@@ -773,7 +780,8 @@ function drawPanels(panels, runs, set) {
 // the baseline's setup (paired bootstrap over queries, computed in dashboard.ts).
 function setupLabel(setup) {
   const replay = setup.replay === true ? "replay" : setup.replay === "mixed" ? "mixed replay" : "live";
-  return `${setup.researchModel || "model not reported"} · ${replay} · ${setup.commit || "?"}`;
+  const judge = setup.judge ? ` · judged by ${setup.judge.model}` : "";
+  return `${setup.researchModel || "model not reported"} · ${replay} · ${setup.commit || "?"}${judge}`;
 }
 function diffCell(diff) {
   if (!diff || diff.meanDiff == null) return el("td", { class: "num" }, "—");
@@ -808,14 +816,16 @@ function setupsSection(set) {
       el("td", { class: "num" }, pct(setup.errorRate)),
       isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.passRate),
       isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.coverage),
-      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.constraintRate));
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.constraintRate),
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.judgeQuality));
   });
   section.append(el("div", { class: "scroll" }, el("table", {},
     el("thead", {}, el("tr", {},
       el("th", {}, "Setup"), el("th", { class: "num" }, "Runs"), el("th", { class: "num" }, "Pass rate"),
       el("th", { class: "num" }, "Coverage"), el("th", { class: "num" }, "Median latency"), el("th", { class: "num" }, "No answer"),
       el("th", { class: "num" }, "Δ pass vs baseline"), el("th", { class: "num" }, "Δ coverage vs baseline"),
-      el("th", { class: "num" }, "Δ constraint hits vs baseline"))),
+      el("th", { class: "num" }, "Δ constraint hits vs baseline"),
+      el("th", { class: "num" }, "Δ judge quality vs baseline"))),
     el("tbody", {}, rows))));
   return section;
 }
@@ -851,8 +861,8 @@ function comparison(set) {
     el("thead", {}, el("tr", {}, el("th", {}, "Metric"), el("th", { class: "num" }, "Before"), el("th", { class: "num" }, "After"), el("th", { class: "num" }, "Change"))),
     el("tbody", {}, keys.map((m) =>
       el("tr", {}, el("th", {}, label(m)),
-        el("td", { class: "num" }, fmt(m, base.summary[m])),
-        el("td", { class: "num" }, fmt(m, run.summary[m])),
+        el("td", { class: "num" }, fmt(m, summaryValue(base, m))),
+        el("td", { class: "num" }, fmt(m, summaryValue(run, m))),
         el("td", { class: "num" }, metricDelta(m === "latencyMsMax" ? "latencyMsMedian" : m, cmp.summaryDelta[m]))))))));
 
   section.append(el("h3", {}, "Settings"));
@@ -972,6 +982,9 @@ function questionGrid(set) {
           r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
           r.metrics && r.metrics.constraintRateAt8 != null ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.constraintRateAt8)),
             `constraint hits (${r.constraintVerdicts.met} met, ${r.constraintVerdicts.missed} missed, ${r.constraintVerdicts.unknown} unknown)`) : null,
+          r.judgeScores ? el("div", { class: "t-head" },
+            `judge: relevance ${pct(r.judgeScores.relevance)}, obscurity fit ${pct(r.judgeScores.obscurityFit)}, ` +
+            `evidence ${pct(r.judgeScores.evidenceQuality)}, discovery ${pct(r.judgeScores.discoveryValue)}`) : null,
           r.tagSources ? el("div", { class: "t-head" },
             `tags: ${r.tagSources.musicbrainz} from MusicBrainz, ${r.tagSources.lastfm} from Last.fm, ${r.tagSources.none} without`) : null,
           r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,
