@@ -33,6 +33,8 @@ async function main(): Promise<void> {
   const { values: args } = parseArgs({
     options: {
       judge: { type: "string", multiple: true },
+      votes: { type: "string" },
+      mode: { type: "string" },
       label: { type: "string" },
       "no-history": { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -53,20 +55,38 @@ async function main(): Promise<void> {
 
   const calibrationEntries: CalibrationEntry[] = JSON.parse(readFileSync(join(__dirname, "judge-calibration.json"), "utf8"));
   const unitTestEntries: UnitTestEntry[] = JSON.parse(readFileSync(join(__dirname, "judge-unit-tests.json"), "utf8"));
-  const judges = args.judge?.length ? args.judge : [llm.judge.model];
+  // --judge model[:reasoning], e.g. gpt-oss-120b:low (that model cannot turn reasoning off).
+  const judges = (args.judge?.length ? args.judge : [`${llm.judge.model}:${llm.judge.reasoningEffort ?? "none"}`]).map((spec) => {
+    const [model, effort] = spec.split(":");
+    return { model: model!, reasoningEffort: effort || "none" };
+  });
+  const votes = Math.max(1, Number.parseInt(args.votes ?? "1", 10) || 1);
+  const mode = args.mode === "per-band" ? "per-band" : "batch";
 
   let worst = 1;
-  for (const model of judges) {
-    const judgeModel = judgeModelFor({ ...llm, judge: { provider: "scaleway", model } })!;
-    console.log(`\nJudge ${model}: ${calibrationEntries.length} labelled examples, ${unitTestEntries.length} unit tests…`);
+  for (const { model, reasoningEffort } of judges) {
+    const judgeModel = judgeModelFor({ ...llm, judge: { provider: "scaleway", model, reasoningEffort } })!;
+    console.log(
+      `\nJudge ${model} (reasoning ${reasoningEffort}, ${votes} vote(s), ${mode}): ` +
+        `${calibrationEntries.length} labelled examples, ${unitTestEntries.length} unit tests…`,
+    );
     const startedAt = new Date();
-    const result = await runCalibration({ judgeModel, calibrationEntries, unitTestEntries });
+    let result;
+    try {
+      result = await runCalibration({ judgeModel, calibrationEntries, unitTestEntries, judging: { votes, mode } });
+    } catch (error) {
+      // One unusable candidate must not stop the comparison of the others.
+      console.error(`  ✗ ${model} could not be calibrated: ${error instanceof Error ? error.message : String(error)}`);
+      worst = 0;
+      continue;
+    }
 
     const { perDimension, rate } = result.agreement;
     console.log(
       `  agreement ${pct(rate)}  (relevance ${pct(perDimension.relevance)}, obscurityFit ${pct(perDimension.obscurityFit)}, ` +
         `evidenceQuality ${pct(perDimension.evidenceQuality)})  ·  unit tests ${pct(result.unitTests.passRate)}  ·  ` +
-        `${((Date.now() - startedAt.getTime()) / 1000).toFixed(0)} s`,
+        `${((Date.now() - startedAt.getTime()) / 1000).toFixed(0)} s` +
+        (result.judging.failedCalls ? `  ·  ${result.judging.failedCalls} failed call(s) left out` : ""),
     );
     for (const f of result.unitTests.failures) {
       console.log(`  ✗ [${f.id}] ${f.dimension}: expected ${f.expected}, got ${f.actual ?? "no score"} — ${f.description}`);
@@ -77,6 +97,7 @@ async function main(): Promise<void> {
         JUDGE_HISTORY_PATH,
         buildJudgeRunRecord(result, {
           judgeModel: model,
+          reasoningEffort,
           startedAt,
           label: args.label ?? null,
           git,

@@ -8,7 +8,8 @@ import {
   type CalibrationJudgeScore,
   type UnitTestResult,
 } from "../api/src/eval/judgeCalibration.js";
-import { buildJudgePrompt, judgeBands, type JudgeInput, type JudgeScoreObject } from "../api/src/eval/judgeWorker.js";
+import { buildJudgePrompt, type JudgeInput } from "../api/src/eval/judgeWorker.js";
+import { judgeWithVotes, type JudgeMode, type JudgeOptions, type NumericScores } from "./judging.ts";
 import type { GitState } from "./history.ts";
 
 /** One hand-labelled recommendation in judge-calibration.json. */
@@ -38,15 +39,10 @@ export type UnitTestEntry = {
 export type CalibrationResult = {
   agreement: AgreementResult;
   unitTests: UnitTestResult;
+  judging: { votes: number; mode: JudgeMode; callsMade: number; failedCalls: number };
 };
 
-/**
- * Generous on purpose: a whole labelled set goes out in one call, and a
- * reasoning judge can think for minutes. Calibration is offline.
- */
-const CALIBRATION_TIMEOUT_MS = 10 * 60_000;
-
-function toCalibrationScore(bandName: string, raw: JudgeScoreObject | undefined): CalibrationJudgeScore {
+function toCalibrationScore(bandName: string, raw: NumericScores | undefined): CalibrationJudgeScore {
   const num = (v: unknown) => (typeof v === "number" ? v : null);
   return {
     bandName,
@@ -66,12 +62,15 @@ export async function runCalibration({
   judgeModel,
   calibrationEntries,
   unitTestEntries,
+  judging = {},
 }: {
   judgeModel: ChatModelClient;
   calibrationEntries: CalibrationEntry[];
   unitTestEntries: UnitTestEntry[];
+  /** Votes, batch or per-band calls; default one batch call per set. */
+  judging?: JudgeOptions;
 }): Promise<CalibrationResult> {
-  const labelled = await judgeBands(
+  const labelled = await judgeWithVotes(
     judgeModel,
     calibrationEntries.map((e) => ({
       bandName: e.bandName,
@@ -81,17 +80,17 @@ export async function runCalibration({
       sourceSignals: e.sourceSignals,
       listeners: e.listeners,
     })),
-    CALIBRATION_TIMEOUT_MS,
+    judging,
   );
   const agreement = computeAgreementRate(
     calibrationEntries.map((e) => ({ bandName: e.bandName, humanScores: e.humanScores })),
     calibrationEntries.map((e) => toCalibrationScore(e.bandName, labelled.scores[e.bandName])),
   );
 
-  const directional = await judgeBands(
+  const directional = await judgeWithVotes(
     judgeModel,
     unitTestEntries.map((e) => ({ ...e.input, obscurityTarget: e.input.obscurityTarget ?? null })),
-    CALIBRATION_TIMEOUT_MS,
+    judging,
   );
   const unitTests = runUnitTests(
     unitTestEntries.map((e) => ({
@@ -103,7 +102,16 @@ export async function runCalibration({
     unitTestEntries.map((e) => toCalibrationScore(e.input.bandName, directional.scores[e.input.bandName])),
   );
 
-  return { agreement, unitTests };
+  return {
+    agreement,
+    unitTests,
+    judging: {
+      votes: judging.votes ?? 1,
+      mode: judging.mode ?? "batch",
+      callsMade: labelled.callsMade + directional.callsMade,
+      failedCalls: labelled.failedCalls + directional.failedCalls,
+    },
+  };
 }
 
 /** One line of `history/judge-runs.jsonl`. */
@@ -116,6 +124,10 @@ export type JudgeRunRecord = {
   dataset: { labelledHash: string; unitTestsHash: string; nLabelled: number; nUnitTests: number };
   config: {
     judgeModel: string;
+    /** Scaleway reasoning_effort the judge ran with. */
+    reasoningEffort: string;
+    votes: number;
+    mode: JudgeMode;
     /** Changes when the judge's instructions change; runs on different prompts are not comparable. */
     promptHash: string;
   };
@@ -123,6 +135,8 @@ export type JudgeRunRecord = {
     agreementRate: number;
     agreementByDimension: AgreementResult["perDimension"];
     unitTestPassRate: number;
+    /** Judge calls that failed and were left out; a high count makes the run suspect. */
+    failedCalls: number;
   };
   unitTestFailures: UnitTestResult["failures"];
 };
@@ -135,6 +149,7 @@ export function buildJudgeRunRecord(
   result: CalibrationResult,
   meta: {
     judgeModel: string;
+    reasoningEffort?: string;
     startedAt: Date;
     label: string | null;
     git: GitState | null;
@@ -155,11 +170,18 @@ export function buildJudgeRunRecord(
       nLabelled: meta.calibrationEntries.length,
       nUnitTests: meta.unitTestEntries.length,
     },
-    config: { judgeModel: meta.judgeModel, promptHash: shortHash(buildJudgePrompt([]).system) },
+    config: {
+      judgeModel: meta.judgeModel,
+      reasoningEffort: meta.reasoningEffort ?? "none",
+      votes: result.judging.votes,
+      mode: result.judging.mode,
+      promptHash: shortHash(buildJudgePrompt([]).system),
+    },
     summary: {
       agreementRate: result.agreement.rate,
       agreementByDimension: result.agreement.perDimension,
       unitTestPassRate: result.unitTests.passRate,
+      failedCalls: result.judging.failedCalls,
     },
     unitTestFailures: result.unitTests.failures,
   };

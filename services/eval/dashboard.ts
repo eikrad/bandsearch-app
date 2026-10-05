@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { loadRuns, type GoldenRunRecord, type GoldenRunResult } from "./history.ts";
+import { seededRandom } from "./random.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PATH = join(__dirname, "dashboard-template.html");
@@ -327,18 +328,6 @@ function perQueryMeans(runs: GoldenRunRecord[], metric: Metric): Map<string, num
     }
   }
   return new Map([...values.entries()].map(([id, vs]) => [id, mean(vs)!]));
-}
-
-/** Small seeded PRNG (mulberry32), so the same runs always give the same interval. */
-function seededRandom(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 const BOOTSTRAP_RESAMPLES = 2000;
