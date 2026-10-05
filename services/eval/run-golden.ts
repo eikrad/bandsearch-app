@@ -457,6 +457,7 @@ async function main(): Promise<void> {
     options: {
       label: { type: "string" },
       notes: { type: "string" },
+      repeat: { type: "string" },
       strict: { type: "boolean", default: false },
       "no-history": { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -506,46 +507,55 @@ async function main(): Promise<void> {
     lastFm: lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : undefined,
   });
   if (!lastFmKey) console.warn("LASTFM_API_KEY not set: coverage uses MusicBrainz tags only.");
-  const startedAt = new Date();
-  const results = await runGoldenEntriesSequentially(
-    goldenSet,
-    async (entry) => {
-      console.log(`→ ${entry.id}`);
-      const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
-      const status = result.passed ? "PASS" : "FAIL";
-      console.log(
-        `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
-          `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
-          (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
-      );
-      return result;
-    },
-    {
-      // Keep going so one flaky 502 does not wipe the whole suite.
-      pauseMs: 3000,
-      onError(entry, err) {
-        const result = goldenErrorResult(entry, err);
-        console.error(`  ERROR  ${entry.id}: ${result.error}`);
+  // --repeat N: N runs of the same setup, each recorded on its own. The
+  // dashboard groups them, so per-query means average out single-run noise.
+  const repeat = Math.max(1, Number.parseInt(args.repeat ?? "1", 10) || 1);
+  const results: GoldenResult[] = [];
+  for (let round = 1; round <= repeat; round += 1) {
+    if (repeat > 1) console.log(`\n=== Run ${round} of ${repeat} ===`);
+    const startedAt = new Date();
+    const runResults = await runGoldenEntriesSequentially(
+      goldenSet,
+      async (entry) => {
+        console.log(`→ ${entry.id}`);
+        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
+        const status = result.passed ? "PASS" : "FAIL";
+        console.log(
+          `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
+            `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
+            (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
+        );
         return result;
       },
-    },
-  );
+      {
+        // Keep going so one flaky 502 does not wipe the whole suite.
+        pauseMs: 3000,
+        onError(entry, err) {
+          const result = goldenErrorResult(entry, err);
+          console.error(`  ERROR  ${entry.id}: ${result.error}`);
+          return result;
+        },
+      },
+    );
+    results.push(...runResults);
+    printTable(runResults);
 
-  printTable(results);
-
+    if (recordHistory) {
+      const record = buildGoldenRunRecord({
+        entries: goldenSet,
+        results: runResults,
+        startedAt,
+        finishedAt: new Date(),
+        label: args.label ?? null,
+        notes: args.notes ?? null,
+        git,
+        apiUrl,
+      });
+      appendRun(GOLDEN_HISTORY_PATH, record);
+      console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
+    }
+  }
   if (recordHistory) {
-    const record = buildGoldenRunRecord({
-      entries: goldenSet,
-      results,
-      startedAt,
-      finishedAt: new Date(),
-      label: args.label ?? null,
-      notes: args.notes ?? null,
-      git,
-      apiUrl,
-    });
-    appendRun(GOLDEN_HISTORY_PATH, record);
-    console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
     console.log(`Dashboard: ${pathToFileURL(writeDashboard({ historyPath: GOLDEN_HISTORY_PATH })).href}`);
   }
 
