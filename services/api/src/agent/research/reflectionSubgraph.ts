@@ -24,6 +24,8 @@ export type ReflectionSubgraphDeps = {
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
   /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
   modelClient?: ChatModelClient;
+  /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
+  model?: string;
 };
 
 export const REFLECTION_SCHEMA = new StateSchema({
@@ -49,6 +51,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         timeoutMs: deps.budget.allocate(6000),
         maxExtraQueries: deps.maxReflectionSearches,
         modelClient: deps.modelClient,
+        model: deps.model,
       });
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
       const reflection = await reflector({
@@ -93,6 +96,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         apiKey: deps.geminiApiKey,
         timeoutMs: deps.budget.allocate(12000),
         modelClient: deps.modelClient,
+        model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });

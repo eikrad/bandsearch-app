@@ -3,6 +3,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { wrapSearchHitBlock } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 12000;
 
@@ -148,7 +149,7 @@ export type CreateCandidateExtractorOptions = {
 export async function createCandidateExtractor({
   apiKey,
   timeoutMs = 12000,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   maxCandidates = CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES,
   modelClient: injectedModelClient,
 }: CreateCandidateExtractorOptions): Promise<

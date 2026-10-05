@@ -273,3 +273,24 @@ test("invokeResearchGraph emits a log event per node", async () => {
     assert.ok(events.includes(expected), `expected a ${expected} log event, got ${events.join(", ")}`);
   }
 });
+
+// ------------------------------------------------------------ provenance
+
+test("a research run names the model that wrote its prose", async () => {
+  const { client, fetchImpl } = happyPath();
+
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, model: "test-model-7b" }),
+    input,
+  );
+
+  assert.equal(result.model, "test-model-7b");
+});
+
+test("a research run without a configured model names the default", async () => {
+  const { client, fetchImpl } = happyPath();
+
+  const result = await invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl }), input);
+
+  assert.equal(result.model, "gemini-2.5-flash");
+});

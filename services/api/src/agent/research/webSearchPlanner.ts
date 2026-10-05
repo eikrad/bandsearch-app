@@ -5,6 +5,7 @@ import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
 export const WEB_SEARCH_QUERY_MAX_LENGTH = 400;
@@ -164,7 +165,7 @@ export type CreateWebSearchPlannerOptions = {
 export async function createWebSearchPlanner({
   apiKey,
   timeoutMs = 20000,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
 }: CreateWebSearchPlannerOptions): Promise<(input: WebSearchPlannerInput) => Promise<SearchPlan>> {
   // An injected client stands in for Gemini entirely, so it needs no key.

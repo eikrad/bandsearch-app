@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { POSTGRES_REMOVED_MESSAGE } from "../preferences/preferenceRepository.js";
+import { DEFAULT_RESEARCH_MODEL } from "./models.js";
 
 function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -76,6 +77,7 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
 
   return {
     geminiApiKey,
+    researchModel: String(env.GEMINI_MODEL ?? "").trim() || DEFAULT_RESEARCH_MODEL,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
     mistralApiKey: String(env.MISTRAL_API_KEY ?? "").trim(),
     evalDashboardPassword: String(env.EVAL_DASHBOARD_PASSWORD ?? "").trim(),

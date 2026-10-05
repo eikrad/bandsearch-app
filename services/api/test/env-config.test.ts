@@ -125,3 +125,13 @@ test("validateRuntimeEnv requires a remote URL for turso-sync", () => {
     /TURSO_DATABASE_URL is required/,
   );
 });
+
+test("validateRuntimeEnv defaults the research model to gemini-2.5-flash", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED });
+  assert.equal(config.researchModel, "gemini-2.5-flash");
+});
+
+test("validateRuntimeEnv lets GEMINI_MODEL choose the research model", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED, GEMINI_MODEL: " gemini-2.5-pro " });
+  assert.equal(config.researchModel, "gemini-2.5-pro");
+});
