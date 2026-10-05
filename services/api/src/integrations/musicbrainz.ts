@@ -17,11 +17,16 @@ type MusicBrainzSearchResponse = {
 type MusicBrainzArtistResponse = {
   id?: string;
   name?: string;
+  /** ISO 3166-1 code, set when the artist's area is a country. */
+  country?: string | null;
+  area?: { "iso-3166-1-codes"?: string[]; "iso-3166-2-codes"?: string[] } | null;
   tags?: Array<{ name?: string }>;
   genres?: Array<{ name?: string }>;
   relations?: Array<{
     type?: string;
+    direction?: string;
     url?: { resource?: string };
+    artist?: { id?: string };
   }>;
   "life-span"?: {
     begin?: string;
@@ -29,6 +34,20 @@ type MusicBrainzArtistResponse = {
     ended?: boolean;
   };
 };
+
+/**
+ * The artist's country as an ISO 3166-1 code: MusicBrainz's `country` when the
+ * area is a country, else the country part of a city area's ISO 3166-2 code
+ * ("IS-1" → "IS"). Null when no area is recorded.
+ */
+function countryOf(data: MusicBrainzArtistResponse): string | null {
+  if (typeof data.country === "string" && data.country) return data.country;
+  const area = data.area;
+  const national = area?.["iso-3166-1-codes"]?.[0];
+  if (national) return national;
+  const regional = area?.["iso-3166-2-codes"]?.[0];
+  return regional ? regional.split("-")[0]! : null;
+}
 
 /**
  * Process-wide gate so every MusicBrainz client in this process (API routes,
@@ -164,7 +183,37 @@ export function createMusicBrainzClient({
           genres,
           urls,
           lifeSpan,
+          country: countryOf(data),
         };
+      });
+    },
+
+    /**
+     * MusicBrainz ids of the people recorded as members of a band (past and
+     * present). A separate request with inc=artist-rels, so the pipeline's
+     * lookupArtist URL — and the eval replay recordings keyed on it — stay as
+     * they are.
+     */
+    async lookupBandMembers(mbid: string): Promise<string[]> {
+      const id = String(mbid ?? "").trim();
+      if (!id) throw new Error("mbid is required for lookupBandMembers");
+      return request(async () => {
+        const url = `${baseUrl}/artist/${encodeURIComponent(id)}?fmt=json&inc=artist-rels`;
+        const response = await fetchWithTimeoutAndRetry({
+          fetchImpl,
+          url,
+          timeoutMs,
+          retries,
+          headers: { "user-agent": USER_AGENT, accept: "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`musicbrainz request failed with status ${response.status}`);
+        }
+        const data = (await response.json()) as MusicBrainzArtistResponse;
+        return (Array.isArray(data.relations) ? data.relations : [])
+          .filter((rel) => rel?.type === "member of band" && rel.direction === "backward")
+          .map((rel) => rel.artist?.id)
+          .filter((memberId): memberId is string => typeof memberId === "string" && memberId !== "");
       });
     },
   };

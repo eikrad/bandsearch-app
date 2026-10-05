@@ -147,7 +147,7 @@ test("createTagResolver merges tags and genres", async () => {
   const resolver = createTagResolver(
     {
       async lookupArtist() {
-        return { id: "m", name: "X", tags: ["shoegaze"], genres: ["black metal"], urls: [], lifeSpan: { ended: false } };
+        return { id: "m", name: "X", tags: ["shoegaze"], genres: ["black metal"], urls: [], lifeSpan: { ended: false }, country: null };
       },
     },
     0,
@@ -161,7 +161,7 @@ test("createTagResolver looks up each mbid only once", async () => {
     {
       async lookupArtist() {
         calls += 1;
-        return { id: "m", name: "X", tags: ["drone"], genres: [], urls: [], lifeSpan: { ended: false } };
+        return { id: "m", name: "X", tags: ["drone"], genres: [], urls: [], lifeSpan: { ended: false }, country: null };
       },
     },
     0,
@@ -193,7 +193,7 @@ test("createTagResolver survives a failure and keeps serving later lookups", asy
           first = false;
           throw new Error("boom");
         }
-        return { id: "m", name: "X", tags: ["ambient"], genres: [], urls: [], lifeSpan: { ended: false } };
+        return { id: "m", name: "X", tags: ["ambient"], genres: [], urls: [], lifeSpan: { ended: false }, country: null };
       },
     },
     0,
@@ -208,7 +208,7 @@ test("createTagResolver spaces requests by the throttle interval", async () => {
     {
       async lookupArtist() {
         startedAt.push(Date.now());
-        return { id: "m", name: "X", tags: [], genres: [], urls: [], lifeSpan: { ended: false } };
+        return { id: "m", name: "X", tags: [], genres: [], urls: [], lifeSpan: { ended: false }, country: null };
       },
     },
     40,
