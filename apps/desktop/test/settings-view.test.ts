@@ -11,7 +11,7 @@ const baseViewProps = {
   hasBraveKey: false,
   hasTursoConfig: false,
   statusMessage: null,
-  geminiStatusMessage: null,
+  llmStatusMessage: null,
   braveStatusMessage: null,
   tursoStatusMessage: null,
 };
@@ -68,30 +68,30 @@ test("SettingsView renders Turso status message when present", () => {
 
 // ── from-env presence states ────────────────────────────────────────────────
 
-test("SettingsView shows 'from .env' status for Gemini key when geminiKeyFromEnv is true", () => {
+test("SettingsView shows 'from .env' status for the LLM key when llmKeyFromEnv is true", () => {
   const html = renderToStaticMarkup(
     React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      viewProps: { ...baseViewProps, hasStoredKey: true, llmKeyFromEnv: true },
       handlers: baseHandlers,
     }),
   );
   assert.equal(html.includes("loaded from .env"), true, "should announce env-loaded key");
 });
 
-test("SettingsView does not render gemini input when geminiKeyFromEnv is true", () => {
+test("SettingsView does not render the LLM key input when llmKeyFromEnv is true", () => {
   const html = renderToStaticMarkup(
     React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      viewProps: { ...baseViewProps, hasStoredKey: true, llmKeyFromEnv: true },
       handlers: baseHandlers,
     }),
   );
-  assert.equal(html.includes('id="gemini-api-key"'), false, "gemini input should be hidden behind Override");
+  assert.equal(html.includes('id="llm-api-key"'), false, "the LLM key input should be hidden behind Override");
 });
 
-test("SettingsView shows Override button when geminiKeyFromEnv is true", () => {
+test("SettingsView shows Override button when llmKeyFromEnv is true", () => {
   const html = renderToStaticMarkup(
     React.createElement(SettingsView, {
-      viewProps: { ...baseViewProps, hasStoredKey: true, geminiKeyFromEnv: true },
+      viewProps: { ...baseViewProps, hasStoredKey: true, llmKeyFromEnv: true },
       handlers: baseHandlers,
     }),
   );
@@ -145,7 +145,7 @@ test("SettingsView does not show missing-key banner when keys are from env", () 
         ...baseViewProps,
         hasStoredKey: true,
         hasBraveKey: true,
-        geminiKeyFromEnv: true,
+        llmKeyFromEnv: true,
         braveKeyFromEnv: true,
       },
       handlers: baseHandlers,

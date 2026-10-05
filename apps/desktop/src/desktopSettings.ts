@@ -29,14 +29,14 @@ async function defaultProbeTursoConnection(url: string, token: string): Promise<
   }
 }
 
-export interface GeminiSettingsControllerOptions {
+export interface DesktopSettingsControllerOptions {
   invokeTauri?: (cmd: string, args?: Record<string, string>) => Promise<unknown>;
   probeTursoConnection?: (url: string, token: string) => Promise<ProbeResult>;
 }
 
-export function createGeminiSettingsController(options: GeminiSettingsControllerOptions = {}) {
+export function createDesktopSettingsController(options: DesktopSettingsControllerOptions = {}) {
   const { invokeTauri, probeTursoConnection } = options;
-  let geminiStatus: StatusMessage | null = null;
+  let llmStatus: StatusMessage | null = null;
   let braveStatus: StatusMessage | null = null;
   let tursoStatus: StatusMessage | null = null;
   let apiEndpointStatus: StatusMessage | null = null;
@@ -44,11 +44,11 @@ export function createGeminiSettingsController(options: GeminiSettingsController
   async function readStatus() {
     if (typeof invokeTauri === "function") {
       try {
-        return (await invokeTauri("gemini_config_status")) as {
+        return (await invokeTauri("llm_config_status")) as {
           hasStoredKey?: boolean;
           hasBraveKey?: boolean;
           hasTursoConfig?: boolean;
-          geminiKeyFromEnv?: boolean;
+          llmKeyFromEnv?: boolean;
           braveKeyFromEnv?: boolean;
           tursoFromEnv?: boolean;
           onboardingComplete?: boolean;
@@ -80,7 +80,7 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       const ls = globalThis.localStorage;
       if (!ls) return { hasStoredKey: false, onboardingComplete: false, apiEndpointUrl: "" };
       return {
-        hasStoredKey: Boolean(ls.getItem("bandsearch_gemini_api_key")?.trim()),
+        hasStoredKey: Boolean(ls.getItem("bandsearch_llm_api_key")?.trim()),
         onboardingComplete: ls.getItem(FIRST_RUN_ONBOARDING_STORAGE_KEY) === "1",
         apiEndpointUrl: String(ls.getItem(API_ENDPOINT_STORAGE_KEY) ?? "").trim(),
       };
@@ -109,7 +109,7 @@ export function createGeminiSettingsController(options: GeminiSettingsController
     let hasStoredKey = false;
     let hasBraveKey = false;
     let hasTursoConfig = false;
-    let geminiKeyFromEnv = false;
+    let llmKeyFromEnv = false;
     let braveKeyFromEnv = false;
     let tursoFromEnv = false;
     let apiEndpointUrl = "";
@@ -119,7 +119,7 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       hasStoredKey = Boolean(r?.hasStoredKey);
       hasBraveKey = Boolean(r?.hasBraveKey);
       hasTursoConfig = Boolean(r?.hasTursoConfig);
-      geminiKeyFromEnv = Boolean(r?.geminiKeyFromEnv);
+      llmKeyFromEnv = Boolean(r?.llmKeyFromEnv);
       braveKeyFromEnv = Boolean(r?.braveKeyFromEnv);
       tursoFromEnv = Boolean(r?.tursoFromEnv);
       apiEndpointUrl = String(r?.apiEndpointUrl ?? "").trim();
@@ -127,7 +127,7 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       try {
         const ls = globalThis.localStorage;
         if (ls) {
-          hasStoredKey = Boolean(ls.getItem("bandsearch_gemini_api_key")?.trim());
+          hasStoredKey = Boolean(ls.getItem("bandsearch_llm_api_key")?.trim());
           hasBraveKey = Boolean(ls.getItem("bandsearch_brave_api_key")?.trim());
           hasTursoConfig = Boolean(ls.getItem("bandsearch_turso_database_url")?.trim());
           apiEndpointUrl = String(ls.getItem(API_ENDPOINT_STORAGE_KEY) ?? "").trim();
@@ -143,49 +143,49 @@ export function createGeminiSettingsController(options: GeminiSettingsController
       hasStoredKey,
       hasBraveKey,
       hasTursoConfig,
-      geminiKeyFromEnv,
+      llmKeyFromEnv,
       braveKeyFromEnv,
       tursoFromEnv,
       apiEndpointUrl,
-      statusMessage: geminiStatus ?? braveStatus,
-      geminiStatusMessage: geminiStatus,
+      statusMessage: llmStatus ?? braveStatus,
+      llmStatusMessage: llmStatus,
       braveStatusMessage: braveStatus,
       tursoStatusMessage: tursoStatus,
       apiEndpointStatusMessage: apiEndpointStatus,
     };
   }
 
-  async function saveGeminiApiKey(apiKey: string) {
+  async function saveLlmApiKey(apiKey: string) {
     const trimmed = String(apiKey || "").trim();
     if (!trimmed) {
-      geminiStatus = { type: "error", text: "Enter a non-empty API key." };
+      llmStatus = { type: "error", text: "Enter a non-empty API key." };
       return;
     }
 
     if (typeof invokeTauri === "function") {
       try {
-        await invokeTauri("save_gemini_api_key", { apiKey: trimmed });
-        geminiStatus = {
+        await invokeTauri("save_llm_api_key", { apiKey: trimmed });
+        llmStatus = {
           type: "success",
           text: "Saved. The API process was restarted with your key.",
         };
       } catch (e) {
         const err = e as { message?: string };
-        geminiStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+        llmStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
       }
       return;
     }
 
     try {
-      globalThis.localStorage?.setItem("bandsearch_gemini_api_key", trimmed);
+      globalThis.localStorage?.setItem("bandsearch_llm_api_key", trimmed);
       globalThis.localStorage?.setItem(FIRST_RUN_ONBOARDING_STORAGE_KEY, "1");
-      geminiStatus = {
+      llmStatus = {
         type: "success",
         text: "Stored in browser storage (development only). Use a .env file or the desktop app for production.",
       };
     } catch (e) {
       const err = e as { message?: string };
-      geminiStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+      llmStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
     }
   }
 
@@ -315,7 +315,7 @@ export function createGeminiSettingsController(options: GeminiSettingsController
 
   return {
     getSettingsViewProps,
-    saveGeminiApiKey,
+    saveLlmApiKey,
     saveBraveApiKey,
     saveTursoConfig,
     clearTursoConfig,

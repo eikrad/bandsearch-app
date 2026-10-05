@@ -1,7 +1,7 @@
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "./index.js";
 import { createHashRouter } from "./createHashRouter.js";
 import { createSavedArtistsShell } from "./createSavedArtistsShell.js";
-import { createGeminiSettingsController } from "./geminiDesktopSettings.js";
+import { createDesktopSettingsController } from "./desktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { getChatSessionId, setChatSessionId } from "./chatSessionStore.js";
@@ -169,7 +169,7 @@ export async function startDesktopBrowserApp({
   // always targets the same API the rest of the app talks to.
   let resolvedBaseUrl = normalizeBase(apiBaseUrl);
 
-  const gemini = createGeminiSettingsController({
+  const settings = createDesktopSettingsController({
     invokeTauri: typeof resolvedInvoke === "function" ? resolvedInvoke : undefined,
     probeTursoConnection: async (url: string, token: string) => {
       try {
@@ -187,7 +187,7 @@ export async function startDesktopBrowserApp({
 
   // Read the persisted config before building API clients so a configured remote
   // endpoint becomes the base URL for every caller (chat, auth, preferences).
-  const gate = await gemini.getBootstrapGate();
+  const gate = await settings.getBootstrapGate();
   if (gate.apiEndpointUrl) resolvedBaseUrl = normalizeBase(gate.apiEndpointUrl);
 
   const authClient = createAuthApiClient({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch });
@@ -307,7 +307,7 @@ export async function startDesktopBrowserApp({
     actionHandlers,
     router,
     savedArtistsShell,
-    getSettingsViewProps: async () => ({ ...(await gemini.getSettingsViewProps()), accountsEnabled }),
+    getSettingsViewProps: async () => ({ ...(await settings.getSettingsViewProps()), accountsEnabled }),
     onExportAccountData: async () => {
       const result = await authClient.exportAccountData();
       if (result.ok === false) throw new Error(result.error);
@@ -319,12 +319,12 @@ export async function startDesktopBrowserApp({
       clearAuthToken();
       return { ok: true };
     },
-    saveGeminiApiKey: (key: string) => gemini.saveGeminiApiKey(key),
-    saveBraveApiKey: (key: string) => gemini.saveBraveApiKey(key),
-    saveTursoConfig: (url: string, token: string) => gemini.saveTursoConfig(url, token),
-    clearTursoConfig: () => gemini.clearTursoConfig(),
-    saveApiEndpointUrl: (url: string) => gemini.saveApiEndpointUrl(url),
-    completeOnboarding: async () => { await gemini.completeOnboarding(); await runAuthGate(); },
+    saveLlmApiKey: (key: string) => settings.saveLlmApiKey(key),
+    saveBraveApiKey: (key: string) => settings.saveBraveApiKey(key),
+    saveTursoConfig: (url: string, token: string) => settings.saveTursoConfig(url, token),
+    clearTursoConfig: () => settings.clearTursoConfig(),
+    saveApiEndpointUrl: (url: string) => settings.saveApiEndpointUrl(url),
+    completeOnboarding: async () => { await settings.completeOnboarding(); await runAuthGate(); },
     onLogin,
     onRegister,
     onResetPassword,

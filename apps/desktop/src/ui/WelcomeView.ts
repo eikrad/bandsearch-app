@@ -14,7 +14,7 @@ const palette = {
 };
 
 /**
- * First-run welcome: guides the user to add a Gemini API key (Settings) or skip for later.
+ * First-run welcome: guides the user to add a Scaleway API key (Settings) or skip for later.
  */
 export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: string }; handlers: WelcomeHandlers }) {
   void viewProps;
@@ -41,7 +41,7 @@ export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: str
       React.createElement(
         "p",
         { style: { fontSize: "14px", color: palette.textSecondary, lineHeight: 1.55, margin: 0 } },
-        "Bandsearch uses Google Gemini for niche music recommendations. Add a Gemini API key once on this device, then you can start chatting. You can change it anytime in Settings.",
+        "Bandsearch finds niche music with AI language models hosted by Scaleway in France. Add a Scaleway API key once on this device, then you can start chatting. You can change it anytime in Settings.",
       ),
     ),
     React.createElement(

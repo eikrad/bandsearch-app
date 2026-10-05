@@ -179,7 +179,7 @@ test("WelcomeView explains why an API key is needed", () => {
     React.createElement(WelcomeView, { viewProps: {}, handlers: { onGoToSettings: () => {}, onSkip: () => {} } }),
   );
 
-  assert.match(html, /Gemini API key/);
+  assert.match(html, /Scaleway API key/);
 });
 
 test("WelcomeView offers both adding a key and skipping", () => {
