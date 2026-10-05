@@ -12,6 +12,7 @@ import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
 import { createWebSearchPlanner, type SearchPlan } from "./webSearchPlanner.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 export type ResearchGraphDeps = {
   geminiApiKey: string;
@@ -31,6 +32,11 @@ export type ResearchGraphDeps = {
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
    */
   modelClient?: ChatModelClient;
+  /**
+   * Model id for every research node; defaults to `DEFAULT_RESEARCH_MODEL`.
+   * Reported back as the run's `model`, the provenance of the ranker's prose.
+   */
+  model?: string;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
   onLog?: (
@@ -125,6 +131,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
     modelClient: deps.modelClient,
+    model: deps.model,
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
@@ -133,6 +140,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(20000),
         modelClient: deps.modelClient,
+        model: deps.model,
       });
       const plan = await planWeb({
         userQuery: state.userQuery,
@@ -157,6 +165,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(18000),
         modelClient: deps.modelClient,
+        model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       // Cap hits so the model emits a manageable candidate list within the timeout.
@@ -239,6 +248,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: Math.max(budget.allocate(12000), 12000),
         modelClient: deps.modelClient,
+        model: deps.model,
       });
       const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
       log("info", "research_obscurity_filter", {
@@ -282,7 +292,13 @@ export type PipelineDiagnostics = {
 export async function invokeResearchGraph(
   deps: ResearchGraphDeps,
   input: ResearchGraphInput,
-): Promise<{ recommendations: unknown[]; assistantReply: string; pipelineDiagnostics: PipelineDiagnostics }> {
+): Promise<{
+  recommendations: unknown[];
+  assistantReply: string;
+  pipelineDiagnostics: PipelineDiagnostics;
+  /** The model that wrote the ranker's prose — the run's provenance. */
+  model: string;
+}> {
   const budget = createResearchBudget(deps.researchTimeoutMs);
   const graph = await buildResearchGraph(deps, budget);
   const result = await graph.invoke({
@@ -317,5 +333,8 @@ export async function invokeResearchGraph(
     recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
     assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
     pipelineDiagnostics,
+    // Every node runs on deps.model today. Should they ever diverge, this must
+    // name the ranker's model: the ranker writes the user-visible `why` prose.
+    model: deps.model ?? DEFAULT_RESEARCH_MODEL,
   };
 }

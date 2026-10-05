@@ -346,7 +346,7 @@ File: `services/eval/golden-set.json`
 
 **No `expectedBands`.** Earlier drafts carried a reference band list for calibration. That field was never a pass/fail gate, never fed `judge-calibration.json` (a separate dataset with no query overlap), and is indefensible over an open-ended search of all recorded music — many equally valid answers exist for any query. Dropped rather than kept as dead weight.
 
-**How `nuggetCoverage@8` is scored:** for each top-8 recommendation with a `musicbrainzArtistId`, the runner looks up that artist's MB tags+genres (memoized; spacing is enforced by `createMusicBrainzClient`'s process-wide ~1.1s gate). Golden entries run **sequentially**, and the runner waits ~1.2s after `/recommendations` returns before tag lookups so the API and eval don't stack on the same MusicBrainz IP. A nugget counts as covered when some tag *contains* it on whole-word boundaries after normalizing case/hyphens/punctuation — deliberately one-directional, so a "post-black metal" tag covers the nugget "black metal", but not the reverse. If no top-8 band yields any tags, the coverage gate is skipped (availability failure, not a quality failure).
+**How `nuggetCoverage@8` is scored:** for each top-8 recommendation with a `musicbrainzArtistId`, the runner looks up that artist's MB tags+genres (memoized; spacing is enforced by `createMusicBrainzClient`'s process-wide ~1.1s gate). Golden entries run **sequentially**, and the runner waits ~1.2s after `/recommendations` returns before tag lookups so the API and eval don't stack on the same MusicBrainz IP. A nugget counts as covered when some tag *contains* it on whole-word boundaries after normalizing case/hyphens/punctuation — deliberately one-directional, so a "post-black metal" tag covers the nugget "black metal", but not the reverse. If no top-8 band yields any tags, the coverage gate is skipped (availability failure, not a quality failure) and the run history records the coverage as unknown (`null`), outside the coverage mean — counting it as 0 would let MusicBrainz tag availability pose as recommendation quality.
 
 **Metrics for `run-golden.ts`:**
 
@@ -361,6 +361,10 @@ File: `services/eval/golden-set.json`
 **Corrected 2026-09-16 (`nuggetCoverage@8`).** After removing `precision@8`, the surviving metric was still wrong: `golden-set.json` still stored band names in `nuggets`, and the runner still matched them against `result.artist`. That is exact-name recall — precisely the metric the design argued against. Rewired: `nuggets` are sonic properties; coverage is scored against MusicBrainz tags/genres fetched by the runner from each recommendation's `musicbrainzArtistId`.
 
 **Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query, resolves MB tags for the top-8, and computes both metrics. Run manually before/after significant prompt changes.
+
+**Run history and dashboard (Step 9b, added 2026-10-05, #209).** Every run appends one record to `services/eval/history/golden-runs.jsonl` (committed): run id, label, git commit/branch/dirty, two golden-set hashes (`questionsHash` over ids and queries groups comparable runs; `contentHash` also covers nuggets, anti-bands and thresholds, so a regrading is visible), the model and pipeline version as reported by the API in `meta.model` / `meta.pipelineVersion` (never assumed by the runner), and per query the status, both metrics, `/recommendations` latency, top 8 and warnings. A query the API did not answer is recorded as `error` with no metrics: it counts in an error rate, stays out of the quality means, and is never a regression. Runs on uncommitted tracked files are refused unless `--allow-dirty`.
+
+`services/eval/dashboard.ts` turns the history into a self-contained `services/eval/reports/dashboard.html` (gitignored). Each run is compared with the latest run labelled `baseline` and with the previous run: pass/fail flips with an exact two-sided sign test (with 10 queries, single flips are hints, not findings), per-query **top-8 overlap** with the compared run, and a **noise floor** — the overlap between repeat runs of an identical setup. Answers move far more often than means do (Chen et al. 2023, second-brain *Production Drift Monitoring*), so an overlap near the noise floor says a change did little even when the pass rate moved. Runs graded against different targets (`contentHash`) or scoring (`GOLDEN_METRICS_VERSION`) get no regression verdict. Layout and comparison rules are ported from the Radiationsafety eval dashboard.
 
 ---
 
@@ -442,6 +446,8 @@ services/api/src/eval/
 services/eval/
   golden-set.json          — curated query → sonic nuggets + antiBands dataset
   run-golden.ts            — regression script (antiBandRate, nuggetCoverage vs MB tags)
+  history.ts               — golden-run records, appended to history/golden-runs.jsonl
+  dashboard.ts             — run comparison + self-contained HTML dashboard
   judge-calibration.json   — hand-labeled set for meta-evaluation
   judge-unit-tests.json    — GroUSE-style edge cases for judge validation
 ```

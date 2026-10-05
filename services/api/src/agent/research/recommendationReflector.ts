@@ -6,6 +6,7 @@ import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 export const REFLECTION_QUERY_MAX_LENGTH = 400;
 
@@ -87,7 +88,7 @@ export async function createRecommendationReflector({
   apiKey,
   timeoutMs = 6000,
   maxExtraQueries = 4,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
 }: CreateRecommendationReflectorOptions): Promise<
   (input: {

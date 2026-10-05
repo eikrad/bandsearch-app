@@ -169,7 +169,8 @@ duty in Art. 50 applies to it. Two disclosures ship in the UI: a permanent line
 in the chat composer stating that recommendations come from Google Gemini, and a
 per-recommendation "AI-generated, not human-curated" caption. Recommendation
 cards also carry `data-ai-generated="true"`, and `/recommendations` returns
-`aiGenerated`, `generatedAt` and `pipelineVersion` in its `meta`.
+`aiGenerated`, `generatedAt`, `pipelineVersion` and the generating `model` in
+its `meta`.
 
 The privacy policy lives in `apps/desktop/src/ui/privacyPolicyText.ts` and is
 readable in-app at `#/privacy`, linked from **Settings → Privacy & data**. It
@@ -224,6 +225,7 @@ Common optional variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Model for every research node; returned as `meta.model` on each recommendation |
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
@@ -285,6 +287,31 @@ npm run test:e2e  # Playwright end-to-end smoke tests (spins up the API and a st
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
 
+### Golden runs and the eval dashboard
+
+The golden set (`services/eval/golden-set.json`) is the regression check for
+recommendation quality. Start the API (`npm run dev` or the desktop
+sidecar), then:
+
+```bash
+npm run golden -w services/eval -- --label baseline   # run all queries, record the run
+npm run dashboard -w services/eval                    # rebuild the dashboard on its own
+```
+
+Every run appends one line to `services/eval/history/golden-runs.jsonl`
+(committed): git commit, the model the API reported, and per query the
+status, `nuggetCoverage@8`, `antiBandRate@8`, latency and top 8. It then
+rewrites `services/eval/reports/dashboard.html` (gitignored), a self-contained
+page that compares each run with the latest run labelled `baseline` and with
+the previous run: flipped queries with a sign test, how much the top 8 changed
+against the noise floor of repeat runs, and changed settings.
+
+A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
+`--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at
+another deployment, `BANDSEARCH_API_TOKEN` authenticates against one with more
+than one account. The live-traffic dashboard at `GET /eval/dashboard` is a
+different thing: it shows scores from real requests, not test runs.
+
 ---
 
 ## Monorepo Structure
@@ -292,7 +319,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 ```
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
-services/eval/    — golden dataset and eval runner (anti-band gate, nugget coverage)
+services/eval/    — golden dataset, eval runner, run history and dashboard
 shared/schemas/   — shared TypeScript validation contracts
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```

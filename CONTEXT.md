@@ -40,6 +40,10 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with `nuggets` (atomic sonic properties — genre, era, trait) and `antiBands` (bands that must not appear). The eval runner (`run-golden.ts`) scores `nuggetCoverage@8` against MusicBrainz tags/genres of the top-8 recommendations (fail below per-entry `minNuggetCoverage`, default 0.5) and `antiBandRate@8` (fail if > 50%; `--strict` fails on any hit). There is no `expectedBands` list: open-ended retrieval has no single correct answer set.
 
+- **Golden run** — one execution of the golden dataset against an API, recorded as a line in `services/eval/history/golden-runs.jsonl` with the model the API reported. A query the API did not answer has status `error` and no metrics; it never counts as a regression. The run labelled `baseline` (the latest such) is what later runs are compared against.
+
+- **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does.
+
 - **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
 
 - **Preference repository** — the abstract storage interface for saved bands, artist groups, and user accounts. Concrete adapters: SQLite (`better-sqlite3`), Turso/libSQL (direct, or a local replica synced via `turso-sync`), and in-memory. A Postgres adapter existed early on and was removed for lacking user scoping (see `docs/ROADMAP.md`, "Architecture — Pending Deepening" entry 8); `PREFERENCE_STORE=postgres` now throws on startup rather than connecting to anything.

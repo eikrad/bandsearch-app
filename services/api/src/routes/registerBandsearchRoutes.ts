@@ -306,9 +306,8 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         });
       }
 
-      // EU AI Act Art. 50(2): layered provenance for the generated prose.
-      // Model id is deliberately absent — it is a per-node default across the
-      // agent files with no path into meta; tracked as a follow-up.
+      // EU AI Act Art. 50(2): layered provenance for the generated prose. The
+      // model id arrives with the pipeline's public meta as `model`.
       const provenance = {
         aiGenerated: true,
         generatedAt: new Date().toISOString(),

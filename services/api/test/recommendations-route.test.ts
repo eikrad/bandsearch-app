@@ -516,7 +516,7 @@ test("a recommendation response carries provenance for its generated text", asyn
           { artist: "Fen", why: "Stylistic overlap", sourceSignals: ["agent_reasoning"] },
         ],
         assistantReply: "One pick for you.",
-        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        meta: { modeUsed: "fresh", usedPreferenceContext: false, model: "test-model-7b" },
       }),
     },
   });
@@ -536,4 +536,5 @@ test("a recommendation response carries provenance for its generated text", asyn
     /^\d{4}-\d{2}-\d{2}T/,
     "response carries an ISO timestamp for when the text was generated",
   );
+  assert.equal(stringField(meta, "model"), "test-model-7b", "response names the model that wrote the prose");
 });

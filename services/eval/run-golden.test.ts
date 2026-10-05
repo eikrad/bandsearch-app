@@ -5,9 +5,12 @@ import {
   computeNuggetCoverage,
   createTagResolver,
   findUncoveredNuggets,
+  goldenErrorResult,
   MB_POST_RECOMMENDATION_COOLDOWN_MS,
   normalizeTerm,
   runGoldenEntriesSequentially,
+  runGoldenEntry,
+  type GoldenResult,
 } from "./run-golden.ts";
 
 // computePrecisionAtK and its tests were removed: it divided hits by the size of
@@ -226,12 +229,16 @@ test("runGoldenEntriesSequentially does not start the next entry until the previ
       return {
         id: entry.id,
         query: entry.query,
+        status: "pass",
         resultNames: [],
         antiBandRateAt8: 0,
         nuggetCoverageAt8: 0,
         uncoveredNuggets: [],
         passed: true,
         warnings: [],
+        latencyMs: 30,
+        model: null,
+        pipelineVersion: null,
       };
     },
   );
@@ -241,4 +248,113 @@ test("runGoldenEntriesSequentially does not start the next entry until the previ
 
 test("MB_POST_RECOMMENDATION_COOLDOWN_MS leaves at least one MusicBrainz IP interval", () => {
   assert.ok(MB_POST_RECOMMENDATION_COOLDOWN_MS >= 1100);
+});
+
+// ─── runGoldenEntry: what one query records ──────────────────────────────────
+
+function apiReturning(body: unknown, status = 200): { fetchImpl: typeof fetch; requests: Request[] } {
+  const requests: Request[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(new Request(input, init));
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  return { fetchImpl, requests };
+}
+
+const noTags = { resolve: async () => ["post-black metal"] };
+
+test("a golden query records the model and pipeline version the API reported", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [{ artist: "Fen", musicbrainzArtistId: "mbid-fen" }],
+    meta: { model: "gemma-4-26b-a4b-it", pipelineVersion: "0.4.0" },
+  });
+
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "blackgaze", query: "bands like Alcest", nuggets: ["black metal"] },
+    noTags,
+    { fetchImpl, mbCooldownMs: 0 },
+  );
+
+  assert.equal(result.status, "pass");
+  assert.equal(result.model, "gemma-4-26b-a4b-it");
+  assert.equal(result.pipelineVersion, "0.4.0");
+  assert.equal(typeof result.latencyMs, "number");
+});
+
+test("a golden query measures the API call, not the MusicBrainz lookups after it", async () => {
+  let clock = 0;
+  const { fetchImpl } = apiReturning({ recommendations: [{ artist: "Fen", musicbrainzArtistId: "m" }], meta: {} });
+  const slowTags = {
+    resolve: async () => {
+      clock += 5000;
+      return ["drone"];
+    },
+  };
+
+  const result = await runGoldenEntry("http://api.test", { id: "x", query: "q" }, slowTags, {
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      clock += 1200;
+      return fetchImpl(input, init);
+    }) as typeof fetch,
+    mbCooldownMs: 0,
+    now: () => clock,
+  });
+
+  assert.equal(result.latencyMs, 1200);
+});
+
+test("a golden query sends the API token when one is configured", async () => {
+  const { fetchImpl, requests } = apiReturning({ recommendations: [], meta: {} });
+
+  await runGoldenEntry("http://api.test", { id: "x", query: "q" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    apiToken: "tok-123",
+  });
+
+  assert.equal(requests[0]!.headers.get("authorization"), "Bearer tok-123");
+});
+
+test("a golden query against a failing API throws, for the runner to record as an error", async () => {
+  const { fetchImpl } = apiReturning({ error: { code: "bad_gateway" } }, 502);
+  await assert.rejects(
+    runGoldenEntry("http://api.test", { id: "x", query: "q" }, noTags, { fetchImpl, mbCooldownMs: 0 }),
+    /API error 502/,
+  );
+});
+
+test("one failing query does not stop the golden run", async () => {
+  const results = await runGoldenEntriesSequentially(
+    [{ id: "a", query: "q1" }, { id: "b", query: "q2", nuggets: ["drone"] }, { id: "c", query: "q3" }],
+    async (entry): Promise<GoldenResult> => {
+      if (entry.id === "b") throw new Error("API error 502 for query \"q2\"");
+      return { ...goldenErrorResult(entry, "unused"), status: "pass", passed: true, warnings: [] };
+    },
+    { onError: goldenErrorResult },
+  );
+
+  assert.deepEqual(results.map((r) => r.status), ["pass", "error", "pass"]);
+  const failed = results[1]!;
+  assert.equal(failed.passed, false);
+  assert.match(failed.error ?? "", /API error 502/);
+  assert.deepEqual(failed.uncoveredNuggets, ["drone"]);
+});
+
+test("a query whose bands have no MusicBrainz tags has unknown coverage, not zero", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [{ artist: "Obscure Act", musicbrainzArtistId: "mbid-x" }],
+    meta: { model: "m" },
+  });
+  const untagged = { resolve: async () => [] as string[] };
+
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "x", query: "q", nuggets: ["funeral doom"] },
+    untagged,
+    { fetchImpl, mbCooldownMs: 0 },
+  );
+
+  assert.equal(result.nuggetCoverageAt8, null);
+  assert.equal(result.status, "pass", "the anti-band gate still decides pass/fail");
 });

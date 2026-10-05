@@ -12,6 +12,7 @@ export type RecommendationRuntimeConfig = {
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   geminiApiKey?: string;
+  researchModel?: string;
   braveApiKey?: string;
   lastFmApiKey?: string;
   researchMaxInitialSearches?: number;
@@ -70,6 +71,7 @@ export function createRecommendationPipeline({
       activeService = createResearchRecommendationService({
         graphDeps: {
           geminiApiKey: apiKey,
+          model: cfg.researchModel,
           braveApiKey: braveKey,
           maxInitialSearches: cfg.researchMaxInitialSearches ?? 6,
           maxReflectionSearches: cfg.researchMaxReflectionSearches ?? 4,
@@ -142,7 +144,7 @@ export function createRecommendationPipeline({
 
       const obscurityTarget = typeof request.obscurityTarget === "string" ? request.obscurityTarget : undefined;
 
-      const { recommendations, assistantReply = "", pipelineDiagnostics } = await activeService.getRecommendations(
+      const { recommendations, assistantReply = "", pipelineDiagnostics, model } = await activeService.getRecommendations(
         String(request.query ?? ""),
         {
           mode,
@@ -158,6 +160,7 @@ export function createRecommendationPipeline({
         meta: {
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,
+          model,
           pipelineDiagnostics: pipelineDiagnostics ?? null,
         },
       };

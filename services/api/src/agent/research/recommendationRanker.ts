@@ -7,6 +7,7 @@ import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
 
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 function pickReplyFromParsed(parsed: unknown): string {
   if (!parsed || typeof parsed !== "object") return "";
@@ -195,7 +196,7 @@ export function buildRankUserPartsForTest(input: {
 export async function createRecommendationRanker({
   apiKey,
   timeoutMs = 12000,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
 }: CreateRecommendationRankerOptions): Promise<
   (input: RankInput) => Promise<{ recommendations: unknown[]; assistantReply: string }>
