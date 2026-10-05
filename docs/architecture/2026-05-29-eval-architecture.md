@@ -379,7 +379,7 @@ File: `services/eval/golden-set.json`
 | Constraint | Field | MusicBrainz source |
 |---|---|---|
 | `country` | ISO 3166-1 code | `country`, else the country part of the city area's ISO 3166-2 code |
-| `beganAfter` / `beganBefore` | year, inclusive | `life-span.begin` |
+| `formedFrom` / `formedUntil` | year, inclusive | `life-span.begin` |
 | `ended` | split up or active | `life-span.ended` |
 | `sharesMemberWith` | `{ mbid, name }` | `member of band` relations (`inc=artist-rels`, a separate request so the pipeline's lookup URL and replay recordings stay unchanged) |
 

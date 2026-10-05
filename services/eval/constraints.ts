@@ -9,10 +9,10 @@
 export type GoldenConstraints = {
   /** ISO 3166-1 code, e.g. "IS". */
   country?: string;
-  /** Formed in this year or later. */
-  beganAfter?: number;
-  /** Formed in this year or earlier. */
-  beganBefore?: number;
+  /** Formed in this year or later (inclusive). */
+  formedFrom?: number;
+  /** Formed in this year or earlier (inclusive). */
+  formedUntil?: number;
   /** true: split up; false: still active. */
   ended?: boolean;
   /** Shares at least one past or present member with this band. */
@@ -48,8 +48,8 @@ function outcomes(
     result.push(["country", facts.country === null ? null : facts.country.toUpperCase() === constraints.country.toUpperCase()]);
   }
   const year = beganYear(facts);
-  if (constraints.beganAfter !== undefined) result.push(["beganAfter", year === null ? null : year >= constraints.beganAfter]);
-  if (constraints.beganBefore !== undefined) result.push(["beganBefore", year === null ? null : year <= constraints.beganBefore]);
+  if (constraints.formedFrom !== undefined) result.push(["formedFrom", year === null ? null : year >= constraints.formedFrom]);
+  if (constraints.formedUntil !== undefined) result.push(["formedUntil", year === null ? null : year <= constraints.formedUntil]);
   if (constraints.ended !== undefined) result.push(["ended", facts.lifeSpan.ended === constraints.ended]);
   if (constraints.sharesMemberWith !== undefined) {
     if (!reference) result.push(["sharesMemberWith", null]);
@@ -126,8 +126,8 @@ export function createConstraintChecker(musicBrainz: MusicBrainzFacts) {
 
       const needsFacts =
         constraints.country !== undefined ||
-        constraints.beganAfter !== undefined ||
-        constraints.beganBefore !== undefined ||
+        constraints.formedFrom !== undefined ||
+        constraints.formedUntil !== undefined ||
         constraints.ended !== undefined;
       const base: ArtistFacts | null = needsFacts ? await factsOf(mbid) : { country: null, lifeSpan: { ended: false } };
       if (!base) return { verdict: "unknown", failed: [] };

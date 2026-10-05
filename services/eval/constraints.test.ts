@@ -22,10 +22,10 @@ test("a band with no recorded area is unknown, not a miss", () => {
 });
 
 test("formation year bounds read the year from MusicBrainz's begin date", () => {
-  assert.equal(checkConstraints({ beganAfter: 2010 }, icelandic).verdict, "met");
-  assert.equal(checkConstraints({ beganAfter: 2015 }, icelandic).verdict, "missed");
-  assert.equal(checkConstraints({ beganBefore: 2000 }, norwegian).verdict, "met");
-  assert.equal(checkConstraints({ beganAfter: 2010 }, noArea).verdict, "unknown", "no begin date recorded");
+  assert.equal(checkConstraints({ formedFrom: 2013 }, icelandic).verdict, "met", "inclusive: formed in 2013");
+  assert.equal(checkConstraints({ formedFrom: 2014 }, icelandic).verdict, "missed");
+  assert.equal(checkConstraints({ formedUntil: 2000 }, norwegian).verdict, "met");
+  assert.equal(checkConstraints({ formedFrom: 2010 }, noArea).verdict, "unknown", "no begin date recorded");
 });
 
 test("an ended constraint checks whether the band has split up", () => {
@@ -35,7 +35,7 @@ test("an ended constraint checks whether the band has split up", () => {
 
 test("all constraints must hold: one miss outweighs unknowns, unknowns outweigh hits", () => {
   assert.equal(checkConstraints({ country: "IS", ended: true }, icelandic).verdict, "missed");
-  assert.equal(checkConstraints({ country: "IS", beganAfter: 2010 }, { ...icelandic, lifeSpan: { ended: false } }).verdict, "unknown");
+  assert.equal(checkConstraints({ country: "IS", formedFrom: 2010 }, { ...icelandic, lifeSpan: { ended: false } }).verdict, "unknown");
 });
 
 test("unknown facts (the lookup failed) leave the band unknown", () => {

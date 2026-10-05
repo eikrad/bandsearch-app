@@ -105,7 +105,7 @@
     "obscurityTarget": "underground",
     "nuggets": ["shoegaze"],
     "constraints": {
-      "beganAfter": 2015
+      "formedFrom": 2016
     },
     "notes": "Constraint query (#253): formation year from MusicBrainz life-span begin; bands without a begin date count as unknown."
   },
@@ -150,7 +150,7 @@
     "antiBands": ["Mayhem", "Darkthrone", "Emperor", "Burzum", "Immortal", "Gorgoroth"],
     "constraints": {
       "country": "NO",
-      "beganBefore": 1994
+      "formedUntil": 1994
     },
     "notes": "Constraint query (#253): two constraints at once — from Norway and formed in 1994 or earlier; the famous names are anti-bands for the obscure target."
   }
