@@ -75,3 +75,52 @@ test("getListenerCount returns null for empty artist name", async () => {
   assert.equal(count, null);
   assert.equal(called, false);
 });
+
+// ─── getTopTags (#250: coverage for bands MusicBrainz has no tags for) ────────
+
+test("getTopTags returns listener tags with their weight, by MusicBrainz id when known", async () => {
+  const urls: string[] = [];
+  const client = createLastFmClient({
+    apiKey: "key",
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return {
+        ok: true,
+        json: async () => ({ toptags: { tag: [{ name: "blackgaze", count: 100 }, { name: "seen live", count: 3 }] } }),
+      };
+    },
+  });
+
+  const tags = await client.getTopTags("Fen", "mbid-fen");
+
+  assert.deepEqual(tags, [
+    { name: "blackgaze", count: 100 },
+    { name: "seen live", count: 3 },
+  ]);
+  assert.match(urls[0]!, /method=artist\.gettoptags/);
+  assert.match(urls[0]!, /mbid=mbid-fen/);
+});
+
+test("getTopTags looks the artist up by name when there is no MusicBrainz id", async () => {
+  const urls: string[] = [];
+  const client = createLastFmClient({
+    apiKey: "key",
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return { ok: true, json: async () => ({ toptags: { tag: [] } }) };
+    },
+  });
+
+  await client.getTopTags("Les Discrets");
+
+  assert.match(urls[0]!, /artist=Les%20Discrets/);
+  assert.doesNotMatch(urls[0]!, /mbid=/);
+});
+
+test("getTopTags returns null when Last.fm fails, which is not the same as no tags", async () => {
+  const failing = createLastFmClient({ apiKey: "key", fetchImpl: fetchReturning({}, { ok: false, status: 500 }) });
+  const unknown = createLastFmClient({ apiKey: "key", fetchImpl: fetchReturning({ error: 6, message: "not found" }) });
+
+  assert.equal(await failing.getTopTags("Fen"), null);
+  assert.deepEqual(await unknown.getTopTags("Fen"), [], "an unknown artist has no tags");
+});
