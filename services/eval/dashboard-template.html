@@ -468,6 +468,7 @@ function overlapText(cmp, set) {
 // Why a query failed, derived from its record: no answer, the anti-band gate
 // (rate > 50%), or nugget coverage below the query's threshold.
 const GATE_TEXT = {
+  noResults: "returned no band at all",
   antiBand: "too many anti-bands in top 8",
   coverage: "nugget coverage below target",
   constraint: "bands miss the query's hard constraints",

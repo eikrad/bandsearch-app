@@ -17,8 +17,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MIN_NUGGET_COVERAGE = 0.5;
 const DEFAULT_MIN_CONSTRAINT_RATE = 0.75;
 
-/** The checks a golden query can fail: too many anti-bands, too little coverage, constraints missed. */
-export type GoldenGate = "antiBand" | "coverage" | "constraint";
+/**
+ * The checks a golden query can fail: no band at all, too many anti-bands, too
+ * little coverage, constraints missed.
+ */
+export type GoldenGate = "noResults" | "antiBand" | "coverage" | "constraint";
 /** Must outlast RESEARCH_TIMEOUT_MS (default 180s) plus HTTP overhead. */
 const DEFAULT_RECOMMENDATION_FETCH_TIMEOUT_MS = 200_000;
 /**
@@ -442,6 +445,8 @@ export async function runGoldenEntry(
   }
 
   const failedGates: GoldenGate[] = [];
+  // Without a band every other check is skipped, which must not read as a pass.
+  if (recommendations.length === 0) failedGates.push("noResults");
   if (antiBandRateAt8 > 0.5) failedGates.push("antiBand");
   if (coverageGateApplies && nuggetCoverageAt8 < minCoverage) failedGates.push("coverage");
   if (constraintRateAt8 !== null && constraintRateAt8 < (entry.minConstraintRate ?? DEFAULT_MIN_CONSTRAINT_RATE)) {
@@ -641,19 +646,22 @@ async function main(): Promise<void> {
   }
 
   const errors = results.filter((r) => r.status === "error");
-  const antiBandFailures = results.filter((r) => r.antiBandRateAt8 > 0.5);
-  const coverageFailures = results.filter((r) => r.status === "fail" && r.antiBandRateAt8 <= 0.5);
+  const gateText: Record<GoldenGate, string> = {
+    noResults: "returned no band at all",
+    antiBand: "failed the anti-band gate (rate > 50%)",
+    coverage: "fell below their minNuggetCoverage",
+    constraint: "missed their hard constraints",
+  };
+  const failedByGate = (gate: GoldenGate) => results.filter((r) => r.failedGates.includes(gate)).length;
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} query(ies) got no answer from the API`);
   }
-  if (antiBandFailures.length > 0) {
-    console.error(`${antiBandFailures.length} query(ies) failed the anti-band gate (rate > 50%)`);
+  for (const gate of Object.keys(gateText) as GoldenGate[]) {
+    const n = failedByGate(gate);
+    if (n > 0) console.error(`${n} query(ies) ${gateText[gate]}`);
   }
-  if (coverageFailures.length > 0) {
-    console.error(`${coverageFailures.length} query(ies) fell below their minNuggetCoverage`);
-  }
-  if (errors.length > 0 || antiBandFailures.length > 0 || coverageFailures.length > 0) {
+  if (errors.length > 0 || results.some((r) => r.failedGates.length > 0)) {
     process.exit(1);
   }
 

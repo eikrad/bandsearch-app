@@ -227,3 +227,12 @@ test("constraints are grading targets: changing one changes the content hash", (
   assert.equal(constrained.questionsHash, base.questionsHash);
   assert.notEqual(constrained.contentHash, base.contentHash);
 });
+
+test("the run summary counts failed queries per gate", () => {
+  const run = record([
+    result({ id: "blackgaze", status: "fail", passed: false, failedGates: ["constraint"] }),
+    result({ id: "zeuhl", status: "fail", passed: false, failedGates: ["coverage", "antiBand"] }),
+    result({ id: "dungeon-synth", status: "fail", passed: false, failedGates: ["noResults"] }),
+  ]);
+  assert.deepEqual(run.summary.failuresByGate, { antiBand: 1, coverage: 1, constraint: 1, noResults: 1 });
+});

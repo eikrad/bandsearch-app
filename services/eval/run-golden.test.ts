@@ -518,3 +518,15 @@ test("a failed anti-band gate is named among the failed gates", async () => {
   );
   assert.deepEqual(result.failedGates, ["antiBand"]);
 });
+
+test("an answer without any band fails the query instead of skipping every check", async () => {
+  const { fetchImpl } = apiReturning({ recommendations: [], meta: {} });
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "x", query: "q", nuggets: ["black metal"], constraints: { country: "NO" } },
+    noTags,
+    { fetchImpl, mbCooldownMs: 0, constraintChecker: checkerWith({}) },
+  );
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.failedGates, ["noResults"]);
+});

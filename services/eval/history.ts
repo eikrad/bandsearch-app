@@ -54,6 +54,8 @@ export type GoldenRunRecord = {
     constraintRateMean: number | null;
     /** Share of queries the runner got no answer to. */
     errorRate: number;
+    /** Failed queries per gate; a query can fail more than one. */
+    failuresByGate: Record<GoldenResult["failedGates"][number], number>;
     /** Bands the API returned per answered query (all of them, not only the top 8). */
     resultCountMean: number | null;
     latencyMsMedian: number | null;
@@ -181,6 +183,12 @@ export function buildGoldenRunRecord({
       constraintRateMean: mean(answered.map((r) => r.constraintRateAt8).filter((c): c is number => c !== null)),
       errorRate: results.length === 0 ? 0 : (results.length - answered.length) / results.length,
       resultCountMean: mean(answered.map((r) => r.resultNames.length)),
+      failuresByGate: {
+        antiBand: results.filter((r) => r.failedGates.includes("antiBand")).length,
+        coverage: results.filter((r) => r.failedGates.includes("coverage")).length,
+        constraint: results.filter((r) => r.failedGates.includes("constraint")).length,
+        noResults: results.filter((r) => r.failedGates.includes("noResults")).length,
+      },
       latencyMsMedian: median(latencies),
       latencyMsMax: latencies.length === 0 ? null : Math.max(...latencies),
     },

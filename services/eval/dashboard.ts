@@ -170,7 +170,7 @@ export function compareRuns(base: GoldenRunRecord, run: GoldenRunRecord): Compar
 
   const summaryDelta: Record<string, number> = {};
   for (const [key, value] of Object.entries(run.summary)) {
-    const before = (base.summary as Record<string, number | null>)[key];
+    const before: unknown = (base.summary as Record<string, unknown>)[key];
     if (typeof value === "number" && typeof before === "number") summaryDelta[key] = value - before;
   }
 
