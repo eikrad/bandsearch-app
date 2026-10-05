@@ -175,7 +175,7 @@ its `meta`.
 The privacy policy lives in `apps/desktop/src/ui/privacyPolicyText.ts` and is
 readable in-app at `#/privacy`, linked from **Settings → Privacy & data**. It
 names every processor that receives data (Gemini, Brave Search, MusicBrainz,
-optional Last.fm, Turso), the lawful basis for each kind of processing, the
+optional Last.fm, Turso, optional Scaleway quality scoring), the lawful basis for each kind of processing, the
 retention periods, and how to exercise your rights.
 
 Two GDPR endpoints back the Settings controls:
@@ -218,22 +218,25 @@ Required variables:
 
 | Variable | Description |
 |----------|-------------|
-| `GEMINI_API_KEY` | Google Gemini — required, API will not start without it |
+| `GEMINI_API_KEY` | Google Gemini — required while `LLM_PROVIDER=gemini` (the default) |
+| `SCW_SECRET_KEY` | Scaleway Generative APIs — required for `LLM_PROVIDER=scaleway`; also enables the LLM judge |
 | `BRAVE_API_KEY` | Brave Search token for niche artist discovery |
 
 Common optional variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Model for every research node; returned as `meta.model` on each recommendation |
+| `LLM_PROVIDER` | `gemini` | Research provider: `gemini` or `scaleway` ([ADR 0004](docs/adr/0004-llm-models-per-role-on-scaleway.md)) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Research model on Gemini; returned as `meta.model` on each recommendation |
+| `SCW_MODEL` | `gemma-4-26b-a4b-it` | Research model on Scaleway (provisional, see ADR 0004) |
+| `SCW_JUDGE_MODEL` | `mistral-medium-3.5-128b` | LLM-as-judge model; must differ from the research model; recorded as `model_id` on every score row |
+| `SCW_REASONING_EFFORT` / `SCW_JUDGE_REASONING_EFFORT` | `none` | Scaleway reasoning per role; `none` keeps calls fast (gemma: 101 s → 9 s for one extraction). `gpt-oss-120b` needs `low` or higher |
+| `SCW_BASE_URL` | `https://api.scaleway.ai/v1` | Project-scoped Scaleway endpoint, if you use one |
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring (Mistral) |
-| `MISTRAL_JUDGE_ENDPOINT` | `https://api.mistral.ai/v1/chat/completions` | Set to `https://api.eu.mistral.ai/v1/chat/completions` to keep judge traffic in the EU |
-| `MISTRAL_JUDGE_MODEL` | `mistral-large-latest` | Judge model; also recorded as `model_id` on every score row |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
@@ -305,6 +308,11 @@ rewrites `services/eval/reports/dashboard.html` (gitignored), a self-contained
 page that compares each run with the latest run labelled `baseline` and with
 the previous run: flipped queries with a sign test, how much the top 8 changed
 against the noise floor of repeat runs, and changed settings.
+
+The judge is checked the same way: `npm run calibrate -w services/eval` scores
+the 25 hand-labelled examples and 16 directional checks with the configured
+judge (`--judge <model>` compares candidates) and appends the agreement to
+`services/eval/history/judge-runs.jsonl`.
 
 A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
 `--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at

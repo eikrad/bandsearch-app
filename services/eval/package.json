@@ -11,5 +11,8 @@
     "golden": "tsx run-golden.ts",
     "dashboard": "tsx dashboard.ts",
     "test": "tsx --test"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5"
   }
 }

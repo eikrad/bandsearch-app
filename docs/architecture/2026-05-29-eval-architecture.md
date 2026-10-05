@@ -193,19 +193,19 @@ CREATE TABLE eval_baselines (
 
 ## LLM-as-Judge
 
-**Model:** Mistral (via Mistral API, `MISTRAL_API_KEY`). Using a different model family (Mistral) than Gemini avoids self-evaluation bias (MT-Bench self-enhancement pattern). If `MISTRAL_API_KEY` is not set, Layer 2 is silently skipped — it is never on the critical path.
+**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (provisional default `mistral-medium-3.5-128b`, see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
 
-**Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 10 s, no retry on failure. Eval data loss is acceptable; a missing judge score is not a system error.
+**Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 60 s (a judge may be a reasoning model), one retry inside the client, failures logged and never thrown. Eval data loss is acceptable; a missing judge score is not a system error.
 
-**Judging mode:** Pointwise — one band per judge call. Pairwise/listwise batch judging is deferred (see Deferred section).
+**Judging mode:** *As built*, listwise in one batch — all bands of a response in one call (`judgeBands` in `judgeWorker.ts`), which calibration uses too. The pointwise design below was never built; GroUSE (Muller et al. 2024) found weaker judges much better with separate calls, so the model comparison (#237 step 3) measures batch vs. per-band calls before this is settled.
 
 **Bias mitigations:**
 
 | Bias | Mitigation |
 |------|------------|
-| Position bias | One band per call; no batch context in judge prompt |
+| Position bias | Designed: one band per call. **Not built** — bands share one batch; the model comparison shuffles band order to measure it |
 | Verbosity bias | Judge prompt instructs: score quality, not length of `why` text |
-| Self-enhancement | Different model family (Claude) than generator (Gemini) |
+| Self-enhancement | Judge never the research model, preferably another family (enforced at startup) |
 | Inconsistency | Optional: 2 judge runs on 10% sample; report score variance in dashboard |
 
 **Deterministic evidence checks (Layer 1.5, before LLM):**
@@ -271,6 +271,8 @@ Layer 2 scores are not trusted for production decisions until the judge is calib
 - GroUSE-style unit test pass rate (target: ≥90%)
 
 **Logging:** `judge_model` and `judge_prompt_hash` on every `llm_eval_scores` row. Re-run calibration when either changes.
+
+**As built (2026-10-05, #237):** `npm run calibrate -w services/eval` scores the 25 labelled examples and the 16 directional cases through `judgeBands`, the same call the live judge makes, so the result describes the production judge. `--judge <model>` (repeatable) compares candidates. Every run appends to `services/eval/history/judge-runs.jsonl` with the judge model, a hash of the judge prompt, hashes of both datasets, agreement per dimension and the failed directional checks. First run, `mistral-medium-3.5-128b`: 97.3% agreement, 89.5% of the directional checks. Until 2026-10-05 the script called Anthropic with a hard-coded model and never ran (#204).
 
 ---
 
@@ -458,7 +460,8 @@ services/eval/
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | No | — | Enables LLM-as-judge (Layer 2). Without it, only automatic scoring runs. |
+| `SCW_SECRET_KEY` | No | — | Enables LLM-as-judge (Layer 2) on Scaleway. Without it, only automatic scoring runs. (Was `ANTHROPIC_API_KEY` in this design, then `MISTRAL_API_KEY`; see ADR 0004.) |
+| `SCW_JUDGE_MODEL` | No | `mistral-medium-3.5-128b` | Judge model; provisional until the model comparison. |
 | `EVAL_DASHBOARD_ENABLED` | No | `false` | Activates `/eval/dashboard` and eval API routes. |
 | `EVAL_DASHBOARD_PASSWORD` | No | — | HTTP Basic Auth password for dashboard. Username: `eval`. |
 
@@ -476,7 +479,7 @@ Each step is independently deployable and builds on the previous one.
 | 2 | Last.fm obscurity score (async) | Enriches events after the response. Requires `LASTFM_API_KEY`. |
 | 3 | Obscurity target in UI + API | Three-button UI, new `obscurityTarget` field in request body and event table. |
 | 4 | Search source quality + evidence checks | URL heuristic + deterministic `citation_support_rate` / `generic_why_flag`. No external call. |
-| 5 | LLM judge worker (Claude) | Fire-and-forget after each event. Requires `ANTHROPIC_API_KEY`. |
+| 5 | LLM judge worker | Fire-and-forget after each event. Built on Mistral, moved to Scaleway (`SCW_SECRET_KEY`) on 2026-10-05. |
 | 5b | Judge calibration | ~20–30 human labels + ~15–20 GroUSE-style unit tests. Agreement rate before trusting Layer 2. |
 | 6 | `eval_baselines` + snapshot endpoint | Small addition once judge scores exist to compare against. Filter by `pipeline_version`. |
 | 7 | Developer dashboard | HTML + Chart.js: overview, funnel panel, human–LLM alignment, trend charts. |

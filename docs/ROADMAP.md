@@ -23,7 +23,22 @@ plan, not a second permanent structure.
 2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
    Android, the deploy gate and the eval data, and it is the one thing claimed
    as infrastructure that has never actually been run.
-3. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
+3. **#237 — all LLM calls on Scaleway (current focus, started 2026-10-05).**
+   Owner decision: Scaleway Generative APIs instead of Gemini and Mistral's own
+   API, as in the Radiationsafety project. Measure first, switch second, remove
+   last ([ADR 0004](adr/0004-llm-models-per-role-on-scaleway.md)):
+   - ✓ Golden-run history + dashboard, model id in provenance (#242, #209, #134)
+   - ✓ Planner/reflection failures degrade instead of 502 (#247, #241); Gemini
+     baseline + repeat run recorded (noise floor: 39% top-band overlap)
+   - ✓ Scaleway behind `LLM_PROVIDER` (default still `gemini`), role-based model
+     config, live judge and calibration on Scaleway (#204 part 1)
+   - Next: stable measurement (replay of Brave/MusicBrainz/Last.fm answers,
+     Last.fm tags for coverage, repeats with paired statistics), then the
+     model comparison with judge scores in golden runs (#204 part 2)
+   - Then: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
+     first), then remove Gemini
+   - Afterwards: score live searches with the judge (#248)
+4. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
    (`feature/card-action-redesign`, merged 2026-08-31) built rating stars, the
    Save/Saved toggle, and the Category/Note sheet behind the `···` button —
    closing #151 (dead `···` button), #152 (Save/Rate hidden on mobile), #163
@@ -35,12 +50,12 @@ plan, not a second permanent structure.
    issues (#151, #152, #163, #165, #166) remain open on GitHub only because
    this repo's PRs target `staging`, where `Closes #N` never auto-fires — see
    `AGENTS.md`; close them by hand once this entry is read.
-4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
+5. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
    This is the first real proof the updater works; the pipeline has only ever
    run against a throwaway `v0.2.1-test` tag.
-5. **Phase 11 — Android.** Unblocked once 9.5 passes. Start with #159 (endpoint
+6. **Phase 11 — Android.** Unblocked once 9.5 passes. Start with #159 (endpoint
    default), then #156 (the seven views, the largest item).
-6. **Whenever there is room:** Phase 8 F6/F7/F8, Architecture 9 (ESM),
+7. **Whenever there is room:** Phase 8 F6/F7/F8, Architecture 9 (ESM),
    Phase 10's macOS check (#145).
 
 The constraints this order satisfies:
@@ -178,8 +193,8 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [x] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log ✓ Done
 - [x] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed ✓ Done
-- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY`. **Corrected 2026-08-31:** this entry used to call the variable name "a known mismatch" because the key was sent to Anthropic's API. The name was right and the implementation was wrong — a Mistral key posted to `api.anthropic.com` can only 401, which is what production logged. The judge now calls Mistral; silently skipped if absent ✓ Done
-- [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done
+- [x] Step 5: LLM-as-judge worker — async judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; never on the request path ✓ Done. Provider history: designed for Claude, built on Mistral (`MISTRAL_API_KEY`; until 2026-08-31 the key was wrongly posted to Anthropic), **moved to Scaleway on 2026-10-05** (`SCW_SECRET_KEY`, `SCW_JUDGE_MODEL`, ADR 0004, #237).
+- [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done. Ran for the first time on 2026-10-05, against the production judge on Scaleway: 97.3% agreement (`services/eval/history/judge-runs.jsonl`); before, `run-calibration.ts` called Anthropic and never ran (#204).
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
 - [x] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input ✓ Done

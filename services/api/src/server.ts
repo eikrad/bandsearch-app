@@ -12,6 +12,9 @@ import { createRecommendationPipeline } from "./recommendationPipeline.js";
 
 async function start() {
   const runtimeConfig = validateRuntimeEnv();
+  for (const warning of runtimeConfig.llm.warnings) {
+    console.warn(JSON.stringify({ level: "warn", component: "llm_config", message: warning }));
+  }
 
   // turso-sync keeps a local replica, which has to be opened before anything
   // can read from it; the other stores build synchronously.

@@ -13,7 +13,7 @@ test("the privacy policy names every third party that receives user data", () =>
 
   // Brave's ToS §3b makes the query-text disclosure contractually mandatory on
   // top of the GDPR duty, so this test exists to keep it from being edited out.
-  for (const processor of ["Gemini", "Brave", "MusicBrainz", "Last.fm", "Turso"]) {
+  for (const processor of ["Gemini", "Brave", "MusicBrainz", "Last.fm", "Turso", "Scaleway"]) {
     assert.match(html, new RegExp(processor), `the policy must name ${processor}`);
   }
 });
