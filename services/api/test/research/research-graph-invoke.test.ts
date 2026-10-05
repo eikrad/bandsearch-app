@@ -294,3 +294,77 @@ test("a research run without a configured model names the default", async () => 
 
   assert.equal(result.model, "gemini-2.5-flash");
 });
+
+// ------------------------------------------------- degraded, not failed (#241)
+
+function timesOut(node: string) {
+  return () => {
+    throw new Error(`${node} timeout`);
+  };
+}
+
+test("a planner that times out still yields recommendations from the fallback search plan", async () => {
+  const { client, fetchImpl, log } = happyPath({ plan: timesOut("web search planner") });
+  const events: Array<{ event: string; details: Record<string, unknown> }> = [];
+
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, onLog: (_level, event, details) => events.push({ event, details }) }),
+    input,
+  );
+
+  assert.equal(result.recommendations.length, 1);
+  assert.ok(
+    log.some((r) => r.url.includes("api.search.brave.com") && decodeURIComponent(r.url).includes("site:bandcamp.com")),
+    "the fallback plan's broad queries were searched",
+  );
+  const fallback = events.find((e) => e.event === "research_plan_fallback");
+  assert.ok(fallback, "the fallback is logged");
+  assert.match(String(fallback.details.reason), /web search planner timeout/);
+});
+
+test("a reflector that fails skips reflection instead of failing the request", async () => {
+  const { client, fetchImpl } = happyPath({ reflect: timesOut("reflector") });
+  const events: string[] = [];
+
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, targetVerifiedCount: 5, onLog: (_level, event) => events.push(event) }),
+    input,
+  );
+
+  assert.equal(result.recommendations.length, 1);
+  assert.ok(events.includes("research_reflection_skipped"), `got ${events.join(", ")}`);
+});
+
+test("a failing extraction in the reflection round keeps the candidates already found", async () => {
+  let extractCalls = 0;
+  const { client, fetchImpl } = happyPath({
+    reflect: () => ({ sufficient: false, gaps: ["more obscure picks"], extraQueries: ["blackgaze demo bandcamp"] }),
+    extract: () => {
+      extractCalls += 1;
+      if (extractCalls > 1) throw new Error("candidate extractor timeout");
+      return extractedCandidates([
+        { name: "Fen", evidenceUrls: ["https://blog.example/ffo-alcest"] },
+        { name: "Ghost Bath", evidenceUrls: ["https://blog.example/blackgaze"] },
+      ]);
+    },
+  });
+  const events: string[] = [];
+
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, targetVerifiedCount: 5, onLog: (_level, event) => events.push(event) }),
+    input,
+  );
+
+  assert.ok(extractCalls >= 2, "the reflection round tried to extract");
+  assert.equal(result.recommendations.length, 1);
+  assert.ok(events.includes("research_reflection_extract_failed"), `got ${events.join(", ")}`);
+});
+
+test("a ranker that times out still fails the request: there is no honest fallback for the prose", async () => {
+  const { client, fetchImpl } = happyPath({ rank: timesOut("recommendation ranker") });
+
+  await assert.rejects(
+    () => invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl }), input),
+    /recommendation ranker timeout/,
+  );
+});

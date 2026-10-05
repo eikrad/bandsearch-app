@@ -80,3 +80,8 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMe
   });
   return Promise.race([promise.finally(() => clearTimeout(timer!)), timeout]);
 }
+
+/** A thrown value as loggable text. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

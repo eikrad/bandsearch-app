@@ -65,7 +65,10 @@ export type BandsearchRouteContext = {
     }>;
   };
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
-  logger?: { warn: (obj: Record<string, unknown>) => void };
+  logger?: {
+    warn: (obj: Record<string, unknown>) => void;
+    error?: (obj: Record<string, unknown>) => void;
+  };
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
   evalWorker?: EvalWorker;
   evalRepository?: EvalRepository;
@@ -323,6 +326,15 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+      // The response only carries a generic code; without this line a failed
+      // request leaves no trace of why (seen as a silent 502 in #241).
+      const logError = logger?.error ?? ((obj) => writeStructuredLog("error", obj));
+      logError({
+        component: "recommendations",
+        event: "recommendation_failed",
+        code: code || null,
+        error: error instanceof Error ? error.message : String(error),
+      });
       if (code === "recommendation_initializing") {
         return sendError(res, 503, "recommendation_initializing", "recommendation pipeline is initializing");
       }

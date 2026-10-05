@@ -2,7 +2,7 @@ import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
-import type { ChatModelClient } from "../modelUtils.js";
+import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
@@ -11,7 +11,7 @@ import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type Veri
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
-import { createWebSearchPlanner, type SearchPlan } from "./webSearchPlanner.js";
+import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 
 export type ResearchGraphDeps = {
@@ -142,12 +142,20 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         modelClient: deps.modelClient,
         model: deps.model,
       });
-      const plan = await planWeb({
-        userQuery: state.userQuery,
-        preferenceContext: state.preferenceContext,
-        messages: state.messages,
-        obscurityTarget: state.obscurityTarget,
-      });
+      let plan: SearchPlan;
+      try {
+        plan = await planWeb({
+          userQuery: state.userQuery,
+          preferenceContext: state.preferenceContext,
+          messages: state.messages,
+          obscurityTarget: state.obscurityTarget,
+        });
+      } catch (error) {
+        // A planner that times out or errors must not fail the request: the
+        // broad fallback queries still find candidates, just less precisely.
+        log("warn", "research_plan_fallback", { reason: errorMessage(error) });
+        plan = fallbackSearchPlan(state.userQuery);
+      }
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
         queryCount: plan.queries.length,

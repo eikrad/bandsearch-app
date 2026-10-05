@@ -4,7 +4,7 @@ import * as z from "zod";
 import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationReflector } from "./recommendationReflector.js";
-import type { ChatModelClient } from "../modelUtils.js";
+import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
 
@@ -54,13 +54,20 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         model: deps.model,
       });
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
-      const reflection = await reflector({
-        userQuery: state.userQuery,
-        plan: state.searchPlan ?? { anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: [] },
-        verifiedCandidates: state.verifiedCandidates,
-        targetVerifiedCount: deps.targetVerifiedCount,
-        searchBudgetRemaining: budgetLeft,
-      });
+      let reflection;
+      try {
+        reflection = await reflector({
+          userQuery: state.userQuery,
+          plan: state.searchPlan ?? { anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: [] },
+          verifiedCandidates: state.verifiedCandidates,
+          targetVerifiedCount: deps.targetVerifiedCount,
+          searchBudgetRemaining: budgetLeft,
+        });
+      } catch (error) {
+        // Reflection only adds searches; without it the run keeps what it found.
+        log("warn", "research_reflection_skipped", { reason: errorMessage(error) });
+        return { nextExtraQueries: [] };
+      }
       const extraQueries = reflection.sufficient
         ? []
         : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
@@ -99,8 +106,14 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
-      return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
+      try {
+        const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
+        return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
+      } catch (error) {
+        // The candidates from the first round are still good; keep them.
+        log("warn", "research_reflection_extract_failed", { reason: errorMessage(error) });
+        return {};
+      }
     })
     .addNode("verify_r", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
