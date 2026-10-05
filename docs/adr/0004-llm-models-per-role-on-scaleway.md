@@ -34,6 +34,12 @@ hosted in France, one key for many open models.
    error) and should come from a different model family (startup warning);
    judges favour output from their own family (MT-Bench self-enhancement).
 5. **Pinned model ids**, never moving aliases, for every role.
+6. **Reasoning off by default.** Scaleway enables reasoning on every model
+   that has it; every call sends `reasoning_effort: "none"` (the counterpart of
+   Gemini's `thinkingBudget: 0`) unless `SCW_REASONING_EFFORT` /
+   `SCW_JUDGE_REASONING_EFFORT` ask for more. Measured on one 40-hit
+   extraction: gemma 101 s with reasoning, 9.1 s without; Gemini 2.5 Flash
+   about 12 s.
 
 Rollout follows #237: measure first (golden-run history and a Gemini
 baseline, #242/#247), switch behind `LLM_PROVIDER` (this step, default still
