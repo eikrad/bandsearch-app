@@ -40,6 +40,8 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with `nuggets` (atomic sonic properties — genre, era, trait) and `antiBands` (bands that must not appear). The eval runner (`run-golden.ts`) scores `nuggetCoverage@8` against MusicBrainz tags/genres of the top-8 recommendations (fail below per-entry `minNuggetCoverage`, default 0.5) and `antiBandRate@8` (fail if > 50%; `--strict` fails on any hit). There is no `expectedBands` list: open-ended retrieval has no single correct answer set.
 
+- **Constraint query** — a golden query with hard facts every recommended band must meet (country, formed after/before, split up, shares a member with a band), checked against MusicBrainz with plain code rather than tags or a judge. A band is *met*, *missed*, or *unknown* when MusicBrainz does not record the fact; `constraintRate@8` is the share of decided bands that are met.
+
 - **Golden run** — one execution of the golden dataset against an API, recorded as a line in `services/eval/history/golden-runs.jsonl` with the model the API reported. A query the API did not answer has status `error` and no metrics; it never counts as a regression. The run labelled `baseline` (the latest such) is what later runs are compared against.
 
 - **Setup** — golden runs that differ only by chance: same research model, code, replay mode, grading targets and metrics version. Repeats of a setup (`--repeat N`) are averaged per query before two setups are compared.

@@ -264,6 +264,7 @@ const METRIC_LABELS = {
   passRate: "Pass rate",
   nuggetCoverageMean: "Nugget coverage @8",
   antiBandRateMean: "Anti-bands in top 8",
+  constraintRateMean: "Constraint hits",
   errorRate: "Queries without answer",
   resultCountMean: "Bands per answer",
   latencyMsMedian: "Median latency",
@@ -466,10 +467,20 @@ function overlapText(cmp, set) {
 
 // Why a query failed, derived from its record: no answer, the anti-band gate
 // (rate > 50%), or nugget coverage below the query's threshold.
+const GATE_TEXT = {
+  noResults: "returned no band at all",
+  antiBand: "too many anti-bands in top 8",
+  coverage: "nugget coverage below target",
+  constraint: "bands miss the query's hard constraints",
+};
 function failureReason(r) {
   if (r.status === "error") return "no answer from the API";
   if (r.status !== "fail") return null;
-  return r.metrics && r.metrics.antiBandRateAt8 > 0.5 ? "too many anti-bands in top 8" : "nugget coverage below target";
+  // Runs before metrics v3 do not record failedGates; fall back to the old inference.
+  if (!r.failedGates) {
+    return r.metrics && r.metrics.antiBandRateAt8 > 0.5 ? GATE_TEXT.antiBand : GATE_TEXT.coverage;
+  }
+  return r.failedGates.map((g) => GATE_TEXT[g] || g).join("; ");
 }
 
 function failureTile(run) {
@@ -796,13 +807,15 @@ function setupsSection(set) {
       el("td", { class: "num" }, seconds(setup.latencyMsMedian)),
       el("td", { class: "num" }, pct(setup.errorRate)),
       isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.passRate),
-      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.coverage));
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.coverage),
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.constraintRate));
   });
   section.append(el("div", { class: "scroll" }, el("table", {},
     el("thead", {}, el("tr", {},
       el("th", {}, "Setup"), el("th", { class: "num" }, "Runs"), el("th", { class: "num" }, "Pass rate"),
       el("th", { class: "num" }, "Coverage"), el("th", { class: "num" }, "Median latency"), el("th", { class: "num" }, "No answer"),
-      el("th", { class: "num" }, "Δ pass vs baseline"), el("th", { class: "num" }, "Δ coverage vs baseline"))),
+      el("th", { class: "num" }, "Δ pass vs baseline"), el("th", { class: "num" }, "Δ coverage vs baseline"),
+      el("th", { class: "num" }, "Δ constraint hits vs baseline"))),
     el("tbody", {}, rows))));
   return section;
 }
@@ -897,6 +910,8 @@ function flipCard(q, status, cmp) {
   const scores = [
     `Nugget coverage ${pct(b.nuggetCoverageAt8)} → ${pct(a.nuggetCoverageAt8)}`,
     `anti-bands ${pct(b.antiBandRateAt8)} → ${pct(a.antiBandRateAt8)}`,
+    a.constraintRateAt8 != null || b.constraintRateAt8 != null
+      ? `constraint hits ${pct(b.constraintRateAt8)} → ${pct(a.constraintRateAt8)}` : null,
     overlap != null ? `top 8 shared ${pct(overlap)}` : null,
   ].filter(Boolean).join("  ·  ");
   const why = failureReason(q.after);
@@ -955,6 +970,8 @@ function questionGrid(set) {
             r.metrics.nuggetCoverageAt8 == null ? "nugget coverage unknown (no MusicBrainz tags)" : "nugget coverage @8") : null,
           r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.antiBandRateAt8)), "anti-bands in top 8") : null,
           r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
+          r.metrics && r.metrics.constraintRateAt8 != null ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.constraintRateAt8)),
+            `constraint hits (${r.constraintVerdicts.met} met, ${r.constraintVerdicts.missed} missed, ${r.constraintVerdicts.unknown} unknown)`) : null,
           r.tagSources ? el("div", { class: "t-head" },
             `tags: ${r.tagSources.musicbrainz} from MusicBrainz, ${r.tagSources.lastfm} from Last.fm, ${r.tagSources.none} without`) : null,
           r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,

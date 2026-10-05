@@ -374,6 +374,17 @@ File: `services/eval/golden-set.json`
 - *Last.fm tags* for coverage where MusicBrainz has none (`createTagLookup`): listener tags weighted ≥ 10 of 100; each result records its tag sources. This changed the metric (`GOLDEN_METRICS_VERSION` 2).
 - *Setups and paired statistics*: `--repeat N`; the dashboard groups runs into setups and compares each with the baseline's setup per query — values averaged over repeats, then a paired bootstrap over queries (95%, seeded). Only intervals that exclude zero count as a difference.
 
+**Constraint queries (added 2026-10-05, #253).** Open-ended queries have no right answer, so their quality rests on tags or a judge. A second kind of golden query states hard facts that MusicBrainz records, and `services/eval/constraints.ts` checks every top band against them with plain code:
+
+| Constraint | Field | MusicBrainz source |
+|---|---|---|
+| `country` | ISO 3166-1 code | `country`, else the country part of the city area's ISO 3166-2 code |
+| `formedFrom` / `formedUntil` | year, inclusive | `life-span.begin` |
+| `ended` | split up or active | `life-span.ended` |
+| `sharesMemberWith` | `{ mbid, name }` | `member of band` relations (`inc=artist-rels`, a separate request so the pipeline's lookup URL and replay recordings stay unchanged) |
+
+A band is *met* when every constraint holds, *missed* when any fails, *unknown* when MusicBrainz lacks a needed fact or the band has no MusicBrainz id. `constraintRate@8` is met ÷ (met + missed); below `minConstraintRate` (default 0.75) the query fails, recorded as the failed gate `constraint`. The reference band of `sharesMemberWith` is a miss for itself. Six constraint queries were added; the owner reviews what each constraint should mean before their first baseline. An external evaluation service was considered and rejected: its terms reserve the right to use all submitted data.
+
 **Product decision (2026-10-05):** varied answers to the same query are wanted, so re-asking can surface new bands. Top-8 overlap is therefore reported as a stability signal, never as quality; quality is judged per band (coverage, anti-bands, and from #237 step 3 the calibrated judge).
 
 ---

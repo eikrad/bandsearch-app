@@ -9,11 +9,19 @@ import { createLastFmClient } from "../api/src/eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
 import { createReplayFetch } from "../api/src/integrations/replayFetch.js";
 import { writeDashboard } from "./dashboard.ts";
+import { createConstraintChecker, constraintRate, type ConstraintCheck, type GoldenConstraints } from "./constraints.ts";
 import { appendRun, buildGoldenRunRecord, readGitState } from "./history.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_MIN_NUGGET_COVERAGE = 0.5;
+const DEFAULT_MIN_CONSTRAINT_RATE = 0.75;
+
+/**
+ * The checks a golden query can fail: no band at all, too many anti-bands, too
+ * little coverage, constraints missed.
+ */
+export type GoldenGate = "noResults" | "antiBand" | "coverage" | "constraint";
 /** Must outlast RESEARCH_TIMEOUT_MS (default 180s) plus HTTP overhead. */
 const DEFAULT_RECOMMENDATION_FETCH_TIMEOUT_MS = 200_000;
 /**
@@ -38,6 +46,10 @@ export type GoldenEntry = {
    */
   antiBands?: string[];
   minNuggetCoverage?: number;
+  /** Hard facts every recommended band must meet, checked against MusicBrainz (#253). */
+  constraints?: GoldenConstraints;
+  /** Share of decided top bands that must meet the constraints; default 0.75. */
+  minConstraintRate?: number;
   notes?: string;
 };
 
@@ -74,6 +86,11 @@ export type GoldenResult = {
   replay: boolean | null;
   /** Where the top bands' tags came from; `none` counts bands with no tags or failed lookups. */
   tagSources: { musicbrainz: number; lastfm: number; none: number };
+  /** Share of decided top bands meeting every constraint; null without constraints or decidable bands. */
+  constraintRateAt8: number | null;
+  constraintVerdicts: { met: number; missed: number; unknown: number } | null;
+  /** Which checks failed; empty when the query passed or got no answer. */
+  failedGates: GoldenGate[];
   error?: string;
 };
 
@@ -237,6 +254,26 @@ export function createTagLookup({
   };
 }
 
+/**
+ * Tags and constraints both read an artist's MusicBrainz record; one lookup per
+ * artist per run keeps the 1 req/s budget for new artists.
+ */
+function memoizeArtistLookups<C extends ReturnType<typeof createMusicBrainzClient>>(client: C): C {
+  const artists = new Map<string, ReturnType<C["lookupArtist"]>>();
+  const members = new Map<string, ReturnType<C["lookupBandMembers"]>>();
+  return {
+    ...client,
+    lookupArtist: (mbid: string) => {
+      if (!artists.has(mbid)) artists.set(mbid, client.lookupArtist(mbid) as ReturnType<C["lookupArtist"]>);
+      return artists.get(mbid)!;
+    },
+    lookupBandMembers: (mbid: string) => {
+      if (!members.has(mbid)) members.set(mbid, client.lookupBandMembers(mbid) as ReturnType<C["lookupBandMembers"]>);
+      return members.get(mbid)!;
+    },
+  };
+}
+
 /** Run golden entries one-at-a-time so the API's MB verifications don't pile up. */
 export async function runGoldenEntriesSequentially(
   entries: GoldenEntry[],
@@ -322,6 +359,10 @@ export type RunGoldenEntryOptions = {
   apiToken?: string;
   /** Clock for the latency measurement; injectable so tests need not sleep. */
   now?: () => number;
+  /** Checks bands against an entry's constraints; required when the entry has any. */
+  constraintChecker?: {
+    check(rec: Recommendation, constraints: GoldenConstraints): Promise<ConstraintCheck>;
+  };
 };
 
 export async function runGoldenEntry(
@@ -385,8 +426,33 @@ export async function runGoldenEntry(
     warnings.push(`uncovered nuggets: ${uncoveredNuggets.join(", ")}`);
   }
 
-  const passed =
-    antiBandRateAt8 <= 0.5 && (!coverageGateApplies || nuggetCoverageAt8 >= minCoverage);
+  let constraintRateAt8: number | null = null;
+  let constraintVerdicts: GoldenResult["constraintVerdicts"] = null;
+  if (entry.constraints) {
+    if (options.constraintChecker) {
+      const checks = await Promise.all(topK.map((r) => options.constraintChecker!.check(r, entry.constraints!)));
+      const verdicts = checks.map((c) => c.verdict);
+      constraintRateAt8 = constraintRate(verdicts);
+      constraintVerdicts = {
+        met: verdicts.filter((v) => v === "met").length,
+        missed: verdicts.filter((v) => v === "missed").length,
+        unknown: verdicts.filter((v) => v === "unknown").length,
+      };
+      if (constraintRateAt8 === null) warnings.push("no top-8 band could be checked against the constraints — gate skipped");
+    } else {
+      warnings.push("query has constraints but the runner has no constraint checker");
+    }
+  }
+
+  const failedGates: GoldenGate[] = [];
+  // Without a band every other check is skipped, which must not read as a pass.
+  if (recommendations.length === 0) failedGates.push("noResults");
+  if (antiBandRateAt8 > 0.5) failedGates.push("antiBand");
+  if (coverageGateApplies && nuggetCoverageAt8 < minCoverage) failedGates.push("coverage");
+  if (constraintRateAt8 !== null && constraintRateAt8 < (entry.minConstraintRate ?? DEFAULT_MIN_CONSTRAINT_RATE)) {
+    failedGates.push("constraint");
+  }
+  const passed = failedGates.length === 0;
 
   return {
     id: entry.id,
@@ -403,6 +469,9 @@ export async function runGoldenEntry(
     pipelineVersion,
     replay,
     tagSources,
+    constraintRateAt8,
+    constraintVerdicts,
+    failedGates,
   };
 }
 
@@ -424,6 +493,9 @@ export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResul
     pipelineVersion: null,
     replay: null,
     tagSources: { musicbrainz: 0, lastfm: 0, none: 0 },
+    constraintRateAt8: null,
+    constraintVerdicts: null,
+    failedGates: [],
     error: message,
   };
 }
@@ -496,14 +568,15 @@ async function main(): Promise<void> {
     ? createReplayFetch({ dir: replayDir, minIntervalMsByHost: { "musicbrainz.org": 1100 } })
     : undefined;
   const lastFmKey = process.env.LASTFM_API_KEY?.trim();
+  const mbClient = memoizeArtistLookups(
+    createMusicBrainzClient({
+      ...(mbBaseUrl ? { baseUrl: mbBaseUrl, minIntervalMs: 0 } : {}),
+      ...(lookupFetch ? { fetchImpl: lookupFetch, minIntervalMs: 0 } : {}),
+    }),
+  );
+  const constraintChecker = createConstraintChecker(mbClient);
   const tags = createTagLookup({
-    musicBrainz: createTagResolver(
-      createMusicBrainzClient({
-        ...(mbBaseUrl ? { baseUrl: mbBaseUrl, minIntervalMs: 0 } : {}),
-        ...(lookupFetch ? { fetchImpl: lookupFetch, minIntervalMs: 0 } : {}),
-      }),
-      0,
-    ),
+    musicBrainz: createTagResolver(mbClient, 0),
     lastFm: lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : undefined,
   });
   if (!lastFmKey) console.warn("LASTFM_API_KEY not set: coverage uses MusicBrainz tags only.");
@@ -518,7 +591,7 @@ async function main(): Promise<void> {
       goldenSet,
       async (entry) => {
         console.log(`→ ${entry.id}`);
-        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
+        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken, constraintChecker });
         const status = result.passed ? "PASS" : "FAIL";
         console.log(
           `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
@@ -573,19 +646,22 @@ async function main(): Promise<void> {
   }
 
   const errors = results.filter((r) => r.status === "error");
-  const antiBandFailures = results.filter((r) => r.antiBandRateAt8 > 0.5);
-  const coverageFailures = results.filter((r) => r.status === "fail" && r.antiBandRateAt8 <= 0.5);
+  const gateText: Record<GoldenGate, string> = {
+    noResults: "returned no band at all",
+    antiBand: "failed the anti-band gate (rate > 50%)",
+    coverage: "fell below their minNuggetCoverage",
+    constraint: "missed their hard constraints",
+  };
+  const failedByGate = (gate: GoldenGate) => results.filter((r) => r.failedGates.includes(gate)).length;
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} query(ies) got no answer from the API`);
   }
-  if (antiBandFailures.length > 0) {
-    console.error(`${antiBandFailures.length} query(ies) failed the anti-band gate (rate > 50%)`);
+  for (const gate of Object.keys(gateText) as GoldenGate[]) {
+    const n = failedByGate(gate);
+    if (n > 0) console.error(`${n} query(ies) ${gateText[gate]}`);
   }
-  if (coverageFailures.length > 0) {
-    console.error(`${coverageFailures.length} query(ies) fell below their minNuggetCoverage`);
-  }
-  if (errors.length > 0 || antiBandFailures.length > 0 || coverageFailures.length > 0) {
+  if (errors.length > 0 || results.some((r) => r.failedGates.length > 0)) {
     process.exit(1);
   }
 

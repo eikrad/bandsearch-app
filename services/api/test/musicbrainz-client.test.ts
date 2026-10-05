@@ -103,3 +103,58 @@ test("lookupArtist rejects empty mbid", async () => {
   });
   await assert.rejects(() => client.lookupArtist(""), /mbid is required/);
 });
+
+// ─── facts for constraint queries (#253) ─────────────────────────────────────
+
+test("lookupArtist reports the artist's country as an ISO code", async () => {
+  const client = createMusicBrainzClient({
+    fetchImpl: async () => jsonResponse({ id: "m", name: "Misþyrming", country: "IS", area: { name: "Iceland" } }),
+    retries: 0,
+    minIntervalMs: 0,
+  });
+  assert.equal((await client.lookupArtist("m")).country, "IS");
+});
+
+test("lookupArtist derives the country from a city area when MusicBrainz gives no country", async () => {
+  const client = createMusicBrainzClient({
+    fetchImpl: async () =>
+      jsonResponse({ id: "m", name: "Sinmara", area: { name: "Reykjavík", "iso-3166-2-codes": ["IS-1"] } }),
+    retries: 0,
+    minIntervalMs: 0,
+  });
+  assert.equal((await client.lookupArtist("m")).country, "IS");
+});
+
+test("lookupArtist reports no country when MusicBrainz records no area", async () => {
+  const client = createMusicBrainzClient({
+    fetchImpl: async () => jsonResponse({ id: "m", name: "Unknown" }),
+    retries: 0,
+    minIntervalMs: 0,
+  });
+  assert.equal((await client.lookupArtist("m")).country, null);
+});
+
+test("lookupBandMembers lists the people recorded as members of a band", async () => {
+  let requestedUrl = "";
+  const client = createMusicBrainzClient({
+    fetchImpl: async (url: string | URL | Request) => {
+      requestedUrl = String(url);
+      return jsonResponse({
+        id: "alcest",
+        relations: [
+          { type: "member of band", direction: "backward", artist: { id: "neige", name: "Neige" } },
+          { type: "member of band", direction: "backward", artist: { id: "winterhalter", name: "Winterhalter" } },
+          { type: "collaboration", direction: "forward", artist: { id: "other", name: "Other" } },
+          { type: "bandcamp", url: { resource: "https://alcest.bandcamp.com" } },
+        ],
+      });
+    },
+    retries: 0,
+    minIntervalMs: 0,
+  });
+
+  const members = await client.lookupBandMembers("alcest");
+
+  assert.match(requestedUrl, /\/artist\/alcest\?fmt=json&inc=artist-rels/);
+  assert.deepEqual(members, ["neige", "winterhalter"]);
+});

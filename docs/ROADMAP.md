@@ -34,6 +34,7 @@ plan, not a second permanent structure.
      config, live judge and calibration on Scaleway (#204 part 1)
    - ✓ Stable measurement: replay of Brave/MusicBrainz/Last.fm answers,
      Last.fm tags for coverage, repeats with paired statistics (#250)
+   - ✓ Constraint queries checked deterministically against MusicBrainz (#253)
    - Next: the model comparison with judge scores in golden runs (#204 part 2)
    - Then: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
      first), then remove Gemini

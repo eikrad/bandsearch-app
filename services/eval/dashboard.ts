@@ -170,7 +170,7 @@ export function compareRuns(base: GoldenRunRecord, run: GoldenRunRecord): Compar
 
   const summaryDelta: Record<string, number> = {};
   for (const [key, value] of Object.entries(run.summary)) {
-    const before = (base.summary as Record<string, number | null>)[key];
+    const before: unknown = (base.summary as Record<string, unknown>)[key];
     if (typeof value === "number" && typeof before === "number") summaryDelta[key] = value - before;
   }
 
@@ -260,6 +260,7 @@ export type SetupSummary = {
   runIds: string[];
   passRate: { mean: number | null; min: number | null; max: number | null };
   nuggetCoverageMean: number | null;
+  constraintRateMean: number | null;
   latencyMsMedian: number | null;
   errorRate: number | null;
 };
@@ -287,6 +288,9 @@ export function groupSetups(runs: GoldenRunRecord[]): SetupSummary[] {
         max: passRates.length ? Math.max(...passRates) : null,
       },
       nuggetCoverageMean: mean(group.map((r) => r.summary.nuggetCoverageMean).filter((v): v is number => v !== null)),
+      constraintRateMean: mean(
+        group.map((r) => r.summary.constraintRateMean ?? null).filter((v): v is number => v !== null),
+      ),
       latencyMsMedian: mean(group.map((r) => r.summary.latencyMsMedian).filter((v): v is number => v !== null)),
       errorRate: mean(group.map((r) => r.summary.errorRate)),
     };
@@ -304,12 +308,13 @@ export type PairedDiff = {
   clear: boolean;
 };
 
-type Metric = "pass" | "coverage" | "antiBand";
+type Metric = "pass" | "coverage" | "antiBand" | "constraint";
 
 function valueOf(result: GoldenRunResult, metric: Metric): number | null {
   if (result.status === "error" || !result.metrics) return null;
   if (metric === "pass") return result.status === "pass" ? 1 : 0;
   if (metric === "coverage") return result.metrics.nuggetCoverageAt8;
+  if (metric === "constraint") return result.metrics.constraintRateAt8 ?? null;
   return result.metrics.antiBandRateAt8;
 }
 
@@ -367,11 +372,12 @@ function pairedDiff(base: GoldenRunRecord[], candidate: GoldenRunRecord[], metri
 export function compareSetups(
   base: GoldenRunRecord[],
   candidate: GoldenRunRecord[],
-): { passRate: PairedDiff; coverage: PairedDiff; antiBandRate: PairedDiff } {
+): { passRate: PairedDiff; coverage: PairedDiff; antiBandRate: PairedDiff; constraintRate: PairedDiff } {
   return {
     passRate: pairedDiff(base, candidate, "pass"),
     coverage: pairedDiff(base, candidate, "coverage"),
     antiBandRate: pairedDiff(base, candidate, "antiBand"),
+    constraintRate: pairedDiff(base, candidate, "constraint"),
   };
 }
 
