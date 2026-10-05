@@ -362,6 +362,10 @@ File: `services/eval/golden-set.json`
 
 **Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query, resolves MB tags for the top-8, and computes both metrics. Run manually before/after significant prompt changes.
 
+**Run history and dashboard (Step 9b, added 2026-10-05, #209).** Every run appends one record to `services/eval/history/golden-runs.jsonl` (committed): run id, label, git commit/branch/dirty, two golden-set hashes (`questionsHash` over ids and queries groups comparable runs; `contentHash` also covers nuggets, anti-bands and thresholds, so a regrading is visible), the model and pipeline version as reported by the API in `meta.model` / `meta.pipelineVersion` (never assumed by the runner), and per query the status, both metrics, `/recommendations` latency, top 8 and warnings. A query the API did not answer is recorded as `error` with no metrics: it counts in an error rate, stays out of the quality means, and is never a regression. Runs on uncommitted tracked files are refused unless `--allow-dirty`.
+
+`services/eval/dashboard.ts` turns the history into a self-contained `services/eval/reports/dashboard.html` (gitignored). Each run is compared with the latest run labelled `baseline` and with the previous run: pass/fail flips with an exact two-sided sign test (with 10 queries, single flips are hints, not findings), per-query **top-8 overlap** with the compared run, and a **noise floor** — the overlap between repeat runs of an identical setup. Answers move far more often than means do (Chen et al. 2023, second-brain *Production Drift Monitoring*), so an overlap near the noise floor says a change did little even when the pass rate moved. Runs graded against different targets (`contentHash`) or scoring (`GOLDEN_METRICS_VERSION`) get no regression verdict. Layout and comparison rules are ported from the Radiationsafety eval dashboard.
+
 ---
 
 ## Developer Dashboard
@@ -442,6 +446,8 @@ services/api/src/eval/
 services/eval/
   golden-set.json          — curated query → sonic nuggets + antiBands dataset
   run-golden.ts            — regression script (antiBandRate, nuggetCoverage vs MB tags)
+  history.ts               — golden-run records, appended to history/golden-runs.jsonl
+  dashboard.ts             — run comparison + self-contained HTML dashboard
   judge-calibration.json   — hand-labeled set for meta-evaluation
   judge-unit-tests.json    — GroUSE-style edge cases for judge validation
 ```
