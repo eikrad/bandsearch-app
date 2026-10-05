@@ -193,7 +193,7 @@ CREATE TABLE eval_baselines (
 
 ## LLM-as-Judge
 
-**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (provisional default `mistral-medium-3.5-128b`, see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
+**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (default `glm-5.2`, chosen by calibration on 2026-10-05, see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
 
 **Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 60 s (a judge may be a reasoning model), one retry inside the client, failures logged and never thrown. Eval data loss is acceptable; a missing judge score is not a system error.
 
@@ -272,7 +272,7 @@ Layer 2 scores are not trusted for production decisions until the judge is calib
 
 **Logging:** `judge_model` and `judge_prompt_hash` on every `llm_eval_scores` row. Re-run calibration when either changes.
 
-**As built (2026-10-05, #237):** `npm run calibrate -w services/eval` scores the 25 labelled examples and the 16 directional cases through `judgeBands`, the same call the live judge makes, so the result describes the production judge. `--judge <model>` (repeatable) compares candidates. Every run appends to `services/eval/history/judge-runs.jsonl` with the judge model, a hash of the judge prompt, hashes of both datasets, agreement per dimension and the failed directional checks. First run, `mistral-medium-3.5-128b`: 97.3% agreement, 89.5% of the directional checks. Until 2026-10-05 the script called Anthropic with a hard-coded model and never ran (#204).
+**As built (2026-10-05, #237):** `npm run calibrate -w services/eval` scores the 25 labelled examples and the 16 directional cases through `judgeBands`, the same call the live judge makes, so the result describes the production judge. `--judge <model>` (repeatable) compares candidates. Every run appends to `services/eval/history/judge-runs.jsonl` with the judge model, a hash of the judge prompt, hashes of both datasets, agreement per dimension and the failed directional checks. First run, `mistral-medium-3.5-128b`: 97.3% agreement, 89.5% of the directional checks. The model comparison (#237 step 3) added `--votes N` (median per dimension), a shuffled band order per vote and `--mode per-band`, calibrated four judges from families none of the research candidates uses, and chose `glm-5.2` (98.7%, all directional checks); see ADR 0004. Golden runs take `--judge model[:reasoning]` and record the judge's four dimensions per query; the Setups section compares their mean (judge quality) between setups. Until 2026-10-05 the script called Anthropic with a hard-coded model and never ran (#204).
 
 ---
 
@@ -480,7 +480,7 @@ services/eval/
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SCW_SECRET_KEY` | No | — | Enables LLM-as-judge (Layer 2) on Scaleway. Without it, only automatic scoring runs. (Was `ANTHROPIC_API_KEY` in this design, then `MISTRAL_API_KEY`; see ADR 0004.) |
-| `SCW_JUDGE_MODEL` | No | `mistral-medium-3.5-128b` | Judge model; provisional until the model comparison. |
+| `SCW_JUDGE_MODEL` | No | `glm-5.2` | Judge model, chosen by calibration (ADR 0004). |
 | `EVAL_DASHBOARD_ENABLED` | No | `false` | Activates `/eval/dashboard` and eval API routes. |
 | `EVAL_DASHBOARD_PASSWORD` | No | — | HTTP Basic Auth password for dashboard. Username: `eval`. |
 

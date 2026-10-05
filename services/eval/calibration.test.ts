@@ -117,3 +117,29 @@ test("a calibration record names the judge model, the prompt and the data it was
   assert.equal(record.summary.agreementRate, 1);
   assert.equal(record.summary.unitTestPassRate, 1);
 });
+
+test("a calibration can use several votes and per-band calls, and records how it judged", async () => {
+  const prompts: string[] = [];
+  const result = await runCalibration({
+    judgeModel: judgeAnswering(agreeingScores, prompts),
+    calibrationEntries,
+    unitTestEntries,
+    judging: { votes: 3, mode: "per-band" },
+  });
+  assert.equal(prompts.length, 3 * (calibrationEntries.length + unitTestEntries.length));
+
+  const record = buildJudgeRunRecord(result, {
+    judgeModel: "gpt-oss-120b",
+    reasoningEffort: "low",
+    startedAt: new Date("2026-10-05T12:00:00Z"),
+    label: null,
+    git: null,
+    calibrationEntries,
+    unitTestEntries,
+  });
+  assert.deepEqual(
+    { votes: record.config.votes, mode: record.config.mode, reasoningEffort: record.config.reasoningEffort },
+    { votes: 3, mode: "per-band", reasoningEffort: "low" },
+  );
+  assert.equal(record.summary.failedCalls, 0);
+});

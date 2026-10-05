@@ -37,6 +37,7 @@ function result(overrides: Partial<GoldenResult> & Pick<GoldenResult, "id">): Go
     constraintRateAt8: null,
     constraintVerdicts: null,
     failedGates: [],
+    judgeScores: null,
     ...overrides,
   };
 }
@@ -235,4 +236,22 @@ test("the run summary counts failed queries per gate", () => {
     result({ id: "dungeon-synth", status: "fail", passed: false, failedGates: ["noResults"] }),
   ]);
   assert.deepEqual(run.summary.failuresByGate, { antiBand: 1, coverage: 1, constraint: 1, noResults: 1 });
+});
+
+test("a judged run records the judge and the mean judge scores over judged queries", () => {
+  const scores = (v: number) => ({ relevance: v, obscurityFit: v, evidenceQuality: v, discoveryValue: v });
+  const run = buildGoldenRunRecord({
+    entries,
+    results: [result({ id: "blackgaze", judgeScores: scores(1) }), result({ id: "zeuhl", judgeScores: scores(0.5) }), result({ id: "dungeon-synth" })],
+    startedAt: new Date("2026-10-05T10:15:00Z"),
+    finishedAt: new Date("2026-10-05T10:45:00Z"),
+    label: null,
+    notes: null,
+    git: null,
+    apiUrl: "http://localhost:3001",
+    judge: { model: "llama-3.3-70b-instruct", reasoningEffort: "none", votes: 3 },
+  });
+  assert.deepEqual(run.config.judge, { model: "llama-3.3-70b-instruct", reasoningEffort: "none", votes: 3 });
+  assert.deepEqual(run.summary.judgeMeans, scores(0.75));
+  assert.deepEqual(run.results[0]!.judgeScores, scores(1));
 });

@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { loadRuns, type GoldenRunRecord, type GoldenRunResult } from "./history.ts";
+import { seededRandom } from "./random.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PATH = join(__dirname, "dashboard-template.html");
@@ -168,11 +169,18 @@ export function compareRuns(base: GoldenRunRecord, run: GoldenRunRecord): Compar
     }
   }
 
+  // Numeric fields one level deep too (judgeMeans.relevance), keyed with a dot.
   const summaryDelta: Record<string, number> = {};
-  for (const [key, value] of Object.entries(run.summary)) {
-    const before: unknown = (base.summary as Record<string, unknown>)[key];
-    if (typeof value === "number" && typeof before === "number") summaryDelta[key] = value - before;
-  }
+  const addDeltas = (after: Record<string, unknown>, before: Record<string, unknown>, prefix: string) => {
+    for (const [key, value] of Object.entries(after)) {
+      const previous = before[key];
+      if (typeof value === "number" && typeof previous === "number") summaryDelta[prefix + key] = value - previous;
+      else if (!prefix && value && previous && typeof value === "object" && typeof previous === "object") {
+        addDeltas(value as Record<string, unknown>, previous as Record<string, unknown>, `${key}.`);
+      }
+    }
+  };
+  addDeltas(run.summary as unknown as Record<string, unknown>, base.summary as unknown as Record<string, unknown>, "");
 
   return {
     baseRunId: base.runId,
@@ -222,6 +230,7 @@ function setupKey(run: GoldenRunRecord): string {
     run.config.pipelineVersion,
     run.config.apiUrl,
     run.config.replay ?? null,
+    run.config.judge ?? null,
     run.git?.commit ?? null,
     run.git?.dirty ?? null,
     run.dataset.contentHash,
@@ -261,6 +270,9 @@ export type SetupSummary = {
   passRate: { mean: number | null; min: number | null; max: number | null };
   nuggetCoverageMean: number | null;
   constraintRateMean: number | null;
+  /** Mean of the judge's four dimensions; null for unjudged setups. */
+  judgeQualityMean: number | null;
+  judge: GoldenRunRecord["config"]["judge"];
   latencyMsMedian: number | null;
   errorRate: number | null;
 };
@@ -291,6 +303,10 @@ export function groupSetups(runs: GoldenRunRecord[]): SetupSummary[] {
       constraintRateMean: mean(
         group.map((r) => r.summary.constraintRateMean ?? null).filter((v): v is number => v !== null),
       ),
+      judgeQualityMean: mean(
+        group.map((r) => judgeQuality(r.summary.judgeMeans ?? null)).filter((v): v is number => v !== null),
+      ),
+      judge: first.config.judge ?? null,
       latencyMsMedian: mean(group.map((r) => r.summary.latencyMsMedian).filter((v): v is number => v !== null)),
       errorRate: mean(group.map((r) => r.summary.errorRate)),
     };
@@ -308,13 +324,23 @@ export type PairedDiff = {
   clear: boolean;
 };
 
-type Metric = "pass" | "coverage" | "antiBand" | "constraint";
+type Metric = "pass" | "coverage" | "antiBand" | "constraint" | "judge";
+
+/** One number for the judge's verdict: the mean of its four dimensions. */
+function judgeQuality(scores: GoldenRunResult["judgeScores"] | undefined): number | null {
+  if (!scores) return null;
+  const values = [scores.relevance, scores.obscurityFit, scores.evidenceQuality, scores.discoveryValue].filter(
+    (v): v is number => v !== null,
+  );
+  return mean(values);
+}
 
 function valueOf(result: GoldenRunResult, metric: Metric): number | null {
   if (result.status === "error" || !result.metrics) return null;
   if (metric === "pass") return result.status === "pass" ? 1 : 0;
   if (metric === "coverage") return result.metrics.nuggetCoverageAt8;
   if (metric === "constraint") return result.metrics.constraintRateAt8 ?? null;
+  if (metric === "judge") return judgeQuality(result.judgeScores);
   return result.metrics.antiBandRateAt8;
 }
 
@@ -327,18 +353,6 @@ function perQueryMeans(runs: GoldenRunRecord[], metric: Metric): Map<string, num
     }
   }
   return new Map([...values.entries()].map(([id, vs]) => [id, mean(vs)!]));
-}
-
-/** Small seeded PRNG (mulberry32), so the same runs always give the same interval. */
-function seededRandom(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 const BOOTSTRAP_RESAMPLES = 2000;
@@ -372,12 +386,19 @@ function pairedDiff(base: GoldenRunRecord[], candidate: GoldenRunRecord[], metri
 export function compareSetups(
   base: GoldenRunRecord[],
   candidate: GoldenRunRecord[],
-): { passRate: PairedDiff; coverage: PairedDiff; antiBandRate: PairedDiff; constraintRate: PairedDiff } {
+): {
+  passRate: PairedDiff;
+  coverage: PairedDiff;
+  antiBandRate: PairedDiff;
+  constraintRate: PairedDiff;
+  judgeQuality: PairedDiff;
+} {
   return {
     passRate: pairedDiff(base, candidate, "pass"),
     coverage: pairedDiff(base, candidate, "coverage"),
     antiBandRate: pairedDiff(base, candidate, "antiBand"),
     constraintRate: pairedDiff(base, candidate, "constraint"),
+    judgeQuality: pairedDiff(base, candidate, "judge"),
   };
 }
 

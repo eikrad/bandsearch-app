@@ -5,17 +5,31 @@ import { parseArgs } from "node:util";
 
 import { config as loadEnv } from "dotenv";
 
+import type { ChatModelClient } from "../api/src/agent/modelUtils.js";
+import { modelFamily } from "../api/src/config/models.js";
+import { createChatModelFactory } from "../api/src/llm/chatModel.js";
+import { checkEvidence } from "../api/src/eval/evidenceChecker.js";
 import { createLastFmClient } from "../api/src/eval/lastFmClient.js";
+import { classifyObscurityTier } from "../api/src/eval/obscurityScorer.js";
+import type { JudgeInput } from "../api/src/eval/judgeWorker.js";
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
 import { createReplayFetch } from "../api/src/integrations/replayFetch.js";
 import { writeDashboard } from "./dashboard.ts";
 import { createConstraintChecker, constraintRate, type ConstraintCheck, type GoldenConstraints } from "./constraints.ts";
-import { appendRun, buildGoldenRunRecord, readGitState } from "./history.ts";
+import { appendRun, buildGoldenRunRecord, readGitState, type GoldenJudgeConfig } from "./history.ts";
+import { judgeWithVotes, type NumericScores } from "./judging.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_MIN_NUGGET_COVERAGE = 0.5;
 const DEFAULT_MIN_CONSTRAINT_RATE = 0.75;
+
+export type JudgeMeans = {
+  relevance: number | null;
+  obscurityFit: number | null;
+  evidenceQuality: number | null;
+  discoveryValue: number | null;
+};
 
 /**
  * The checks a golden query can fail: no band at all, too many anti-bands, too
@@ -56,6 +70,8 @@ export type GoldenEntry = {
 export type Recommendation = {
   artist: string;
   musicbrainzArtistId?: string;
+  why?: string;
+  sourceSignals?: string[];
 };
 
 export type GoldenResult = {
@@ -91,6 +107,8 @@ export type GoldenResult = {
   constraintVerdicts: { met: number; missed: number; unknown: number } | null;
   /** Which checks failed; empty when the query passed or got no answer. */
   failedGates: GoldenGate[];
+  /** The judge's mean scores over the top bands; null when not judged or the judge failed. */
+  judgeScores: JudgeMeans | null;
   error?: string;
 };
 
@@ -339,12 +357,17 @@ async function fetchRecommendations(
   }
 
   const data = (await response.json()) as {
-    recommendations?: Array<{ artist?: string; musicbrainzArtistId?: string }>;
+    recommendations?: Array<{ artist?: string; musicbrainzArtistId?: string; why?: unknown; sourceSignals?: unknown }>;
     meta?: { model?: unknown; pipelineVersion?: unknown; evalReplay?: unknown };
   };
   return {
     recommendations: (data.recommendations ?? [])
-      .map((r) => ({ artist: r.artist ?? "", musicbrainzArtistId: r.musicbrainzArtistId }))
+      .map((r) => ({
+        artist: r.artist ?? "",
+        musicbrainzArtistId: r.musicbrainzArtistId,
+        why: typeof r.why === "string" ? r.why : undefined,
+        sourceSignals: Array.isArray(r.sourceSignals) ? r.sourceSignals.filter((x): x is string => typeof x === "string") : undefined,
+      }))
       .filter((r) => r.artist.length > 0),
     model: typeof data.meta?.model === "string" ? data.meta.model : null,
     pipelineVersion: typeof data.meta?.pipelineVersion === "string" ? data.meta.pipelineVersion : null,
@@ -359,6 +382,17 @@ export type RunGoldenEntryOptions = {
   apiToken?: string;
   /** Clock for the latency measurement; injectable so tests need not sleep. */
   now?: () => number;
+  /**
+   * Scores the top bands with an LLM judge, given what the live judge gets.
+   * Not a gate: judge scores measure quality, they do not pass or fail a query.
+   */
+  judge?: {
+    model: ChatModelClient;
+    modelId: string;
+    votes?: number;
+    /** Last.fm listener count per band, for the obscurity tier; omit to send none. */
+    listenersOf?: (artist: string) => Promise<number | null>;
+  };
   /** Checks bands against an entry's constraints; required when the entry has any. */
   constraintChecker?: {
     check(rec: Recommendation, constraints: GoldenConstraints): Promise<ConstraintCheck>;
@@ -444,6 +478,48 @@ export async function runGoldenEntry(
     }
   }
 
+  let judgeScores: JudgeMeans | null = null;
+  if (options.judge && topK.length > 0) {
+    const { judge } = options;
+    if (model && modelFamily(judge.modelId) === modelFamily(model)) {
+      warnings.push(
+        `judge ${judge.modelId} and research model ${model} are from the same model family (${modelFamily(model)})`,
+      );
+    }
+    try {
+      const inputs: JudgeInput[] = await Promise.all(
+        topK.map(async (r) => {
+          const listeners = judge.listenersOf ? await judge.listenersOf(r.artist) : null;
+          const evidence = checkEvidence(r.why ?? "", r.sourceSignals ?? []);
+          return {
+            bandName: r.artist,
+            query: entry.query,
+            obscurityTarget: entry.obscurityTarget ?? null,
+            why: r.why ?? "",
+            sourceSignals: r.sourceSignals ?? [],
+            listeners,
+            obscurityTier: listeners === null ? null : classifyObscurityTier(listeners),
+            citationSupportRate: evidence.citationSupportRate,
+            genericWhyFlag: evidence.genericWhyFlag,
+          };
+        }),
+      );
+      const { scores } = await judgeWithVotes(judge.model, inputs, { votes: judge.votes ?? 1 });
+      const meanOf = (key: keyof NumericScores) => {
+        const values = topK.map((r) => scores[r.artist]?.[key]).filter((v): v is number => typeof v === "number");
+        return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length;
+      };
+      judgeScores = {
+        relevance: meanOf("relevance"),
+        obscurityFit: meanOf("obscurity_fit"),
+        evidenceQuality: meanOf("evidence_quality"),
+        discoveryValue: meanOf("discovery_value"),
+      };
+    } catch (error) {
+      warnings.push(`judge failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   const failedGates: GoldenGate[] = [];
   // Without a band every other check is skipped, which must not read as a pass.
   if (recommendations.length === 0) failedGates.push("noResults");
@@ -472,6 +548,7 @@ export async function runGoldenEntry(
     constraintRateAt8,
     constraintVerdicts,
     failedGates,
+    judgeScores,
   };
 }
 
@@ -496,6 +573,7 @@ export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResul
     constraintRateAt8: null,
     constraintVerdicts: null,
     failedGates: [],
+    judgeScores: null,
     error: message,
   };
 }
@@ -530,6 +608,8 @@ async function main(): Promise<void> {
       label: { type: "string" },
       notes: { type: "string" },
       repeat: { type: "string" },
+      judge: { type: "string" },
+      "judge-votes": { type: "string" },
       strict: { type: "boolean", default: false },
       "no-history": { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -541,7 +621,7 @@ async function main(): Promise<void> {
 
   // A run on uncommitted code cannot be traced back to what ran, so it only
   // enters the history when the operator says so explicitly.
-  const git = readGitState([GOLDEN_HISTORY_PATH]);
+  const git = readGitState();
   if (recordHistory && git?.dirty && !args["allow-dirty"]) {
     console.error(
       "Tracked files have uncommitted changes, so this run's commit would not say what ran.\n" +
@@ -580,6 +660,35 @@ async function main(): Promise<void> {
     lastFm: lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : undefined,
   });
   if (!lastFmKey) console.warn("LASTFM_API_KEY not set: coverage uses MusicBrainz tags only.");
+
+  // --judge model[:reasoning] scores each query's top bands with that Scaleway
+  // judge (calibrated with npm run calibrate); --judge-votes N takes the median.
+  let judge: RunGoldenEntryOptions["judge"];
+  let judgeConfig: GoldenJudgeConfig | null = null;
+  if (args.judge) {
+    const [judgeModelId, effort] = args.judge.split(":");
+    judgeConfig = {
+      model: judgeModelId!,
+      reasoningEffort: effort || "none",
+      votes: Math.max(1, Number.parseInt(args["judge-votes"] ?? "1", 10) || 1),
+    };
+    const lastFm = lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : null;
+    judge = {
+      // The same settings as the live judge (judgeModelFor): temperature 0, JSON mode.
+      model: createChatModelFactory(
+        { provider: "scaleway", model: judgeConfig.model, reasoningEffort: judgeConfig.reasoningEffort },
+        {
+          geminiApiKey: "",
+          scalewayApiKey: process.env.SCW_SECRET_KEY ?? "",
+          scalewayBaseUrl: process.env.SCW_BASE_URL?.trim() ?? "",
+        },
+      )({ temperature: 0, json: true }),
+      modelId: judgeConfig.model,
+      votes: judgeConfig.votes,
+      listenersOf: lastFm ? (artist) => lastFm.getListenerCount(artist) : undefined,
+    };
+    console.log(`Judging top bands with ${judgeConfig.model} (reasoning ${judgeConfig.reasoningEffort}, ${judgeConfig.votes} vote(s))`);
+  }
   // --repeat N: N runs of the same setup, each recorded on its own. The
   // dashboard groups them, so per-query means average out single-run noise.
   const repeat = Math.max(1, Number.parseInt(args.repeat ?? "1", 10) || 1);
@@ -591,7 +700,7 @@ async function main(): Promise<void> {
       goldenSet,
       async (entry) => {
         console.log(`→ ${entry.id}`);
-        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken, constraintChecker });
+        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken, constraintChecker, judge });
         const status = result.passed ? "PASS" : "FAIL";
         console.log(
           `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
@@ -623,6 +732,7 @@ async function main(): Promise<void> {
         notes: args.notes ?? null,
         git,
         apiUrl,
+        judge: judgeConfig,
       });
       appendRun(GOLDEN_HISTORY_PATH, record);
       console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);

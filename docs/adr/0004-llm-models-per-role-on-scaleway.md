@@ -1,7 +1,8 @@
 # ADR 0004 — LLM models per role, on Scaleway
 
-**Status:** Accepted for the structure; **model choices provisional** until the
-model comparison in #237 step 3 replaces them with measured ones.
+**Status:** Accepted. Model choices measured on 2026-10-05 (#237 step 3); see
+"Measured model choices" below. The provisional choices of the first draft are
+kept underneath for the record.
 **Date:** 2026-10-05
 
 ## Context
@@ -45,7 +46,55 @@ Rollout follows #237: measure first (golden-run history and a Gemini
 baseline, #242/#247), switch behind `LLM_PROVIDER` (this step, default still
 `gemini`), compare models, switch the default, remove Gemini.
 
-## Provisional model choices
+## Measured model choices (2026-10-05)
+
+**How it was measured.** The 16-query golden set (10 open-ended, 6 constraint
+queries), with recorded Brave, MusicBrainz and Last.fm answers replayed so
+every model saw the same search data (#250). Three runs per model, compared
+with the Gemini baseline per query: values averaged over the runs, 95% paired
+bootstrap over queries. Quality was judged by `glm-5.2` (below), a judge from
+a family none of the candidates belongs to.
+
+**Judge.** Four candidates calibrated against the 25 human labels and 16
+directional checks, 3 votes each with shuffled band order:
+
+| Judge | Family | Agreement | Directional checks | Time |
+|---|---|---|---|---|
+| **glm-5.2** | Zhipu | **98.7%** | **100%** (after fixing ut-13) | 155 s |
+| llama-3.3-70b-instruct | Meta | 96.0% | 94.4% — misses a fabricated second URL (ut-15) | 121 s |
+| mistral-medium-3.5-128b | Mistral | 98.7% | 89.5% (before the ut-13 fix) | 178 s |
+| gpt-oss-120b (reasoning low) | OpenAI | 92.0% | 94.7% (before the ut-13 fix); obscurity fit 76% | 283 s |
+
+The labelled set separates judges poorly: three reach 98.7% because it only
+distinguishes high from low. Finer judge comparisons need harder,
+owner-labelled borderline cases.
+
+**Research model.** Differences against Gemini 2.5 Flash; `*` marks an
+interval that excludes zero:
+
+| Model | Pass | Constraint hits | Judge quality | Median latency | Unanswered | Δ constraints | Δ judge quality |
+|---|---|---|---|---|---|---|---|
+| gemini-2.5-flash (baseline) | 56% | 71% | 71% | 29 s | 0% | — | — |
+| gemma-4-26b-a4b-it | 51% | 48% | 65% | 38 s | 6% | −36 pp [−65, −7] * | −6 pp [−11, −1] * |
+| **deepseek-v4-flash-0731** | 66% | 77% | 71% | 40 s | 2% | +6 pp [0, +13] | +1 pp [−4, +5] |
+| mistral-small-3.2-24b | 47% | 84% | 67% | 33 s | 21% | +9 pp [−27, +58] | −3 pp [−9, +2] |
+
+**Decision:** research `deepseek-v4-flash-0731`, judge `glm-5.2`, both with
+reasoning off.
+
+- deepseek is the only candidate that is at least on par with Gemini on every
+  measure; none of its differences is outside the noise.
+- gemma extracts fastest (9 s) but ignores hard constraints far more often
+  and scores lower with the judge.
+- mistral-small times out in the 12 s extraction budget on a fifth of the
+  queries; with a larger budget it might be viable, but that budget is
+  latency every user pays.
+
+**Trade-off accepted:** median latency per query rises from ~29 s to ~40 s
+(with replayed lookups; live MusicBrainz adds the same to both). Cost per
+query was not measured; Scaleway bills per token for every candidate.
+
+## Provisional model choices (first draft, superseded)
 
 | Role | Env | Default | Why, for now |
 |---|---|---|---|

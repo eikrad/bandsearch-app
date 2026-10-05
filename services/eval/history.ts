@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { dirname } from "node:path";
 
 import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
 
@@ -16,6 +16,8 @@ export const GOLDEN_METRICS_VERSION = 3;
 // 2 → 3 (2026-10-05, #253): constraint queries add a third pass/fail gate.
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
+
+export type GoldenJudgeConfig = { model: string; reasoningEffort: string; votes: number };
 
 /** One line of `history/golden-runs.jsonl`: what was tested and what came out. */
 export type GoldenRunRecord = {
@@ -41,6 +43,8 @@ export type GoldenRunRecord = {
     pipelineVersion: string | null;
     /** Whether the API replayed recorded Brave/MusicBrainz/Last.fm answers (#250). */
     replay: boolean | "mixed" | null;
+    /** The judge that scored the top bands; null for an unjudged run. */
+    judge: GoldenJudgeConfig | null;
     metricsVersion: number;
   };
   durationSec: number;
@@ -54,6 +58,8 @@ export type GoldenRunRecord = {
     constraintRateMean: number | null;
     /** Share of queries the runner got no answer to. */
     errorRate: number;
+    /** Mean judge scores over judged queries; null for an unjudged run. */
+    judgeMeans: GoldenResult["judgeScores"];
     /** Failed queries per gate; a query can fail more than one. */
     failuresByGate: Record<GoldenResult["failedGates"][number], number>;
     /** Bands the API returned per answered query (all of them, not only the top 8). */
@@ -77,6 +83,7 @@ export type GoldenRunResult = {
   tagSources: GoldenResult["tagSources"];
   constraintVerdicts: GoldenResult["constraintVerdicts"];
   failedGates: GoldenResult["failedGates"];
+  judgeScores: GoldenResult["judgeScores"];
   uncoveredNuggets: string[];
   warnings: string[];
   error?: string;
@@ -132,6 +139,19 @@ function reportedValue(values: Array<string | null>): string | null {
   return reported.length === 1 ? reported[0]! : `mixed: ${reported.join(", ")}`;
 }
 
+function judgeMeansOf(results: GoldenResult[]): GoldenResult["judgeScores"] {
+  const judged = results.map((r) => r.judgeScores).filter((j): j is NonNullable<typeof j> => j != null);
+  if (judged.length === 0) return null;
+  const meanOf = (key: keyof NonNullable<GoldenResult["judgeScores"]>) =>
+    mean(judged.map((j) => j[key]).filter((v): v is number => v !== null));
+  return {
+    relevance: meanOf("relevance"),
+    obscurityFit: meanOf("obscurityFit"),
+    evidenceQuality: meanOf("evidenceQuality"),
+    discoveryValue: meanOf("discoveryValue"),
+  };
+}
+
 function replayValue(values: Array<boolean | null>): GoldenRunRecord["config"]["replay"] {
   const reported = distinct(values.filter((v): v is boolean => v !== null));
   if (reported.length === 0) return null;
@@ -147,7 +167,9 @@ export function buildGoldenRunRecord({
   notes,
   git,
   apiUrl,
+  judge = null,
 }: {
+  judge?: GoldenJudgeConfig | null;
   entries: GoldenEntry[];
   results: GoldenResult[];
   startedAt: Date;
@@ -173,6 +195,7 @@ export function buildGoldenRunRecord({
       researchModel: reportedValue(answered.map((r) => r.model)),
       pipelineVersion: reportedValue(answered.map((r) => r.pipelineVersion)),
       replay: replayValue(answered.map((r) => r.replay)),
+      judge,
       metricsVersion: GOLDEN_METRICS_VERSION,
     },
     durationSec: Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
@@ -183,6 +206,7 @@ export function buildGoldenRunRecord({
       constraintRateMean: mean(answered.map((r) => r.constraintRateAt8).filter((c): c is number => c !== null)),
       errorRate: results.length === 0 ? 0 : (results.length - answered.length) / results.length,
       resultCountMean: mean(answered.map((r) => r.resultNames.length)),
+      judgeMeans: judgeMeansOf(answered),
       failuresByGate: {
         antiBand: results.filter((r) => r.failedGates.includes("antiBand")).length,
         coverage: results.filter((r) => r.failedGates.includes("coverage")).length,
@@ -210,6 +234,7 @@ export function buildGoldenRunRecord({
       tagSources: r.tagSources,
       constraintVerdicts: r.constraintVerdicts,
       failedGates: r.failedGates,
+      judgeScores: r.judgeScores,
       uncoveredNuggets: r.uncoveredNuggets,
       warnings: r.warnings,
       ...(r.error !== undefined ? { error: r.error } : {}),
@@ -239,17 +264,17 @@ export function loadRuns<T = GoldenRunRecord>(path: string): T[] {
 }
 
 /**
- * Commit, branch and whether tracked files differ from it. The history files a
- * run appends to are excluded: writing them is what every run does.
+ * Commit, branch and whether tracked files differ from it. The eval history
+ * files are excluded: every golden run and calibration appends to them, so a
+ * calibration running beside a golden run must not mark it dirty.
  */
-export function readGitState(historyPaths: string[] = []): GitState | null {
-  const cwd = dirname(historyPaths[0] ?? new URL(import.meta.url).pathname);
+export function readGitState(): GitState | null {
+  const cwd = dirname(new URL(import.meta.url).pathname);
   const git = (args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-  const ignored = historyPaths.map((p) => basename(p));
   try {
     const changed = git(["status", "--porcelain", "--untracked-files=no"])
       .split("\n")
-      .filter((line) => line.trim() !== "" && !ignored.some((name) => line.endsWith(`history/${name}`)));
+      .filter((line) => line.trim() !== "" && !line.includes("services/eval/history/"));
     return {
       commit: git(["rev-parse", "--short", "HEAD"]),
       branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
