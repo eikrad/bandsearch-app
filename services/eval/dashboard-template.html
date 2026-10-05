@@ -906,6 +906,8 @@ function questionGrid(set) {
             r.metrics.nuggetCoverageAt8 == null ? "nugget coverage unknown (no MusicBrainz tags)" : "nugget coverage @8") : null,
           r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.antiBandRateAt8)), "anti-bands in top 8") : null,
           r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
+          r.tagSources ? el("div", { class: "t-head" },
+            `tags: ${r.tagSources.musicbrainz} from MusicBrainz, ${r.tagSources.lastfm} from Last.fm, ${r.tagSources.none} without`) : null,
           r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,
           r.error ? el("div", { class: "t-head" }, `⚠ ${r.error}`) : null,
           ...r.warnings.filter((w) => !w.startsWith("runner error")).map((w) => el("div", { class: "t-head" }, `⚠ ${w}`)),

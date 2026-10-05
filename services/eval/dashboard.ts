@@ -215,6 +215,7 @@ function setupKey(run: GoldenRunRecord): string {
     run.config.researchModel,
     run.config.pipelineVersion,
     run.config.apiUrl,
+    run.config.replay ?? null,
     run.git?.commit ?? null,
     run.git?.dirty ?? null,
     run.dataset.contentHash,

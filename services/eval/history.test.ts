@@ -32,6 +32,8 @@ function result(overrides: Partial<GoldenResult> & Pick<GoldenResult, "id">): Go
     latencyMs: 1000,
     model: "gemini-2.5-flash",
     pipelineVersion: "0.4.0",
+    replay: false,
+    tagSources: { musicbrainz: 2, lastfm: 0, none: 0 },
     ...overrides,
   };
 }
@@ -186,4 +188,19 @@ test("a golden run reports how many bands the API returned per query", () => {
     result({ id: "dungeon-synth", resultNames: ["A", "B", "C", "D", "E", "F", "G", "H", "I"] }),
   ]);
   assert.equal(run.summary.resultCountMean, 6, "counts what the API returned, not only the top 8");
+});
+
+test("a golden run records whether the API replayed recorded lookups", () => {
+  assert.equal(record([result({ id: "blackgaze", replay: true })]).config.replay, true);
+  assert.equal(record([result({ id: "blackgaze", replay: false })]).config.replay, false);
+  assert.equal(
+    record([result({ id: "blackgaze", replay: true }), result({ id: "zeuhl", replay: false })]).config.replay,
+    "mixed",
+  );
+});
+
+test("a golden run keeps each query's tag sources and is scored under metrics version 2", () => {
+  const run = record([result({ id: "blackgaze", tagSources: { musicbrainz: 1, lastfm: 2, none: 0 } })]);
+  assert.deepEqual(run.results[0]!.tagSources, { musicbrainz: 1, lastfm: 2, none: 0 });
+  assert.equal(run.config.metricsVersion, 2, "Last.fm tags changed what coverage means");
 });

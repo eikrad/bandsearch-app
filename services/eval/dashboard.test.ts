@@ -27,6 +27,8 @@ function result(id: string, outcome: Outcome, top: string[] = ["Fen", "Ghost Bat
     latencyMs: outcome === "error" ? null : 1000,
     model: outcome === "error" ? null : "gemini-2.5-flash",
     pipelineVersion: "0.4.0",
+    replay: outcome === "error" ? null : false,
+    tagSources: { musicbrainz: top.length, lastfm: 0, none: 0 },
     ...(outcome === "error" ? { error: "API error 502" } : {}),
   };
 }
