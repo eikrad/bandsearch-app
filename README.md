@@ -228,8 +228,8 @@ Common optional variables:
 |----------|---------|-------------|
 | `LLM_PROVIDER` | `gemini` | Research provider: `gemini` or `scaleway` ([ADR 0004](docs/adr/0004-llm-models-per-role-on-scaleway.md)) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Research model on Gemini; returned as `meta.model` on each recommendation |
-| `SCW_MODEL` | `gemma-4-26b-a4b-it` | Research model on Scaleway (provisional, see ADR 0004) |
-| `SCW_JUDGE_MODEL` | `mistral-medium-3.5-128b` | LLM-as-judge model; must differ from the research model; recorded as `model_id` on every score row |
+| `SCW_MODEL` | `deepseek-v4-flash-0731` | Research model on Scaleway, chosen by the model comparison (ADR 0004) |
+| `SCW_JUDGE_MODEL` | `glm-5.2` | LLM-as-judge model; must differ from the research model; recorded as `model_id` on every score row |
 | `SCW_REASONING_EFFORT` / `SCW_JUDGE_REASONING_EFFORT` | `none` | Scaleway reasoning per role; `none` keeps calls fast (gemma: 101 s → 9 s for one extraction). `gpt-oss-120b` needs `low` or higher |
 | `SCW_BASE_URL` | `https://api.scaleway.ai/v1` | Project-scoped Scaleway endpoint, if you use one |
 | `PORT` | `3001` | API port |

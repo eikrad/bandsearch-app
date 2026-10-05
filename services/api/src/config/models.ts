@@ -23,13 +23,17 @@ export type ModelRef = {
 export const DEFAULT_RESEARCH_MODEL = "gemini-2.5-flash";
 
 /**
- * Provisional Scaleway defaults until the model comparison (#237 step 3)
- * picks them by measurement. The research default is the model that measured
- * best in the Radiationsafety project; the judge default is a non-reasoning
- * model from a different family than the research model.
+ * Scaleway defaults, chosen by measurement on 2026-10-05 (ADR 0004, #237).
+ *
+ * Research: deepseek-v4-flash-0731 was the only candidate on par with the
+ * Gemini baseline on every golden metric (judge quality +1 pp, constraint
+ * hits +6 pp, both within noise) with 2% unanswered queries; gemma was
+ * clearly worse on constraints and judge quality, mistral-small timed out on
+ * 21% of queries. Judge: glm-5.2, 98.7% agreement with the human labels and
+ * every directional check, from a family none of the research models uses.
  */
-export const DEFAULT_SCALEWAY_RESEARCH_MODEL = "gemma-4-26b-a4b-it";
-export const DEFAULT_SCALEWAY_JUDGE_MODEL = "mistral-medium-3.5-128b";
+export const DEFAULT_SCALEWAY_RESEARCH_MODEL = "deepseek-v4-flash-0731";
+export const DEFAULT_SCALEWAY_JUDGE_MODEL = "glm-5.2";
 
 export type LlmConfig = {
   research: ModelRef;

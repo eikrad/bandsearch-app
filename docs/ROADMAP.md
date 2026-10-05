@@ -35,8 +35,10 @@ plan, not a second permanent structure.
    - ✓ Stable measurement: replay of Brave/MusicBrainz/Last.fm answers,
      Last.fm tags for coverage, repeats with paired statistics (#250)
    - ✓ Constraint queries checked deterministically against MusicBrainz (#253)
-   - Next: the model comparison with judge scores in golden runs (#204 part 2)
-   - Then: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
+   - ✓ Model comparison with judge scores in golden runs (#204 part 2):
+     judge `glm-5.2`, research `deepseek-v4-flash-0731` — on par with Gemini,
+     ~11 s slower per query (ADR 0004)
+   - Next: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
      first), then remove Gemini
    - Afterwards: score live searches with the judge (#248), and a judge
      quality gate that drops weak candidates and searches again (#251)

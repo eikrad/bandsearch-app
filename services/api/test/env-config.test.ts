@@ -148,8 +148,8 @@ test("the research graph runs on Gemini unless LLM_PROVIDER says otherwise", () 
 test("LLM_PROVIDER=scaleway runs the research graph on Scaleway without a Gemini key", () => {
   const { llm, researchModel } = validateRuntimeEnv({ ...BRAVE, LLM_PROVIDER: "scaleway", SCW_SECRET_KEY: "scw" });
   assert.equal(llm.research.provider, "scaleway");
-  assert.equal(llm.research.model, "gemma-4-26b-a4b-it");
-  assert.equal(researchModel, "gemma-4-26b-a4b-it", "provenance names the Scaleway model");
+  assert.equal(llm.research.model, "deepseek-v4-flash-0731");
+  assert.equal(researchModel, "deepseek-v4-flash-0731", "provenance names the Scaleway model");
 });
 
 test("SCW_MODEL chooses the Scaleway research model", () => {
@@ -172,7 +172,7 @@ test("an unknown LLM_PROVIDER is rejected, not silently replaced", () => {
 
 test("the judge runs on Scaleway whenever a Scaleway key is set", () => {
   const { llm } = validateRuntimeEnv({ ...REQUIRED, SCW_SECRET_KEY: "scw" });
-  assert.deepEqual(llm.judge, { provider: "scaleway", model: "mistral-medium-3.5-128b", reasoningEffort: "none" });
+  assert.deepEqual(llm.judge, { provider: "scaleway", model: "glm-5.2", reasoningEffort: "none" });
 });
 
 test("SCW_JUDGE_MODEL chooses the judge model", () => {
