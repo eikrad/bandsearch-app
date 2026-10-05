@@ -219,3 +219,8 @@ test("reasoning is off for both roles unless configured per role", () => {
   assert.equal(llm.research.reasoningEffort, "none");
   assert.equal(llm.judge?.reasoningEffort, "low");
 });
+
+test("EVAL_REPLAY_DIR turns on replay of external answers for eval runs", () => {
+  assert.equal(validateRuntimeEnv({ ...REQUIRED }).evalReplayDir, "");
+  assert.equal(validateRuntimeEnv({ ...REQUIRED, EVAL_REPLAY_DIR: " /tmp/replay " }).evalReplayDir, "/tmp/replay");
+});

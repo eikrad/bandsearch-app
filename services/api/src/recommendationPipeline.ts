@@ -8,6 +8,29 @@ import {
 import { writeStructuredLog } from "./http/structuredLog.js";
 import type { LlmConfig } from "./config/models.js";
 import { createChatModelFactory } from "./llm/chatModel.js";
+import { createReplayFetch } from "./integrations/replayFetch.js";
+
+/** MusicBrainz asks for at most one request per second per IP. */
+const MUSICBRAINZ_MIN_INTERVAL_MS = 1100;
+
+/**
+ * How the research graph reaches Brave, MusicBrainz and Last.fm. Normally the
+ * network; with a replay directory, a recording transport whose real
+ * MusicBrainz calls are spaced while replays are immediate.
+ */
+export function externalLookupsFor(cfg: Pick<RecommendationRuntimeConfig, "evalReplayDir">): {
+  replay: boolean;
+  fetchImpl?: typeof fetch;
+  musicBrainzMinIntervalMs?: number;
+} {
+  const dir = String(cfg.evalReplayDir ?? "").trim();
+  if (!dir) return { replay: false };
+  return {
+    replay: true,
+    fetchImpl: createReplayFetch({ dir, minIntervalMsByHost: { "musicbrainz.org": MUSICBRAINZ_MIN_INTERVAL_MS } }),
+    musicBrainzMinIntervalMs: 0,
+  };
+}
 import type { SavedBandContextSource } from "./savedBandContext.js";
 
 export type RecommendationRuntimeConfig = {
@@ -17,6 +40,8 @@ export type RecommendationRuntimeConfig = {
   researchModel?: string;
   /** Provider and model per role; when set, the research nodes are built from it. */
   llm?: LlmConfig;
+  /** Eval only: record and replay external lookups in this directory (#250). */
+  evalReplayDir?: string;
   braveApiKey?: string;
   lastFmApiKey?: string;
   researchMaxInitialSearches?: number;
@@ -49,6 +74,7 @@ export function createRecommendationPipeline({
   }
 
   const cfg = runtimeConfig ?? {};
+  const evalReplay = String(cfg.evalReplayDir ?? "").trim() !== "";
 
   let resolveFirstReady: (() => void) | undefined;
   const whenReadyPromise = new Promise<void>((resolve) => {
@@ -72,6 +98,7 @@ export function createRecommendationPipeline({
       const apiKey = String(cfg.llm?.geminiApiKey ?? cfg.geminiApiKey ?? "").trim();
       const braveKey = String(cfg.braveApiKey ?? "").trim();
       const chatModel = cfg.llm ? createChatModelFactory(cfg.llm.research, cfg.llm) : undefined;
+      const lookups = externalLookupsFor(cfg);
 
       activeService = createResearchRecommendationService({
         graphDeps: {
@@ -87,6 +114,8 @@ export function createRecommendationPipeline({
           lastFmApiKey: String(cfg.lastFmApiKey ?? "").trim(),
           musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
           musicBrainzRetries: cfg.musicBrainzRetries,
+          fetchImpl: lookups.fetchImpl,
+          musicBrainzMinIntervalMs: lookups.musicBrainzMinIntervalMs,
           onLog: (level, event, details) => {
             pipelineLog(level, event, details);
           },
@@ -96,6 +125,7 @@ export function createRecommendationPipeline({
         mode: "research",
         provider: cfg.llm?.research.provider ?? "gemini",
         model: cfg.llm?.research.model ?? cfg.researchModel,
+        replay: lookups.replay,
       });
       activeError = null;
       if (resolveFirstReady) {
@@ -171,6 +201,8 @@ export function createRecommendationPipeline({
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,
           model,
+          // Eval runs record this, so a replayed run is never mistaken for a live one.
+          ...(evalReplay ? { evalReplay: true } : {}),
           pipelineDiagnostics: pipelineDiagnostics ?? null,
         },
       };

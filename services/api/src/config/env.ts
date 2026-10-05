@@ -79,6 +79,8 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
     evalDashboardPassword: String(env.EVAL_DASHBOARD_PASSWORD ?? "").trim(),
     braveApiKey,
+    // Eval only: record and replay Brave/MusicBrainz/Last.fm answers (#250).
+    evalReplayDir: String(env.EVAL_REPLAY_DIR ?? "").trim(),
     pipelineReadyTimeoutMs,
     researchMaxInitialSearches,
     researchMaxReflectionSearches,
