@@ -154,7 +154,10 @@ export function createApp({
   // semantics for artist_group_members.
   let sqliteDatabase: Database.Database | null = null;
   const openSqliteDatabase = () => {
-    sqliteDatabase ??= new Database(runtimeConfig.databasePath || "bandsearch.db");
+    // No file fallback: the "bandsearch.db" default lives in validateRuntimeEnv(),
+    // which server.ts always passes. An unconfigured app (tests) gets a private
+    // in-memory database instead of whatever bandsearch.db sits in the cwd.
+    sqliteDatabase ??= new Database(runtimeConfig.databasePath || ":memory:");
     return sqliteDatabase;
   };
 
