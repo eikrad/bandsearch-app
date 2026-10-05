@@ -13,6 +13,7 @@ import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
+import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export type ResearchGraphDeps = {
   geminiApiKey: string;
@@ -32,6 +33,8 @@ export type ResearchGraphDeps = {
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
    */
   modelClient?: ChatModelClient;
+  /** Builds each node's model from the configured provider; used when no `modelClient` is given. */
+  chatModel?: ChatModelFactory;
   /**
    * Model id for every research node; defaults to `DEFAULT_RESEARCH_MODEL`.
    * Reported back as the run's `model`, the provenance of the ranker's prose.
@@ -131,6 +134,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
     modelClient: deps.modelClient,
+    chatModel: deps.chatModel,
     model: deps.model,
   });
 
@@ -140,6 +144,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(20000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
         model: deps.model,
       });
       let plan: SearchPlan;
@@ -173,6 +178,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(18000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
         model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
@@ -256,6 +262,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: Math.max(budget.allocate(12000), 12000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
         model: deps.model,
       });
       const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);

@@ -6,6 +6,8 @@ import {
   resolveRecommendationFacadeInput,
 } from "./recommendations.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
+import type { LlmConfig } from "./config/models.js";
+import { createChatModelFactory } from "./llm/chatModel.js";
 import type { SavedBandContextSource } from "./savedBandContext.js";
 
 export type RecommendationRuntimeConfig = {
@@ -13,6 +15,8 @@ export type RecommendationRuntimeConfig = {
   musicBrainzRetries?: number;
   geminiApiKey?: string;
   researchModel?: string;
+  /** Provider and model per role; when set, the research nodes are built from it. */
+  llm?: LlmConfig;
   braveApiKey?: string;
   lastFmApiKey?: string;
   researchMaxInitialSearches?: number;
@@ -65,13 +69,15 @@ export function createRecommendationPipeline({
 
   async function initialize() {
     try {
-      const apiKey = String(cfg.geminiApiKey ?? "").trim();
+      const apiKey = String(cfg.llm?.geminiApiKey ?? cfg.geminiApiKey ?? "").trim();
       const braveKey = String(cfg.braveApiKey ?? "").trim();
+      const chatModel = cfg.llm ? createChatModelFactory(cfg.llm.research, cfg.llm) : undefined;
 
       activeService = createResearchRecommendationService({
         graphDeps: {
           geminiApiKey: apiKey,
-          model: cfg.researchModel,
+          chatModel,
+          model: cfg.llm?.research.model ?? cfg.researchModel,
           braveApiKey: braveKey,
           maxInitialSearches: cfg.researchMaxInitialSearches ?? 6,
           maxReflectionSearches: cfg.researchMaxReflectionSearches ?? 4,
@@ -86,7 +92,11 @@ export function createRecommendationPipeline({
           },
         },
       });
-      pipelineLog("info", "recommendation_pipeline_mode", { mode: "research" });
+      pipelineLog("info", "recommendation_pipeline_mode", {
+        mode: "research",
+        provider: cfg.llm?.research.provider ?? "gemini",
+        model: cfg.llm?.research.model ?? cfg.researchModel,
+      });
       activeError = null;
       if (resolveFirstReady) {
         resolveFirstReady();

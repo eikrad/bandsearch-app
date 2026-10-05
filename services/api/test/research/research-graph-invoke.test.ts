@@ -368,3 +368,30 @@ test("a ranker that times out still fails the request: there is no honest fallba
     /recommendation ranker timeout/,
   );
 });
+
+// ------------------------------------------------- provider switch (#237)
+
+test("every research node builds its model from the configured factory, at its own temperature", async () => {
+  const { client, fetchImpl } = happyPath();
+  const temperatures: number[] = [];
+
+  const result = await invokeResearchGraph(
+    graphDeps({
+      fetchImpl,
+      model: "gemma-4-26b-a4b-it",
+      chatModel: ({ temperature }) => {
+        temperatures.push(temperature);
+        return client;
+      },
+    }),
+    input,
+  );
+
+  assert.equal(result.recommendations.length, 1, "the run completes on the factory's model");
+  assert.equal(result.model, "gemma-4-26b-a4b-it");
+  assert.deepEqual(
+    [...new Set(temperatures)].sort(),
+    [0.1, 0.15, 0.2, 0.35],
+    "planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35",
+  );
+});

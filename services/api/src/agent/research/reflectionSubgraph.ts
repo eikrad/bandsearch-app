@@ -7,6 +7,7 @@ import { createRecommendationReflector } from "./recommendationReflector.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
+import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export type ReflectionSubgraphDeps = {
   geminiApiKey: string;
@@ -24,6 +25,8 @@ export type ReflectionSubgraphDeps = {
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
   /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
   modelClient?: ChatModelClient;
+  /** Builds the assess and extract nodes' models from the configured provider. */
+  chatModel?: ChatModelFactory;
   /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
   model?: string;
 };
@@ -51,6 +54,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         timeoutMs: deps.budget.allocate(6000),
         maxExtraQueries: deps.maxReflectionSearches,
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
         model: deps.model,
       });
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
@@ -103,6 +107,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         apiKey: deps.geminiApiKey,
         timeoutMs: deps.budget.allocate(12000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
         model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
