@@ -306,7 +306,10 @@ For comparing models, start the API **and** the runner with `EVAL_REPLAY_DIR`
 recorded on first use and replayed afterwards, so every model sees the same
 search data and repeat runs skip MusicBrainz's 1 req/s limit. LLM calls always
 run live. Coverage uses MusicBrainz tags and, for bands without any, Last.fm
-listener tags (`LASTFM_API_KEY`).
+listener tags (`LASTFM_API_KEY`). Some golden queries carry hard
+**constraints** — "from Iceland", "formed after 2015", "shares a member with
+Alcest" — that the runner checks against MusicBrainz with plain code, no LLM
+involved.
 
 Every run appends one line to `services/eval/history/golden-runs.jsonl`
 (committed): git commit, the model the API reported, and per query the
