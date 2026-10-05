@@ -621,7 +621,7 @@ async function main(): Promise<void> {
 
   // A run on uncommitted code cannot be traced back to what ran, so it only
   // enters the history when the operator says so explicitly.
-  const git = readGitState([GOLDEN_HISTORY_PATH]);
+  const git = readGitState();
   if (recordHistory && git?.dirty && !args["allow-dirty"]) {
     console.error(
       "Tracked files have uncommitted changes, so this run's commit would not say what ran.\n" +

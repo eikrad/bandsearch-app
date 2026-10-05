@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const recordHistory = !args["no-history"];
-  const git = readGitState([JUDGE_HISTORY_PATH]);
+  const git = readGitState();
   if (recordHistory && git?.dirty && !args["allow-dirty"]) {
     console.error("Tracked files have uncommitted changes; commit first, or pass --allow-dirty or --no-history.");
     process.exit(2);

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { dirname } from "node:path";
 
 import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
 
@@ -264,17 +264,17 @@ export function loadRuns<T = GoldenRunRecord>(path: string): T[] {
 }
 
 /**
- * Commit, branch and whether tracked files differ from it. The history files a
- * run appends to are excluded: writing them is what every run does.
+ * Commit, branch and whether tracked files differ from it. The eval history
+ * files are excluded: every golden run and calibration appends to them, so a
+ * calibration running beside a golden run must not mark it dirty.
  */
-export function readGitState(historyPaths: string[] = []): GitState | null {
-  const cwd = dirname(historyPaths[0] ?? new URL(import.meta.url).pathname);
+export function readGitState(): GitState | null {
+  const cwd = dirname(new URL(import.meta.url).pathname);
   const git = (args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-  const ignored = historyPaths.map((p) => basename(p));
   try {
     const changed = git(["status", "--porcelain", "--untracked-files=no"])
       .split("\n")
-      .filter((line) => line.trim() !== "" && !ignored.some((name) => line.endsWith(`history/${name}`)));
+      .filter((line) => line.trim() !== "" && !line.includes("services/eval/history/"));
     return {
       commit: git(["rev-parse", "--short", "HEAD"]),
       branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
