@@ -1,7 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { compareRuns, dashboardData, renderHtml, signTest, top8Overlap } from "./dashboard.ts";
+import {
+  compareRuns,
+  compareSetups,
+  dashboardData,
+  groupSetups,
+  renderHtml,
+  signTest,
+  top8Overlap,
+} from "./dashboard.ts";
 import { buildGoldenRunRecord, type GoldenRunRecord } from "./history.ts";
 import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
 
@@ -27,6 +35,8 @@ function result(id: string, outcome: Outcome, top: string[] = ["Fen", "Ghost Bat
     latencyMs: outcome === "error" ? null : 1000,
     model: outcome === "error" ? null : "gemini-2.5-flash",
     pipelineVersion: "0.4.0",
+    replay: outcome === "error" ? null : false,
+    tagSources: { musicbrainz: top.length, lastfm: 0, none: 0 },
     ...(outcome === "error" ? { error: "API error 502" } : {}),
   };
 }
@@ -216,4 +226,82 @@ test("text from the history cannot close the page's data script", () => {
   const html = renderHtml(dashboardData([record]));
   assert.ok(!html.includes("</script><script>alert(1)"));
   assert.ok(html.includes("\\u003c/script>"));
+});
+
+// ─── setups: repeats of one configuration, compared per query (#250) ─────────
+
+function coverage(id: string, value: number | null, outcome: Outcome = "pass"): GoldenResult {
+  return { ...result(id, outcome), nuggetCoverageAt8: value };
+}
+
+function runWith(results: GoldenResult[], model: string): GoldenRunRecord {
+  minute += 1;
+  const startedAt = new Date(Date.UTC(2026, 9, 6, 10, minute));
+  return buildGoldenRunRecord({
+    entries,
+    results: results.map((r) => (r.status === "error" ? r : { ...r, model })),
+    startedAt,
+    finishedAt: new Date(startedAt.getTime() + 60_000),
+    label: null,
+    notes: null,
+    git: { commit: "abc1234", branch: "b", dirty: false },
+    apiUrl: "http://localhost:3001",
+  });
+}
+
+test("repeat runs of one model on one commit form one setup", () => {
+  const a1 = runWith([coverage("blackgaze", 1)], "gemini");
+  const a2 = runWith([coverage("blackgaze", 0.5)], "gemini");
+  const b1 = runWith([coverage("blackgaze", 0)], "gemma");
+
+  const setups = groupSetups([a1, a2, b1]);
+
+  assert.equal(setups.length, 2);
+  assert.deepEqual(setups.find((s) => s.researchModel === "gemini")!.runIds, [a1.runId, a2.runId]);
+});
+
+test("two setups are compared per query, averaged over their repeats", () => {
+  const base = [
+    runWith([coverage("blackgaze", 1), coverage("zeuhl", 0.5), coverage("drone", 0)], "gemini"),
+    runWith([coverage("blackgaze", 0), coverage("zeuhl", 0.5), coverage("drone", 0)], "gemini"),
+  ];
+  const candidate = [
+    runWith([coverage("blackgaze", 1), coverage("zeuhl", 1), coverage("drone", 0.5)], "gemma"),
+    runWith([coverage("blackgaze", 1), coverage("zeuhl", 1), coverage("drone", 0.5)], "gemma"),
+  ];
+
+  const cmp = compareSetups(base, candidate);
+
+  // per-query differences: blackgaze 1 - 0.5, zeuhl 1 - 0.5, drone 0.5 - 0
+  assert.equal(cmp.coverage.nQueries, 3);
+  assert.equal(cmp.coverage.meanDiff, 0.5);
+  assert.ok(cmp.coverage.ci95![0] <= 0.5 && 0.5 <= cmp.coverage.ci95![1]);
+  assert.equal(cmp.coverage.ci95![0], 0.5, "every query moved by exactly 0.5, so the interval has no width");
+});
+
+test("a difference whose interval includes zero is not called a finding", () => {
+  const base = [runWith([coverage("blackgaze", 1), coverage("zeuhl", 0), coverage("drone", 0.5)], "gemini")];
+  const candidate = [runWith([coverage("blackgaze", 0), coverage("zeuhl", 1), coverage("drone", 0.5)], "gemma")];
+
+  const cmp = compareSetups(base, candidate);
+
+  assert.equal(cmp.coverage.meanDiff, 0);
+  assert.ok(cmp.coverage.ci95![0] < 0 && cmp.coverage.ci95![1] > 0);
+  assert.equal(cmp.coverage.clear, false);
+});
+
+test("queries a setup never answered, or whose coverage is unknown, drop out of that comparison", () => {
+  const base = [runWith([coverage("blackgaze", 1), coverage("zeuhl", null), result("drone", "error")], "gemini")];
+  const candidate = [runWith([coverage("blackgaze", 0.5), coverage("zeuhl", 1), coverage("drone", 1)], "gemma")];
+
+  const cmp = compareSetups(base, candidate);
+
+  assert.equal(cmp.coverage.nQueries, 1, "only blackgaze has a known coverage in both");
+  assert.equal(cmp.passRate.nQueries, 2, "drone was never answered by the base setup");
+});
+
+test("the paired bootstrap is reproducible: the same runs give the same interval", () => {
+  const base = [runWith([coverage("blackgaze", 0.2), coverage("zeuhl", 0.4), coverage("drone", 0.9)], "gemini")];
+  const candidate = [runWith([coverage("blackgaze", 0.6), coverage("zeuhl", 0.3), coverage("drone", 1)], "gemma")];
+  assert.deepEqual(compareSetups(base, candidate).coverage.ci95, compareSetups(base, candidate).coverage.ci95);
 });

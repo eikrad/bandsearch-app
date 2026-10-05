@@ -10,7 +10,9 @@ import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
  * runs on either side as not directly comparable instead of reporting the
  * change as a regression or an improvement.
  */
-export const GOLDEN_METRICS_VERSION = 1;
+export const GOLDEN_METRICS_VERSION = 2;
+// 1 → 2 (2026-10-05, #250): coverage also counts Last.fm tags for bands without
+// MusicBrainz tags, so it is known for far more queries and measured differently.
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
 
@@ -36,6 +38,8 @@ export type GoldenRunRecord = {
     /** As reported by the API in `meta.model`, never assumed by the runner. */
     researchModel: string | null;
     pipelineVersion: string | null;
+    /** Whether the API replayed recorded Brave/MusicBrainz/Last.fm answers (#250). */
+    replay: boolean | "mixed" | null;
     metricsVersion: number;
   };
   durationSec: number;
@@ -65,6 +69,7 @@ export type GoldenRunResult = {
   latencyMs: number | null;
   model: string | null;
   top8: string[];
+  tagSources: GoldenResult["tagSources"];
   uncoveredNuggets: string[];
   warnings: string[];
   error?: string;
@@ -118,6 +123,12 @@ function reportedValue(values: Array<string | null>): string | null {
   return reported.length === 1 ? reported[0]! : `mixed: ${reported.join(", ")}`;
 }
 
+function replayValue(values: Array<boolean | null>): GoldenRunRecord["config"]["replay"] {
+  const reported = distinct(values.filter((v): v is boolean => v !== null));
+  if (reported.length === 0) return null;
+  return reported.length === 1 ? reported[0]! : "mixed";
+}
+
 export function buildGoldenRunRecord({
   entries,
   results,
@@ -152,6 +163,7 @@ export function buildGoldenRunRecord({
       apiUrl,
       researchModel: reportedValue(answered.map((r) => r.model)),
       pipelineVersion: reportedValue(answered.map((r) => r.pipelineVersion)),
+      replay: replayValue(answered.map((r) => r.replay)),
       metricsVersion: GOLDEN_METRICS_VERSION,
     },
     durationSec: Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
@@ -175,6 +187,7 @@ export function buildGoldenRunRecord({
       latencyMs: r.latencyMs,
       model: r.model,
       top8: r.resultNames.slice(0, 8),
+      tagSources: r.tagSources,
       uncoveredNuggets: r.uncoveredNuggets,
       warnings: r.warnings,
       ...(r.error !== undefined ? { error: r.error } : {}),

@@ -28,6 +28,8 @@ export type ResearchGraphDeps = {
   maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
+  /** Spacing of MusicBrainz calls; 0 when the transport already spaces real calls (replay). */
+  musicBrainzMinIntervalMs?: number;
   /**
    * Chat model for every Gemini-backed node. Defaults to Gemini built from
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
@@ -113,6 +115,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
     fetchImpl: deps.fetchImpl,
+    ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
 
   const lastFm: LastFmClient | null = deps.lastFmApiKey

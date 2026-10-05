@@ -758,6 +758,55 @@ function drawPanels(panels, runs, set) {
   }
 }
 
+// One row per configuration: its repeats averaged, and per query compared with
+// the baseline's setup (paired bootstrap over queries, computed in dashboard.ts).
+function setupLabel(setup) {
+  const replay = setup.replay === true ? "replay" : setup.replay === "mixed" ? "mixed replay" : "live";
+  return `${setup.researchModel || "model not reported"} · ${replay} · ${setup.commit || "?"}`;
+}
+function diffCell(diff) {
+  if (!diff || diff.meanDiff == null) return el("td", { class: "num" }, "—");
+  const [lo, hi] = diff.ci95;
+  const fmt = (v) => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v * 100))}`;
+  const cls = !diff.clear ? "flat" : diff.meanDiff > 0 ? "up" : "down";
+  return el("td", { class: "num" },
+    el("span", { class: `delta ${cls}` }, `${fmt(diff.meanDiff)} pp`),
+    el("span", { class: "sub" }, ` [${fmt(lo)}, ${fmt(hi)}]`),
+    diff.clear ? null : el("span", { class: "sub" }, " within noise"));
+}
+function setupsSection(set) {
+  const section = el("section", { class: "card", "aria-labelledby": "h-setups" },
+    el("h2", { id: "h-setups" }, "Setups"),
+    el("p", { class: "note" },
+      "Runs with the same model, code, replay mode and grading form one setup; their repeats are averaged per query. " +
+      "Each setup is compared with the baseline's setup query by query; brackets give the 95% interval of the difference " +
+      "(paired bootstrap over queries). Only a difference whose interval excludes zero is coloured."));
+  if (set.setups.length < 2) {
+    section.append(el("p", { class: "empty" }, "One setup so far. Run another model or code version, ideally with --repeat 3, to compare."));
+  }
+  const rows = set.setups.map((setup) => {
+    const cmp = set.setupComparisons[setup.key];
+    const isBase = setup.key === set.baselineSetupKey;
+    return el("tr", {},
+      el("th", {}, setupLabel(setup), isBase ? el("span", { class: "sub" }, " · baseline") : null),
+      el("td", { class: "num" }, String(setup.runIds.length)),
+      el("td", { class: "num" }, pct(setup.passRate.mean),
+        setup.runIds.length > 1 ? el("span", { class: "sub" }, ` (${pct(setup.passRate.min)}–${pct(setup.passRate.max)})`) : null),
+      el("td", { class: "num" }, pct(setup.nuggetCoverageMean)),
+      el("td", { class: "num" }, seconds(setup.latencyMsMedian)),
+      el("td", { class: "num" }, pct(setup.errorRate)),
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.passRate),
+      isBase ? el("td", { class: "num" }, "—") : diffCell(cmp && cmp.coverage));
+  });
+  section.append(el("div", { class: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {},
+      el("th", {}, "Setup"), el("th", { class: "num" }, "Runs"), el("th", { class: "num" }, "Pass rate"),
+      el("th", { class: "num" }, "Coverage"), el("th", { class: "num" }, "Median latency"), el("th", { class: "num" }, "No answer"),
+      el("th", { class: "num" }, "Δ pass vs baseline"), el("th", { class: "num" }, "Δ coverage vs baseline"))),
+    el("tbody", {}, rows))));
+  return section;
+}
+
 function comparison(set) {
   const cmp = set.comparisons[state.runId][state.against];
   const section = el("section", { class: "card", "aria-labelledby": "h-compare" },
@@ -906,6 +955,8 @@ function questionGrid(set) {
             r.metrics.nuggetCoverageAt8 == null ? "nugget coverage unknown (no MusicBrainz tags)" : "nugget coverage @8") : null,
           r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.antiBandRateAt8)), "anti-bands in top 8") : null,
           r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
+          r.tagSources ? el("div", { class: "t-head" },
+            `tags: ${r.tagSources.musicbrainz} from MusicBrainz, ${r.tagSources.lastfm} from Last.fm, ${r.tagSources.none} without`) : null,
           r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,
           r.error ? el("div", { class: "t-head" }, `⚠ ${r.error}`) : null,
           ...r.warnings.filter((w) => !w.startsWith("runner error")).map((w) => el("div", { class: "t-head" }, `⚠ ${w}`)),
@@ -933,7 +984,7 @@ function render() {
   syncRunSelect(set);
   document.getElementById("set-select").value = state.setId;
   document.getElementById("against-select").value = state.against;
-  main.replaceChildren(headline(set), trends(set), comparison(set), questionGrid(set));
+  main.replaceChildren(headline(set), setupsSection(set), trends(set), comparison(set), questionGrid(set));
 }
 
 const runCount = Object.keys(DATA.runs).length;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeAntiBandRate,
   computeNuggetCoverage,
+  createTagLookup,
   createTagResolver,
   findUncoveredNuggets,
   goldenErrorResult,
@@ -239,6 +240,8 @@ test("runGoldenEntriesSequentially does not start the next entry until the previ
         latencyMs: 30,
         model: null,
         pipelineVersion: null,
+        replay: false,
+        tagSources: { musicbrainz: 0, lastfm: 0, none: 0 },
       };
     },
   );
@@ -261,7 +264,7 @@ function apiReturning(body: unknown, status = 200): { fetchImpl: typeof fetch; r
   return { fetchImpl, requests };
 }
 
-const noTags = { resolve: async () => ["post-black metal"] };
+const noTags = { tagsFor: async () => ({ tags: ["post-black metal"], source: "musicbrainz" as const }) };
 
 test("a golden query records the model and pipeline version the API reported", async () => {
   const { fetchImpl } = apiReturning({
@@ -286,9 +289,9 @@ test("a golden query measures the API call, not the MusicBrainz lookups after it
   let clock = 0;
   const { fetchImpl } = apiReturning({ recommendations: [{ artist: "Fen", musicbrainzArtistId: "m" }], meta: {} });
   const slowTags = {
-    resolve: async () => {
+    tagsFor: async () => {
       clock += 5000;
-      return ["drone"];
+      return { tags: ["drone"], source: "musicbrainz" as const };
     },
   };
 
@@ -346,7 +349,7 @@ test("a query whose bands have no MusicBrainz tags has unknown coverage, not zer
     recommendations: [{ artist: "Obscure Act", musicbrainzArtistId: "mbid-x" }],
     meta: { model: "m" },
   });
-  const untagged = { resolve: async () => [] as string[] };
+  const untagged = { tagsFor: async () => ({ tags: [] as string[], source: null }) };
 
   const result = await runGoldenEntry(
     "http://api.test",
@@ -357,4 +360,79 @@ test("a query whose bands have no MusicBrainz tags has unknown coverage, not zer
 
   assert.equal(result.nuggetCoverageAt8, null);
   assert.equal(result.status, "pass", "the anti-band gate still decides pass/fail");
+});
+
+// ─── tag lookup: MusicBrainz first, Last.fm for the rest (#250) ──────────────
+
+function mbResolver(tagsByMbid: Record<string, string[] | null>) {
+  return { resolve: async (mbid: string) => (mbid in tagsByMbid ? tagsByMbid[mbid]! : []) };
+}
+function lastFm(tagsByName: Record<string, Array<{ name: string; count: number }> | null>, asked: string[] = []) {
+  return {
+    getTopTags: async (name: string) => {
+      asked.push(name);
+      return name in tagsByName ? tagsByName[name]! : [];
+    },
+  };
+}
+
+test("a band's MusicBrainz tags are used when it has them, without asking Last.fm", async () => {
+  const asked: string[] = [];
+  const lookup = createTagLookup({ musicBrainz: mbResolver({ m1: ["blackgaze"] }), lastFm: lastFm({}, asked) });
+
+  assert.deepEqual(await lookup.tagsFor({ artist: "Fen", musicbrainzArtistId: "m1" }), { tags: ["blackgaze"], source: "musicbrainz" });
+  assert.deepEqual(asked, []);
+});
+
+test("a band without MusicBrainz tags gets its Last.fm tags, minus the weakly weighted ones", async () => {
+  const lookup = createTagLookup({
+    musicBrainz: mbResolver({ m1: [] }),
+    lastFm: lastFm({ Fen: [{ name: "post-black metal", count: 100 }, { name: "seen live", count: 4 }] }),
+  });
+
+  assert.deepEqual(await lookup.tagsFor({ artist: "Fen", musicbrainzArtistId: "m1" }), {
+    tags: ["post-black metal"],
+    source: "lastfm",
+  });
+});
+
+test("a band with no MusicBrainz id is looked up on Last.fm by name", async () => {
+  const lookup = createTagLookup({ musicBrainz: mbResolver({}), lastFm: lastFm({ Sylvaine: [{ name: "shoegaze", count: 80 }] }) });
+  assert.deepEqual(await lookup.tagsFor({ artist: "Sylvaine" }), { tags: ["shoegaze"], source: "lastfm" });
+});
+
+test("when both sources fail the band's tags are unknown, not empty", async () => {
+  const lookup = createTagLookup({ musicBrainz: mbResolver({ m1: null }), lastFm: lastFm({ Fen: null }) });
+  assert.equal(await lookup.tagsFor({ artist: "Fen", musicbrainzArtistId: "m1" }), null);
+});
+
+test("without a Last.fm key, MusicBrainz alone decides", async () => {
+  const lookup = createTagLookup({ musicBrainz: mbResolver({ m1: [] }) });
+  assert.deepEqual(await lookup.tagsFor({ artist: "Fen", musicbrainzArtistId: "m1" }), { tags: [], source: null });
+});
+
+test("a golden query records where its bands' tags came from and whether the API replayed", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [
+      { artist: "Fen", musicbrainzArtistId: "m1" },
+      { artist: "Sylvaine", musicbrainzArtistId: "m2" },
+      { artist: "Obscure", musicbrainzArtistId: "m3" },
+    ],
+    meta: { model: "m", evalReplay: true },
+  });
+  const lookup = createTagLookup({
+    musicBrainz: mbResolver({ m1: ["post-black metal"], m2: [], m3: [] }),
+    lastFm: lastFm({ Sylvaine: [{ name: "blackgaze", count: 90 }] }),
+  });
+
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "x", query: "q", nuggets: ["black metal", "blackgaze"] },
+    lookup,
+    { fetchImpl, mbCooldownMs: 0 },
+  );
+
+  assert.deepEqual(result.tagSources, { musicbrainz: 1, lastfm: 1, none: 1 });
+  assert.equal(result.nuggetCoverageAt8, 1, "Last.fm's blackgaze covers the second nugget");
+  assert.equal(result.replay, true);
 });

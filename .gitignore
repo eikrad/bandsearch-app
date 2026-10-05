@@ -31,3 +31,6 @@ playwright/.auth/
 
 # Eval reports and dashboard (history under services/eval/history/ is committed)
 services/eval/reports/
+
+# Recorded external answers for eval replay (EVAL_REPLAY_DIR); may hold search results, never committed
+services/eval/replay/

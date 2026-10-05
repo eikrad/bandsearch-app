@@ -3,7 +3,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
+import { config as loadEnv } from "dotenv";
+
+import { createLastFmClient } from "../api/src/eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
+import { createReplayFetch } from "../api/src/integrations/replayFetch.js";
 import { writeDashboard } from "./dashboard.ts";
 import { appendRun, buildGoldenRunRecord, readGitState } from "./history.ts";
 
@@ -66,6 +70,10 @@ export type GoldenResult = {
   /** Model the API reported in `meta.model`; null if it reported none. */
   model: string | null;
   pipelineVersion: string | null;
+  /** Whether the API replayed recorded lookups (meta.evalReplay); null when it gave no answer. */
+  replay: boolean | null;
+  /** Where the top bands' tags came from; `none` counts bands with no tags or failed lookups. */
+  tagSources: { musicbrainz: number; lastfm: number; none: number };
   error?: string;
 };
 
@@ -191,6 +199,44 @@ export function createTagResolver(
   };
 }
 
+export type TagSource = "musicbrainz" | "lastfm";
+export type BandTags = { tags: string[]; source: TagSource | null };
+
+/** Tags for one recommended band; null when every source failed (unknown, not "no tags"). */
+export type TagLookup = { tagsFor(rec: Recommendation): Promise<BandTags | null> };
+
+/**
+ * Last.fm weights tags 0–100 relative to the artist's top tag. Below this,
+ * tags are mostly listener noise ("seen live", "favorites") rather than genre.
+ */
+export const MIN_LASTFM_TAG_WEIGHT = 10;
+
+/**
+ * MusicBrainz first, Last.fm for bands MusicBrainz has no tags for. Obscure
+ * bands often have no MusicBrainz tags at all, which left coverage unknown for
+ * 4–6 of 10 golden queries; Last.fm's listener tags reach far more of them.
+ */
+export function createTagLookup({
+  musicBrainz,
+  lastFm,
+}: {
+  musicBrainz: TagResolver;
+  lastFm?: { getTopTags(artistName: string, mbid?: string): Promise<Array<{ name: string; count: number }> | null> };
+}): TagLookup {
+  return {
+    async tagsFor(rec) {
+      const fromMb = rec.musicbrainzArtistId ? await musicBrainz.resolve(rec.musicbrainzArtistId) : [];
+      if (fromMb && fromMb.length > 0) return { tags: fromMb, source: "musicbrainz" };
+      if (!lastFm) return fromMb === null ? null : { tags: [], source: null };
+
+      const fromLastFm = await lastFm.getTopTags(rec.artist, rec.musicbrainzArtistId);
+      if (fromLastFm === null) return fromMb === null ? null : { tags: [], source: null };
+      const tags = fromLastFm.filter((t) => t.count >= MIN_LASTFM_TAG_WEIGHT).map((t) => t.name);
+      return tags.length > 0 ? { tags, source: "lastfm" } : { tags: [], source: null };
+    },
+  };
+}
+
 /** Run golden entries one-at-a-time so the API's MB verifications don't pile up. */
 export async function runGoldenEntriesSequentially(
   entries: GoldenEntry[],
@@ -217,6 +263,7 @@ type RecommendationsResponse = {
   recommendations: Recommendation[];
   model: string | null;
   pipelineVersion: string | null;
+  replay: boolean;
 };
 
 async function fetchRecommendations(
@@ -256,7 +303,7 @@ async function fetchRecommendations(
 
   const data = (await response.json()) as {
     recommendations?: Array<{ artist?: string; musicbrainzArtistId?: string }>;
-    meta?: { model?: unknown; pipelineVersion?: unknown };
+    meta?: { model?: unknown; pipelineVersion?: unknown; evalReplay?: unknown };
   };
   return {
     recommendations: (data.recommendations ?? [])
@@ -264,6 +311,7 @@ async function fetchRecommendations(
       .filter((r) => r.artist.length > 0),
     model: typeof data.meta?.model === "string" ? data.meta.model : null,
     pipelineVersion: typeof data.meta?.pipelineVersion === "string" ? data.meta.pipelineVersion : null,
+    replay: data.meta?.evalReplay === true,
   };
 }
 
@@ -279,13 +327,13 @@ export type RunGoldenEntryOptions = {
 export async function runGoldenEntry(
   apiUrl: string,
   entry: GoldenEntry,
-  tags: TagResolver,
+  tags: TagLookup,
   options: RunGoldenEntryOptions = {},
 ): Promise<GoldenResult> {
   const k = options.k ?? 8;
   const now = options.now ?? Date.now;
   const startedAt = now();
-  const { recommendations, model, pipelineVersion } = await fetchRecommendations(
+  const { recommendations, model, pipelineVersion, replay } = await fetchRecommendations(
     apiUrl,
     entry.query,
     entry.obscurityTarget,
@@ -305,10 +353,13 @@ export async function runGoldenEntry(
     await new Promise((r) => setTimeout(r, cooldownMs));
   }
 
-  const resolved = await Promise.all(
-    topK.map((r) => (r.musicbrainzArtistId ? tags.resolve(r.musicbrainzArtistId) : Promise.resolve([] as string[]))),
-  );
-  const tagSets = resolved.map((t) => t ?? []);
+  const resolved = await Promise.all(topK.map((r) => tags.tagsFor(r)));
+  const tagSets = resolved.map((t) => t?.tags ?? []);
+  const tagSources = {
+    musicbrainz: resolved.filter((t) => t?.source === "musicbrainz").length,
+    lastfm: resolved.filter((t) => t?.source === "lastfm").length,
+    none: resolved.filter((t) => !t?.source).length,
+  };
 
   const unidentified = topK.filter((r) => !r.musicbrainzArtistId).length;
   if (unidentified > 0) {
@@ -316,7 +367,7 @@ export async function runGoldenEntry(
   }
   const lookupFailures = resolved.filter((t) => t === null).length;
   if (lookupFailures > 0) {
-    warnings.push(`${lookupFailures} MusicBrainz lookup(s) failed — coverage may understate quality`);
+    warnings.push(`${lookupFailures} tag lookup(s) failed — coverage may understate quality`);
   }
 
   const antiBandRateAt8 = computeAntiBandRate(antiBands, resultNames, k);
@@ -328,7 +379,7 @@ export async function runGoldenEntry(
   const tagsUsable = tagSets.some((t) => t.length > 0);
   const coverageGateApplies = nuggets.length > 0 && tagsUsable;
   if (nuggets.length > 0 && !tagsUsable) {
-    warnings.push("no MusicBrainz tags available for any top-8 result — coverage gate skipped");
+    warnings.push("no tags available for any top-8 result — coverage gate skipped");
   }
   if (coverageGateApplies && nuggetCoverageAt8 < minCoverage) {
     warnings.push(`uncovered nuggets: ${uncoveredNuggets.join(", ")}`);
@@ -350,6 +401,8 @@ export async function runGoldenEntry(
     latencyMs,
     model,
     pipelineVersion,
+    replay,
+    tagSources,
   };
 }
 
@@ -369,6 +422,8 @@ export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResul
     latencyMs: null,
     model: null,
     pipelineVersion: null,
+    replay: null,
+    tagSources: { musicbrainz: 0, lastfm: 0, none: 0 },
     error: message,
   };
 }
@@ -397,10 +452,12 @@ function printTable(results: GoldenResult[]): void {
 export const GOLDEN_HISTORY_PATH = join(__dirname, "history", "golden-runs.jsonl");
 
 async function main(): Promise<void> {
+  loadEnv({ path: join(__dirname, "../../.env"), quiet: true });
   const { values: args } = parseArgs({
     options: {
       label: { type: "string" },
       notes: { type: "string" },
+      repeat: { type: "string" },
       strict: { type: "boolean", default: false },
       "no-history": { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -432,52 +489,73 @@ async function main(): Promise<void> {
   // Live traffic: spacing lives in createMusicBrainzClient (process-wide 1.1s).
   // Stub: disable client throttle; tag resolver also unthrottled.
   const mbBaseUrl = process.env.BANDSEARCH_MB_BASE_URL;
-  const tags = createTagResolver(
-    createMusicBrainzClient(
-      mbBaseUrl ? { baseUrl: mbBaseUrl, minIntervalMs: 0 } : {},
+  // EVAL_REPLAY_DIR: the same recordings the API replays (#250); the replaying
+  // transport spaces real MusicBrainz calls, so the client's own gate is off.
+  const replayDir = process.env.EVAL_REPLAY_DIR?.trim();
+  const lookupFetch = replayDir
+    ? createReplayFetch({ dir: replayDir, minIntervalMsByHost: { "musicbrainz.org": 1100 } })
+    : undefined;
+  const lastFmKey = process.env.LASTFM_API_KEY?.trim();
+  const tags = createTagLookup({
+    musicBrainz: createTagResolver(
+      createMusicBrainzClient({
+        ...(mbBaseUrl ? { baseUrl: mbBaseUrl, minIntervalMs: 0 } : {}),
+        ...(lookupFetch ? { fetchImpl: lookupFetch, minIntervalMs: 0 } : {}),
+      }),
+      0,
     ),
-    0,
-  );
-  const startedAt = new Date();
-  const results = await runGoldenEntriesSequentially(
-    goldenSet,
-    async (entry) => {
-      console.log(`→ ${entry.id}`);
-      const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
-      const status = result.passed ? "PASS" : "FAIL";
-      console.log(
-        `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
-          `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
-          (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
-      );
-      return result;
-    },
-    {
-      // Keep going so one flaky 502 does not wipe the whole suite.
-      pauseMs: 3000,
-      onError(entry, err) {
-        const result = goldenErrorResult(entry, err);
-        console.error(`  ERROR  ${entry.id}: ${result.error}`);
+    lastFm: lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : undefined,
+  });
+  if (!lastFmKey) console.warn("LASTFM_API_KEY not set: coverage uses MusicBrainz tags only.");
+  // --repeat N: N runs of the same setup, each recorded on its own. The
+  // dashboard groups them, so per-query means average out single-run noise.
+  const repeat = Math.max(1, Number.parseInt(args.repeat ?? "1", 10) || 1);
+  const results: GoldenResult[] = [];
+  for (let round = 1; round <= repeat; round += 1) {
+    if (repeat > 1) console.log(`\n=== Run ${round} of ${repeat} ===`);
+    const startedAt = new Date();
+    const runResults = await runGoldenEntriesSequentially(
+      goldenSet,
+      async (entry) => {
+        console.log(`→ ${entry.id}`);
+        const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
+        const status = result.passed ? "PASS" : "FAIL";
+        console.log(
+          `  ${status}  anti=${formatPct(result.antiBandRateAt8)}  nugget=${formatPct(result.nuggetCoverageAt8)}` +
+            `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
+            (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
+        );
         return result;
       },
-    },
-  );
+      {
+        // Keep going so one flaky 502 does not wipe the whole suite.
+        pauseMs: 3000,
+        onError(entry, err) {
+          const result = goldenErrorResult(entry, err);
+          console.error(`  ERROR  ${entry.id}: ${result.error}`);
+          return result;
+        },
+      },
+    );
+    results.push(...runResults);
+    printTable(runResults);
 
-  printTable(results);
-
+    if (recordHistory) {
+      const record = buildGoldenRunRecord({
+        entries: goldenSet,
+        results: runResults,
+        startedAt,
+        finishedAt: new Date(),
+        label: args.label ?? null,
+        notes: args.notes ?? null,
+        git,
+        apiUrl,
+      });
+      appendRun(GOLDEN_HISTORY_PATH, record);
+      console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
+    }
+  }
   if (recordHistory) {
-    const record = buildGoldenRunRecord({
-      entries: goldenSet,
-      results,
-      startedAt,
-      finishedAt: new Date(),
-      label: args.label ?? null,
-      notes: args.notes ?? null,
-      git,
-      apiUrl,
-    });
-    appendRun(GOLDEN_HISTORY_PATH, record);
-    console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
     console.log(`Dashboard: ${pathToFileURL(writeDashboard({ historyPath: GOLDEN_HISTORY_PATH })).href}`);
   }
 

@@ -63,6 +63,12 @@ export type QuestionSet = {
    * An overlap with the baseline near this floor says the change did little.
    */
   noiseFloor: { overlapMean: number; pairs: number } | null;
+  /** One entry per configuration; repeats are grouped. */
+  setups: SetupSummary[];
+  /** The setup containing the baseline run. */
+  baselineSetupKey: string | null;
+  /** Every other setup against the baseline setup, keyed by setup key. */
+  setupComparisons: Record<string, ReturnType<typeof compareSetups>>;
 };
 
 export type DashboardData = {
@@ -215,9 +221,11 @@ function setupKey(run: GoldenRunRecord): string {
     run.config.researchModel,
     run.config.pipelineVersion,
     run.config.apiUrl,
+    run.config.replay ?? null,
     run.git?.commit ?? null,
     run.git?.dirty ?? null,
     run.dataset.contentHash,
+    run.config.metricsVersion,
   ]);
 }
 
@@ -239,6 +247,132 @@ function noiseFloor(runs: GoldenRunRecord[]): QuestionSet["noiseFloor"] {
   }
   const overlapMean = mean(overlaps);
   return overlapMean === null ? null : { overlapMean, pairs: overlaps.length };
+}
+
+// ─── setups: repeats of one configuration (#250) ──────────────────────────────
+
+export type SetupSummary = {
+  key: string;
+  researchModel: string | null;
+  replay: GoldenRunRecord["config"]["replay"];
+  commit: string | null;
+  pipelineVersion: string | null;
+  runIds: string[];
+  passRate: { mean: number | null; min: number | null; max: number | null };
+  nuggetCoverageMean: number | null;
+  latencyMsMedian: number | null;
+  errorRate: number | null;
+};
+
+/** Runs that differ only by chance, grouped; one entry per configuration, oldest first. */
+export function groupSetups(runs: GoldenRunRecord[]): SetupSummary[] {
+  const groups = new Map<string, GoldenRunRecord[]>();
+  for (const run of [...runs].sort((a, b) => a.runId.localeCompare(b.runId))) {
+    const key = setupKey(run);
+    groups.set(key, [...(groups.get(key) ?? []), run]);
+  }
+  return [...groups.entries()].map(([key, group]) => {
+    const passRates = group.map((r) => r.summary.passRate).filter((v): v is number => v !== null);
+    const first = group[0]!;
+    return {
+      key,
+      researchModel: first.config.researchModel,
+      replay: first.config.replay ?? null,
+      commit: first.git?.commit ?? null,
+      pipelineVersion: first.config.pipelineVersion,
+      runIds: group.map((r) => r.runId),
+      passRate: {
+        mean: mean(passRates),
+        min: passRates.length ? Math.min(...passRates) : null,
+        max: passRates.length ? Math.max(...passRates) : null,
+      },
+      nuggetCoverageMean: mean(group.map((r) => r.summary.nuggetCoverageMean).filter((v): v is number => v !== null)),
+      latencyMsMedian: mean(group.map((r) => r.summary.latencyMsMedian).filter((v): v is number => v !== null)),
+      errorRate: mean(group.map((r) => r.summary.errorRate)),
+    };
+  });
+}
+
+export type PairedDiff = {
+  /** Queries with a value in both setups. */
+  nQueries: number;
+  /** Mean over queries of (candidate − base), each side averaged over its repeats. */
+  meanDiff: number | null;
+  /** Paired bootstrap over queries, 95 %. */
+  ci95: [number, number] | null;
+  /** The interval excludes zero: a difference larger than the noise. */
+  clear: boolean;
+};
+
+type Metric = "pass" | "coverage" | "antiBand";
+
+function valueOf(result: GoldenRunResult, metric: Metric): number | null {
+  if (result.status === "error" || !result.metrics) return null;
+  if (metric === "pass") return result.status === "pass" ? 1 : 0;
+  if (metric === "coverage") return result.metrics.nuggetCoverageAt8;
+  return result.metrics.antiBandRateAt8;
+}
+
+function perQueryMeans(runs: GoldenRunRecord[], metric: Metric): Map<string, number> {
+  const values = new Map<string, number[]>();
+  for (const run of runs) {
+    for (const result of run.results) {
+      const v = valueOf(result, metric);
+      if (v !== null) values.set(result.id, [...(values.get(result.id) ?? []), v]);
+    }
+  }
+  return new Map([...values.entries()].map(([id, vs]) => [id, mean(vs)!]));
+}
+
+/** Small seeded PRNG (mulberry32), so the same runs always give the same interval. */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const BOOTSTRAP_RESAMPLES = 2000;
+
+function pairedDiff(base: GoldenRunRecord[], candidate: GoldenRunRecord[], metric: Metric): PairedDiff {
+  const before = perQueryMeans(base, metric);
+  const after = perQueryMeans(candidate, metric);
+  const diffs = [...after.entries()].filter(([id]) => before.has(id)).map(([id, v]) => v - before.get(id)!);
+  if (diffs.length === 0) return { nQueries: 0, meanDiff: null, ci95: null, clear: false };
+
+  const random = seededRandom(20261005);
+  const resampled: number[] = [];
+  for (let b = 0; b < BOOTSTRAP_RESAMPLES; b += 1) {
+    let sum = 0;
+    for (let i = 0; i < diffs.length; i += 1) sum += diffs[Math.floor(random() * diffs.length)]!;
+    resampled.push(sum / diffs.length);
+  }
+  resampled.sort((x, y) => x - y);
+  const ci95: [number, number] = [
+    resampled[Math.floor(0.025 * BOOTSTRAP_RESAMPLES)]!,
+    resampled[Math.floor(0.975 * BOOTSTRAP_RESAMPLES) - 1]!,
+  ];
+  return { nQueries: diffs.length, meanDiff: mean(diffs), ci95, clear: ci95[0] > 0 || ci95[1] < 0 };
+}
+
+/**
+ * Compares two setups query by query. Each query's value is averaged over a
+ * setup's repeats first, so the noise of single runs averages out; the
+ * interval comes from resampling queries, the unit that varies most.
+ */
+export function compareSetups(
+  base: GoldenRunRecord[],
+  candidate: GoldenRunRecord[],
+): { passRate: PairedDiff; coverage: PairedDiff; antiBandRate: PairedDiff } {
+  return {
+    passRate: pairedDiff(base, candidate, "pass"),
+    coverage: pairedDiff(base, candidate, "coverage"),
+    antiBandRate: pairedDiff(base, candidate, "antiBand"),
+  };
 }
 
 function questionSet(questionsHash: string, runs: GoldenRunRecord[], baselineRunId?: string): QuestionSet {
@@ -267,7 +401,26 @@ function questionSet(questionsHash: string, runs: GoldenRunRecord[], baselineRun
     markers,
     comparisons,
     noiseFloor: noiseFloor(runs),
+    ...setupView(runs, baseline),
   };
+}
+
+function setupView(
+  runs: GoldenRunRecord[],
+  baseline: GoldenRunRecord | null,
+): Pick<QuestionSet, "setups" | "baselineSetupKey" | "setupComparisons"> {
+  const setups = groupSetups(runs);
+  const baselineSetupKey = baseline ? setupKey(baseline) : null;
+  const runsOf = (key: string) => runs.filter((r) => setupKey(r) === key);
+  const setupComparisons: QuestionSet["setupComparisons"] = {};
+  if (baselineSetupKey) {
+    for (const setup of setups) {
+      if (setup.key !== baselineSetupKey) {
+        setupComparisons[setup.key] = compareSetups(runsOf(baselineSetupKey), runsOf(setup.key));
+      }
+    }
+  }
+  return { setups, baselineSetupKey, setupComparisons };
 }
 
 export function dashboardData(runs: GoldenRunRecord[], options: { baselineRunId?: string } = {}): DashboardData {
