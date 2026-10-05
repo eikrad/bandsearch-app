@@ -28,3 +28,6 @@ test-results/
 
 # Playwright cached auth state
 playwright/.auth/
+
+# Eval reports and dashboard (history under services/eval/history/ is committed)
+services/eval/reports/

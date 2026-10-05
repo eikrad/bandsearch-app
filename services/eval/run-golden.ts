@@ -1,8 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
+import { appendRun, buildGoldenRunRecord, type GitState } from "./history.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -42,12 +45,23 @@ export type Recommendation = {
 export type GoldenResult = {
   id: string;
   query: string;
+  /**
+   * `error` means the runner got no answer to score (HTTP error, timeout); its
+   * metrics are placeholders and the history leaves them out of every mean.
+   */
+  status: "pass" | "fail" | "error";
   resultNames: string[];
   antiBandRateAt8: number;
   nuggetCoverageAt8: number;
   uncoveredNuggets: string[];
   passed: boolean;
   warnings: string[];
+  /** Wall time of the /recommendations call alone; null when it failed. */
+  latencyMs: number | null;
+  /** Model the API reported in `meta.model`; null if it reported none. */
+  model: string | null;
+  pipelineVersion: string | null;
+  error?: string;
 };
 
 // `precision@8` used to live here. It was designed (see
@@ -176,30 +190,54 @@ export function createTagResolver(
 export async function runGoldenEntriesSequentially(
   entries: GoldenEntry[],
   runOne: (entry: GoldenEntry) => Promise<GoldenResult>,
+  options: { onError?: (entry: GoldenEntry, err: unknown) => GoldenResult; pauseMs?: number } = {},
 ): Promise<GoldenResult[]> {
   const results: GoldenResult[] = [];
-  for (const entry of entries) {
-    results.push(await runOne(entry));
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i]!;
+    try {
+      results.push(await runOne(entry));
+    } catch (err) {
+      if (!options.onError) throw err;
+      results.push(options.onError(entry, err));
+    }
+    if (options.pauseMs && options.pauseMs > 0 && i < entries.length - 1) {
+      await new Promise((r) => setTimeout(r, options.pauseMs));
+    }
   }
   return results;
 }
 
+type RecommendationsResponse = {
+  recommendations: Recommendation[];
+  model: string | null;
+  pipelineVersion: string | null;
+};
+
 async function fetchRecommendations(
   apiUrl: string,
   query: string,
-  obscurityTarget?: string,
-  timeoutMs: number = DEFAULT_RECOMMENDATION_FETCH_TIMEOUT_MS,
-): Promise<Recommendation[]> {
+  obscurityTarget: string | undefined,
+  { fetchImpl = globalThis.fetch, apiToken, timeoutMs = DEFAULT_RECOMMENDATION_FETCH_TIMEOUT_MS }: {
+    fetchImpl?: typeof fetch;
+    apiToken?: string;
+    timeoutMs?: number;
+  } = {},
+): Promise<RecommendationsResponse> {
   const body: Record<string, unknown> = { query };
   if (obscurityTarget) body.obscurityTarget = obscurityTarget;
+
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  // A deployment with more than one account rejects anonymous requests.
+  if (apiToken) headers.authorization = `Bearer ${apiToken}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}/recommendations`, {
+    response = await fetchImpl(`${apiUrl}/recommendations`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -213,20 +251,42 @@ async function fetchRecommendations(
 
   const data = (await response.json()) as {
     recommendations?: Array<{ artist?: string; musicbrainzArtistId?: string }>;
+    meta?: { model?: unknown; pipelineVersion?: unknown };
   };
-  return (data.recommendations ?? [])
-    .map((r) => ({ artist: r.artist ?? "", musicbrainzArtistId: r.musicbrainzArtistId }))
-    .filter((r) => r.artist.length > 0);
+  return {
+    recommendations: (data.recommendations ?? [])
+      .map((r) => ({ artist: r.artist ?? "", musicbrainzArtistId: r.musicbrainzArtistId }))
+      .filter((r) => r.artist.length > 0),
+    model: typeof data.meta?.model === "string" ? data.meta.model : null,
+    pipelineVersion: typeof data.meta?.pipelineVersion === "string" ? data.meta.pipelineVersion : null,
+  };
 }
 
-async function runGoldenEntry(
+export type RunGoldenEntryOptions = {
+  k?: number;
+  mbCooldownMs?: number;
+  fetchImpl?: typeof fetch;
+  apiToken?: string;
+  /** Clock for the latency measurement; injectable so tests need not sleep. */
+  now?: () => number;
+};
+
+export async function runGoldenEntry(
   apiUrl: string,
   entry: GoldenEntry,
   tags: TagResolver,
-  k = 8,
-  options: { mbCooldownMs?: number } = {},
+  options: RunGoldenEntryOptions = {},
 ): Promise<GoldenResult> {
-  const recommendations = await fetchRecommendations(apiUrl, entry.query, entry.obscurityTarget);
+  const k = options.k ?? 8;
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  const { recommendations, model, pipelineVersion } = await fetchRecommendations(
+    apiUrl,
+    entry.query,
+    entry.obscurityTarget,
+    { fetchImpl: options.fetchImpl, apiToken: options.apiToken },
+  );
+  const latencyMs = now() - startedAt;
   const resultNames = recommendations.map((r) => r.artist);
   const nuggets = entry.nuggets ?? [];
   const antiBands = entry.antiBands ?? [];
@@ -275,19 +335,43 @@ async function runGoldenEntry(
   return {
     id: entry.id,
     query: entry.query,
+    status: passed ? "pass" : "fail",
     resultNames,
     antiBandRateAt8,
     nuggetCoverageAt8,
     uncoveredNuggets,
     passed,
     warnings,
+    latencyMs,
+    model,
+    pipelineVersion,
+  };
+}
+
+/** The result for a query the runner could not get an answer to. */
+export function goldenErrorResult(entry: GoldenEntry, err: unknown): GoldenResult {
+  const message = err instanceof Error ? err.message : String(err);
+  return {
+    id: entry.id,
+    query: entry.query,
+    status: "error",
+    resultNames: [],
+    antiBandRateAt8: 0,
+    nuggetCoverageAt8: 0,
+    uncoveredNuggets: entry.nuggets ?? [],
+    passed: false,
+    warnings: [`runner error: ${message}`],
+    latencyMs: null,
+    model: null,
+    pipelineVersion: null,
+    error: message,
   };
 }
 
 function printTable(results: GoldenResult[]): void {
   console.log("\n=== Golden Dataset Results ===\n");
   for (const r of results) {
-    const status = r.passed ? "✓ PASS" : "✗ FAIL";
+    const status = r.status === "error" ? "! ERROR" : r.passed ? "✓ PASS" : "✗ FAIL";
     console.log(`${status}  ${r.id}`);
     console.log(`  Query:       ${r.query}`);
     console.log(`  Results:     ${r.resultNames.slice(0, 5).join(", ")}${r.resultNames.length > 5 ? "…" : ""}`);
@@ -300,9 +384,53 @@ function printTable(results: GoldenResult[]): void {
   }
 }
 
+/** Where committed run history lives; reports and the dashboard stay local. */
+export const GOLDEN_HISTORY_PATH = join(__dirname, "history", "golden-runs.jsonl");
+
+/**
+ * Commit, branch and whether tracked files differ from it. The history file
+ * itself is excluded: appending to it is what every run does.
+ */
+function readGitState(): GitState | null {
+  const git = (args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8" }).trim();
+  try {
+    const changed = git(["status", "--porcelain", "--untracked-files=no"])
+      .split("\n")
+      .filter((line) => line.trim() !== "" && !line.endsWith("services/eval/history/golden-runs.jsonl"));
+    return {
+      commit: git(["rev-parse", "--short", "HEAD"]),
+      branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+      dirty: changed.length > 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
+  const { values: args } = parseArgs({
+    options: {
+      label: { type: "string" },
+      notes: { type: "string" },
+      strict: { type: "boolean", default: false },
+      "no-history": { type: "boolean", default: false },
+      "allow-dirty": { type: "boolean", default: false },
+    },
+  });
   const apiUrl = process.env.BANDSEARCH_API_URL ?? "http://localhost:3001";
-  const strict = process.argv.includes("--strict");
+  const apiToken = process.env.BANDSEARCH_API_TOKEN?.trim() || undefined;
+  const recordHistory = !args["no-history"];
+
+  // A run on uncommitted code cannot be traced back to what ran, so it only
+  // enters the history when the operator says so explicitly.
+  const git = readGitState();
+  if (recordHistory && git?.dirty && !args["allow-dirty"]) {
+    console.error(
+      "Tracked files have uncommitted changes, so this run's commit would not say what ran.\n" +
+        "Commit first, or pass --allow-dirty (recorded as dirty) or --no-history.",
+    );
+    process.exit(2);
+  }
 
   const goldenSet: GoldenEntry[] = JSON.parse(
     readFileSync(join(__dirname, "golden-set.json"), "utf8"),
@@ -321,18 +449,54 @@ async function main(): Promise<void> {
     ),
     0,
   );
-  const results = await runGoldenEntriesSequentially(goldenSet, (entry) =>
-    runGoldenEntry(apiUrl, entry, tags),
+  const startedAt = new Date();
+  const results = await runGoldenEntriesSequentially(
+    goldenSet,
+    async (entry) => {
+      console.log(`→ ${entry.id}`);
+      const result = await runGoldenEntry(apiUrl, entry, tags, { apiToken });
+      const status = result.passed ? "PASS" : "FAIL";
+      console.log(
+        `  ${status}  anti=${(result.antiBandRateAt8 * 100).toFixed(0)}%  nugget=${(result.nuggetCoverageAt8 * 100).toFixed(0)}%` +
+          `  ${((result.latencyMs ?? 0) / 1000).toFixed(1)}s` +
+          (result.warnings.length ? `  ⚠ ${result.warnings.join("; ")}` : ""),
+      );
+      return result;
+    },
+    {
+      // Keep going so one flaky 502 does not wipe the whole suite.
+      pauseMs: 3000,
+      onError(entry, err) {
+        const result = goldenErrorResult(entry, err);
+        console.error(`  ERROR  ${entry.id}: ${result.error}`);
+        return result;
+      },
+    },
   );
 
   printTable(results);
+
+  if (recordHistory) {
+    const record = buildGoldenRunRecord({
+      entries: goldenSet,
+      results,
+      startedAt,
+      finishedAt: new Date(),
+      label: args.label ?? null,
+      notes: args.notes ?? null,
+      git,
+      apiUrl,
+    });
+    appendRun(GOLDEN_HISTORY_PATH, record);
+    console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
+  }
 
   const warnCount = results.reduce((n, r) => n + r.warnings.length, 0);
   if (warnCount > 0) {
     console.log(`${warnCount} warning(s) — see above`);
   }
 
-  if (strict) {
+  if (args.strict) {
     const strictFailed = results.filter((r) => r.antiBandRateAt8 > 0);
     if (strictFailed.length > 0) {
       console.error(`\n[--strict] ${strictFailed.length} query(ies) have anti-bands in top-8`);
@@ -340,16 +504,20 @@ async function main(): Promise<void> {
     }
   }
 
+  const errors = results.filter((r) => r.status === "error");
   const antiBandFailures = results.filter((r) => r.antiBandRateAt8 > 0.5);
-  const coverageFailures = results.filter((r) => !r.passed && r.antiBandRateAt8 <= 0.5);
+  const coverageFailures = results.filter((r) => r.status === "fail" && r.antiBandRateAt8 <= 0.5);
 
+  if (errors.length > 0) {
+    console.error(`\n${errors.length} query(ies) got no answer from the API`);
+  }
   if (antiBandFailures.length > 0) {
-    console.error(`\n${antiBandFailures.length} query(ies) failed the anti-band gate (rate > 50%)`);
+    console.error(`${antiBandFailures.length} query(ies) failed the anti-band gate (rate > 50%)`);
   }
   if (coverageFailures.length > 0) {
     console.error(`${coverageFailures.length} query(ies) fell below their minNuggetCoverage`);
   }
-  if (antiBandFailures.length > 0 || coverageFailures.length > 0) {
+  if (errors.length > 0 || antiBandFailures.length > 0 || coverageFailures.length > 0) {
     process.exit(1);
   }
 
