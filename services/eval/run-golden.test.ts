@@ -242,6 +242,9 @@ test("runGoldenEntriesSequentially does not start the next entry until the previ
         pipelineVersion: null,
         replay: false,
         tagSources: { musicbrainz: 0, lastfm: 0, none: 0 },
+        constraintRateAt8: null,
+        constraintVerdicts: null,
+        failedGates: [],
       };
     },
   );
@@ -435,4 +438,83 @@ test("a golden query records where its bands' tags came from and whether the API
   assert.deepEqual(result.tagSources, { musicbrainz: 1, lastfm: 1, none: 1 });
   assert.equal(result.nuggetCoverageAt8, 1, "Last.fm's blackgaze covers the second nugget");
   assert.equal(result.replay, true);
+});
+
+// ─── constraint queries (#253) ────────────────────────────────────────────────
+
+function checkerWith(verdicts: Record<string, "met" | "missed" | "unknown">) {
+  return {
+    check: async (rec: { artist: string }) => ({
+      verdict: verdicts[rec.artist] ?? ("unknown" as const),
+      failed: verdicts[rec.artist] === "missed" ? (["country"] as Array<"country">) : [],
+    }),
+  };
+}
+
+const icelandQuery = { id: "iceland", query: "black metal from Iceland", constraints: { country: "IS" } };
+
+test("a constraint query records how many of its top bands meet the constraints", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [
+      { artist: "Misþyrming", musicbrainzArtistId: "a" },
+      { artist: "Mayhem", musicbrainzArtistId: "b" },
+      { artist: "Sinmara", musicbrainzArtistId: "c" },
+      { artist: "Unknown", musicbrainzArtistId: "d" },
+    ],
+    meta: {},
+  });
+
+  const result = await runGoldenEntry("http://api.test", icelandQuery, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    constraintChecker: checkerWith({ "Misþyrming": "met", Mayhem: "missed", Sinmara: "met" }),
+  });
+
+  assert.equal(result.constraintRateAt8, 2 / 3);
+  assert.deepEqual(result.constraintVerdicts, { met: 2, missed: 1, unknown: 1 });
+  assert.equal(result.status, "fail", "2 of 3 is below the default 0.75");
+  assert.deepEqual(result.failedGates, ["constraint"]);
+});
+
+test("a constraint query passes when enough of its decided bands meet the constraints", async () => {
+  const { fetchImpl } = apiReturning({
+    recommendations: [
+      { artist: "Misþyrming", musicbrainzArtistId: "a" },
+      { artist: "Sinmara", musicbrainzArtistId: "c" },
+      { artist: "Unknown", musicbrainzArtistId: "d" },
+    ],
+    meta: {},
+  });
+
+  const result = await runGoldenEntry("http://api.test", icelandQuery, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    constraintChecker: checkerWith({ "Misþyrming": "met", Sinmara: "met" }),
+  });
+
+  assert.equal(result.constraintRateAt8, 1);
+  assert.equal(result.status, "pass");
+  assert.deepEqual(result.failedGates, []);
+});
+
+test("a query without constraints has no constraint rate", async () => {
+  const { fetchImpl } = apiReturning({ recommendations: [{ artist: "Fen", musicbrainzArtistId: "m" }], meta: {} });
+  const result = await runGoldenEntry("http://api.test", { id: "x", query: "q" }, noTags, {
+    fetchImpl,
+    mbCooldownMs: 0,
+    constraintChecker: checkerWith({ Fen: "met" }),
+  });
+  assert.equal(result.constraintRateAt8, null);
+  assert.equal(result.constraintVerdicts, null);
+});
+
+test("a failed anti-band gate is named among the failed gates", async () => {
+  const { fetchImpl } = apiReturning({ recommendations: [{ artist: "Coldplay" }, { artist: "Muse" }], meta: {} });
+  const result = await runGoldenEntry(
+    "http://api.test",
+    { id: "x", query: "q", antiBands: ["Coldplay", "Muse"] },
+    noTags,
+    { fetchImpl, mbCooldownMs: 0 },
+  );
+  assert.deepEqual(result.failedGates, ["antiBand"]);
 });

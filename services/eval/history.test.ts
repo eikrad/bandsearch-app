@@ -34,6 +34,9 @@ function result(overrides: Partial<GoldenResult> & Pick<GoldenResult, "id">): Go
     pipelineVersion: "0.4.0",
     replay: false,
     tagSources: { musicbrainz: 2, lastfm: 0, none: 0 },
+    constraintRateAt8: null,
+    constraintVerdicts: null,
+    failedGates: [],
     ...overrides,
   };
 }
@@ -202,5 +205,25 @@ test("a golden run records whether the API replayed recorded lookups", () => {
 test("a golden run keeps each query's tag sources and is scored under metrics version 2", () => {
   const run = record([result({ id: "blackgaze", tagSources: { musicbrainz: 1, lastfm: 2, none: 0 } })]);
   assert.deepEqual(run.results[0]!.tagSources, { musicbrainz: 1, lastfm: 2, none: 0 });
-  assert.equal(run.config.metricsVersion, 2, "Last.fm tags changed what coverage means");
+  assert.equal(run.config.metricsVersion, 3);
+});
+
+test("a golden run records constraint rates and averages them over the queries that have them", () => {
+  const run = record([
+    result({ id: "blackgaze", constraintRateAt8: 1, constraintVerdicts: { met: 3, missed: 0, unknown: 0 } }),
+    result({ id: "zeuhl", constraintRateAt8: 0.5, constraintVerdicts: { met: 1, missed: 1, unknown: 1 }, status: "fail", passed: false, failedGates: ["constraint"] }),
+    result({ id: "dungeon-synth" }),
+  ]);
+
+  assert.equal(run.summary.constraintRateMean, 0.75);
+  assert.equal(run.results[1]!.metrics?.constraintRateAt8, 0.5);
+  assert.deepEqual(run.results[1]!.failedGates, ["constraint"]);
+  assert.equal(run.config.metricsVersion, 3);
+});
+
+test("constraints are grading targets: changing one changes the content hash", () => {
+  const base = goldenSetHashes(entries);
+  const constrained = goldenSetHashes(entries.map((e) => (e.id === "zeuhl" ? { ...e, constraints: { country: "FR" } } : e)));
+  assert.equal(constrained.questionsHash, base.questionsHash);
+  assert.notEqual(constrained.contentHash, base.contentHash);
 });

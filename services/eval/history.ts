@@ -10,9 +10,10 @@ import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
  * runs on either side as not directly comparable instead of reporting the
  * change as a regression or an improvement.
  */
-export const GOLDEN_METRICS_VERSION = 2;
+export const GOLDEN_METRICS_VERSION = 3;
 // 1 → 2 (2026-10-05, #250): coverage also counts Last.fm tags for bands without
 // MusicBrainz tags, so it is known for far more queries and measured differently.
+// 2 → 3 (2026-10-05, #253): constraint queries add a third pass/fail gate.
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
 
@@ -49,6 +50,8 @@ export type GoldenRunRecord = {
     /** Over queries whose coverage could be known. */
     nuggetCoverageMean: number | null;
     antiBandRateMean: number | null;
+    /** Over constraint queries with at least one decidable band (#253). */
+    constraintRateMean: number | null;
     /** Share of queries the runner got no answer to. */
     errorRate: number;
     /** Bands the API returned per answered query (all of them, not only the top 8). */
@@ -65,11 +68,13 @@ export type GoldenRunResult = {
   status: GoldenResult["status"];
   /** Null for an errored query: it has no score, which is not a score of zero. */
   /** Null for an errored query; `nuggetCoverageAt8` null alone means coverage was unknown. */
-  metrics: { nuggetCoverageAt8: number | null; antiBandRateAt8: number } | null;
+  metrics: { nuggetCoverageAt8: number | null; antiBandRateAt8: number; constraintRateAt8: number | null } | null;
   latencyMs: number | null;
   model: string | null;
   top8: string[];
   tagSources: GoldenResult["tagSources"];
+  constraintVerdicts: GoldenResult["constraintVerdicts"];
+  failedGates: GoldenResult["failedGates"];
   uncoveredNuggets: string[];
   warnings: string[];
   error?: string;
@@ -91,6 +96,8 @@ export function goldenSetHashes(entries: GoldenEntry[]): { questionsHash: string
         e.nuggets ?? [],
         e.antiBands ?? [],
         e.minNuggetCoverage ?? null,
+        e.constraints ?? null,
+        e.minConstraintRate ?? null,
       ]),
     ),
   };
@@ -171,6 +178,7 @@ export function buildGoldenRunRecord({
       passRate: answered.length === 0 ? null : answered.filter((r) => r.passed).length / answered.length,
       nuggetCoverageMean: mean(answered.map((r) => r.nuggetCoverageAt8).filter((c): c is number => c !== null)),
       antiBandRateMean: mean(answered.map((r) => r.antiBandRateAt8)),
+      constraintRateMean: mean(answered.map((r) => r.constraintRateAt8).filter((c): c is number => c !== null)),
       errorRate: results.length === 0 ? 0 : (results.length - answered.length) / results.length,
       resultCountMean: mean(answered.map((r) => r.resultNames.length)),
       latencyMsMedian: median(latencies),
@@ -183,11 +191,17 @@ export function buildGoldenRunRecord({
       metrics:
         r.status === "error"
           ? null
-          : { nuggetCoverageAt8: r.nuggetCoverageAt8, antiBandRateAt8: r.antiBandRateAt8 },
+          : {
+              nuggetCoverageAt8: r.nuggetCoverageAt8,
+              antiBandRateAt8: r.antiBandRateAt8,
+              constraintRateAt8: r.constraintRateAt8,
+            },
       latencyMs: r.latencyMs,
       model: r.model,
       top8: r.resultNames.slice(0, 8),
       tagSources: r.tagSources,
+      constraintVerdicts: r.constraintVerdicts,
+      failedGates: r.failedGates,
       uncoveredNuggets: r.uncoveredNuggets,
       warnings: r.warnings,
       ...(r.error !== undefined ? { error: r.error } : {}),

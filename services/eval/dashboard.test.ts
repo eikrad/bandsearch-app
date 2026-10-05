@@ -37,6 +37,9 @@ function result(id: string, outcome: Outcome, top: string[] = ["Fen", "Ghost Bat
     pipelineVersion: "0.4.0",
     replay: outcome === "error" ? null : false,
     tagSources: { musicbrainz: top.length, lastfm: 0, none: 0 },
+    constraintRateAt8: null,
+    constraintVerdicts: null,
+    failedGates: outcome === "fail" ? ["coverage"] : [],
     ...(outcome === "error" ? { error: "API error 502" } : {}),
   };
 }
@@ -304,4 +307,16 @@ test("the paired bootstrap is reproducible: the same runs give the same interval
   const base = [runWith([coverage("blackgaze", 0.2), coverage("zeuhl", 0.4), coverage("drone", 0.9)], "gemini")];
   const candidate = [runWith([coverage("blackgaze", 0.6), coverage("zeuhl", 0.3), coverage("drone", 1)], "gemma")];
   assert.deepEqual(compareSetups(base, candidate).coverage.ci95, compareSetups(base, candidate).coverage.ci95);
+});
+
+test("setups are also compared on how often their bands meet hard constraints", () => {
+  const withRate = (id: string, rate: number): GoldenResult => ({ ...result(id, "pass"), constraintRateAt8: rate });
+  const base = [runWith([withRate("blackgaze", 0.5), withRate("zeuhl", 0.5)], "gemini")];
+  const candidate = [runWith([withRate("blackgaze", 1), withRate("zeuhl", 1)], "gemma")];
+
+  const cmp = compareSetups(base, candidate);
+
+  assert.equal(cmp.constraintRate.nQueries, 2);
+  assert.equal(cmp.constraintRate.meanDiff, 0.5);
+  assert.equal(groupSetups(candidate)[0]!.constraintRateMean, 1);
 });
