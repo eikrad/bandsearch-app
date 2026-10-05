@@ -368,6 +368,14 @@ File: `services/eval/golden-set.json`
 
 `services/eval/dashboard.ts` turns the history into a self-contained `services/eval/reports/dashboard.html` (gitignored). Each run is compared with the latest run labelled `baseline` and with the previous run: pass/fail flips with an exact two-sided sign test (with 10 queries, single flips are hints, not findings), per-query **top-8 overlap** with the compared run, and a **noise floor** — the overlap between repeat runs of an identical setup. Answers move far more often than means do (Chen et al. 2023, second-brain *Production Drift Monitoring*), so an overlap near the noise floor says a change did little even when the pass rate moved. Runs graded against different targets (`contentHash`) or scoring (`GOLDEN_METRICS_VERSION`) get no regression verdict. Layout and comparison rules are ported from the Radiationsafety eval dashboard.
 
+**Stable measurement (added 2026-10-05, #250).** The first Gemini baseline showed that single runs cannot separate models: two identical runs shared 39% of their top bands and differed by 18 points in pass rate, and coverage was unknown for 4–6 of 10 queries. Three changes:
+
+- *Replay* (`EVAL_REPLAY_DIR`, `integrations/replayFetch.ts`): the API and the runner record Brave, MusicBrainz and Last.fm answers on first use and replay them afterwards. Setups compared on the golden set then see identical search and verification data, and repeat runs skip MusicBrainz's rate limit. Only 2xx and 404 are recorded; credentials in query strings are stripped. LLM calls are never replayed. The API reports `meta.evalReplay`, which the run records.
+- *Last.fm tags* for coverage where MusicBrainz has none (`createTagLookup`): listener tags weighted ≥ 10 of 100; each result records its tag sources. This changed the metric (`GOLDEN_METRICS_VERSION` 2).
+- *Setups and paired statistics*: `--repeat N`; the dashboard groups runs into setups and compares each with the baseline's setup per query — values averaged over repeats, then a paired bootstrap over queries (95%, seeded). Only intervals that exclude zero count as a difference.
+
+**Product decision (2026-10-05):** varied answers to the same query are wanted, so re-asking can surface new bands. Top-8 overlap is therefore reported as a stability signal, never as quality; quality is judged per band (coverage, anti-bands, and from #237 step 3 the calibrated judge).
+
 ---
 
 ## Developer Dashboard

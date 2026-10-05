@@ -42,7 +42,11 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Golden run** — one execution of the golden dataset against an API, recorded as a line in `services/eval/history/golden-runs.jsonl` with the model the API reported. A query the API did not answer has status `error` and no metrics; it never counts as a regression. The run labelled `baseline` (the latest such) is what later runs are compared against.
 
-- **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does.
+- **Setup** — golden runs that differ only by chance: same research model, code, replay mode, grading targets and metrics version. Repeats of a setup (`--repeat N`) are averaged per query before two setups are compared.
+
+- **Replay** — eval-only recording of Brave, MusicBrainz and Last.fm answers (`EVAL_REPLAY_DIR`), so setups compared on the golden set see the same search data. LLM calls are never replayed.
+
+- **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does. Overlap is a **stability** signal, not a quality one: varied answers to the same query are wanted (product decision 2026-10-05, so re-asking can surface new bands).
 
 - **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
 

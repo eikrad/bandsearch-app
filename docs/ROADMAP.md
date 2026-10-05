@@ -32,12 +32,13 @@ plan, not a second permanent structure.
      baseline + repeat run recorded (noise floor: 39% top-band overlap)
    - ✓ Scaleway behind `LLM_PROVIDER` (default still `gemini`), role-based model
      config, live judge and calibration on Scaleway (#204 part 1)
-   - Next: stable measurement (replay of Brave/MusicBrainz/Last.fm answers,
-     Last.fm tags for coverage, repeats with paired statistics), then the
-     model comparison with judge scores in golden runs (#204 part 2)
+   - ✓ Stable measurement: replay of Brave/MusicBrainz/Last.fm answers,
+     Last.fm tags for coverage, repeats with paired statistics (#250)
+   - Next: the model comparison with judge scores in golden runs (#204 part 2)
    - Then: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
      first), then remove Gemini
-   - Afterwards: score live searches with the judge (#248)
+   - Afterwards: score live searches with the judge (#248), and a judge
+     quality gate that drops weak candidates and searches again (#251)
 4. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
    (`feature/card-action-redesign`, merged 2026-08-31) built rating stars, the
    Save/Saved toggle, and the Category/Note sheet behind the `···` button —
