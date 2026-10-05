@@ -15,7 +15,14 @@ export type ChatModelClient = {
  * Extract one balanced JSON object or array from text that may include model preamble or trailing prose.
  */
 export function parseModelJsonResponse(raw: string): unknown {
-  const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  // Reasoning models (qwen3, deepseek, glm on Scaleway) may put their thinking
+  // in a <think> block before the answer; braces in there are not the answer.
+  const text = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
   try {
     return JSON.parse(text) as unknown;
   } catch {

@@ -48,3 +48,8 @@ test("withTimeout rejects when timeout fires first", async () => {
   const slow = new Promise((resolve) => setTimeout(() => resolve("late"), 200));
   await assert.rejects(withTimeout(slow, 10), /timeout/i);
 });
+
+test("parseModelJsonResponse ignores a reasoning model's <think> block", () => {
+  const raw = '<think>Maybe {"draft": true}? No.</think>\n{"final": 1}';
+  assert.deepEqual(parseModelJsonResponse(raw), { final: 1 });
+});
