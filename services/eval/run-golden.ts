@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
+import { writeDashboard } from "./dashboard.ts";
 import { appendRun, buildGoldenRunRecord, type GitState } from "./history.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -489,6 +490,7 @@ async function main(): Promise<void> {
     });
     appendRun(GOLDEN_HISTORY_PATH, record);
     console.log(`Recorded run ${record.runId} (model: ${record.config.researchModel ?? "not reported"}) in ${GOLDEN_HISTORY_PATH}`);
+    console.log(`Dashboard: ${pathToFileURL(writeDashboard({ historyPath: GOLDEN_HISTORY_PATH })).href}`);
   }
 
   const warnCount = results.reduce((n, r) => n + r.warnings.length, 0);

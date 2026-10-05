@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Golden Runs</title>
+<style>
+/* Tokens: validated default data-viz palette (single series, status, blue
+   sequential ramp). Dark values are their own steps, not an inversion. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6d68;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --series: #2a78d6;
+  --marker: #52514e;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --good-tint: #e4f3e2;
+  --critical: #d03b3b;
+  --critical-text: #b42f2f;
+  --critical-tint: #fbe7e5;
+  --warning: #fab219;
+  --warning-tint: #fdf3dc;
+  --seq-0: #cde2fb; --seq-1: #9ec5f4; --seq-2: #6da7ec;
+  --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #184f95;
+  --seq-ink-0: #0b0b0b; --seq-ink-1: #0b0b0b; --seq-ink-2: #0b0b0b;
+  --seq-ink-3: #0b0b0b; --seq-ink-4: #ffffff; --seq-ink-5: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #9c9a93;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series: #3987e5;
+    --marker: #c3c2b7;
+    --good-text: #0ca30c;
+    --good-tint: #15291a;
+    --critical-text: #e66767;
+    --critical-tint: #341b1b;
+    --warning-tint: #33290f;
+    --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95;
+    --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
+    --seq-ink-0: #ffffff; --seq-ink-1: #ffffff; --seq-ink-2: #ffffff;
+    --seq-ink-3: #ffffff; --seq-ink-4: #0b0b0b; --seq-ink-5: #0b0b0b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #9c9a93;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --series: #3987e5;
+  --marker: #c3c2b7;
+  --good-text: #0ca30c;
+  --good-tint: #15291a;
+  --critical-text: #e66767;
+  --critical-tint: #341b1b;
+  --warning-tint: #33290f;
+  --seq-0: #0d366b; --seq-1: #104281; --seq-2: #184f95;
+  --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec;
+  --seq-ink-0: #ffffff; --seq-ink-1: #ffffff; --seq-ink-2: #ffffff;
+  --seq-ink-3: #ffffff; --seq-ink-4: #0b0b0b; --seq-ink-5: #0b0b0b;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+h3 { font-size: 14px; margin: 16px 0 6px; }
+p { margin: 0; }
+.sub, .note { color: var(--ink-2); }
+.note { font-size: 13px; margin-bottom: 12px; }
+code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.filters {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+  margin: 16px -16px 20px; padding: 10px 16px;
+  background: var(--page);
+  border-bottom: 1px solid var(--border);
+}
+label { color: var(--ink-2); font-size: 13px; }
+select {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--axis); border-radius: 6px; padding: 4px 8px;
+  max-width: 100%;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+/* Headline */
+.tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 48px; font-weight: 600; line-height: 1.1; }
+.tile .value.small { font-size: 18px; line-height: 1.4; }
+.tile .deltas { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.delta { font-variant-numeric: tabular-nums; font-weight: 600; }
+.delta.up { color: var(--good-text); }
+.delta.down { color: var(--critical-text); }
+.delta.flat { color: var(--ink-2); }
+
+/* Trends: small multiples */
+.multiples { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+/* Two lines for every title, so the plots of one row line up. */
+.panel h3 { margin: 0 0 10px; font-weight: 600; line-height: 1.3; min-height: 2.6em; }
+.panel .latest { color: var(--ink-2); font-weight: 400; }
+.chart { display: flex; align-items: stretch; }
+.y-gutter { position: relative; width: 36px; flex-shrink: 0; }
+.y-gutter span {
+  position: absolute; right: 6px; transform: translateY(-50%);
+  font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.plot { position: relative; flex: 1; min-width: 0; outline: none; }
+.plot:focus-visible { box-shadow: 0 0 0 2px var(--series); border-radius: 4px; }
+.plot svg { display: block; width: 100%; overflow: visible; }
+.x-axis {
+  position: relative; height: 16px; margin-left: 36px; margin-top: 4px;
+  font-size: 11px; color: var(--muted);
+}
+.x-axis span { position: absolute; white-space: nowrap; }
+.x-axis .mid { transform: translateX(-50%); }
+.x-axis .end { right: 0; }
+.plot .badge {
+  position: absolute; top: -8px; transform: translateX(-50%);
+  min-width: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--marker); color: var(--ink-2);
+  font-size: 10px; line-height: 14px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.chart-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; margin: 0; }
+.legend-markers { margin-top: 10px; font-size: 12px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.key-dash { display: inline-block; width: 14px; border-top: 1px dashed var(--muted); vertical-align: middle; margin-right: 6px; }
+.key-ring { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--series); border-radius: 50%; vertical-align: -1px; margin-right: 6px; }
+
+.tooltip {
+  position: fixed; z-index: 20; pointer-events: none;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 8px 10px; font-size: 12px; min-width: 180px; max-width: 320px;
+}
+.tooltip[hidden] { display: none; }
+.tooltip .t-head { color: var(--ink-2); margin-bottom: 4px; }
+.tooltip .t-row { display: flex; align-items: center; gap: 8px; }
+.tooltip .t-row strong { font-variant-numeric: tabular-nums; min-width: 40px; }
+.tooltip .t-key { width: 12px; border-top: 2px solid var(--series); }
+
+/* Tables */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
+thead th { color: var(--ink-2); font-weight: 500; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+tbody tr + tr td, tbody tr + tr th { border-top: 1px solid var(--grid); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+details { margin-top: 12px; }
+summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
+
+/* Question grid + topic table */
+.matrix th.q { font-weight: 400; min-width: 220px; max-width: 360px; }
+.matrix .qid { color: var(--muted); font-size: 11px; display: block; }
+.matrix th.run { text-align: center; font-size: 11px; line-height: 1.3; min-width: 64px; }
+.matrix th.run.selected { color: var(--ink); font-weight: 600; }
+.matrix td.cell { padding: 2px; text-align: center; }
+.cell-btn {
+  width: 100%; min-width: 44px; min-height: 30px; border: 0; border-radius: 4px;
+  font: 600 13px system-ui, sans-serif; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.cell-btn:focus-visible { outline: 2px solid var(--series); outline-offset: 1px; }
+.cell-btn.pass { background: var(--good-tint); color: var(--good-text); }
+.cell-btn.fail { background: var(--critical-tint); color: var(--critical-text); }
+.cell-btn.missing { background: transparent; color: var(--muted); font-weight: 400; font-size: 11px; }
+.cell-btn.unjudged { background: var(--warning-tint); color: var(--ink-2); }
+.failures { list-style: none; padding: 0; margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+.failures strong { color: var(--ink); font-variant-numeric: tabular-nums; display: inline-block; min-width: 1.5em; }
+.cell-btn .n { display: block; font-weight: 400; font-size: 10px; opacity: 0.85; }
+.cell-btn.low-n { opacity: 0.45; font-style: italic; }
+.topic-tag {
+  display: inline-block; font-size: 11px; color: var(--ink-2);
+  border: 1px solid var(--axis); border-radius: 999px; padding: 0 6px; margin: 2px 4px 0 0;
+}
+.group-row th { color: var(--ink-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 12px; }
+
+/* Compare */
+.verdict { font-size: 18px; font-weight: 600; margin: 4px 0 8px; }
+.pair { color: var(--ink-2); font-size: 13px; }
+.warnings { list-style: none; padding: 0; margin: 10px 0 0; }
+.warnings li {
+  background: var(--warning-tint); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px;
+  font-size: 13px;
+}
+.warnings li::before { content: "⚠ "; }
+.flip { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.flip .status { font-weight: 600; margin-right: 6px; }
+.flip .qid { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.flip .status.fail, .flip .status.lower { color: var(--critical-text); }
+.flip .status.pass, .flip .status.higher { color: var(--good-text); }
+.flip .scores { font-size: 12px; color: var(--ink-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.previews { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 8px; }
+.previews div { font-size: 12px; background: var(--page); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+.previews .ph { color: var(--ink-2); font-weight: 600; display: block; margin-bottom: 4px; }
+.empty { color: var(--ink-2); padding: 24px 0; }
+.top8 ol { margin: 0; padding-left: 20px; }
+.top8 li.shared { color: var(--ink-2); }
+.top8 li.new { font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Golden runs</h1>
+    <p class="sub" id="subtitle"></p>
+  </header>
+  <div class="filters" id="filters">
+    <label>Query set <select id="set-select"></select></label>
+    <label>Run <select id="run-select"></select></label>
+    <label>Compared with <select id="against-select">
+      <option value="baseline">Baseline</option>
+      <option value="previous">Previous run</option>
+    </select></label>
+  </div>
+  <main id="main"></main>
+</div>
+<div class="tooltip" id="tooltip" role="status" hidden></div>
+
+<script id="dashboard-data" type="application/json">__DASHBOARD_DATA__</script>
+<script>
+"use strict";
+// Generated by services/eval/dashboard.ts. All comparison logic is computed
+// there (tested); this script only draws it. Layout and chart rules are
+// ported from the Radiationsafety eval dashboard.
+const DATA = JSON.parse(document.getElementById("dashboard-data").textContent);
+
+// Summary fields of a golden run (history.ts), in reading order.
+const METRIC_LABELS = {
+  passRate: "Pass rate",
+  nuggetCoverageMean: "Nugget coverage @8",
+  antiBandRateMean: "Anti-bands in top 8",
+  errorRate: "Queries without answer",
+  latencyMsMedian: "Median latency",
+};
+// "ms" values are shown in seconds; everything else is a 0–1 rate.
+const METRIC_KIND = { latencyMsMedian: "ms" };
+// For these a rise is bad news, so deltas are coloured the other way round.
+const LOWER_IS_BETTER = new Set(["antiBandRateMean", "errorRate", "latencyMsMedian", "latencyMsMax"]);
+const MAX_COLUMNS = 16;
+
+const state = { setId: null, runId: null, against: "baseline" };
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value == null || value === false) continue;
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+function svgEl(tag, attrs) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  return node;
+}
+const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+function signed(v, asPct) {
+  if (v == null) return "—";
+  const shown = asPct ? Math.round(v * 100) : Math.round(v * 100) / 100;
+  if (shown === 0) return asPct ? "±0 pp" : "±0.00";
+  const sign = shown > 0 ? "+" : "−";
+  return asPct ? `${sign}${Math.abs(shown)} pp` : `${sign}${Math.abs(shown).toFixed(2)}`;
+}
+function deltaEl(v, asPct, lowerIsBetter = false) {
+  const flat = v == null || Math.abs(v) < 0.005;
+  const arrow = flat ? "" : v > 0 ? "▲ " : "▼ ";
+  const good = !flat && (v > 0) !== lowerIsBetter;
+  const cls = flat ? "flat" : good ? "up" : "down";
+  return el("span", { class: `delta ${cls}` }, arrow + signed(v, asPct));
+}
+const seconds = (ms) => (ms == null ? "—" : `${(ms / 1000).toFixed(1)} s`);
+function fmtMetric(metric, v) {
+  return METRIC_KIND[metric] === "ms" ? seconds(v) : pct(v);
+}
+function metricDelta(metric, v) {
+  if (METRIC_KIND[metric] !== "ms") return deltaEl(v, true, LOWER_IS_BETTER.has(metric));
+  const flat = v == null || Math.abs(v) < 50;
+  const good = !flat && (v > 0) !== LOWER_IS_BETTER.has(metric);
+  const text = v == null ? "—" : flat ? "±0.0 s" : `${v > 0 ? "▲ +" : "▼ −"}${Math.abs(v / 1000).toFixed(1)} s`;
+  return el("span", { class: `delta ${flat ? "flat" : good ? "up" : "down"}` }, text);
+}
+function runDate(run, withTime = true) {
+  if (!run.timestamp) return run.runId;
+  const opts = withTime
+    ? { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }
+    : { day: "numeric", month: "short" };
+  return new Date(run.timestamp).toLocaleString(undefined, opts);
+}
+// Sign test over flipped queries (computed in dashboard.ts). With few flips
+// nothing is significant, which is the point: single flips are hints.
+function significanceText(sig) {
+  if (!sig || sig.flipped === 0) return "No query changed between pass and fail.";
+  const p = sig.pValue < 0.001 ? "< 0.001" : `= ${sig.pValue.toFixed(2)}`;
+  const n = `${sig.flipped} flipped quer${sig.flipped === 1 ? "y" : "ies"}`;
+  return sig.significant
+    ? `Unlikely to be chance (sign test, p ${p}, ${n}).`
+    : `Could be chance (sign test, p ${p}, ${n}). Treat single flips as hints.`;
+}
+const runName = (run) => (run.label ? `${run.label} · ${runDate(run)}` : runDate(run));
+const shortLabel = (run) => run.label || runDate(run, false);
+const summaryValue = (run, metric) => run.summary[metric];
+const shownMetrics = () => Object.keys(METRIC_LABELS);
+
+// ---------- shared tooltip ----------
+const tooltip = document.getElementById("tooltip");
+function showTooltip(anchor, build) {
+  tooltip.replaceChildren(...build());
+  tooltip.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const t = tooltip.getBoundingClientRect();
+  let left = r.left + r.width / 2 - t.width / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - t.width - 8));
+  let top = r.top - t.height - 8;
+  if (top < 8) top = r.bottom + 8;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+function showTooltipAt(x, y, build) {
+  tooltip.replaceChildren(...build());
+  tooltip.hidden = false;
+  const t = tooltip.getBoundingClientRect();
+  let left = x + 14;
+  if (left + t.width > window.innerWidth - 8) left = x - t.width - 14;
+  let top = y - t.height / 2;
+  top = Math.max(8, Math.min(top, window.innerHeight - t.height - 8));
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+const hideTooltip = () => { tooltip.hidden = true; };
+
+// ---------- state ----------
+const currentSet = () => DATA.sets.find((s) => s.questionsHash === state.setId);
+const setRuns = (set) => set.runIds.map((id) => DATA.runs[id]);
+function selectRun(runId) {
+  state.runId = runId;
+  document.getElementById("run-select").value = runId;
+  render();
+}
+
+function initFilters() {
+  const setSelect = document.getElementById("set-select");
+  setSelect.replaceChildren(
+    ...DATA.sets.map((s) =>
+      el("option", { value: s.questionsHash },
+        `${s.nItems} queries · ${s.runIds.length} run${s.runIds.length === 1 ? "" : "s"} · ${s.questionsHash}`))
+  );
+  setSelect.addEventListener("change", () => {
+    state.setId = setSelect.value;
+    state.runId = null;
+    render();
+  });
+  document.getElementById("run-select").addEventListener("change", (e) => selectRun(e.target.value));
+  document.getElementById("against-select").addEventListener("change", (e) => {
+    state.against = e.target.value;
+    render();
+  });
+}
+
+function syncRunSelect(set) {
+  const runSelect = document.getElementById("run-select");
+  runSelect.replaceChildren(
+    ...setRuns(set).slice().reverse().map((run) => el("option", { value: run.runId }, runName(run)))
+  );
+  runSelect.value = state.runId;
+}
+
+// ---------- sections ----------
+function headline(set) {
+  const run = DATA.runs[state.runId];
+  const cmp = set.comparisons[state.runId];
+  const prev = cmp.previous, base = cmp.baseline;
+  const chosen = cmp[state.against];
+  const commit = run.git && run.git.commit
+    ? `${run.git.commit}${run.git.dirty ? " + uncommitted changes" : ""}`
+    : "commit not recorded";
+  return el("section", { class: "card", "aria-labelledby": "h-headline" },
+    el("h2", { id: "h-headline", class: "sr-only" }, "Selected run"),
+    el("div", { class: "tiles" },
+      el("div", { class: "tile" },
+        el("div", { class: "label" }, "Pass rate"),
+        el("div", { class: "value" }, pct(run.summary.passRate)),
+        el("div", { class: "deltas" },
+          prev ? ["vs previous ", passDelta(prev)] : "first run in this set",
+          base ? ["  ·  vs baseline ", passDelta(base)] : null)),
+      el("div", { class: "tile" },
+        el("div", { class: "label" }, state.against === "baseline" ? "Since baseline" : "Since previous run"),
+        el("div", { class: "value small" }, chosen ? chosen.verdict : "Nothing to compare with"),
+        chosen && chosen.comparable ? el("div", { class: "deltas" }, significanceText(chosen.significance)) : null,
+        chosen ? el("div", { class: "deltas" }, overlapText(chosen, set)) : null),
+      failureTile(run),
+      el("div", { class: "tile" },
+        el("div", { class: "label" }, "Run"),
+        el("div", { class: "value small" }, runName(run)),
+        el("div", { class: "deltas" }, run.config.researchModel || "model not reported"),
+        el("div", { class: "deltas" }, commit,
+          run.durationSec != null ? ` · ${Math.round(run.durationSec / 60)} min` : "",
+          ` · ${seconds(run.summary.latencyMsMedian)} median`),
+        run.notes ? el("div", { class: "deltas" }, run.notes) : null)));
+}
+
+// A pass-rate change across a change of grading targets is not a change of the system.
+function passDelta(cmp) {
+  return cmp.comparable
+    ? deltaEl(cmp.summaryDelta.passRate, true)
+    : el("span", { class: "delta flat" }, "different targets");
+}
+
+// How much the top 8 stayed the same, read against what repeat runs of one
+// setup give by chance (Chen et al. 2023: answers move far more than means).
+function overlapText(cmp, set) {
+  if (cmp.overlap.mean == null) return "No answered query in common.";
+  const floor = set.noiseFloor
+    ? `repeat runs of one setup share ${pct(set.noiseFloor.overlapMean)}`
+    : "no repeat run yet to show how much answers move by chance";
+  return `Top 8 shared: ${pct(cmp.overlap.mean)} (${floor}).`;
+}
+
+// Why a query failed, derived from its record: no answer, the anti-band gate
+// (rate > 50%), or nugget coverage below the query's threshold.
+function failureReason(r) {
+  if (r.status === "error") return "no answer from the API";
+  if (r.status !== "fail") return null;
+  return r.metrics && r.metrics.antiBandRateAt8 > 0.5 ? "too many anti-bands in top 8" : "nugget coverage below target";
+}
+
+function failureTile(run) {
+  const counts = new Map();
+  for (const r of run.results) {
+    const reason = failureReason(r);
+    if (reason) counts.set(reason, (counts.get(reason) || 0) + 1);
+  }
+  return el("div", { class: "tile" },
+    el("div", { class: "label" }, "Why queries failed"),
+    counts.size
+      ? el("ul", { class: "failures" },
+          [...counts.entries()].map(([reason, n]) => el("li", {}, el("strong", {}, String(n)), " ", reason)))
+      : el("div", { class: "value small" }, "No failures"));
+}
+
+function trends(set) {
+  const runs = setRuns(set);
+  const metrics = shownMetrics();
+  const section = el("section", { class: "card", "aria-labelledby": "h-trends" },
+    el("h2", { id: "h-trends" }, "Scores over time"),
+    el("p", { class: "note" },
+      "One point per run, in run order. Hover or use ← → on a chart to read every score for a run; click to select it."));
+  if (runs.length < 2) {
+    section.append(el("p", { class: "empty" }, "Only one run on this query set so far. The trend appears from the second run."));
+  }
+  const multiples = el("div", { class: "multiples" });
+  const panels = metrics.map((metric) => {
+    const panel = el("div", { class: "panel" });
+    multiples.append(panel);
+    return { metric, panel };
+  });
+  section.append(multiples);
+
+  const markerNotes = set.markers.map((m, i) =>
+    el("span", {}, el("span", { class: "key-dash" }), `${i + 1}: ${m.reasons.join(", ")} (${runName(DATA.runs[m.runId])})`));
+  section.append(el("div", { class: "legend-markers" },
+    el("span", {}, el("span", { class: "key-ring" }), "baseline run"),
+    markerNotes));
+
+  // Table twin for every chart value.
+  const table = el("table", {},
+    el("thead", {}, el("tr", {}, el("th", {}, "Run"), el("th", {}, "Model"),
+      metrics.map((m) => el("th", { class: "num" }, METRIC_LABELS[m])))),
+    el("tbody", {}, runs.map((run) =>
+      el("tr", {}, el("th", {}, runName(run)), el("td", {}, el("code", {}, run.config.researchModel || "—")),
+        metrics.map((m) => el("td", { class: "num" }, fmtMetric(m, summaryValue(run, m))))))));
+  section.append(el("details", {}, el("summary", {}, "Show as table"), el("div", { class: "scroll" }, table)));
+
+  if (trendsResize) trendsResize.disconnect();
+  let lastWidth = null, frame = null;
+  trendsResize = new ResizeObserver(([entry]) => {
+    const widthNow = Math.round(entry.contentRect.width);
+    if (widthNow === lastWidth) return;
+    lastWidth = widthNow;
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => drawPanels(panels, runs, set));
+  });
+  trendsResize.observe(multiples);
+  return section;
+}
+
+// ---------- chart geometry ----------
+// Follows the metric-chart rules of DemBot's design system (DemAI-tech/dembot,
+// docs/DESIGNS.md "Metric charts"): round value ticks, a tick mark wherever a
+// label names a position, labels dropped rather than squeezed, solid grid
+// (dashes mean an annotation), numbered marker badges, HTML labels, a plot
+// measured to its rendered width, and no empty axes for a series with no data.
+// The x axis is run order rather than time: runs come in bursts (four in an
+// afternoon, then nothing for days), and a time axis would stack a burst on
+// one pixel.
+const PLOT_H = 120, PAD = { top: 10, right: 12, bottom: 8, left: 8 };
+const TICK_LENGTH = 5;
+const CHAR_WIDTH_PX = 6, LABEL_GAP_PX = 10;  // 11px labels; estimates err toward a tick too few
+const BADGE_MIN_GAP_PX = 18;
+
+// 1, 2, 2.5 or 5 times a power of ten at or above raw: the steps people count in.
+function niceStep(raw) {
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const f = raw / magnitude;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * magnitude;
+}
+// Zero-based ticks at a round step; the scale's top is the data's max raised
+// to a whole step, so a 0.46 peak reads against 0 / 0.1 / … / 0.5, not against
+// fractions of 0.46. Rates stay within 0–1 since every step divides 1.
+function niceValueTicks(dataMax, targetCount = 5) {
+  if (!(dataMax > 0)) return { max: 1, step: 0.2, ticks: [0, 0.2, 0.4, 0.6, 0.8, 1] };
+  const step = niceStep(dataMax / targetCount);
+  const count = Math.ceil(dataMax / step - 1e-9);
+  const ticks = Array.from({ length: count + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
+  return { max: ticks[ticks.length - 1], step, ticks };
+}
+// Decimals that show a step exactly (0.25 → 2, 0.2 → 1, 1 → 0).
+function stepDecimals(step) {
+  for (let d = 0; d <= 4; d++) {
+    const scaled = step * 10 ** d;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return d;
+  }
+  return 4;
+}
+const labelWidth = (label) => label.length * CHAR_WIDTH_PX;
+// Keep the run labels that fit between the kept ones and the two flush end
+// labels; a label that does not fit is dropped, never overlapped.
+function ticksThatFit(candidates, leftClearance, rightClearance) {
+  const kept = [];
+  let cursor = leftClearance;
+  for (const tick of candidates) {
+    const half = labelWidth(tick.label) / 2;
+    if (tick.x - half < cursor || tick.x + half > rightClearance) continue;
+    kept.push(tick);
+    cursor = tick.x + half + LABEL_GAP_PX;
+  }
+  return kept;
+}
+// Markers closer than a badge's width share one badge naming the range (1–3):
+// separate badges would hide all but the top one.
+function mergeBadges(markers) {
+  const groups = [];
+  for (const m of markers) {
+    const last = groups[groups.length - 1];
+    if (last && m.x - last.x < BADGE_MIN_GAP_PX) last.numbers.push(m.number);
+    else groups.push({ x: m.x, numbers: [m.number] });
+  }
+  return groups;
+}
+
+let trendsResize = null;
+
+function drawPanels(panels, runs, set) {
+  const hovers = [];
+  const setHover = (index) => hovers.forEach((fn) => fn(index));
+  const baseIndex = runs.findIndex((r) => r.runId === set.baselineRunId);
+  const selectedIndex = runs.findIndex((r) => r.runId === state.runId);
+  const markers = set.markers
+    .map((m, i) => ({ number: i + 1, index: runs.findIndex((r) => r.runId === m.runId), reasons: m.reasons }))
+    .filter((m) => m.index >= 0);
+
+  for (const { metric, panel } of panels) {
+    const values = runs.map((r) => summaryValue(r, metric));
+    const latest = values[values.length - 1];
+    const fmt = (v) => fmtMetric(metric, v);
+    panel.replaceChildren(
+      el("h3", {}, METRIC_LABELS[metric] || metric, " ", el("span", { class: "latest" }, fmt(latest))));
+    if (values.every((v) => v == null)) {
+      panel.append(el("p", { class: "chart-empty", style: `height:${PLOT_H}px` }, "No run on this set reports it."));
+      continue;
+    }
+    const gutter = el("div", { class: "y-gutter", "aria-hidden": "true" });
+    const plot = el("div", { class: "plot", tabindex: "0", role: "img",
+      "aria-label": `${METRIC_LABELS[metric] || metric} over ${runs.length} runs; latest ${fmt(latest)}. Table below.` });
+    const chart = el("div", { class: "chart" }, gutter, plot);
+    const xAxis = el("div", { class: "x-axis", "aria-hidden": "true" });
+    panel.append(chart, xAxis);
+
+    // Measured, not scaled: one viewBox unit is one CSS pixel at every width.
+    const width = Math.max(120, plot.clientWidth);
+    const inner = { l: PAD.left, r: width - PAD.right, t: PAD.top, b: PLOT_H - PAD.bottom };
+    const xFor = (i) => runs.length === 1 ? (inner.l + inner.r) / 2 : inner.l + (i / (runs.length - 1)) * (inner.r - inner.l);
+    const { max, step, ticks } = niceValueTicks(Math.max(...values.filter((v) => v != null)));
+    const yFor = (v) => inner.b - (v / max) * (inner.b - inner.t);
+    const tickLabel = METRIC_KIND[metric] === "ms"
+      ? (v) => `${(v / 1000).toFixed(stepDecimals(step / 1000))}s`
+      : (v) => `${Math.round(v * 100)}%`;
+    const svg = svgEl("svg", { viewBox: `0 0 ${width} ${PLOT_H}`, height: PLOT_H, "aria-hidden": "true" });
+
+    // Run labels: both ends flush to their edge, the runs between centred
+    // under their point when there is room, in the same vocabulary.
+    // Run labels when both end labels fit side by side, dates otherwise: one
+    // vocabulary for the whole axis, never two labels run into each other.
+    const fits = (label) => labelWidth(shortLabel(runs[0])) + labelWidth(shortLabel(runs[runs.length - 1]))
+      + LABEL_GAP_PX <= inner.r - inner.l;
+    const runTick = fits() ? shortLabel : (run) => runDate(run, false);
+    const startLabel = runTick(runs[0]);
+    const endLabel = runs.length > 1 ? runTick(runs[runs.length - 1]) : "";
+    const xTicks = runs.length > 2
+      ? ticksThatFit(
+          // A label already on the axis (three runs on one day) places nothing new.
+          runs.slice(1, -1).map((run, k) => ({ x: xFor(k + 1), label: runTick(run) }))
+            .filter((t, k, all) => t.label !== startLabel && t.label !== endLabel
+              && (k === 0 || t.label !== all[k - 1].label)),
+          inner.l + labelWidth(startLabel) + LABEL_GAP_PX,
+          inner.r - labelWidth(endLabel) - LABEL_GAP_PX)
+      : [];
+
+    // Grid: solid, a line at every labelled value and run; the baseline is the axis.
+    for (const tick of ticks) {
+      const y = yFor(tick);
+      if (tick !== 0) {
+        svg.append(svgEl("line", { x1: inner.l, x2: inner.r, y1: y, y2: y, stroke: "var(--grid)", "stroke-width": 1 }));
+      }
+      svg.append(svgEl("line", { x1: inner.l - TICK_LENGTH, x2: inner.l, y1: y, y2: y, stroke: "var(--axis)", "stroke-width": 1 }));
+      gutter.append(el("span", { style: `top:${(y / PLOT_H) * 100}%` }, tickLabel(tick)));
+    }
+    for (const t of xTicks) {
+      svg.append(svgEl("line", { x1: t.x, x2: t.x, y1: inner.t, y2: inner.b, stroke: "var(--grid)", "stroke-width": 1 }));
+    }
+    svg.append(svgEl("line", { x1: inner.l, x2: inner.r, y1: inner.b, y2: inner.b, stroke: "var(--axis)", "stroke-width": 1 }));
+    const tickXs = [xFor(0), ...xTicks.map((t) => t.x)];
+    if (runs.length > 1) tickXs.push(xFor(runs.length - 1));
+    for (const x of tickXs) {
+      svg.append(svgEl("line", { x1: x, x2: x, y1: inner.b, y2: inner.b + TICK_LENGTH, stroke: "var(--axis)", "stroke-width": 1 }));
+    }
+
+    // Annotations: dashed, numbered; the legend under the charts names them.
+    for (const m of markers) {
+      svg.append(svgEl("line", { x1: xFor(m.index), x2: xFor(m.index), y1: inner.t, y2: inner.b,
+        stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
+    }
+    const crosshair = svgEl("line", { y1: inner.t, y2: inner.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+    svg.append(crosshair);
+
+    // A run without this metric breaks the line rather than bridging it.
+    const d = values.map((v, i) => (v == null ? null : `${xFor(i).toFixed(1)} ${yFor(v).toFixed(1)}`))
+      .map((p, i, all) => (p == null ? "" : `${i === 0 || all[i - 1] == null ? "M" : "L"} ${p}`)).join(" ");
+    svg.append(svgEl("path", { d, fill: "none", stroke: "var(--series)", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    values.forEach((v, i) => {
+      if (v == null) return;
+      svg.append(svgEl("circle", { cx: xFor(i), cy: yFor(v), r: i === selectedIndex ? 5.5 : 4,
+        fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2 }));
+      if (i === baseIndex) {
+        svg.append(svgEl("circle", { cx: xFor(i), cy: yFor(v), r: 8, fill: "none", stroke: "var(--series)", "stroke-width": 1.5 }));
+      }
+    });
+    plot.append(svg);
+
+    // Badges are HTML over the plot, so they keep their size.
+    for (const group of mergeBadges(markers.map((m) => ({ number: m.number, x: xFor(m.index) })))) {
+      const numbers = group.numbers;
+      const text = numbers.length > 1 ? `${numbers[0]}–${numbers[numbers.length - 1]}` : String(numbers[0]);
+      plot.append(el("span", { class: "badge", style: `left:${(group.x / width) * 100}%`,
+        title: numbers.map((n) => `${n}: ${set.markers[n - 1].reasons.join(", ")}`).join("\n") }, text));
+    }
+
+    xAxis.append(el("span", { style: "left:0" }, startLabel));
+    for (const t of xTicks) xAxis.append(el("span", { class: "mid", style: `left:${(t.x / width) * 100}%` }, t.label));
+    if (endLabel) xAxis.append(el("span", { class: "end" }, endLabel));
+
+    hovers.push((index) => {
+      if (index == null) { crosshair.setAttribute("visibility", "hidden"); return; }
+      crosshair.setAttribute("x1", xFor(index));
+      crosshair.setAttribute("x2", xFor(index));
+      crosshair.setAttribute("visibility", "visible");
+    });
+
+    const indexAt = (clientX) => {
+      const rect = svg.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * width;
+      if (runs.length === 1) return 0;
+      const i = Math.round(((x - inner.l) / (inner.r - inner.l)) * (runs.length - 1));
+      return Math.max(0, Math.min(runs.length - 1, i));
+    };
+    const tipFor = (index) => () => {
+      const run = runs[index];
+      const rows = panels.map((p) => p.metric).map((m) =>
+        el("div", { class: "t-row" }, el("span", { class: "t-key" }),
+          el("strong", {}, fmtMetric(m, summaryValue(run, m))),
+          METRIC_LABELS[m] || m));
+      const marker = set.markers.find((mk) => mk.runId === run.runId);
+      return [
+        el("div", { class: "t-head" }, runName(run), run.runId === set.baselineRunId ? " · baseline" : ""),
+        ...rows,
+        marker ? el("div", { class: "t-head" }, `⚠ ${marker.reasons.join(", ")}`) : null,
+      ].filter(Boolean);
+    };
+    plot.addEventListener("pointermove", (e) => {
+      const index = indexAt(e.clientX);
+      setHover(index);
+      showTooltipAt(e.clientX, e.clientY, tipFor(index));
+    });
+    plot.addEventListener("pointerleave", () => { setHover(null); hideTooltip(); });
+    plot.addEventListener("click", (e) => selectRun(runs[indexAt(e.clientX)].runId));
+    let focusIndex = selectedIndex >= 0 ? selectedIndex : runs.length - 1;
+    plot.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") focusIndex = Math.max(0, focusIndex - 1);
+      else if (e.key === "ArrowRight") focusIndex = Math.min(runs.length - 1, focusIndex + 1);
+      else if (e.key === "Enter") { selectRun(runs[focusIndex].runId); return; }
+      else return;
+      e.preventDefault();
+      setHover(focusIndex);
+      showTooltip(plot, tipFor(focusIndex));
+    });
+    plot.addEventListener("blur", () => { setHover(null); hideTooltip(); });
+  }
+}
+
+function comparison(set) {
+  const cmp = set.comparisons[state.runId][state.against];
+  const section = el("section", { class: "card", "aria-labelledby": "h-compare" },
+    el("h2", { id: "h-compare" }, "Compare runs"));
+  if (!cmp) {
+    section.append(el("p", { class: "empty" },
+      state.against === "baseline"
+        ? "This run is the baseline or came before it. Pick a later run, or compare with the previous run."
+        : "This is the first run on this query set; there is no previous run."));
+    return section;
+  }
+  const base = DATA.runs[cmp.baseRunId], run = DATA.runs[cmp.runId];
+  section.append(
+    el("p", { class: "pair" }, `${runName(base)}  →  ${runName(run)}`,
+      cmp.commits[0] || cmp.commits[1] ? `   (${cmp.commits[0] || "?"} → ${cmp.commits[1] || "?"})` : ""),
+    el("p", { class: "verdict" }, cmp.verdict),
+    cmp.comparable
+      ? el("p", { class: "note" }, significanceText(cmp.significance), " ", overlapText(cmp, set))
+      : el("p", { class: "note" }, "Grading targets or scoring differ between these runs, so flipped queries say as " +
+          "much about the new rules as about the system. Compare with a run graded the same way, or label one as the new baseline."));
+  if (cmp.warnings.length) {
+    section.append(el("ul", { class: "warnings" }, cmp.warnings.map((w) => el("li", {}, w))));
+  }
+
+  const keys = [...shownMetrics(), "latencyMsMax"];
+  const label = (m) => (m === "latencyMsMax" ? "Slowest query" : METRIC_LABELS[m]);
+  const fmt = (m, v) => (m === "latencyMsMax" ? seconds(v) : fmtMetric(m, v));
+  section.append(el("h3", {}, "Scores"), el("div", { class: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {}, el("th", {}, "Metric"), el("th", { class: "num" }, "Before"), el("th", { class: "num" }, "After"), el("th", { class: "num" }, "Change"))),
+    el("tbody", {}, keys.map((m) =>
+      el("tr", {}, el("th", {}, label(m)),
+        el("td", { class: "num" }, fmt(m, base.summary[m])),
+        el("td", { class: "num" }, fmt(m, run.summary[m])),
+        el("td", { class: "num" }, metricDelta(m === "latencyMsMax" ? "latencyMsMedian" : m, cmp.summaryDelta[m]))))))));
+
+  section.append(el("h3", {}, "Settings"));
+  if (cmp.configDiff.length === 0) {
+    section.append(el("p", { class: "note" }, "Same model, pipeline version and API in both runs."));
+  } else {
+    section.append(el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Setting"), el("th", {}, "Before"), el("th", {}, "After"))),
+      el("tbody", {}, cmp.configDiff.map((c) =>
+        el("tr", {}, el("th", {}, el("code", {}, c.field)), el("td", {}, el("code", {}, JSON.stringify(c.before))), el("td", {}, el("code", {}, JSON.stringify(c.after)))))))));
+  }
+
+  const flipList = (title, items, status) =>
+    items.length ? [el("h3", {}, `${title} (${items.length})`), ...items.map((q) => flipCard(q, status, cmp))] : [];
+  const flips = [
+    ...flipList("Regressions: passed before, fail now", cmp.regressions, "fail"),
+    ...flipList("Improvements: failed before, pass now", cmp.improvements, "pass"),
+  ];
+  if (!cmp.comparable && flips.length) {
+    section.append(el("details", {},
+      el("summary", {}, `Pass/fail changes under different targets, for reference only (${cmp.regressions.length + cmp.improvements.length})`),
+      flips));
+  } else {
+    section.append(...flips);
+  }
+  // Same pass/fail, different scores or bands: collapsed, since nearly every
+  // query's top 8 moves a little between runs.
+  if (cmp.changed.length) {
+    section.append(el("details", {},
+      el("summary", {}, `Other changes, no pass/fail flip (${cmp.changed.length})`),
+      cmp.changed.map((q) => flipCard(q, null, cmp))));
+  }
+  if (cmp.unanswered.length) {
+    section.append(el("p", { class: "note" },
+      `${cmp.unanswered.length} quer${cmp.unanswered.length === 1 ? "y was" : "ies were"} not answered in one of the runs and ` +
+      `${cmp.unanswered.length === 1 ? "is" : "are"} left out of this comparison: ${cmp.unanswered.join(", ")}.`));
+  }
+  if (!cmp.regressions.length && !cmp.improvements.length && !cmp.changed.length) {
+    section.append(el("p", { class: "note" }, "Every query scored the same and returned the same top 8 in both runs."));
+  }
+  return section;
+}
+
+const STATUS_TEXT = { fail: "✗ fails", pass: "✓ passes" };
+function top8List(title, bands, other) {
+  const shared = new Set(other.map((b) => b.toLowerCase()));
+  return el("div", {}, el("span", { class: "ph" }, title),
+    bands.length
+      ? el("ol", {}, bands.map((b) => el("li", { class: shared.has(b.toLowerCase()) ? "shared" : "new" }, b)))
+      : "No bands.");
+}
+function flipCard(q, status, cmp) {
+  const b = q.before.metrics || {}, a = q.after.metrics || {};
+  const overlap = cmp.overlap.byQuery[q.id];
+  const scores = [
+    `Nugget coverage ${pct(b.nuggetCoverageAt8)} → ${pct(a.nuggetCoverageAt8)}`,
+    `anti-bands ${pct(b.antiBandRateAt8)} → ${pct(a.antiBandRateAt8)}`,
+    overlap != null ? `top 8 shared ${pct(overlap)}` : null,
+  ].filter(Boolean).join("  ·  ");
+  const why = failureReason(q.after);
+  return el("div", { class: "flip" },
+    el("div", {},
+      status ? el("span", { class: `status ${status}` }, STATUS_TEXT[status]) : null,
+      q.query, " ", el("span", { class: "qid" }, q.id)),
+    why ? el("div", { class: "scores" }, `Now: ${why}`) : null,
+    el("div", { class: "scores" }, scores),
+    q.after.uncoveredNuggets.length ? el("div", { class: "scores" }, `Uncovered: ${q.after.uncoveredNuggets.join(", ")}`) : null,
+    el("details", {}, el("summary", {}, "Top 8 before and after (bold = not in the other list)"),
+      el("div", { class: "previews top8" },
+        top8List("Before", q.before.top8, q.after.top8),
+        top8List("After", q.after.top8, q.before.top8))));
+}
+
+function visibleRuns(set) {
+  return setRuns(set).slice(-MAX_COLUMNS);
+}
+function runHeader(run) {
+  return el("th", { class: `run${run.runId === state.runId ? " selected" : ""}`, scope: "col" },
+    shortLabel(run), el("br"), run.label ? runDate(run, false) : "");
+}
+function truncatedNote(set) {
+  return set.runIds.length > MAX_COLUMNS
+    ? el("p", { class: "note" }, `Showing the latest ${MAX_COLUMNS} of ${set.runIds.length} runs.`)
+    : null;
+}
+
+function outcome(r) {
+  if (r.status === "pass") return "passed";
+  return `failed: ${failureReason(r)}`;
+}
+
+function questionGrid(set) {
+  const runs = visibleRuns(set);
+  const section = el("section", { class: "card", "aria-labelledby": "h-grid" },
+    el("h2", { id: "h-grid" }, "Queries"),
+    el("p", { class: "note" }, "✓ passed, ✗ failed, ! no answer from the API. Hover or focus a cell for its scores and bands; click to select that run."),
+    truncatedNote(set));
+  const body = el("tbody", {}, set.questions.map((q) =>
+    el("tr", {},
+      el("th", { class: "q", scope: "row" }, q.query, el("span", { class: "qid" }, q.id)),
+      runs.map((run) => {
+        const r = run.results.find((x) => x.id === q.id);
+        if (!r) return el("td", { class: "cell" }, el("span", { class: "cell-btn missing" }, "—"));
+        const cls = r.status === "error" ? "unjudged" : r.status;
+        const btn = el("button", {
+          type: "button",
+          class: `cell-btn ${cls}`,
+          "aria-label": `${q.id}, ${runName(run)}: ${outcome(r)}`,
+        }, r.status === "error" ? "!" : r.status === "pass" ? "✓" : "✗");
+        const tip = () => [
+          el("div", { class: "t-head" }, `${runName(run)} · ${outcome(r)}`),
+          r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.nuggetCoverageAt8)), "nugget coverage @8") : null,
+          r.metrics ? el("div", { class: "t-row" }, el("strong", {}, pct(r.metrics.antiBandRateAt8)), "anti-bands in top 8") : null,
+          r.latencyMs != null ? el("div", { class: "t-row" }, el("strong", {}, seconds(r.latencyMs)), "API latency") : null,
+          r.top8.length ? el("div", { class: "t-head" }, r.top8.join(", ")) : null,
+          r.error ? el("div", { class: "t-head" }, `⚠ ${r.error}`) : null,
+          ...r.warnings.filter((w) => !w.startsWith("runner error")).map((w) => el("div", { class: "t-head" }, `⚠ ${w}`)),
+        ].filter(Boolean);
+        btn.addEventListener("pointerenter", () => showTooltip(btn, tip));
+        btn.addEventListener("focus", () => showTooltip(btn, tip));
+        btn.addEventListener("pointerleave", hideTooltip);
+        btn.addEventListener("blur", hideTooltip);
+        btn.addEventListener("click", () => selectRun(run.runId));
+        return el("td", { class: "cell" }, btn);
+      }))));
+  section.append(el("div", { class: "scroll" }, el("table", { class: "matrix" },
+    el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Query"), runs.map(runHeader))),
+    body)));
+  return section;
+}
+
+// ---------- render ----------
+function render() {
+  hideTooltip();
+  const main = document.getElementById("main");
+  const set = currentSet();
+  if (!set) return;
+  if (!state.runId || !set.runIds.includes(state.runId)) state.runId = set.runIds[set.runIds.length - 1];
+  syncRunSelect(set);
+  document.getElementById("set-select").value = state.setId;
+  document.getElementById("against-select").value = state.against;
+  main.replaceChildren(headline(set), trends(set), comparison(set), questionGrid(set));
+}
+
+const runCount = Object.keys(DATA.runs).length;
+document.getElementById("subtitle").textContent =
+  `${runCount} recorded run${runCount === 1 ? "" : "s"} across ${DATA.sets.length} query set${DATA.sets.length === 1 ? "" : "s"}.`;
+if (!DATA.sets.length) {
+  document.getElementById("filters").hidden = true;
+  document.getElementById("main").append(el("div", { class: "card" },
+    el("p", { class: "empty" }, "No runs recorded yet. Run the golden set to start the history: "),
+    el("code", {}, "npm run golden -w services/eval -- --label baseline")));
+} else {
+  state.setId = DATA.sets[0].questionsHash;
+  initFilters();
+  render();
+  // Charts are drawn at their measured width, so redraw when the width
+  // changes; height-only resizes (a phone's address bar) keep the page as is.
+  let resizeTimer, lastWidth = window.innerWidth;
+  window.addEventListener("resize", () => {
+    if (window.innerWidth === lastWidth) return;
+    lastWidth = window.innerWidth;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+  });
+}
+</script>
+</body>
+</html>
