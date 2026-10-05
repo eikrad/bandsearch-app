@@ -43,8 +43,10 @@ hosted in France, one key for many open models.
    about 12 s.
 
 Rollout follows #237: measure first (golden-run history and a Gemini
-baseline, #242/#247), switch behind `LLM_PROVIDER` (this step, default still
-`gemini`), compare models, switch the default, remove Gemini.
+baseline, #242/#247), switch behind `LLM_PROVIDER` (#249), compare models
+(#255), switch the default (2026-10-05: `LLM_PROVIDER` defaults to `scaleway`;
+the desktop stores a vendor-neutral `llm_api_key` and hands it to the sidecar
+as `SCW_SECRET_KEY`), then remove Gemini.
 
 ## Measured model choices (2026-10-05)
 

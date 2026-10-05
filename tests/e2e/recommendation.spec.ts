@@ -8,7 +8,7 @@ type RecommendationApiResponse = {
 };
 
 /**
- * Tests tagged `@live` drive the real research pipeline: Gemini plans the search,
+ * Tests tagged `@live` drive the real research pipeline: the LLM plans the search,
  * Brave runs it, MusicBrainz verifies each candidate. They are excluded from
  * `npm run test:e2e` and run by `npm run test:e2e:live`.
  *
@@ -48,7 +48,7 @@ test.describe("Bandsearch UI", () => {
     await expect(card.locator("h2")).not.toBeEmpty();
   });
 
-  test("recommendations come from Gemini, not deterministic fallback @live", async ({ page }) => {
+  test("recommendations come from the LLM, not deterministic fallback @live", async ({ page }) => {
     const apiResponses: RecommendationApiResponse[] = [];
 
     await page.route("**/recommendations", async (route) => {

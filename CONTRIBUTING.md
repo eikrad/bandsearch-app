@@ -14,7 +14,7 @@ Thanks for contributing to Bandsearch.
      CI runs this on every pull request, with dummy API keys — these specs never reach
      the recommendation pipeline, so no real credentials are involved and forked PRs work.
    - `npm run test:e2e:live` — additionally runs the `@live` specs, which drive the real
-     Gemini + Brave + MusicBrainz pipeline. Excluded from the default run: MusicBrainz
+     LLM + Brave + MusicBrainz pipeline. Excluded from the default run: MusicBrainz
      throttles at roughly one request per second, so the same query has taken anywhere
      from 26 s to over 150 s depending on recent usage. Expect minutes, and occasional
      upstream timeouts that are not your change.
