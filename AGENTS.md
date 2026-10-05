@@ -63,11 +63,17 @@ feature branch  →  staging  →  main
 - When creating a feature branch or fixing a bug, set `base = staging` in the PR
 - `staging` acts as the integration/QA gate before production (`main`)
 
-**Issues do not close themselves here.** GitHub honours `Closes #123` only when a
-PR merges into the *default* branch — `main`. Since PRs target `staging`, the
-keyword never fires, and a finished issue stays open until someone closes it by
-hand. Still write `Closes #123` in the PR so the link is recorded, then close the
-issue manually once the PR is merged.
+**An issue is done when its work reaches `main`.** GitHub honours `Closes #123`
+only on the *default* branch, `main`, so the keyword in a PR into `staging` never
+fires. A keyword in a **commit message** does: the merge `staging` → `main` brings
+the commit onto `main`, and GitHub closes the issue then. So:
+
+- Put `Closes #123` in the message of the commit that finishes the issue (and in
+  the PR description, which records the link). `Refs #123` for partial work.
+- Do not close issues by hand when a PR merges into `staging`; work sitting in
+  `staging` is not shipped yet.
+- If a finished issue has no closing commit, list `Closes #123` in the
+  `staging` → `main` PR description instead.
 
 ## Testing
 
