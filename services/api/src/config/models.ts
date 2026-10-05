@@ -10,7 +10,8 @@
 
 export type LlmProvider = "gemini" | "scaleway";
 
-export const LLM_PROVIDERS: readonly LlmProvider[] = ["gemini", "scaleway"];
+/** The first one is the default (Scaleway since 2026-10-05, ADR 0004); Gemini stays for rollback until removed. */
+export const LLM_PROVIDERS: readonly LlmProvider[] = ["scaleway", "gemini"];
 
 export type ModelRef = {
   provider: LlmProvider;
@@ -19,7 +20,7 @@ export type ModelRef = {
   reasoningEffort?: string;
 };
 
-/** Default research model on Gemini, the provider being migrated away from (#237). */
+/** Research model on Gemini, kept for rollback (LLM_PROVIDER=gemini) until Gemini is removed (#237). */
 export const DEFAULT_RESEARCH_MODEL = "gemini-2.5-flash";
 
 /**
@@ -71,7 +72,7 @@ function trimmed(value: string | undefined): string {
 }
 
 export function resolveLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
-  const providerSetting = trimmed(env.LLM_PROVIDER).toLowerCase() || "gemini";
+  const providerSetting = trimmed(env.LLM_PROVIDER).toLowerCase() || LLM_PROVIDERS[0]!;
   if (!LLM_PROVIDERS.includes(providerSetting as LlmProvider)) {
     throw new Error(`LLM_PROVIDER must be one of ${LLM_PROVIDERS.join(", ")} (got "${providerSetting}")`);
   }
@@ -80,10 +81,10 @@ export function resolveLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
   const scalewayApiKey = trimmed(env.SCW_SECRET_KEY);
 
   if (provider === "gemini" && !geminiApiKey) {
-    throw new Error("GEMINI_API_KEY is required (or set LLM_PROVIDER=scaleway)");
+    throw new Error("GEMINI_API_KEY is required when LLM_PROVIDER=gemini");
   }
   if (provider === "scaleway" && !scalewayApiKey) {
-    throw new Error("SCW_SECRET_KEY is required when LLM_PROVIDER=scaleway");
+    throw new Error("SCW_SECRET_KEY is required (Scaleway is the default LLM provider; LLM_PROVIDER=gemini selects Gemini)");
   }
 
   const research: ModelRef =
