@@ -10,7 +10,7 @@
  * mandatory on top of the GDPR duty.
  */
 
-export const LAST_UPDATED = "2026-08-25";
+export const LAST_UPDATED = "2026-10-05";
 
 export const MINIMUM_AGE = 16;
 
@@ -59,11 +59,11 @@ export const PRIVACY_POLICY: PolicySection[] = [
   {
     heading: "Who else receives your data",
     paragraphs: [
-      "Google (Gemini API): your search text and conversation context are sent to Google's Gemini API to plan searches and write recommendations. Google LLC is certified under the EU-US Data Privacy Framework, with Standard Contractual Clauses as a fallback safeguard.",
+      "Scaleway (Generative APIs): your search text and conversation context are sent to AI language models that Scaleway hosts in France, to plan searches and write recommendations. If the server operator turns on quality scoring, the generated recommendations are also sent there to be rated by a second model. No account identifier is sent with either.",
+      "Google (Gemini API, only if the server operator selects it): instead of Scaleway, your search text and conversation context go to Google's Gemini API. Google LLC is certified under the EU-US Data Privacy Framework, with Standard Contractual Clauses as a fallback safeguard.",
       "Brave Search API: your search queries are sent to Brave to find candidate artists. Brave retains query records for up to 90 days for billing and troubleshooting purposes.",
       "MusicBrainz: artist names only — no account identifier and nothing about you — are sent to verify that a suggested artist exists.",
       "Last.fm (optional): if enabled, artist names are sent to fetch images and popularity data. This integration is off unless configured.",
-      "Scaleway (optional): if the server operator turns on quality scoring, your search text and the recommendations generated for it are sent to Scaleway's Generative APIs, hosted in France, where an AI model rates how well they fit. This carries no account identifier and is off unless configured.",
       "Turso: when a deployment is configured to use Turso, your account data and taste profile are stored in that database rather than locally.",
     ],
   },

@@ -93,7 +93,7 @@ test("desktop react shell maps BandsearchHttpError to a human recommendation err
   await assert.rejects(() => shell.submitQuery("metal"), /query failed/);
   const props = shell.getViewProps();
   assert.equal(props.actionStatus?.type, "error");
-  assert.match(props.actionStatus?.message, /Settings|API key|Gemini/i);
+  assert.match(props.actionStatus?.message, /Settings|API key/i);
 });
 
 test("desktop react shell clears action status after timeout", async () => {

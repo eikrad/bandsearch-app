@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Primary window: chat UI and Gemini settings IPC","local":true,"windows":["main"],"permissions":["core:default","allow-gemini-config-status","allow-save-gemini-api-key","opener:allow-default-urls","updater:default"]}}
+{"default":{"identifier":"default","description":"Primary window: chat UI and settings IPC","local":true,"windows":["main"],"permissions":["core:default","allow-llm-config-status","allow-save-llm-api-key","opener:allow-default-urls","updater:default"]}}

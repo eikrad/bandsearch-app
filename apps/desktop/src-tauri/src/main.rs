@@ -17,7 +17,15 @@ struct WorkspaceRoot(PathBuf);
 
 #[derive(Default, Deserialize, Serialize)]
 struct BandsearchConfig {
+    /// Key for the API's LLM provider (Scaleway by default, ADR 0004), handed to
+    /// the local sidecar. Named for its role, not a vendor, so a provider change
+    /// does not touch the config file, the commands or their permissions again.
     #[serde(default)]
+    llm_api_key: String,
+    /// Read from configs written before the Scaleway switch, never written back:
+    /// a Gemini key cannot run the default provider, and an unusable secret on
+    /// disk is data kept for nothing. The next save drops it.
+    #[serde(default, skip_serializing)]
     gemini_api_key: String,
     #[serde(default)]
     brave_api_key: String,
@@ -33,6 +41,12 @@ struct BandsearchConfig {
     api_endpoint_url: String,
 }
 
+impl BandsearchConfig {
+    fn has_legacy_gemini_key(&self) -> bool {
+        !self.gemini_api_key.trim().is_empty()
+    }
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UpdateAvailablePayload {
@@ -42,12 +56,12 @@ struct UpdateAvailablePayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GeminiConfigStatus {
+struct LlmConfigStatus {
     has_stored_key: bool,
     has_brave_key: bool,
     onboarding_complete: bool,
     has_turso_config: bool,
-    gemini_key_from_env: bool,
+    llm_key_from_env: bool,
     brave_key_from_env: bool,
     turso_from_env: bool,
     api_endpoint_url: String,
@@ -60,7 +74,7 @@ fn env_non_empty(name: &str) -> bool {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SaveGeminiApiKeyRequest {
+struct SaveLlmApiKeyRequest {
     api_key: String,
 }
 
@@ -110,7 +124,12 @@ fn load_config() -> BandsearchConfig {
     let Ok(data) = std::fs::read_to_string(&path) else {
         return BandsearchConfig::default();
     };
-    serde_json::from_str(&data).unwrap_or_default()
+    let cfg: BandsearchConfig = serde_json::from_str(&data).unwrap_or_default();
+    if cfg.has_legacy_gemini_key() {
+        // Rewriting the file is what drops the key (it is never serialized).
+        let _ = persist_config(&cfg);
+    }
+    cfg
 }
 
 fn persist_config(cfg: &BandsearchConfig) -> Result<(), String> {
@@ -122,9 +141,9 @@ fn persist_config(cfg: &BandsearchConfig) -> Result<(), String> {
     std::fs::write(path, data).map_err(|e| e.to_string())
 }
 
-fn gemini_key_for_spawn() -> Option<String> {
+fn llm_key_for_spawn() -> Option<String> {
     let cfg = load_config();
-    let trimmed = cfg.gemini_api_key.trim();
+    let trimmed = cfg.llm_api_key.trim();
     if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
 }
 
@@ -305,9 +324,40 @@ fn absolute_bandsearch_db_path(workspace_root: &Path) -> String {
         .into_owned()
 }
 
+/// Name of the variable the API reads its LLM key from (Scaleway, ADR 0004).
+const LLM_KEY_ENV: &str = "SCW_SECRET_KEY";
+
+/// The keys the local API sidecar is started with; blank values are left out
+/// so the API's own .env or defaults apply.
+fn sidecar_env(
+    llm_key: Option<&str>,
+    brave_key: Option<&str>,
+    turso_url: Option<&str>,
+    turso_token: Option<&str>,
+) -> Vec<(&'static str, String)> {
+    let mut env = Vec::new();
+    let mut push = |name: &'static str, value: Option<&str>| {
+        if let Some(v) = value {
+            let t = v.trim();
+            if !t.is_empty() {
+                env.push((name, t.to_string()));
+            }
+        }
+    };
+    push(LLM_KEY_ENV, llm_key);
+    push("BRAVE_API_KEY", brave_key);
+    push("TURSO_DATABASE_URL", turso_url);
+    let has_url = turso_url.map(|u| !u.trim().is_empty()).unwrap_or(false);
+    if has_url {
+        push("PREFERENCE_STORE", Some("turso"));
+        push("TURSO_AUTH_TOKEN", turso_token);
+    }
+    env
+}
+
 fn spawn_api_child(
     workspace_root: &Path,
-    gemini_key: Option<&str>,
+    llm_key: Option<&str>,
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
@@ -318,30 +368,8 @@ fn spawn_api_child(
     cmd.args(&args).current_dir(workspace_root);
     cmd.env("DATABASE_PATH", absolute_bandsearch_db_path(workspace_root));
     cmd.env("JWT_SECRET", jwt_secret);
-    if let Some(k) = gemini_key {
-        let t = k.trim();
-        if !t.is_empty() {
-            cmd.env("GEMINI_API_KEY", t);
-        }
-    }
-    if let Some(k) = brave_key {
-        let t = k.trim();
-        if !t.is_empty() {
-            cmd.env("BRAVE_API_KEY", t);
-        }
-    }
-    if let Some(url) = turso_url {
-        let t = url.trim();
-        if !t.is_empty() {
-            cmd.env("PREFERENCE_STORE", "turso");
-            cmd.env("TURSO_DATABASE_URL", t);
-            if let Some(tok) = turso_token {
-                let tt = tok.trim();
-                if !tt.is_empty() {
-                    cmd.env("TURSO_AUTH_TOKEN", tt);
-                }
-            }
-        }
+    for (name, value) in sidecar_env(llm_key, brave_key, turso_url, turso_token) {
+        cmd.env(name, value);
     }
     cmd.spawn()
 }
@@ -356,13 +384,13 @@ fn api_listen_port() -> u16 {
 fn start_api_sidecar(
     api: &ApiProcess,
     workspace_root: &Path,
-    gemini_key: Option<&str>,
+    llm_key: Option<&str>,
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
     jwt_secret: &str,
 ) {
-    match spawn_api_child(workspace_root, gemini_key, brave_key, turso_url, turso_token, jwt_secret) {
+    match spawn_api_child(workspace_root, llm_key, brave_key, turso_url, turso_token, jwt_secret) {
         Ok(child) => {
             if let Ok(mut guard) = api.0.lock() {
                 *guard = Some(child);
@@ -390,14 +418,14 @@ fn stop_api_sidecar(api: &ApiProcess) {
 fn restart_api_sidecar(
     api: &ApiProcess,
     workspace_root: &Path,
-    gemini_key: Option<&str>,
+    llm_key: Option<&str>,
     brave_key: Option<&str>,
     turso_url: Option<&str>,
     turso_token: Option<&str>,
     jwt_secret: &str,
 ) {
     stop_api_sidecar(api);
-    start_api_sidecar(api, workspace_root, gemini_key, brave_key, turso_url, turso_token, jwt_secret);
+    start_api_sidecar(api, workspace_root, llm_key, brave_key, turso_url, turso_token, jwt_secret);
 }
 
 /// Single source of truth for the local-sidecar lifecycle. Reads the current config
@@ -407,11 +435,11 @@ fn restart_api_sidecar(
 fn reconcile_sidecar(api: &ApiProcess, workspace_root: &Path) {
     let cfg = load_config();
     if should_run_local_sidecar(&cfg.api_endpoint_url) {
-        let gemini = gemini_key_for_spawn();
+        let llm = llm_key_for_spawn();
         let brave = brave_key_for_spawn();
         let (turso_url, turso_tok) = turso_for_spawn();
         let jwt = ensure_jwt_secret();
-        restart_api_sidecar(api, workspace_root, gemini.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
+        restart_api_sidecar(api, workspace_root, llm.as_deref(), brave.as_deref(), turso_url.as_deref(), turso_tok.as_deref(), &jwt);
     } else {
         eprintln!("[bandsearch] remote API endpoint configured — stopping local sidecar");
         stop_api_sidecar(api);
@@ -456,22 +484,22 @@ fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 #[tauri::command]
-fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
+fn llm_config_status() -> Result<LlmConfigStatus, String> {
     let cfg = load_config();
-    let gemini_in_config = !cfg.gemini_api_key.trim().is_empty();
+    let llm_in_config = !cfg.llm_api_key.trim().is_empty();
     let brave_in_config = !cfg.brave_api_key.trim().is_empty();
     let turso_in_config = !cfg.turso_database_url.trim().is_empty();
 
-    let gemini_key_from_env = !gemini_in_config && env_non_empty("GEMINI_API_KEY");
+    let llm_key_from_env = !llm_in_config && env_non_empty(LLM_KEY_ENV);
     let brave_key_from_env = !brave_in_config && (env_non_empty("BRAVE_API_KEY") || env_non_empty("BRAVE_SEARCH_API_KEY"));
     let turso_from_env = !turso_in_config && env_non_empty("TURSO_DATABASE_URL");
 
-    Ok(GeminiConfigStatus {
-        has_stored_key: gemini_in_config || gemini_key_from_env,
+    Ok(LlmConfigStatus {
+        has_stored_key: llm_in_config || llm_key_from_env,
         has_brave_key: brave_in_config || brave_key_from_env,
         onboarding_complete: cfg.onboarding_completed,
         has_turso_config: turso_in_config || turso_from_env,
-        gemini_key_from_env,
+        llm_key_from_env,
         brave_key_from_env,
         turso_from_env,
         api_endpoint_url: cfg.api_endpoint_url.trim().to_string(),
@@ -479,17 +507,17 @@ fn gemini_config_status() -> Result<GeminiConfigStatus, String> {
 }
 
 #[tauri::command]
-fn save_gemini_api_key(
+fn save_llm_api_key(
     workspace: State<'_, WorkspaceRoot>,
     api: State<'_, ApiProcess>,
-    req: SaveGeminiApiKeyRequest,
+    req: SaveLlmApiKeyRequest,
 ) -> Result<(), String> {
     let trimmed = req.api_key.trim();
     if trimmed.is_empty() {
         return Err("API key is empty".into());
     }
     let mut cfg = load_config();
-    cfg.gemini_api_key = trimmed.to_string();
+    cfg.llm_api_key = trimmed.to_string();
     cfg.onboarding_completed = true;
     persist_config(&cfg)?;
     reconcile_sidecar(api.inner(), &workspace.0);
@@ -590,7 +618,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![gemini_config_status, save_gemini_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding, install_update])
+        .invoke_handler(tauri::generate_handler![llm_config_status, save_llm_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding, install_update])
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
@@ -827,7 +855,7 @@ mod tests {
     #[test]
     fn config_defaults_api_endpoint_url_to_empty_when_absent() {
         // Older config.json files predate the field; serde(default) must keep them valid.
-        let cfg: BandsearchConfig = serde_json::from_str(r#"{"gemini_api_key":"k"}"#)
+        let cfg: BandsearchConfig = serde_json::from_str(r#"{"brave_api_key":"k"}"#)
             .expect("config without api_endpoint_url must still parse");
         assert_eq!(cfg.api_endpoint_url, "");
         assert!(should_run_local_sidecar(&cfg.api_endpoint_url));
@@ -866,18 +894,47 @@ mod tests {
     }
 
     #[test]
-    fn gemini_config_status_serializes_api_endpoint_url_camel_case() {
-        let status = GeminiConfigStatus {
+    fn llm_config_status_serializes_camel_case() {
+        let status = LlmConfigStatus {
             has_stored_key: false,
             has_brave_key: false,
             onboarding_complete: false,
             has_turso_config: false,
-            gemini_key_from_env: false,
+            llm_key_from_env: true,
             brave_key_from_env: false,
             turso_from_env: false,
             api_endpoint_url: "https://remote.example".to_string(),
         };
         let value = serde_json::to_value(&status).expect("status must serialize");
         assert_eq!(value["apiEndpointUrl"], "https://remote.example");
+        assert_eq!(value["llmKeyFromEnv"], true);
+    }
+
+    #[test]
+    fn a_legacy_gemini_key_is_read_but_never_written_back() {
+        // A Gemini key cannot run the Scaleway default; keeping an unusable
+        // secret on disk would only be data held for nothing.
+        let cfg: BandsearchConfig =
+            serde_json::from_str(r#"{"gemini_api_key":"old-gemini","brave_api_key":"b"}"#)
+                .expect("an old config must still parse");
+        assert!(cfg.has_legacy_gemini_key());
+        assert_eq!(cfg.llm_api_key, "");
+        let written = serde_json::to_value(&cfg).expect("config must serialize");
+        assert!(written.get("gemini_api_key").is_none(), "the Gemini key is dropped on the next save");
+        assert_eq!(written["brave_api_key"], "b");
+    }
+
+    #[test]
+    fn the_sidecar_gets_the_llm_key_as_scw_secret_key() {
+        let env = sidecar_env(Some(" scw-key "), Some("brave"), None, None);
+        assert!(env.contains(&("SCW_SECRET_KEY", "scw-key".to_string())));
+        assert!(env.contains(&("BRAVE_API_KEY", "brave".to_string())));
+        assert!(env.iter().all(|(name, _)| *name != "GEMINI_API_KEY"));
+    }
+
+    #[test]
+    fn blank_keys_are_not_passed_to_the_sidecar() {
+        let env = sidecar_env(Some("  "), None, Some(""), None);
+        assert!(env.is_empty());
     }
 }

@@ -500,7 +500,7 @@ test("a user is told they are talking to an AI before they type anything", () =>
     /AI-generated recommendations/i,
     "empty state discloses that recommendations come from an AI",
   );
-  assert.match(html, /Gemini/, "the disclosure names the model provider");
+  assert.match(html, /Scaleway/, "the disclosure names the model provider");
 });
 
 test("the AI disclosure stays visible while results are on screen", () => {

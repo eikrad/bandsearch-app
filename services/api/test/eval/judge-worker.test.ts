@@ -258,5 +258,5 @@ test("the configured judge asks Scaleway for JSON at temperature 0", async () =>
 });
 
 test("without a Scaleway key there is no judge model", () => {
-  assert.equal(judgeModelFor(resolveLlmConfig({ GEMINI_API_KEY: "g" })), null);
+  assert.equal(judgeModelFor(resolveLlmConfig({ LLM_PROVIDER: "gemini", GEMINI_API_KEY: "g" })), null);
 });

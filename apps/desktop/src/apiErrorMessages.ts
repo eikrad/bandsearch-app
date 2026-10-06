@@ -15,7 +15,7 @@ export function formatRecommendationQueryError(error: unknown): string {
       case "search_unavailable":
         return "Web search (Brave) is temporarily unavailable. Check your network connection and try again in a moment.";
       case "recommendation_unavailable":
-        return "Gemini could not return recommendations. Open Settings and confirm your API key; if it is correct, Gemini may be busy or unreachable — try again in a moment.";
+        return "The AI model could not return recommendations. Open Settings and confirm your Scaleway API key; if it is correct, the model may be busy or unreachable — try again in a moment.";
       case "validation_error":
         return typeof error.message === "string" && error.message.trim()
           ? error.message

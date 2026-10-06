@@ -38,8 +38,10 @@ plan, not a second permanent structure.
    - ✓ Model comparison with judge scores in golden runs (#204 part 2):
      judge `glm-5.2`, research `deepseek-v4-flash-0731` — on par with Gemini,
      ~11 s slower per query (ADR 0004)
-   - Next: switch the default to Scaleway (set `SCW_SECRET_KEY` on Render
-     first), then remove Gemini
+   - ✓ Scaleway is the default provider; desktop key vendor-neutral, privacy
+     policy and UI name Scaleway. Before this reaches `main`, set
+     `SCW_SECRET_KEY` on Render; rollback is `LLM_PROVIDER=gemini` there
+   - Next: remove Gemini once Scaleway has run stably on Render for a few days
    - Afterwards: score live searches with the judge (#248), and a judge
      quality gate that drops weak candidates and searches again (#251)
 4. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192

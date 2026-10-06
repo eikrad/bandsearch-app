@@ -68,7 +68,7 @@ export interface DesktopReactMountOptions {
   router?: MountRouter | null;
   savedArtistsShell?: MountSavedShell | null;
   getSettingsViewProps?: () => unknown;
-  saveGeminiApiKey?: (apiKey: string) => Promise<void>;
+  saveLlmApiKey?: (apiKey: string) => Promise<void>;
   saveBraveApiKey?: (apiKey: string) => Promise<void>;
   saveTursoConfig?: (url: string, token: string) => Promise<void>;
   clearTursoConfig?: () => Promise<void>;
@@ -98,7 +98,7 @@ export function createDesktopReactMount({
     hasBraveKey: false,
     statusMessage: null,
   }),
-  saveGeminiApiKey = async (apiKey) => { void apiKey; },
+  saveLlmApiKey = async (apiKey) => { void apiKey; },
   saveBraveApiKey = async (apiKey) => { void apiKey; },
   saveTursoConfig = async (url, token) => { void url; void token; },
   clearTursoConfig = async () => {},
@@ -125,7 +125,7 @@ export function createDesktopReactMount({
   let updateBannerViewProps: UpdateBannerViewProps | null = null;
   // The last routed element, so the banner can be toggled on top of it without
   // re-running the route — re-rendering `settings` would repeat its
-  // gemini_config_status IPC just to paint an overlay.
+  // llm_config_status IPC just to paint an overlay.
   let routedView: React.ReactNode = null;
 
   // Always the same Fragment shape, banner or not: rendering the bare view when
@@ -221,7 +221,7 @@ export function createDesktopReactMount({
 
     if (route === "settings") {
       // Merged over the injected props so an account action can report itself.
-      // The supplier owns Gemini/Brave status; nothing owned the outcome of an
+      // The supplier owns LLM/Brave key status; nothing owned the outcome of an
       // export or a deletion, so both failed in silence.
       const supplied = await Promise.resolve(getSettingsViewProps()) as Record<string, unknown>;
       const viewProps = accountStatus ? { ...supplied, statusMessage: accountStatus } : supplied;
@@ -337,7 +337,7 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onSaveApiKey: async (apiKey: string) => {
-      await saveGeminiApiKey(apiKey);
+      await saveLlmApiKey(apiKey);
       return renderCurrent();
     },
     onSaveBraveApiKey: async (apiKey: string) => {

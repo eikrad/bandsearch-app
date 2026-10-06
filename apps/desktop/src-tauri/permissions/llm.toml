@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-llm-config-status"
+description = "Allows reading whether an LLM API key (Scaleway) is stored in local config."
+commands.allow = ["llm_config_status"]
+
+[[permission]]
+identifier = "allow-save-llm-api-key"
+description = "Allows saving the LLM API key and restarting the API sidecar."
+commands.allow = ["save_llm_api_key"]

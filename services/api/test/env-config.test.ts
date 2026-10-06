@@ -3,30 +3,34 @@ import assert from "node:assert/strict";
 
 import { validateRuntimeEnv } from "../src/config/env.js";
 
-const REQUIRED = { GEMINI_API_KEY: "test-gemini-key", BRAVE_API_KEY: "test-brave-key" };
+const REQUIRED = { SCW_SECRET_KEY: "test-scw-key", BRAVE_API_KEY: "test-brave-key" };
+/** Gemini, the provider before the Scaleway switch (#237); kept selectable for rollback. */
+const GEMINI = { LLM_PROVIDER: "gemini", GEMINI_API_KEY: "test-gemini-key", BRAVE_API_KEY: "test-brave-key" };
 
-test("validateRuntimeEnv requires GEMINI_API_KEY", () => {
-  assert.throws(
-    () => validateRuntimeEnv({ BRAVE_API_KEY: "key" }),
-    /GEMINI_API_KEY is required/,
-  );
+test("validateRuntimeEnv requires SCW_SECRET_KEY: Scaleway is the default provider", () => {
+  assert.throws(() => validateRuntimeEnv({ BRAVE_API_KEY: "key" }), /SCW_SECRET_KEY is required/);
+});
+
+test("validateRuntimeEnv requires GEMINI_API_KEY when LLM_PROVIDER=gemini", () => {
+  assert.throws(() => validateRuntimeEnv({ LLM_PROVIDER: "gemini", BRAVE_API_KEY: "key" }), /GEMINI_API_KEY is required/);
 });
 
 test("validateRuntimeEnv requires BRAVE_API_KEY", () => {
   assert.throws(
-    () => validateRuntimeEnv({ GEMINI_API_KEY: "key" }),
+    () => validateRuntimeEnv({ SCW_SECRET_KEY: "key" }),
     /BRAVE_API_KEY .*is required/,
   );
 });
 
 test("validateRuntimeEnv accepts BRAVE_SEARCH_API_KEY as an alias", () => {
-  const config = validateRuntimeEnv({ GEMINI_API_KEY: "key", BRAVE_SEARCH_API_KEY: "alias-brave-key" });
+  const config = validateRuntimeEnv({ SCW_SECRET_KEY: "key", BRAVE_SEARCH_API_KEY: "alias-brave-key" });
   assert.equal(config.braveApiKey, "alias-brave-key");
 });
 
 test("validateRuntimeEnv returns defaults for minimal env", () => {
   const config = validateRuntimeEnv({ ...REQUIRED });
-  assert.equal(config.geminiApiKey, "test-gemini-key");
+  assert.equal(config.llm.scalewayApiKey, "test-scw-key");
+  assert.equal(config.geminiApiKey, "");
   assert.equal(config.braveApiKey, "test-brave-key");
   assert.equal(config.lastFmApiKey, "");
   assert.equal(config.researchMaxInitialSearches, 6);
@@ -126,13 +130,13 @@ test("validateRuntimeEnv requires a remote URL for turso-sync", () => {
   );
 });
 
-test("validateRuntimeEnv defaults the research model to gemini-2.5-flash", () => {
-  const config = validateRuntimeEnv({ ...REQUIRED });
+test("validateRuntimeEnv defaults the Gemini research model to gemini-2.5-flash", () => {
+  const config = validateRuntimeEnv({ ...GEMINI });
   assert.equal(config.researchModel, "gemini-2.5-flash");
 });
 
 test("validateRuntimeEnv lets GEMINI_MODEL choose the research model", () => {
-  const config = validateRuntimeEnv({ ...REQUIRED, GEMINI_MODEL: " gemini-2.5-pro " });
+  const config = validateRuntimeEnv({ ...GEMINI, GEMINI_MODEL: " gemini-2.5-pro " });
   assert.equal(config.researchModel, "gemini-2.5-pro");
 });
 
@@ -140,8 +144,13 @@ test("validateRuntimeEnv lets GEMINI_MODEL choose the research model", () => {
 
 const BRAVE = { BRAVE_API_KEY: "test-brave-key" };
 
-test("the research graph runs on Gemini unless LLM_PROVIDER says otherwise", () => {
+test("the research graph runs on Scaleway unless LLM_PROVIDER says otherwise", () => {
   const { llm } = validateRuntimeEnv({ ...REQUIRED });
+  assert.deepEqual(llm.research, { provider: "scaleway", model: "deepseek-v4-flash-0731", reasoningEffort: "none" });
+});
+
+test("LLM_PROVIDER=gemini still runs the research graph on Gemini, the rollback path", () => {
+  const { llm } = validateRuntimeEnv({ ...GEMINI });
   assert.deepEqual(llm.research, { provider: "gemini", model: "gemini-2.5-flash" });
 });
 
@@ -167,7 +176,7 @@ test("LLM_PROVIDER=scaleway requires SCW_SECRET_KEY", () => {
 });
 
 test("an unknown LLM_PROVIDER is rejected, not silently replaced", () => {
-  assert.throws(() => validateRuntimeEnv({ ...REQUIRED, LLM_PROVIDER: "mistral" }), /LLM_PROVIDER must be one of gemini, scaleway/);
+  assert.throws(() => validateRuntimeEnv({ ...REQUIRED, LLM_PROVIDER: "mistral" }), /LLM_PROVIDER must be one of scaleway, gemini/);
 });
 
 test("the judge runs on Scaleway whenever a Scaleway key is set", () => {
@@ -181,7 +190,7 @@ test("SCW_JUDGE_MODEL chooses the judge model", () => {
 });
 
 test("without a Scaleway key there is no judge; a Mistral key no longer enables one", () => {
-  const { llm } = validateRuntimeEnv({ ...REQUIRED, MISTRAL_API_KEY: "mistral" });
+  const { llm } = validateRuntimeEnv({ ...GEMINI, MISTRAL_API_KEY: "mistral" });
   assert.equal(llm.judge, null);
 });
 
@@ -200,7 +209,7 @@ test("a judge that is the research model itself is refused", () => {
 });
 
 test("a judge from the research model's family is allowed with a warning", () => {
-  const { llm } = validateRuntimeEnv({ ...REQUIRED, SCW_SECRET_KEY: "scw", SCW_JUDGE_MODEL: "gemma-4-26b-a4b-it" });
+  const { llm } = validateRuntimeEnv({ ...GEMINI, SCW_SECRET_KEY: "scw", SCW_JUDGE_MODEL: "gemma-4-26b-a4b-it" });
   assert.equal(llm.judge?.model, "gemma-4-26b-a4b-it");
   assert.ok(
     llm.warnings.some((w) => /same model family \(google\)/.test(w)),

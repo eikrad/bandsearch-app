@@ -15,7 +15,7 @@ graph LR
     DESK --> API[Express API\nNode.js :3001]
     BROWSER --> API
     API --> GRAPH[LangGraph\nResearch Pipeline]
-    GRAPH --> GEMINI[Google Gemini\nplan · extract · reflect · rank]
+    GRAPH --> LLM[Scaleway LLM\nplan · extract · reflect · rank]
     GRAPH --> BRAVE[Brave Search API\nniche artist discovery]
     GRAPH --> MB[MusicBrainz\nartist verification]
     GRAPH --> DB[(SQLite / Turso)]
@@ -65,7 +65,7 @@ graph TD
         API --> PIPELINE
     end
 
-    PIPELINE --> GEMINI[Google Gemini\nplan · extract · rank]
+    PIPELINE --> LLM[Scaleway LLM\nplan · extract · rank]
     PIPELINE --> BRAVE[Brave Search API\ndiscovery queries]
     PIPELINE --> MB[MusicBrainz\nartist verification]
 
@@ -134,25 +134,25 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 
 ```mermaid
 flowchart TD
-    START(["START"]) --> plan["plan\nGemini — builds Brave queries\nfrom user taste"]
+    START(["START"]) --> plan["plan\nLLM — builds Brave queries\nfrom user taste"]
     plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
-    brave_initial --> extract["extract\nGemini — extracts band names\nfrom search snippets"]
+    brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
-    enrich_lastfm --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
+    enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
 ```
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `plan` | Gemini | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
+| `plan` | LLM | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
-| `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
+| `extract` | LLM | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
 | `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
-| `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
+| `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
@@ -160,10 +160,10 @@ Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to
 
 ```mermaid
 flowchart TD
-    subSTART(["START"]) --> assess["assess\nGemini — evaluates results,\ngenerates extraQueries if gaps found"]
+    subSTART(["START"]) --> assess["assess\nLLM — evaluates results,\ngenerates extraQueries if gaps found"]
     assess -->|"sufficient or budget gone"| subEND(["END"])
     assess -->|"needs more data"| search["search\nBrave Search API\nexecutes extra queries"]
-    search --> extract_r["extract_r\nGemini — extracts from\nnew hits only"]
+    search --> extract_r["extract_r\nLLM — extracts from\nnew hits only"]
     extract_r --> verify_r["verify_r\nMusicBrainz — verifies\nnew candidates only"]
     verify_r -->|"maxRounds or budget gone"| subEND
     verify_r -->|"rounds remaining"| assess
@@ -171,9 +171,9 @@ flowchart TD
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `assess` | Gemini | Evaluates current results; generates `extraQueries` when gaps are found |
+| `assess` | LLM | Evaluates current results; generates `extraQueries` when gaps are found |
 | `search` | Brave Search API | Executes extra queries against remaining budget; stores new hits in `newHits` separately from the accumulated `braveHits` |
-| `extract_r` | Gemini | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
+| `extract_r` | LLM | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
 | `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges via `mergeVerifiedCandidates` — preserves all prior-round results |
 
 ### Budget management (`researchBudget.ts`)
@@ -187,8 +187,8 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation while `LLM_PROVIDER=gemini` (the default until the switch in #237) |
-| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | same nodes with `LLM_PROVIDER=scaleway`; the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
+| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | Only with `LLM_PROVIDER=gemini`, the rollback until Gemini is removed (#237) |
+| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (default since 2026-10-05); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
@@ -289,7 +289,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 
 | Decision | Rationale |
 |----------|----------|
-| **One model for all graph nodes, chosen per role** | Consistent structured-JSON output across plan / extract / reflect / rank; each node keeps its own temperature (planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35); provider and model come from `config/models.ts` (Gemini until the Scaleway switch, #237) |
+| **One model for all graph nodes, chosen per role** | Consistent structured-JSON output across plan / extract / reflect / rank; each node keeps its own temperature (planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35); provider and model come from `config/models.ts` (Scaleway `deepseek-v4-flash-0731` by default, ADR 0004) |
 | **Optional async judge on Scaleway** | Keeps the LLM judge off the critical response path; never the research model and preferably another family, against self-evaluation bias; calibration uses the same call and model, so its result describes the production judge; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Turso swap without touching business logic |
