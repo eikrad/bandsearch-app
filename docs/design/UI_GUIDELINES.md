@@ -347,35 +347,40 @@ non-authoritative illustration.
 
 ### Voice input (locked)
 
-> **Not yet built** — tracked in #157. No mic button, plugin or Settings
-> switch exists today. This section is the target.
+> **Not yet built** — tracked in #157. No mic button, plugin, endpoint or
+> Settings switch exists today. This section is the target.
 
-Decided in the 2026-09-28 grilling session for #157. This text is the spec;
-the [mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ) (Chat and
-Settings screens) is a private, non-authoritative illustration.
+Decided in the 2026-09-28 grilling session for #157; **engine revised
+2026-10-06** from Android's `SpeechRecognizer` (audio may go to Google) to
+`whisper-large-v3` on Scaleway, reached through our API. Dictation only: the
+reply stays text (spoken replies are #259, not decided). The
+[mockup](https://claude.ai/artifact/GanWpZoaWJxPyn4nCFpNKQ) (Chat and Settings
+screens) is a private, non-authoritative illustration and predates the engine
+change.
 
 - **Off by default; opt-in with a notice.** The Settings voice-input switch
   starts off, and the composer has no mic button until it is turned on.
-  Turning it on first shows a notice with "Cancel" / "Turn on": the phone's own
-  speech recognition processes the voice, and depending on the phone that
-  audio may go to a third party (on most phones, Google). Only "Turn on"
-  enables it. *(Revised 2026-09-28 — an earlier version of this section had
-  the button visible by default.)*
-- **Mic button.** Sits in the composer next to Send, 44px target.
-  `RECORD_AUDIO` is requested on the first tap after enabling, never at launch
-  or at the switch.
-- **No recognition service, no control.** If the phone has no speech
-  recognition service (`SpeechRecognizer.isRecognitionAvailable()` is false —
-  common on phones without Google services), neither the mic button nor the
-  Settings switch is rendered.
+  Turning it on first shows a notice with "Cancel" / "Turn on": the recording
+  is sent to Bandsearch's server and processed by Scaleway in France, and is
+  not stored. Only "Turn on" enables it. *(Revised 2026-09-28 — an earlier
+  version of this section had the button visible by default.)*
+- **Mic button.** Sits in the composer next to Send, 44px target. Tap to start
+  recording, tap again to stop; a recording stops by itself after 60 seconds.
+  While recording the button shows a listening state; after stopping it shows
+  a busy state until the text arrives. `RECORD_AUDIO` is requested on the
+  first tap after enabling, never at launch or at the switch.
+- **Needs the server.** Transcription runs on the hosted API, so a mic tap with
+  no connection, or a failed transcription, shows an inline dismissible hint
+  above the composer ("Couldn't transcribe — try again") and leaves the
+  composer untouched. There is no on-phone fallback.
 - **Permission denied — inline hint, not a modal.** A banner above the
   composer: "Microphone access denied", an "Open Android settings" button
   (opens Android's app-info page for Bandsearch, where the permission lives)
   and a × to dismiss. The mic button stays visible but visibly inactive;
   tapping it again while still denied re-shows the hint if dismissed.
-- **No auto-submit.** Recognised text fills the composer input; the user
-  reviews and sends it. `SpeechRecognizer` misreads are common enough
-  (band names, slang) that sending straight through isn't safe.
+- **No auto-submit.** The transcript fills the composer input; the user
+  reviews and sends it. Whisper still misreads band names and slang now and
+  then, so sending straight through isn't safe.
 
 ## Roadmap UI Ideas
 

@@ -53,7 +53,8 @@ queue and now do.
    (operator becomes controller), #136 (Art. 4 AI-literacy note, DPIA
    screening). Then #248 (judge scores on live searches), which needs #132.
 7. **Phase 11 — Android.** #159 (endpoint default, shares the default with
-   #238), then #156 (the seven views, the largest item), #157, #158.
+   #238), then #156 (the seven views, the largest item), #157, #158. #259 (spoken
+   replies) is an undecided idea after #157.
 8. **Whenever there is room:**
    - #251 judge as a quality gate — after #257's reflection work
    - #154 card action touch targets (the one card-action item left)
@@ -354,12 +355,19 @@ mobile handling, the other seven views have none.
       on edge screens), Settings stays single-scroll, Saved Artists' style-
       reference selection bar moves to the bottom — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
-- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
-      Behaviour decided: the phone's own `SpeechRecognizer` (not a bundled
-      model), off by default with a third-party notice when turned on, hidden
-      where no recognition service exists, inline dismissible hint on
-      permission denial, no auto-submit of the transcript — see the spec and
-      `docs/design/UI_GUIDELINES.md`'s Voice Input section.
+- [ ] #157 — microphone button + Settings toggle. **Engine changed 2026-10-06:**
+      `whisper-large-v3` on Scaleway, reached through a new endpoint on our API,
+      instead of Android's `SpeechRecognizer` (which sends audio to Google on
+      most phones — the reason this was put back in the queue). Dictation only;
+      off by default with a notice that the recording goes to our server and
+      Scaleway (France); no auto-submit; inline hint on permission denial or a
+      failed transcription. Needs a size/duration cap and rate limit on the new
+      endpoint, and a spike on how to record in Tauri's Android WebView — see
+      the spec and `docs/design/UI_GUIDELINES.md`'s Voice Input section.
+- [ ] #259 — spoken replies (text-to-speech). Idea only, not scoped: Scaleway
+      has no TTS model, Android's local `TextToSpeech` is the likely route, and
+      reading result cards aloud would sound bad, so a short spoken summary is
+      the realistic shape. Not before #157 has shipped.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android. Release mechanics
       decided: rides the same release-please pipeline and tag as desktop,
