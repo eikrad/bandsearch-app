@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
-![Version: 0.4.0-alpha.0](https://img.shields.io/badge/version-0.4.0-blue)
+[![Release](https://img.shields.io/github/v/release/eikrad/bandsearch-app?include_prereleases)](https://github.com/eikrad/bandsearch-app/releases)
 
-AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by Gemini.
+AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by a language model (Scaleway-hosted by default).
 
 ## Features
 
@@ -17,6 +17,21 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 - **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config
 
 ## How it works
+
+Bandsearch is a desktop app (Tauri + React) that talks to a Node.js API. The API runs a research pipeline against three external services and stores your data in SQLite or Turso.
+
+```mermaid
+flowchart LR
+    You([You]) --> App["Desktop app\nTauri + React"]
+    App --> API["Express API\nNode.js :3001"]
+    API --> Pipeline["Research pipeline\nLangGraph"]
+    Pipeline --> LLM["LLM\nScaleway"]
+    Pipeline --> Brave["Brave Search"]
+    Pipeline --> MB["MusicBrainz"]
+    API --> DB[("SQLite / Turso\nsaved bands · sessions · users")]
+```
+
+The pipeline itself:
 
 ```mermaid
 flowchart TD
@@ -54,6 +69,9 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
 | [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
 | [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
+| [docs/adr/0003-android-hosting-render-over-fly.md](docs/adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render |
+| [docs/adr/0004-llm-models-per-role-on-scaleway.md](docs/adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role |
+| [docs/releasing.md](docs/releasing.md) | How versions, the CHANGELOG and desktop releases are produced |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
@@ -199,7 +217,7 @@ column without being added to that list.
 Bandsearch uses two persistence domains:
 
 - **Preferences store** (`saved_bands`, groups) — configurable via `PREFERENCE_STORE`.
-- **Session store** (`chat_sessions`, `chat_messages`) — local SQLite in `DATABASE_PATH` (default `bandsearch.db`).
+- **Session store** (`chat_sessions`, `chat_messages`) — local SQLite in `DATABASE_PATH` (default `bandsearch.db`); with `PREFERENCE_STORE=turso` it lives in Turso too.
 
 | `PREFERENCE_STORE` | Description |
 |--------------------|-------------|
@@ -329,7 +347,8 @@ judge (`--judge <model>` compares candidates) and appends the agreement to
 A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
 `--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at
 another deployment, `BANDSEARCH_API_TOKEN` authenticates against one with more
-than one account. The live-traffic dashboard at `GET /eval/dashboard` is a
+than one account. The live-traffic dashboard at `GET /eval/dashboard` (404 unless
+`EVAL_DASHBOARD_ENABLED=true`; `EVAL_DASHBOARD_PASSWORD` adds Basic Auth) is a
 different thing: it shows scores from real requests, not test runs.
 
 ---

@@ -98,13 +98,13 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
 | Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
 | Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [README § Privacy & transparency](../../README.md#privacy--transparency) |
-| Eval | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `POST /eval/feedback`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
+| Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `POST /eval/feedback`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
 
 ---
 
@@ -250,7 +250,7 @@ Tables: `saved_bands` (rating, categories, notes), `artist_groups`
 
 ### Session store
 
-SQLite (`bandsearch.db`) with in-memory fallback. Tables: `chat_sessions`, `chat_messages`.
+SQLite (`DATABASE_PATH`, default `bandsearch.db`) with in-memory fallback; with `PREFERENCE_STORE=turso` sessions live in Turso (`tursoChatSessionRepository`). Tables: `chat_sessions`, `chat_messages`.
 
 ### Auth store
 
@@ -263,7 +263,7 @@ Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with
 Three-tier progressive auth — determined by the number of registered users at runtime:
 
 | Users registered | Mode |
-|-----------------|
+|-----------------|------|
 | 0 | Pass-through — no auth checks |
 | 1 | Auto-attach — all requests associated with the single user |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
@@ -274,7 +274,7 @@ Three-tier progressive auth — determined by the number of registered users at 
 
 - **Stack:** Tauri (Rust shell) + React (TypeScript)
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
-- **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback) and `ObscurityTargetPicker`
+- **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings, Privacy policy (`#/privacy`) and a Connecting screen while the API starts (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback), `ObscurityTargetPicker` and `UpdateBanner` (in-app update notice)
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
 
 ---
