@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml/badge.svg)](https://github.com/eikrad/bandsearch-app/actions/workflows/ci.yml)
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
-![Version: 0.4.0-alpha.0](https://img.shields.io/badge/version-0.4.0-blue)
+[![Release](https://img.shields.io/github/v/release/eikrad/bandsearch-app)](https://github.com/eikrad/bandsearch-app/releases/latest)
 
-AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by Gemini.
+AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by an LLM (Scaleway Generative APIs by default).
 
 ## Features
 
@@ -262,9 +262,16 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
 
 ## Desktop releases
 
-Tagged pushes matching `v*` run [`.github/workflows/release.yml`](.github/workflows/release.yml): each OS downloads the matching Node sidecar into `apps/desktop/src-tauri/binaries/`, then `tauri-apps/tauri-action` builds installers and opens a **draft prerelease**.
+Versions, the CHANGELOG and releases come from [release-please](https://github.com/googleapis/release-please) and Conventional Commit messages; nobody edits a version number by hand. The full flow, including how to merge each kind of pull request, is in [docs/releasing.md](docs/releasing.md). In short:
 
-One-time signing setup (required before the first tag):
+1. Changes reach `main` via feature branch → `staging` → `main`.
+2. Every push to `main` opens or updates a `chore(main): release X.Y.Z` pull request. Merging it tags `vX.Y.Z` and creates a **draft** GitHub release.
+3. [`.github/workflows/release.yml`](.github/workflows/release.yml) then builds the Linux, Windows and macOS installers: each OS downloads the matching Node sidecar into `apps/desktop/src-tauri/binaries/`, and `tauri-apps/tauri-action` uploads the installers and `latest.json` into the draft.
+4. Only when every build has passed is the draft published and marked **latest**. The in-app updater offers a release only from that moment.
+
+Pushing a tag no longer starts a build. For a test build, run **Actions → Build desktop installers → Run workflow** with a tag such as `v0.4.2-test`; it builds into a new draft prerelease.
+
+One-time signing setup (required before the first release):
 
 1. Generate keys (private key stays outside the repo):
    ```bash
