@@ -7,7 +7,10 @@ Thanks for contributing to Bandsearch.
 1. Create a branch from `staging` (not `main` — PRs must target `staging`; `main` only updates by merging `staging` in after validation, and this is enforced by CI).
 2. Keep changes scoped to one phase or concern.
 3. Run checks locally before committing (the same checks also run automatically via a husky pre-commit hook):
-   - `npm run ci` — lint + typecheck + test in one command
+   - `npm run ci` — lint + typecheck + test in one command. The API tests never open
+     your dev database: without a configured `databasePath`, `createApp()` and
+     `createPreferenceRepository()` use in-memory SQLite. Only `validateRuntimeEnv()`
+     (what the server passes) defaults to `bandsearch.db`.
    - `npm run test:e2e` — Playwright end-to-end smoke tests, if you touched user-facing flows.
      Needs browsers once (`npx playwright install chromium`). Runs against its own
      `e2e-bandsearch.db` and signs itself in, so it does not touch your dev database.
