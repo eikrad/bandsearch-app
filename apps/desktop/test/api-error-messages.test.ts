@@ -24,14 +24,15 @@ test("formatRecommendationQueryError maps recommendation_context_unavailable", (
   assert.match(msg, /network|Music|lookup/i);
 });
 
-test("formatRecommendationQueryError maps recommendation_unavailable to Gemini guidance", () => {
+test("formatRecommendationQueryError maps recommendation_unavailable to LLM key guidance", () => {
   const msg = formatRecommendationQueryError(
     new BandsearchHttpError("recommendation service unavailable", {
       status: 502,
       code: "recommendation_unavailable",
     }),
   );
-  assert.match(msg, /Gemini|API key|Settings/i);
+  assert.match(msg, /Scaleway API key/);
+  assert.doesNotMatch(msg, /Gemini/);
 });
 
 test("formatRecommendationQueryError passes through validation_error message", () => {

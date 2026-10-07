@@ -18,7 +18,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Research budget** — a wall-clock time limit (`RESEARCH_TIMEOUT_MS`) shared across all graph nodes. When exhausted, conditional edges route directly to `END` gracefully instead of timing out mid-flight.
 
-- **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into Gemini prompts for `preference-aware` mode recommendations.
+- **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into the LLM prompts for `preference-aware` mode recommendations.
 
 - **Saved band** — an artist the user has kept in their preference memory. Saving is itself a signal of interest; it does not require the user to judge the artist. A saved band may carry a rating, categories and a note, all optional.
 

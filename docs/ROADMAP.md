@@ -40,7 +40,9 @@ queue and now do.
    - ✓ Constraint queries checked deterministically against MusicBrainz (#254, #253)
    - ✓ Model comparison: judge `glm-5.2`, research `deepseek-v4-flash-0731`, on
      par with Gemini, ~11 s slower per query (#255, #204 part 2, ADR 0004)
-   - Scaleway as the default provider, vendor-neutral desktop key (#256, open)
+   - ✓ Scaleway is the default provider; desktop key vendor-neutral, privacy
+     policy and UI name Scaleway (#256). Before this reaches `main`, set
+     `SCW_SECRET_KEY` on Render; rollback is `LLM_PROVIDER=gemini` there
 3. **#257 — improve search quality, one measured change at a time.** Evidence
    quality of the why texts (the judge's weakest dimension, ~0.5), then hard
    constraints, then reflection (#180, never runs today). Each change measured

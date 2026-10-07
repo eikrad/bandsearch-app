@@ -71,7 +71,7 @@ test("startDesktopBrowserApp uses the configured remote endpoint as the API base
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: fakeFetch,
     invokeTauri: async (cmd) => {
-      if (cmd === "gemini_config_status") {
+      if (cmd === "llm_config_status") {
         return { hasStoredKey: true, onboardingComplete: true, apiEndpointUrl: "https://bandsearch-api.onrender.com" };
       }
       return {};
@@ -246,7 +246,7 @@ async function startAgainstWakingApi(downFor: number) {
     // Onboarding complete, otherwise the welcome gate short-circuits the auth
     // gate and no status check happens at all.
     invokeTauri: async (cmd) =>
-      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+      cmd === "llm_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
     updateDismissalStorage: fakeUpdateStorage(),
     fetchImpl: async (url) => {
       if (!String(url).endsWith("/auth/status")) return jsonResponse({});
@@ -310,7 +310,7 @@ async function startWithAccount(overrides: { userCount?: number; enabled?: boole
 
   await startDesktopBrowserApp({
     invokeTauri: async (cmd) =>
-      cmd === "gemini_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+      cmd === "llm_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
     updateDismissalStorage: fakeUpdateStorage(),
     fetchImpl: async (url) => {
       if (String(url).endsWith("/auth/status")) return jsonResponse({ enabled, userCount });

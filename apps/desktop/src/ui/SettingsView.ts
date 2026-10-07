@@ -646,11 +646,11 @@ interface SettingsViewProps {
     hasStoredKey?: boolean;
     hasBraveKey?: boolean;
     hasTursoConfig?: boolean;
-    geminiKeyFromEnv?: boolean;
+    llmKeyFromEnv?: boolean;
     braveKeyFromEnv?: boolean;
     tursoFromEnv?: boolean;
     apiEndpointUrl?: string;
-    geminiStatusMessage?: StatusMessage;
+    llmStatusMessage?: StatusMessage;
     braveStatusMessage?: StatusMessage;
     tursoStatusMessage?: StatusMessage;
     apiEndpointStatusMessage?: StatusMessage;
@@ -676,7 +676,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
     "Your keys are stored locally on this device and passed to the Bandsearch API process.";
 
   const missingKeys: string[] = [];
-  if (viewProps.hasStoredKey === false && !viewProps.geminiKeyFromEnv) missingKeys.push("Gemini");
+  if (viewProps.hasStoredKey === false && !viewProps.llmKeyFromEnv) missingKeys.push("Scaleway");
   if (viewProps.hasBraveKey === false && !viewProps.braveKeyFromEnv) missingKeys.push("Brave Search");
 
   const banner =
@@ -789,12 +789,12 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       statusMessage: viewProps.privacyStatusMessage ?? null,
     }),
     React.createElement(ApiKeyCard, {
-      id: "gemini-api-key",
-      label: "Gemini API key",
-      placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your Gemini API key",
+      id: "llm-api-key",
+      label: "Scaleway API key",
+      placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your Scaleway API key",
       onSave: (key) => handlers.onSaveApiKey?.(key),
-      statusMessage: viewProps.geminiStatusMessage ?? null,
-      fromEnv: viewProps.geminiKeyFromEnv,
+      statusMessage: viewProps.llmStatusMessage ?? null,
+      fromEnv: viewProps.llmKeyFromEnv,
     }),
     React.createElement(ApiKeyCard, {
       id: "brave-api-key",

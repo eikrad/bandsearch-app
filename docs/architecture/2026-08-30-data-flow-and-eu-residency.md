@@ -15,10 +15,9 @@ provider answers to). They have very different costs.
 |---|---|---|---|
 | Compute | Frankfurt ✅ | 🇺🇸 Render Inc. | — |
 | Database | EU selectable | 🇺🇸 Turso | accounts, e-mail addresses, password hashes, saved preferences, chat history |
-| LLM | US | 🇺🇸 Google (Gemini) | **query text + full conversation context** |
+| LLM | France 🇪🇺 | 🇫🇷 Scaleway (default since 2026-10-05; Google Gemini before, still selectable) | **query text + full conversation context** |
 | Web search | US | 🇺🇸 Brave | **search queries, retained 90 days** |
 | Judge (optional) | France 🇪🇺 | 🇫🇷 Scaleway (since 2026-10-05; Mistral before) | query text + recommendation prose |
-| LLM, after the switch (#237) | France 🇪🇺 | 🇫🇷 Scaleway | would replace Google for query text + conversation context |
 
 **Planned, not built — voice input (#157).** Dictation on Android would send a
 short audio recording from the phone to our API (Render, Frankfurt), which
@@ -33,8 +32,10 @@ typed query. This table gains a row and the privacy policy gains the flow when
 
 The compute layer — the only one a hosting migration would move — is the one
 carrying the least personal data. The user's actual queries and conversation go
-to Google and Brave regardless of where the Express process runs. That is
-architectural, not a hosting choice.
+to the LLM provider and Brave regardless of where the Express process runs. That
+is architectural, not a hosting choice. *Updated 2026-10-05:* the LLM provider is
+now Scaleway in France (#237, ADR 0004), so of the two only Brave remains outside
+the EU.
 
 ## What is already EU
 
