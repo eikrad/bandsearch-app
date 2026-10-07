@@ -19,6 +19,17 @@ provider answers to). They have very different costs.
 | Web search | US | 🇺🇸 Brave | **search queries, retained 90 days** |
 | Judge (optional) | France 🇪🇺 | 🇫🇷 Scaleway (since 2026-10-05; Mistral before) | query text + recommendation prose |
 
+**Planned, not built — voice input (#157).** Dictation on Android would send a
+short audio recording from the phone to our API (Render, Frankfurt), which
+forwards it to `whisper-large-v3` on 🇫🇷 Scaleway and returns only the text. No
+Google speech service is involved. The API keeps the audio in memory for the
+request only. Scaleway's published policy is zero data retention by default,
+with the exception that traffic causing abnormal errors or looking malicious
+may have its request stored temporarily (checked 2026-10-06; the page does not
+name audio specifically). The recognised text then follows the same path as any
+typed query. This table gains a row and the privacy policy gains the flow when
+#157 ships.
+
 The compute layer — the only one a hosting migration would move — is the one
 carrying the least personal data. The user's actual queries and conversation go
 to the LLM provider and Brave regardless of where the Express process runs. That
