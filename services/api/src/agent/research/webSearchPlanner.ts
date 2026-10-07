@@ -5,6 +5,8 @@ import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
+import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
 export const WEB_SEARCH_QUERY_MAX_LENGTH = 400;
@@ -159,24 +161,28 @@ export type CreateWebSearchPlannerOptions = {
    * drive this factory's closure without a key or a network call.
    */
   modelClient?: ChatModelClient;
+  /** Builds this node's model from the configured provider (llm/chatModel.ts). */
+  chatModel?: ChatModelFactory;
 };
 
 export async function createWebSearchPlanner({
   apiKey,
   timeoutMs = 20000,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
+  chatModel,
 }: CreateWebSearchPlannerOptions): Promise<(input: WebSearchPlannerInput) => Promise<SearchPlan>> {
   // An injected client stands in for Gemini entirely, so it needs no key.
   const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !trimmedKey) {
+  if (!injectedModelClient && !chatModel && !trimmedKey) {
     throw new Error("apiKey is required for web search planner");
   }
 
-  const plannerModel: ChatModelClient = injectedModelClient ?? new ChatGoogleGenerativeAI({
+  const temperature = 0.2;
+  const plannerModel: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
     model,
     apiKey: trimmedKey,
-    temperature: 0.2,
+    temperature,
     thinkingConfig: { thinkingBudget: 0 },
   });
 

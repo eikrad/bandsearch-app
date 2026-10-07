@@ -192,7 +192,7 @@
       "citationSupportRate": 1.0,
       "genericWhyFlag": false
     },
-    "expectedDirection": { "relevance": "low", "obscurityFit": "low" }
+    "expectedDirection": { "relevance": "low" }
   },
   {
     "id": "ut-14",

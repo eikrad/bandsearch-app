@@ -193,19 +193,19 @@ CREATE TABLE eval_baselines (
 
 ## LLM-as-Judge
 
-**Model:** Mistral (via Mistral API, `MISTRAL_API_KEY`). Using a different model family (Mistral) than Gemini avoids self-evaluation bias (MT-Bench self-enhancement pattern). If `MISTRAL_API_KEY` is not set, Layer 2 is silently skipped — it is never on the critical path.
+**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (default `glm-5.2`, chosen by calibration on 2026-10-05, see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
 
-**Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 10 s, no retry on failure. Eval data loss is acceptable; a missing judge score is not a system error.
+**Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 60 s (a judge may be a reasoning model), one retry inside the client, failures logged and never thrown. Eval data loss is acceptable; a missing judge score is not a system error.
 
-**Judging mode:** Pointwise — one band per judge call. Pairwise/listwise batch judging is deferred (see Deferred section).
+**Judging mode:** *As built*, listwise in one batch — all bands of a response in one call (`judgeBands` in `judgeWorker.ts`), which calibration uses too. The pointwise design below was never built; GroUSE (Muller et al. 2024) found weaker judges much better with separate calls, so the model comparison (#237 step 3) measures batch vs. per-band calls before this is settled.
 
 **Bias mitigations:**
 
 | Bias | Mitigation |
 |------|------------|
-| Position bias | One band per call; no batch context in judge prompt |
+| Position bias | Designed: one band per call. **Not built** — bands share one batch; the model comparison shuffles band order to measure it |
 | Verbosity bias | Judge prompt instructs: score quality, not length of `why` text |
-| Self-enhancement | Different model family (Claude) than generator (Gemini) |
+| Self-enhancement | Judge never the research model, preferably another family (enforced at startup) |
 | Inconsistency | Optional: 2 judge runs on 10% sample; report score variance in dashboard |
 
 **Deterministic evidence checks (Layer 1.5, before LLM):**
@@ -271,6 +271,8 @@ Layer 2 scores are not trusted for production decisions until the judge is calib
 - GroUSE-style unit test pass rate (target: ≥90%)
 
 **Logging:** `judge_model` and `judge_prompt_hash` on every `llm_eval_scores` row. Re-run calibration when either changes.
+
+**As built (2026-10-05, #237):** `npm run calibrate -w services/eval` scores the 25 labelled examples and the 16 directional cases through `judgeBands`, the same call the live judge makes, so the result describes the production judge. `--judge <model>` (repeatable) compares candidates. Every run appends to `services/eval/history/judge-runs.jsonl` with the judge model, a hash of the judge prompt, hashes of both datasets, agreement per dimension and the failed directional checks. First run, `mistral-medium-3.5-128b`: 97.3% agreement, 89.5% of the directional checks. The model comparison (#237 step 3) added `--votes N` (median per dimension), a shuffled band order per vote and `--mode per-band`, calibrated four judges from families none of the research candidates uses, and chose `glm-5.2` (98.7%, all directional checks); see ADR 0004. Golden runs take `--judge model[:reasoning]` and record the judge's four dimensions per query; the Setups section compares their mean (judge quality) between setups. Until 2026-10-05 the script called Anthropic with a hard-coded model and never ran (#204).
 
 ---
 
@@ -346,7 +348,7 @@ File: `services/eval/golden-set.json`
 
 **No `expectedBands`.** Earlier drafts carried a reference band list for calibration. That field was never a pass/fail gate, never fed `judge-calibration.json` (a separate dataset with no query overlap), and is indefensible over an open-ended search of all recorded music — many equally valid answers exist for any query. Dropped rather than kept as dead weight.
 
-**How `nuggetCoverage@8` is scored:** for each top-8 recommendation with a `musicbrainzArtistId`, the runner looks up that artist's MB tags+genres (memoized; spacing is enforced by `createMusicBrainzClient`'s process-wide ~1.1s gate). Golden entries run **sequentially**, and the runner waits ~1.2s after `/recommendations` returns before tag lookups so the API and eval don't stack on the same MusicBrainz IP. A nugget counts as covered when some tag *contains* it on whole-word boundaries after normalizing case/hyphens/punctuation — deliberately one-directional, so a "post-black metal" tag covers the nugget "black metal", but not the reverse. If no top-8 band yields any tags, the coverage gate is skipped (availability failure, not a quality failure).
+**How `nuggetCoverage@8` is scored:** for each top-8 recommendation with a `musicbrainzArtistId`, the runner looks up that artist's MB tags+genres (memoized; spacing is enforced by `createMusicBrainzClient`'s process-wide ~1.1s gate). Golden entries run **sequentially**, and the runner waits ~1.2s after `/recommendations` returns before tag lookups so the API and eval don't stack on the same MusicBrainz IP. A nugget counts as covered when some tag *contains* it on whole-word boundaries after normalizing case/hyphens/punctuation — deliberately one-directional, so a "post-black metal" tag covers the nugget "black metal", but not the reverse. If no top-8 band yields any tags, the coverage gate is skipped (availability failure, not a quality failure) and the run history records the coverage as unknown (`null`), outside the coverage mean — counting it as 0 would let MusicBrainz tag availability pose as recommendation quality.
 
 **Metrics for `run-golden.ts`:**
 
@@ -361,6 +363,29 @@ File: `services/eval/golden-set.json`
 **Corrected 2026-09-16 (`nuggetCoverage@8`).** After removing `precision@8`, the surviving metric was still wrong: `golden-set.json` still stored band names in `nuggets`, and the runner still matched them against `result.artist`. That is exact-name recall — precisely the metric the design argued against. Rewired: `nuggets` are sonic properties; coverage is scored against MusicBrainz tags/genres fetched by the runner from each recommendation's `musicbrainzArtistId`.
 
 **Usage:** CI-runnable script (`services/eval/run-golden.ts`) that calls the recommendation API with each golden query, resolves MB tags for the top-8, and computes both metrics. Run manually before/after significant prompt changes.
+
+**Run history and dashboard (Step 9b, added 2026-10-05, #209).** Every run appends one record to `services/eval/history/golden-runs.jsonl` (committed): run id, label, git commit/branch/dirty, two golden-set hashes (`questionsHash` over ids and queries groups comparable runs; `contentHash` also covers nuggets, anti-bands and thresholds, so a regrading is visible), the model and pipeline version as reported by the API in `meta.model` / `meta.pipelineVersion` (never assumed by the runner), and per query the status, both metrics, `/recommendations` latency, top 8 and warnings. A query the API did not answer is recorded as `error` with no metrics: it counts in an error rate, stays out of the quality means, and is never a regression. Runs on uncommitted tracked files are refused unless `--allow-dirty`.
+
+`services/eval/dashboard.ts` turns the history into a self-contained `services/eval/reports/dashboard.html` (gitignored). Each run is compared with the latest run labelled `baseline` and with the previous run: pass/fail flips with an exact two-sided sign test (with 10 queries, single flips are hints, not findings), per-query **top-8 overlap** with the compared run, and a **noise floor** — the overlap between repeat runs of an identical setup. Answers move far more often than means do (Chen et al. 2023, second-brain *Production Drift Monitoring*), so an overlap near the noise floor says a change did little even when the pass rate moved. Runs graded against different targets (`contentHash`) or scoring (`GOLDEN_METRICS_VERSION`) get no regression verdict. Layout and comparison rules are ported from the Radiationsafety eval dashboard.
+
+**Stable measurement (added 2026-10-05, #250).** The first Gemini baseline showed that single runs cannot separate models: two identical runs shared 39% of their top bands and differed by 18 points in pass rate, and coverage was unknown for 4–6 of 10 queries. Three changes:
+
+- *Replay* (`EVAL_REPLAY_DIR`, `integrations/replayFetch.ts`): the API and the runner record Brave, MusicBrainz and Last.fm answers on first use and replay them afterwards. Setups compared on the golden set then see identical search and verification data, and repeat runs skip MusicBrainz's rate limit. Only 2xx and 404 are recorded; credentials in query strings are stripped. LLM calls are never replayed. The API reports `meta.evalReplay`, which the run records.
+- *Last.fm tags* for coverage where MusicBrainz has none (`createTagLookup`): listener tags weighted ≥ 10 of 100; each result records its tag sources. This changed the metric (`GOLDEN_METRICS_VERSION` 2).
+- *Setups and paired statistics*: `--repeat N`; the dashboard groups runs into setups and compares each with the baseline's setup per query — values averaged over repeats, then a paired bootstrap over queries (95%, seeded). Only intervals that exclude zero count as a difference.
+
+**Constraint queries (added 2026-10-05, #253).** Open-ended queries have no right answer, so their quality rests on tags or a judge. A second kind of golden query states hard facts that MusicBrainz records, and `services/eval/constraints.ts` checks every top band against them with plain code:
+
+| Constraint | Field | MusicBrainz source |
+|---|---|---|
+| `country` | ISO 3166-1 code | `country`, else the country part of the city area's ISO 3166-2 code |
+| `formedFrom` / `formedUntil` | year, inclusive | `life-span.begin` |
+| `ended` | split up or active | `life-span.ended` |
+| `sharesMemberWith` | `{ mbid, name }` | `member of band` relations (`inc=artist-rels`, a separate request so the pipeline's lookup URL and replay recordings stay unchanged) |
+
+A band is *met* when every constraint holds, *missed* when any fails, *unknown* when MusicBrainz lacks a needed fact or the band has no MusicBrainz id. `constraintRate@8` is met ÷ (met + missed); below `minConstraintRate` (default 0.75) the query fails, recorded as the failed gate `constraint`. The reference band of `sharesMemberWith` is a miss for itself. Six constraint queries were added; the owner reviews what each constraint should mean before their first baseline. An external evaluation service was considered and rejected: its terms reserve the right to use all submitted data.
+
+**Product decision (2026-10-05):** varied answers to the same query are wanted, so re-asking can surface new bands. Top-8 overlap is therefore reported as a stability signal, never as quality; quality is judged per band (coverage, anti-bands, and from #237 step 3 the calibrated judge).
 
 ---
 
@@ -442,6 +467,8 @@ services/api/src/eval/
 services/eval/
   golden-set.json          — curated query → sonic nuggets + antiBands dataset
   run-golden.ts            — regression script (antiBandRate, nuggetCoverage vs MB tags)
+  history.ts               — golden-run records, appended to history/golden-runs.jsonl
+  dashboard.ts             — run comparison + self-contained HTML dashboard
   judge-calibration.json   — hand-labeled set for meta-evaluation
   judge-unit-tests.json    — GroUSE-style edge cases for judge validation
 ```
@@ -452,7 +479,8 @@ services/eval/
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | No | — | Enables LLM-as-judge (Layer 2). Without it, only automatic scoring runs. |
+| `SCW_SECRET_KEY` | No | — | Enables LLM-as-judge (Layer 2) on Scaleway. Without it, only automatic scoring runs. (Was `ANTHROPIC_API_KEY` in this design, then `MISTRAL_API_KEY`; see ADR 0004.) |
+| `SCW_JUDGE_MODEL` | No | `glm-5.2` | Judge model, chosen by calibration (ADR 0004). |
 | `EVAL_DASHBOARD_ENABLED` | No | `false` | Activates `/eval/dashboard` and eval API routes. |
 | `EVAL_DASHBOARD_PASSWORD` | No | — | HTTP Basic Auth password for dashboard. Username: `eval`. |
 
@@ -470,7 +498,7 @@ Each step is independently deployable and builds on the previous one.
 | 2 | Last.fm obscurity score (async) | Enriches events after the response. Requires `LASTFM_API_KEY`. |
 | 3 | Obscurity target in UI + API | Three-button UI, new `obscurityTarget` field in request body and event table. |
 | 4 | Search source quality + evidence checks | URL heuristic + deterministic `citation_support_rate` / `generic_why_flag`. No external call. |
-| 5 | LLM judge worker (Claude) | Fire-and-forget after each event. Requires `ANTHROPIC_API_KEY`. |
+| 5 | LLM judge worker | Fire-and-forget after each event. Built on Mistral, moved to Scaleway (`SCW_SECRET_KEY`) on 2026-10-05. |
 | 5b | Judge calibration | ~20–30 human labels + ~15–20 GroUSE-style unit tests. Agreement rate before trusting Layer 2. |
 | 6 | `eval_baselines` + snapshot endpoint | Small addition once judge scores exist to compare against. Filter by `pipeline_version`. |
 | 7 | Developer dashboard | HTML + Chart.js: overview, funnel panel, human–LLM alignment, trend charts. |

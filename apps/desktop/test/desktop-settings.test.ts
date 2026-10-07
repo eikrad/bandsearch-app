@@ -1,19 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGeminiSettingsController } from "../src/geminiDesktopSettings.js";
+import { createDesktopSettingsController } from "../src/desktopSettings.js";
 
 type TauriCall = { cmd: string; args?: Record<string, string> };
 
-test("createGeminiSettingsController reports missing key when invoke returns hasStoredKey false", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController reports missing key when invoke returns hasStoredKey false", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: false }),
   });
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.hasStoredKey, false);
 });
 
-test("createGeminiSettingsController reports stored key when invoke returns true", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController reports stored key when invoke returns true", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
@@ -22,16 +22,16 @@ test("createGeminiSettingsController reports stored key when invoke returns true
 
 // ── fromEnv flags ──────────────────────────────────────────────────────────
 
-test("getSettingsViewProps passes geminiKeyFromEnv true from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
-    invokeTauri: async () => ({ hasStoredKey: true, geminiKeyFromEnv: true }),
+test("getSettingsViewProps passes llmKeyFromEnv true from invoke", async () => {
+  const ctrl = createDesktopSettingsController({
+    invokeTauri: async () => ({ hasStoredKey: true, llmKeyFromEnv: true }),
   });
   const props = await ctrl.getSettingsViewProps();
-  assert.equal(props.geminiKeyFromEnv, true);
+  assert.equal(props.llmKeyFromEnv, true);
 });
 
 test("getSettingsViewProps passes braveKeyFromEnv true from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasBraveKey: true, braveKeyFromEnv: true }),
   });
   const props = await ctrl.getSettingsViewProps();
@@ -39,7 +39,7 @@ test("getSettingsViewProps passes braveKeyFromEnv true from invoke", async () =>
 });
 
 test("getSettingsViewProps passes tursoFromEnv true from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasTursoConfig: true, tursoFromEnv: true }),
   });
   const props = await ctrl.getSettingsViewProps();
@@ -47,36 +47,36 @@ test("getSettingsViewProps passes tursoFromEnv true from invoke", async () => {
 });
 
 test("getSettingsViewProps defaults fromEnv flags to false when invoke omits them", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
-  assert.equal(props.geminiKeyFromEnv, false);
+  assert.equal(props.llmKeyFromEnv, false);
   assert.equal(props.braveKeyFromEnv, false);
   assert.equal(props.tursoFromEnv, false);
 });
 
 // ── Brave API key ──────────────────────────────────────────────────────────
 
-test("createGeminiSettingsController reports hasBraveKey from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController reports hasBraveKey from invoke", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true, hasBraveKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.hasBraveKey, true);
 });
 
-test("createGeminiSettingsController hasBraveKey defaults to false when not returned", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController hasBraveKey defaults to false when not returned", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.hasBraveKey, false);
 });
 
-test("createGeminiSettingsController saveBraveApiKey calls save_brave_api_key command", async () => {
+test("createDesktopSettingsController saveBraveApiKey calls save_brave_api_key command", async () => {
   const calls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => {
       calls.push({ cmd, args });
       return {};
@@ -88,8 +88,8 @@ test("createGeminiSettingsController saveBraveApiKey calls save_brave_api_key co
   assert.equal(saveCall.args?.apiKey, "bsapikey123");
 });
 
-test("createGeminiSettingsController saveBraveApiKey rejects empty key", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController saveBraveApiKey rejects empty key", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({}),
   });
   await ctrl.saveBraveApiKey("   ");
@@ -97,8 +97,8 @@ test("createGeminiSettingsController saveBraveApiKey rejects empty key", async (
   assert.equal(props.statusMessage?.type, "error");
 });
 
-test("createGeminiSettingsController saveBraveApiKey records error when invoke fails", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController saveBraveApiKey records error when invoke fails", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
       if (cmd === "save_brave_api_key") throw new Error("permission denied");
       return { hasStoredKey: false };
@@ -110,26 +110,26 @@ test("createGeminiSettingsController saveBraveApiKey records error when invoke f
   assert.match(props.statusMessage?.text || "", /permission denied/);
 });
 
-test("createGeminiSettingsController rejects empty save with error status", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController rejects empty save with error status", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({}),
   });
-  await ctrl.saveGeminiApiKey("   ");
+  await ctrl.saveLlmApiKey("   ");
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.statusMessage?.type, "error");
 });
 
-test("createGeminiSettingsController getBootstrapGate reads onboarding flag from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController getBootstrapGate reads onboarding flag from invoke", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: false, onboardingComplete: true }),
   });
   const gate = await ctrl.getBootstrapGate();
   assert.deepEqual(gate, { hasStoredKey: false, onboardingComplete: true, apiEndpointUrl: "" });
 });
 
-test("createGeminiSettingsController completeOnboarding invokes Tauri command", async () => {
+test("createDesktopSettingsController completeOnboarding invokes Tauri command", async () => {
   const calls: string[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
       calls.push(cmd);
       return {};
@@ -139,14 +139,14 @@ test("createGeminiSettingsController completeOnboarding invokes Tauri command", 
   assert.deepEqual(calls, ["complete_onboarding"]);
 });
 
-test("createGeminiSettingsController records error when invoke fails on save", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController records error when invoke fails on save", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
-      if (cmd === "save_gemini_api_key") throw new Error("disk full");
+      if (cmd === "save_llm_api_key") throw new Error("disk full");
       return { hasStoredKey: false };
     },
   });
-  await ctrl.saveGeminiApiKey("valid-key");
+  await ctrl.saveLlmApiKey("valid-key");
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.statusMessage?.type, "error");
   assert.match(props.statusMessage?.text || "", /disk full/);
@@ -154,26 +154,26 @@ test("createGeminiSettingsController records error when invoke fails on save", a
 
 // ── Turso sync settings ────────────────────────────────────────────────────
 
-test("createGeminiSettingsController hasTursoConfig is false when invoke does not return it", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController hasTursoConfig is false when invoke does not return it", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true, hasBraveKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.hasTursoConfig, false);
 });
 
-test("createGeminiSettingsController hasTursoConfig is true when invoke returns it", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController hasTursoConfig is true when invoke returns it", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true, hasBraveKey: true, hasTursoConfig: true }),
   });
   const props = await ctrl.getSettingsViewProps();
   assert.equal(props.hasTursoConfig, true);
 });
 
-test("createGeminiSettingsController saveTursoConfig probes connection before saving", async () => {
+test("createDesktopSettingsController saveTursoConfig probes connection before saving", async () => {
   const probeArgs: Array<{ url: string; token: string }> = [];
   const tauriCalls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async (url, token) => { probeArgs.push({ url, token }); return { ok: true }; },
   });
@@ -183,9 +183,9 @@ test("createGeminiSettingsController saveTursoConfig probes connection before sa
   assert.equal(probeArgs[0].token, "mytoken");
 });
 
-test("createGeminiSettingsController saveTursoConfig invokes Tauri when probe succeeds", async () => {
+test("createDesktopSettingsController saveTursoConfig invokes Tauri when probe succeeds", async () => {
   const tauriCalls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async () => ({ ok: true }),
   });
@@ -196,9 +196,9 @@ test("createGeminiSettingsController saveTursoConfig invokes Tauri when probe su
   assert.equal(saveCall.args?.authToken, "mytoken");
 });
 
-test("createGeminiSettingsController saveTursoConfig does NOT invoke Tauri when probe fails", async () => {
+test("createDesktopSettingsController saveTursoConfig does NOT invoke Tauri when probe fails", async () => {
   const tauriCalls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => { tauriCalls.push({ cmd, args }); return {}; },
     probeTursoConnection: async () => ({ ok: false, error: "connection refused" }),
   });
@@ -207,8 +207,8 @@ test("createGeminiSettingsController saveTursoConfig does NOT invoke Tauri when 
   assert.equal(saveCall, undefined, "should not call save_turso_config when probe fails");
 });
 
-test("createGeminiSettingsController saveTursoConfig sets error status when probe fails", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController saveTursoConfig sets error status when probe fails", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: false }),
     probeTursoConnection: async () => ({ ok: false, error: "timeout" }),
   });
@@ -218,8 +218,8 @@ test("createGeminiSettingsController saveTursoConfig sets error status when prob
   assert.match(props.tursoStatusMessage?.text || "", /timeout/);
 });
 
-test("createGeminiSettingsController saveTursoConfig sets success status when probe passes", async () => {
-  const ctrl = createGeminiSettingsController({
+test("createDesktopSettingsController saveTursoConfig sets success status when probe passes", async () => {
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: false }),
     probeTursoConnection: async () => ({ ok: true }),
   });
@@ -228,9 +228,9 @@ test("createGeminiSettingsController saveTursoConfig sets success status when pr
   assert.equal(props.tursoStatusMessage?.type, "success");
 });
 
-test("createGeminiSettingsController saveTursoConfig rejects empty databaseUrl", async () => {
+test("createDesktopSettingsController saveTursoConfig rejects empty databaseUrl", async () => {
   const tauriCalls: string[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => { tauriCalls.push(cmd); return {}; },
     probeTursoConnection: async () => ({ ok: true }),
   });
@@ -243,7 +243,7 @@ test("createGeminiSettingsController saveTursoConfig rejects empty databaseUrl",
 // ── API endpoint (remote vs local sidecar) ───────────────────────────────────
 
 test("getSettingsViewProps passes apiEndpointUrl from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true, apiEndpointUrl: "https://bandsearch-api.onrender.com" }),
   });
   const props = await ctrl.getSettingsViewProps();
@@ -251,7 +251,7 @@ test("getSettingsViewProps passes apiEndpointUrl from invoke", async () => {
 });
 
 test("getSettingsViewProps apiEndpointUrl defaults to empty string when invoke omits it", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true }),
   });
   const props = await ctrl.getSettingsViewProps();
@@ -259,7 +259,7 @@ test("getSettingsViewProps apiEndpointUrl defaults to empty string when invoke o
 });
 
 test("getBootstrapGate includes apiEndpointUrl from invoke", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => ({ hasStoredKey: true, onboardingComplete: true, apiEndpointUrl: "https://remote.example" }),
   });
   const gate = await ctrl.getBootstrapGate();
@@ -268,7 +268,7 @@ test("getBootstrapGate includes apiEndpointUrl from invoke", async () => {
 
 test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async () => {
   const calls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
   });
   await ctrl.saveApiEndpointUrl("  https://bandsearch-api.onrender.com  ");
@@ -279,7 +279,7 @@ test("saveApiEndpointUrl calls save_api_endpoint_url with trimmed url", async ()
 
 test("saveApiEndpointUrl accepts empty string to reset to local and reports success", async () => {
   const calls: TauriCall[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd, args) => { calls.push({ cmd, args }); return {}; },
   });
   await ctrl.saveApiEndpointUrl("   ");
@@ -292,7 +292,7 @@ test("saveApiEndpointUrl accepts empty string to reset to local and reports succ
 
 test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => {
   const calls: string[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
   });
   await ctrl.saveApiEndpointUrl("bandsearch-api.onrender.com");
@@ -303,7 +303,7 @@ test("saveApiEndpointUrl rejects a non-URL value without invoking", async () => 
 
 test("saveApiEndpointUrl rejects a non-http protocol without invoking", async () => {
   const calls: string[] = [];
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => { calls.push(cmd); return {}; },
   });
   await ctrl.saveApiEndpointUrl("javascript:alert(1)");
@@ -313,7 +313,7 @@ test("saveApiEndpointUrl rejects a non-http protocol without invoking", async ()
 });
 
 test("saveApiEndpointUrl records error when invoke fails", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
       if (cmd === "save_api_endpoint_url") throw new Error("disk full");
       return { hasStoredKey: false };
@@ -325,11 +325,11 @@ test("saveApiEndpointUrl records error when invoke fails", async () => {
   assert.match(props.apiEndpointStatusMessage?.text || "", /disk full/);
 });
 
-test("gemini_config_status is invoked exactly once per getSettingsViewProps call", async () => {
+test("llm_config_status is invoked exactly once per getSettingsViewProps call", async () => {
   let callCount = 0;
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
-      if (cmd === "gemini_config_status") callCount++;
+      if (cmd === "llm_config_status") callCount++;
       return { hasStoredKey: true };
     },
   });
@@ -338,11 +338,11 @@ test("gemini_config_status is invoked exactly once per getSettingsViewProps call
   assert.equal(callCount, 1, "invokeTauri should be called exactly once");
 });
 
-test("gemini_config_status is invoked exactly once per getBootstrapGate call", async () => {
+test("llm_config_status is invoked exactly once per getBootstrapGate call", async () => {
   let callCount = 0;
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async (cmd) => {
-      if (cmd === "gemini_config_status") callCount++;
+      if (cmd === "llm_config_status") callCount++;
       return { hasStoredKey: false };
     },
   });
@@ -370,12 +370,12 @@ function withStubbedLocalStorage<T>(entries: Record<string, string>, run: () => 
 }
 
 test("bootstrap gate falls back to browser storage when the Tauri invoke fails", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => { throw new Error("not running in Tauri"); },
   });
 
   const gate = await withStubbedLocalStorage(
-    { bandsearch_onboarding_complete: "1", bandsearch_gemini_api_key: "key-123" },
+    { bandsearch_onboarding_complete: "1", bandsearch_llm_api_key: "key-123" },
     () => ctrl.getBootstrapGate(),
   );
 
@@ -384,12 +384,12 @@ test("bootstrap gate falls back to browser storage when the Tauri invoke fails",
 });
 
 test("settings view falls back to browser storage when the Tauri invoke fails", async () => {
-  const ctrl = createGeminiSettingsController({
+  const ctrl = createDesktopSettingsController({
     invokeTauri: async () => { throw new Error("not running in Tauri"); },
   });
 
   const props = await withStubbedLocalStorage(
-    { bandsearch_gemini_api_key: "key-123", bandsearch_brave_api_key: "brave-456" },
+    { bandsearch_llm_api_key: "key-123", bandsearch_brave_api_key: "brave-456" },
     () => ctrl.getSettingsViewProps(),
   );
 

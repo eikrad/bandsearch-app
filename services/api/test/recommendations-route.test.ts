@@ -516,7 +516,7 @@ test("a recommendation response carries provenance for its generated text", asyn
           { artist: "Fen", why: "Stylistic overlap", sourceSignals: ["agent_reasoning"] },
         ],
         assistantReply: "One pick for you.",
-        meta: { modeUsed: "fresh", usedPreferenceContext: false },
+        meta: { modeUsed: "fresh", usedPreferenceContext: false, model: "test-model-7b" },
       }),
     },
   });
@@ -536,4 +536,24 @@ test("a recommendation response carries provenance for its generated text", asyn
     /^\d{4}-\d{2}-\d{2}T/,
     "response carries an ISO timestamp for when the text was generated",
   );
+  assert.equal(stringField(meta, "model"), "test-model-7b", "response names the model that wrote the prose");
+});
+
+test("a recommendation that fails is logged with its cause, not only answered with 502", async () => {
+  const errors: Array<Record<string, unknown>> = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => {
+        throw new Error("recommendation ranker timeout");
+      },
+    },
+    logger: { warn: () => {}, error: (obj: Record<string, unknown>) => errors.push(obj) },
+  });
+
+  const result = await makeRequest(app, "/recommendations", { query: "funeral doom" });
+
+  assert.equal(result.status, 502);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]!.event, "recommendation_failed");
+  assert.match(String(errors[0]!.error), /recommendation ranker timeout/);
 });

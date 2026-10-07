@@ -11,6 +11,7 @@ function makeLastFmClient(getListenerCount: LastFmClient["getListenerCount"]): L
   return {
     getListenerCount,
     getSimilarArtists: async () => [],
+    getTopTags: async () => [],
   };
 }
 

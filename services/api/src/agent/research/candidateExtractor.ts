@@ -3,6 +3,8 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { wrapSearchHitBlock } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
+import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 12000;
 
@@ -143,27 +145,31 @@ export type CreateCandidateExtractorOptions = {
    * drive this factory's closure without a key or a network call.
    */
   modelClient?: ChatModelClient;
+  /** Builds this node's model from the configured provider (llm/chatModel.ts). */
+  chatModel?: ChatModelFactory;
 };
 
 export async function createCandidateExtractor({
   apiKey,
   timeoutMs = 12000,
-  model = "gemini-2.5-flash",
+  model = DEFAULT_RESEARCH_MODEL,
   maxCandidates = CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES,
   modelClient: injectedModelClient,
+  chatModel,
 }: CreateCandidateExtractorOptions): Promise<
   (input: { hits: SearchHitInput[]; anchorArtists: string[] }) => Promise<ExtractedCandidate[]>
 > {
   // An injected client stands in for Gemini entirely, so it needs no key.
   const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !trimmedKey) {
+  if (!injectedModelClient && !chatModel && !trimmedKey) {
     throw new Error("apiKey is required for candidate extractor");
   }
 
-  const modelClient: ChatModelClient = injectedModelClient ?? new ChatGoogleGenerativeAI({
+  const temperature = 0.1;
+  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
     model,
     apiKey: trimmedKey,
-    temperature: 0.1,
+    temperature,
     thinkingConfig: { thinkingBudget: 0 },
   });
 

@@ -8,7 +8,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 
 ## Features
 
-- **Niche artist discovery** — Gemini plans targeted Brave searches (FFO/Bandcamp-style) to find obscure artists that match your taste
+- **Niche artist discovery** — an LLM plans targeted Brave searches (FFO/Bandcamp-style) to find obscure artists that match your taste
 - **MusicBrainz verified** — every suggestion is checked against real artist records (mbid, genres, tags, URL relations)
 - **Preference memory** — save and rate bands; future recommendations adapt to your listening history
 - **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
@@ -20,25 +20,25 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 
 ```mermaid
 flowchart TD
-    START(["START"]) --> plan["plan\nWebSearchPlanner · Gemini"]
+    START(["START"]) --> plan["plan\nWebSearchPlanner · LLM"]
     plan --> brave_initial["brave_initial\nBrave Search API"]
-    brave_initial --> extract["extract\nCandidateExtractor · Gemini"]
+    brave_initial --> extract["extract\nCandidateExtractor · LLM"]
     extract --> verify["verify\nMusicBrainz"]
     verify --> reflect_if_needed
 
     subgraph reflect_if_needed["reflect_if_needed — Reflection Subgraph"]
         direction TD
-        subSTART(["START"]) --> assess["assess\nRecommendationReflector · Gemini"]
+        subSTART(["START"]) --> assess["assess\nRecommendationReflector · LLM"]
         assess -- "sufficient or budget gone" --> subEND(["END"])
         assess -- "needs more data" --> search["search\nBrave Search API"]
-        search --> extract_r["extract_r\nCandidateExtractor · Gemini"]
+        search --> extract_r["extract_r\nCandidateExtractor · LLM"]
         extract_r --> verify_r["verify_r\nMusicBrainz"]
         verify_r -- "maxRounds or budget gone" --> subEND
         verify_r -- "loop" --> assess
     end
 
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional)"]
-    enrich_lastfm --> rank["rank\nRecommendationRanker · Gemini"]
+    enrich_lastfm --> rank["rank\nRecommendationRanker · LLM"]
     rank --> END(["END"])
 ```
 
@@ -64,7 +64,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | Layer | Technology |
 |-------|------------|
 | API server | Express.js + TypeScript (Node.js 26+) |
-| AI pipeline | LangGraph + Google Gemini |
+| AI pipeline | LangGraph + Scaleway Generative APIs (DeepSeek V4 Flash by default; Gemini selectable) |
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
 | Desktop shell | Tauri v2 (Rust) + React + TypeScript |
@@ -81,12 +81,12 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 git clone https://github.com/eikrad/bandsearch-app
 cd bandsearch-app
 npm install
-cp .env.example .env        # then add GEMINI_API_KEY and BRAVE_API_KEY
+cp .env.example .env        # then add SCW_SECRET_KEY and BRAVE_API_KEY
 npm run dev                 # API starts on http://localhost:3001
 ```
 
 Preferences are saved automatically to `bandsearch.db` — no database setup needed.
-Both `GEMINI_API_KEY` and `BRAVE_API_KEY` are required to start the API.
+Both `SCW_SECRET_KEY` (Scaleway) and `BRAVE_API_KEY` are required to start the API (with `LLM_PROVIDER=gemini`, `GEMINI_API_KEY` instead of the Scaleway key).
 
 Test it:
 
@@ -134,7 +134,7 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchel
 
 ### API key storage
 
-Keys are written to the OS config directory as `bandsearch/config.json`. Use **Settings** in the app header to save your Gemini and Brave keys.
+Keys are written to the OS config directory as `bandsearch/config.json`. Use **Settings** in the app header to save your Scaleway and Brave keys. A Gemini key stored by an earlier version is removed, since it cannot run the default provider.
 
 | OS | Path |
 |----|------|
@@ -166,15 +166,16 @@ Set `JWT_SECRET` in your environment for persistent sessions across restarts.
 
 Bandsearch is a minimal-risk AI system under the EU AI Act, and the transparency
 duty in Art. 50 applies to it. Two disclosures ship in the UI: a permanent line
-in the chat composer stating that recommendations come from Google Gemini, and a
+in the chat composer stating that a language model hosted by Scaleway writes the recommendations, and a
 per-recommendation "AI-generated, not human-curated" caption. Recommendation
 cards also carry `data-ai-generated="true"`, and `/recommendations` returns
-`aiGenerated`, `generatedAt` and `pipelineVersion` in its `meta`.
+`aiGenerated`, `generatedAt`, `pipelineVersion` and the generating `model` in
+its `meta`.
 
 The privacy policy lives in `apps/desktop/src/ui/privacyPolicyText.ts` and is
 readable in-app at `#/privacy`, linked from **Settings → Privacy & data**. It
-names every processor that receives data (Gemini, Brave Search, MusicBrainz,
-optional Last.fm, Turso), the lawful basis for each kind of processing, the
+names every processor that receives data (Scaleway, Brave Search, MusicBrainz,
+optional Last.fm, Turso, and Google only if an operator selects Gemini), the lawful basis for each kind of processing, the
 retention periods, and how to exercise your rights.
 
 Two GDPR endpoints back the Settings controls:
@@ -217,21 +218,24 @@ Required variables:
 
 | Variable | Description |
 |----------|-------------|
-| `GEMINI_API_KEY` | Google Gemini — required, API will not start without it |
+| `SCW_SECRET_KEY` | Scaleway Generative APIs — required (the default LLM provider); also enables the LLM judge |
 | `BRAVE_API_KEY` | Brave Search token for niche artist discovery |
 
 Common optional variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `LLM_PROVIDER` | `scaleway` | Research provider; `gemini` is the rollback until Gemini is removed ([ADR 0004](docs/adr/0004-llm-models-per-role-on-scaleway.md)) |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | — / `gemini-2.5-flash` | Only with `LLM_PROVIDER=gemini` |
+| `SCW_MODEL` | `deepseek-v4-flash-0731` | Research model on Scaleway, chosen by the model comparison (ADR 0004) |
+| `SCW_JUDGE_MODEL` | `glm-5.2` | LLM-as-judge model; must differ from the research model; recorded as `model_id` on every score row |
+| `SCW_REASONING_EFFORT` / `SCW_JUDGE_REASONING_EFFORT` | `none` | Scaleway reasoning per role; `none` keeps calls fast (gemma: 101 s → 9 s for one extraction). `gpt-oss-120b` needs `low` or higher |
+| `SCW_BASE_URL` | `https://api.scaleway.ai/v1` | Project-scoped Scaleway endpoint, if you use one |
 | `PORT` | `3001` | API port |
 | `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
-| `MISTRAL_API_KEY` | — | Activates the async LLM-as-judge eval scoring (Mistral) |
-| `MISTRAL_JUDGE_ENDPOINT` | `https://api.mistral.ai/v1/chat/completions` | Set to `https://api.eu.mistral.ai/v1/chat/completions` to keep judge traffic in the EU |
-| `MISTRAL_JUDGE_MODEL` | `mistral-large-latest` | Judge model; also recorded as `model_id` on every score row |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
@@ -249,7 +253,7 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
    ```bash
    TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso --workspace @bandsearch/api
    ```
-2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `GEMINI_API_KEY`, `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
+2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `SCW_SECRET_KEY` (a key of its own, not the one for local evals), `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
 3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
 
 **Free-tier limitations:** Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds, and it carries no SLA or uptime guarantee. For an always-on deployment, upgrade the service to the Starter plan ($7/month) in the Render dashboard.
@@ -285,6 +289,49 @@ npm run test:e2e  # Playwright end-to-end smoke tests (spins up the API and a st
 
 Tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
 
+### Golden runs and the eval dashboard
+
+The golden set (`services/eval/golden-set.json`) is the regression check for
+recommendation quality. Start the API (`npm run dev` or the desktop
+sidecar), then:
+
+```bash
+npm run golden -w services/eval -- --label baseline --repeat 3   # three runs of one setup
+npm run dashboard -w services/eval                               # rebuild the dashboard on its own
+```
+
+For comparing models, start the API **and** the runner with `EVAL_REPLAY_DIR`
+(e.g. `services/eval/replay`): Brave, MusicBrainz and Last.fm answers are
+recorded on first use and replayed afterwards, so every model sees the same
+search data and repeat runs skip MusicBrainz's 1 req/s limit. LLM calls always
+run live. Coverage uses MusicBrainz tags and, for bands without any, Last.fm
+listener tags (`LASTFM_API_KEY`). Some golden queries carry hard
+**constraints** — "from Iceland", "formed after 2015", "shares a member with
+Alcest" — that the runner checks against MusicBrainz with plain code, no LLM
+involved.
+
+Every run appends one line to `services/eval/history/golden-runs.jsonl`
+(committed): git commit, the model the API reported, and per query the
+status, `nuggetCoverage@8`, `antiBandRate@8`, latency and top 8. It then
+rewrites `services/eval/reports/dashboard.html` (gitignored), a self-contained
+page that compares each run with the latest run labelled `baseline` and with
+the previous run: flipped queries with a sign test, how much the top 8 changed
+against the noise floor of repeat runs, and changed settings. Its **Setups**
+section groups repeats of one configuration and compares each setup with the
+baseline's per query, with a 95% interval (paired bootstrap); only differences
+outside the noise are highlighted.
+
+The judge is checked the same way: `npm run calibrate -w services/eval` scores
+the 25 hand-labelled examples and 16 directional checks with the configured
+judge (`--judge <model>` compares candidates) and appends the agreement to
+`services/eval/history/judge-runs.jsonl`.
+
+A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
+`--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at
+another deployment, `BANDSEARCH_API_TOKEN` authenticates against one with more
+than one account. The live-traffic dashboard at `GET /eval/dashboard` is a
+different thing: it shows scores from real requests, not test runs.
+
 ---
 
 ## Monorepo Structure
@@ -292,7 +339,7 @@ Tests run automatically before every commit via a pre-commit hook (installed by 
 ```
 apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
-services/eval/    — golden dataset and eval runner (anti-band gate, nugget coverage)
+services/eval/    — golden dataset, eval runner, run history and dashboard
 shared/schemas/   — shared TypeScript validation contracts
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
@@ -308,8 +355,8 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the expect
 ## Acknowledgements
 
 - [MusicBrainz](https://musicbrainz.org) — open music encyclopedia providing artist and release metadata (CC0 1.0)
-- [Google Gemini](https://deepmind.google/technologies/gemini/) — LLM powering the recommendation and explanation layer
-- [LangChain](https://www.langchain.com) — framework for structuring Gemini model calls
+- [Scaleway Generative APIs](https://www.scaleway.com/en/generative-apis/) — EU-hosted models powering the recommendation and explanation layer (DeepSeek V4 Flash) and the quality judge (GLM 5.2)
+- [LangChain](https://www.langchain.com) — framework for structuring the model calls
 - [Tauri](https://tauri.app) — framework for the native desktop wrapper
 - [Brave Search](https://brave.com/search/api/) — web search API for niche artist discovery
 

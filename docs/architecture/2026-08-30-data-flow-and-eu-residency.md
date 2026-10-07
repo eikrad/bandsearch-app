@@ -15,14 +15,27 @@ provider answers to). They have very different costs.
 |---|---|---|---|
 | Compute | Frankfurt ✅ | 🇺🇸 Render Inc. | — |
 | Database | EU selectable | 🇺🇸 Turso | accounts, e-mail addresses, password hashes, saved preferences, chat history |
-| LLM | US | 🇺🇸 Google (Gemini) | **query text + full conversation context** |
+| LLM | France 🇪🇺 | 🇫🇷 Scaleway (default since 2026-10-05; Google Gemini before, still selectable) | **query text + full conversation context** |
 | Web search | US | 🇺🇸 Brave | **search queries, retained 90 days** |
-| Judge (optional) | EU-capable | 🇫🇷 Mistral | recommendation prose |
+| Judge (optional) | France 🇪🇺 | 🇫🇷 Scaleway (since 2026-10-05; Mistral before) | query text + recommendation prose |
+
+**Planned, not built — voice input (#157).** Dictation on Android would send a
+short audio recording from the phone to our API (Render, Frankfurt), which
+forwards it to `whisper-large-v3` on 🇫🇷 Scaleway and returns only the text. No
+Google speech service is involved. The API keeps the audio in memory for the
+request only. Scaleway's published policy is zero data retention by default,
+with the exception that traffic causing abnormal errors or looking malicious
+may have its request stored temporarily (checked 2026-10-06; the page does not
+name audio specifically). The recognised text then follows the same path as any
+typed query. This table gains a row and the privacy policy gains the flow when
+#157 ships.
 
 The compute layer — the only one a hosting migration would move — is the one
 carrying the least personal data. The user's actual queries and conversation go
-to Google and Brave regardless of where the Express process runs. That is
-architectural, not a hosting choice.
+to the LLM provider and Brave regardless of where the Express process runs. That
+is architectural, not a hosting choice. *Updated 2026-10-05:* the LLM provider is
+now Scaleway in France (#237, ADR 0004), so of the two only Brave remains outside
+the EU.
 
 ## What is already EU
 
@@ -58,15 +71,20 @@ assessment.
 
 ## EU alternatives, if sovereignty ever becomes the goal
 
-Recorded so the option is not re-researched from scratch. Not recommended and
-not scoped — replacing the search and LLM providers means rebuilding the
-research pipeline, since prompt formats, structured outputs and snippet parsing
-are all shaped by the current two.
+Recorded so the option is not re-researched from scratch. Written 2026-08-30
+as "not recommended and not scoped", on the assumption that replacing the
+search and LLM providers means rebuilding the research pipeline. **Corrected
+2026-10-05:** for the LLM that assumption did not hold (see the LLM bullet), and
+the move to Scaleway is under way (#237). Replacing Brave is still unscoped: its
+snippet format does shape the extractor.
 
 - **Hosting:** Hetzner (DE, ~4 €/month), Scaleway (FR), OVHcloud (FR), IONOS (DE)
-- **LLM:** Mistral (FR) — the judge already runs on Mistral since the 2026-08-31
-  migration, and `MISTRAL_JUDGE_ENDPOINT` accepts `api.eu.mistral.ai` for EU
-  residency. The main pipeline (Gemini) is the part still to move.
+- **LLM:** Scaleway Generative APIs (FR) — chosen 2026-10-05 (#237, ADR 0004).
+  The judge already runs there; the research pipeline can switch with
+  `LLM_PROVIDER=scaleway` and becomes the default once the model comparison
+  has picked a model. That turned out cheaper than this note assumed: the
+  nodes only use a JSON-in-the-prompt chat interface, so the switch is a new
+  client behind the same interface, not a rebuilt pipeline.
 - **Web search:** Qwant (FR) is the closest equivalent to Brave with an API.
 
 ## Bearing on Phase 7 (Android)

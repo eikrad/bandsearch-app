@@ -2,7 +2,7 @@ import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
-import type { ChatModelClient } from "../modelUtils.js";
+import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
@@ -11,7 +11,9 @@ import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type Veri
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
-import { createWebSearchPlanner, type SearchPlan } from "./webSearchPlanner.js";
+import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
+import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
+import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export type ResearchGraphDeps = {
   geminiApiKey: string;
@@ -26,11 +28,20 @@ export type ResearchGraphDeps = {
   maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
+  /** Spacing of MusicBrainz calls; 0 when the transport already spaces real calls (replay). */
+  musicBrainzMinIntervalMs?: number;
   /**
    * Chat model for every Gemini-backed node. Defaults to Gemini built from
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
    */
   modelClient?: ChatModelClient;
+  /** Builds each node's model from the configured provider; used when no `modelClient` is given. */
+  chatModel?: ChatModelFactory;
+  /**
+   * Model id for every research node; defaults to `DEFAULT_RESEARCH_MODEL`.
+   * Reported back as the run's `model`, the provenance of the ranker's prose.
+   */
+  model?: string;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
   onLog?: (
@@ -104,6 +115,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
     fetchImpl: deps.fetchImpl,
+    ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
 
   const lastFm: LastFmClient | null = deps.lastFmApiKey
@@ -125,6 +137,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
     modelClient: deps.modelClient,
+    chatModel: deps.chatModel,
+    model: deps.model,
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
@@ -133,13 +147,23 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(20000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
+        model: deps.model,
       });
-      const plan = await planWeb({
-        userQuery: state.userQuery,
-        preferenceContext: state.preferenceContext,
-        messages: state.messages,
-        obscurityTarget: state.obscurityTarget,
-      });
+      let plan: SearchPlan;
+      try {
+        plan = await planWeb({
+          userQuery: state.userQuery,
+          preferenceContext: state.preferenceContext,
+          messages: state.messages,
+          obscurityTarget: state.obscurityTarget,
+        });
+      } catch (error) {
+        // A planner that times out or errors must not fail the request: the
+        // broad fallback queries still find candidates, just less precisely.
+        log("warn", "research_plan_fallback", { reason: errorMessage(error) });
+        plan = fallbackSearchPlan(state.userQuery);
+      }
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
         queryCount: plan.queries.length,
@@ -157,6 +181,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(18000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
+        model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       // Cap hits so the model emits a manageable candidate list within the timeout.
@@ -239,6 +265,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         apiKey: deps.geminiApiKey,
         timeoutMs: Math.max(budget.allocate(12000), 12000),
         modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
+        model: deps.model,
       });
       const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
       log("info", "research_obscurity_filter", {
@@ -282,7 +310,13 @@ export type PipelineDiagnostics = {
 export async function invokeResearchGraph(
   deps: ResearchGraphDeps,
   input: ResearchGraphInput,
-): Promise<{ recommendations: unknown[]; assistantReply: string; pipelineDiagnostics: PipelineDiagnostics }> {
+): Promise<{
+  recommendations: unknown[];
+  assistantReply: string;
+  pipelineDiagnostics: PipelineDiagnostics;
+  /** The model that wrote the ranker's prose — the run's provenance. */
+  model: string;
+}> {
   const budget = createResearchBudget(deps.researchTimeoutMs);
   const graph = await buildResearchGraph(deps, budget);
   const result = await graph.invoke({
@@ -317,5 +351,8 @@ export async function invokeResearchGraph(
     recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
     assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
     pipelineDiagnostics,
+    // Every node runs on deps.model today. Should they ever diverge, this must
+    // name the ranker's model: the ranker writes the user-visible `why` prose.
+    model: deps.model ?? DEFAULT_RESEARCH_MODEL,
   };
 }

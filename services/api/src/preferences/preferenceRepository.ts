@@ -149,8 +149,10 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
   if (runtimeConfig.preferenceStore === "memory") {
     return createInMemoryPreferenceRepository();
   }
-  // Default: SQLite — persistent, zero-config, works everywhere
-  const db = new Database(runtimeConfig.databasePath || "bandsearch.db");
+  // Default: SQLite. Persistent only when given a path — validateRuntimeEnv()
+  // supplies "bandsearch.db" for the server; without one this is in-memory, so
+  // an unconfigured caller (tests) never writes into a file in the cwd.
+  const db = new Database(runtimeConfig.databasePath || ":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS saved_bands (

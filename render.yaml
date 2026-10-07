@@ -16,6 +16,11 @@ services:
       - key: EVAL_DASHBOARD_ENABLED
         value: false
       # Secrets — set via the Render dashboard, not stored here:
+      # SCW_SECRET_KEY: Scaleway, the default LLM provider (ADR 0004).
+      - key: SCW_SECRET_KEY
+        sync: false
+      # Rollback only: set LLM_PROVIDER=gemini in the dashboard to run on Gemini
+      # again. Removed together with Gemini (#237).
       - key: GEMINI_API_KEY
         sync: false
       - key: BRAVE_API_KEY

@@ -12,7 +12,7 @@ import type { EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
 import { createLastFmClient } from "./eval/lastFmClient.js";
-import { createJudgeWorker, createNoOpJudgeWorker } from "./eval/judgeWorker.js";
+import { createJudgeWorker, createNoOpJudgeWorker, judgeModelFor } from "./eval/judgeWorker.js";
 
 // ESM/CJS interop — these modules may wrap their export in a .default in some build environments
 const helmet = ((helmetLib as unknown as { default?: typeof helmetLib }).default) ?? helmetLib;
@@ -38,6 +38,7 @@ import { sendError } from "./http/errors.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
 import { registerBandsearchRoutes } from "./routes/registerBandsearchRoutes.js";
 import type { BandsearchRouteContext } from "./routes/registerBandsearchRoutes.js";
+import type { LlmConfig } from "./config/models.js";
 
 type AppRuntimeConfig = {
   corsOrigin?: string;
@@ -49,7 +50,8 @@ type AppRuntimeConfig = {
   musicBrainzRetries?: number;
   wikidataTimeoutMs?: number;
   lastFmApiKey?: string;
-  mistralApiKey?: string;
+  /** Provider and model per role (config/models.ts); without it no judge runs. */
+  llm?: LlmConfig;
   evalDashboardPassword?: string;
   jwtSecret?: string;
   evalDashboardEnabled?: boolean;
@@ -152,7 +154,10 @@ export function createApp({
   // semantics for artist_group_members.
   let sqliteDatabase: Database.Database | null = null;
   const openSqliteDatabase = () => {
-    sqliteDatabase ??= new Database(runtimeConfig.databasePath || "bandsearch.db");
+    // No file fallback: the "bandsearch.db" default lives in validateRuntimeEnv(),
+    // which server.ts always passes. An unconfigured app (tests) gets a private
+    // in-memory database instead of whatever bandsearch.db sits in the cwd.
+    sqliteDatabase ??= new Database(runtimeConfig.databasePath || ":memory:");
     return sqliteDatabase;
   };
 
@@ -247,12 +252,15 @@ export function createApp({
     setInterval(purgeExpiredEvents, 24 * 60 * 60 * 1000).unref();
   }
 
-  const resolvedJudgeWorker = runtimeConfig.mistralApiKey
-    ? createJudgeWorker({
-        mistralApiKey: runtimeConfig.mistralApiKey,
-        evalRepository: resolvedEvalRepository,
-      })
-    : createNoOpJudgeWorker();
+  const judgeModel = runtimeConfig.llm ? judgeModelFor(runtimeConfig.llm) : null;
+  const resolvedJudgeWorker =
+    judgeModel && runtimeConfig.llm?.judge
+      ? createJudgeWorker({
+          judgeModel,
+          modelId: runtimeConfig.llm.judge.model,
+          evalRepository: resolvedEvalRepository,
+        })
+      : createNoOpJudgeWorker();
 
   const resolvedEvalWorker: EvalWorker =
     evalWorker ??

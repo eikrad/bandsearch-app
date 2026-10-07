@@ -5,8 +5,14 @@
   "description": "Eval scripts: judge calibration and golden dataset regression runner",
   "type": "module",
   "scripts": {
+    "lint": "eslint \"*.ts\" --max-warnings=0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "calibrate": "tsx run-calibration.ts",
     "golden": "tsx run-golden.ts",
-    "test": "tsx --test run-golden.test.ts"
+    "dashboard": "tsx dashboard.ts",
+    "test": "tsx --test"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5"
   }
 }

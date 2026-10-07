@@ -18,7 +18,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Research budget** — a wall-clock time limit (`RESEARCH_TIMEOUT_MS`) shared across all graph nodes. When exhausted, conditional edges route directly to `END` gracefully instead of timing out mid-flight.
 
-- **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into Gemini prompts for `preference-aware` mode recommendations.
+- **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into the LLM prompts for `preference-aware` mode recommendations.
 
 - **Saved band** — an artist the user has kept in their preference memory. Saving is itself a signal of interest; it does not require the user to judge the artist. A saved band may carry a rating, categories and a note, all optional.
 
@@ -36,9 +36,19 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `MISTRAL_API_KEY`).
 
-- **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Only active when `MISTRAL_API_KEY` is set; never on the critical response path.
+- **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Runs on Scaleway (`SCW_JUDGE_MODEL`, never the research model) and is only active when `SCW_SECRET_KEY` is set; checked against human labels by `run-calibration.ts`; never on the critical response path.
 
 - **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with `nuggets` (atomic sonic properties — genre, era, trait) and `antiBands` (bands that must not appear). The eval runner (`run-golden.ts`) scores `nuggetCoverage@8` against MusicBrainz tags/genres of the top-8 recommendations (fail below per-entry `minNuggetCoverage`, default 0.5) and `antiBandRate@8` (fail if > 50%; `--strict` fails on any hit). There is no `expectedBands` list: open-ended retrieval has no single correct answer set.
+
+- **Constraint query** — a golden query with hard facts every recommended band must meet (country, formed after/before, split up, shares a member with a band), checked against MusicBrainz with plain code rather than tags or a judge. A band is *met*, *missed*, or *unknown* when MusicBrainz does not record the fact; `constraintRate@8` is the share of decided bands that are met.
+
+- **Golden run** — one execution of the golden dataset against an API, recorded as a line in `services/eval/history/golden-runs.jsonl` with the model the API reported. A query the API did not answer has status `error` and no metrics; it never counts as a regression. The run labelled `baseline` (the latest such) is what later runs are compared against.
+
+- **Setup** — golden runs that differ only by chance: same research model, code, replay mode, grading targets and metrics version. Repeats of a setup (`--repeat N`) are averaged per query before two setups are compared.
+
+- **Replay** — eval-only recording of Brave, MusicBrainz and Last.fm answers (`EVAL_REPLAY_DIR`), so setups compared on the golden set see the same search data. LLM calls are never replayed.
+
+- **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does. Overlap is a **stability** signal, not a quality one: varied answers to the same query are wanted (product decision 2026-10-05, so re-asking can surface new bands).
 
 - **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
 

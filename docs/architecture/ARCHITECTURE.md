@@ -15,7 +15,7 @@ graph LR
     DESK --> API[Express API\nNode.js :3001]
     BROWSER --> API
     API --> GRAPH[LangGraph\nResearch Pipeline]
-    GRAPH --> GEMINI[Google Gemini\nplan · extract · reflect · rank]
+    GRAPH --> LLM[Scaleway LLM\nplan · extract · reflect · rank]
     GRAPH --> BRAVE[Brave Search API\nniche artist discovery]
     GRAPH --> MB[MusicBrainz\nartist verification]
     GRAPH --> DB[(SQLite / Turso)]
@@ -65,7 +65,7 @@ graph TD
         API --> PIPELINE
     end
 
-    PIPELINE --> GEMINI[Google Gemini\nplan · extract · rank]
+    PIPELINE --> LLM[Scaleway LLM\nplan · extract · rank]
     PIPELINE --> BRAVE[Brave Search API\ndiscovery queries]
     PIPELINE --> MB[MusicBrainz\nartist verification]
 
@@ -73,7 +73,7 @@ graph TD
 
     API -.->|optional| LASTFM[Last.fm\nartist images + obscurity score]
     PIPELINE -.->|optional tracing| LANGSMITH[LangSmith]
-    API -.->|optional async eval| JUDGE[Mistral\nLLM-as-Judge]
+    API -.->|optional async eval| JUDGE[Scaleway\nLLM-as-Judge]
 ```
 
 ---
@@ -134,25 +134,25 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 
 ```mermaid
 flowchart TD
-    START(["START"]) --> plan["plan\nGemini — builds Brave queries\nfrom user taste"]
+    START(["START"]) --> plan["plan\nLLM — builds Brave queries\nfrom user taste"]
     plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
-    brave_initial --> extract["extract\nGemini — extracts band names\nfrom search snippets"]
+    brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
-    enrich_lastfm --> rank["rank\nGemini — final ranked list\nwith evidence-grounded why text"]
+    enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
 ```
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `plan` | Gemini | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
+| `plan` | LLM | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
-| `extract` | Gemini | Identifies band names from snippets; filters out anchor artists |
+| `extract` | LLM | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
 | `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
-| `rank` | Gemini | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
+| `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
@@ -160,10 +160,10 @@ Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to
 
 ```mermaid
 flowchart TD
-    subSTART(["START"]) --> assess["assess\nGemini — evaluates results,\ngenerates extraQueries if gaps found"]
+    subSTART(["START"]) --> assess["assess\nLLM — evaluates results,\ngenerates extraQueries if gaps found"]
     assess -->|"sufficient or budget gone"| subEND(["END"])
     assess -->|"needs more data"| search["search\nBrave Search API\nexecutes extra queries"]
-    search --> extract_r["extract_r\nGemini — extracts from\nnew hits only"]
+    search --> extract_r["extract_r\nLLM — extracts from\nnew hits only"]
     extract_r --> verify_r["verify_r\nMusicBrainz — verifies\nnew candidates only"]
     verify_r -->|"maxRounds or budget gone"| subEND
     verify_r -->|"rounds remaining"| assess
@@ -171,9 +171,9 @@ flowchart TD
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `assess` | Gemini | Evaluates current results; generates `extraQueries` when gaps are found |
+| `assess` | LLM | Evaluates current results; generates `extraQueries` when gaps are found |
 | `search` | Brave Search API | Executes extra queries against remaining budget; stores new hits in `newHits` separately from the accumulated `braveHits` |
-| `extract_r` | Gemini | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
+| `extract_r` | LLM | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
 | `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges via `mergeVerifiedCandidates` — preserves all prior-round results |
 
 ### Budget management (`researchBudget.ts`)
@@ -187,10 +187,10 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | All structured reasoning and text generation |
+| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | Only with `LLM_PROVIDER=gemini`, the rollback until Gemini is removed (#237) |
+| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (default since 2026-10-05); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
 | **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
-| **Mistral** (optional, `MISTRAL_API_KEY`) | Eval layer | Async LLM-as-Judge scoring — never on the critical path; a different model family from Gemini to avoid self-evaluation bias |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
@@ -207,7 +207,7 @@ flowchart LR
         direction TB
         T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
         T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
-        T2["Tier 2 — LLM-as-Judge\nClaude scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
+        T2["Tier 2 — LLM-as-Judge\nScaleway judge scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
         T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
         T1 --> T15 --> T2
     end
@@ -220,7 +220,7 @@ flowchart LR
 |-------|-----------|------|---------|
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
-| **2 — LLM-as-Judge** | Async, fire-and-forget | When `MISTRAL_API_KEY` is set | Mistral scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
+| **2 — LLM-as-Judge** | Async, fire-and-forget | When `SCW_SECRET_KEY` is set (and eval is enabled) | The Scaleway judge (`SCW_JUDGE_MODEL`) scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
 | **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
 
 Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
@@ -229,9 +229,7 @@ A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_E
 
 The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
 
-> **Note on the judge model (corrected 2026-09-04):** the judge worker (`eval/judgeWorker.ts`) posts `MISTRAL_API_KEY` to Mistral, as the name says — endpoint and model are overridable via `MISTRAL_JUDGE_ENDPOINT` / `MISTRAL_JUDGE_MODEL`, and `api.eu.mistral.ai` keeps judge traffic in the EU. Earlier revisions of this file described the key going to Anthropic; that was true before the 2026-08-31 migration. One leftover survived it: `model_id` on every score row was still hardcoded to `claude-opus-4-8`, and a test asserted that value, so the provenance recorded on eval data named a model that never scored it. Both are fixed; the test now asserts that `model_id` equals the model actually sent.
->
-> **`run-calibration.ts` still calls Anthropic** and is therefore calibrated against a judge that is no longer the one in production. Recalibrating against Mistral is open work — see `docs/ROADMAP.md`.
+> **Judge provider history.** Designed for Claude; built on Mistral (until 2026-08-31 the Mistral key was wrongly posted to Anthropic, and `model_id` stayed hard-coded to `claude-opus-4-8` until 2026-09-04); **moved to Scaleway on 2026-10-05** together with calibration, which until then still called Anthropic and never ran. Both now use the same call (`judgeBands`) and the same configured model (#237, #204, [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)).
 
 ---
 
@@ -291,8 +289,8 @@ Three-tier progressive auth — determined by the number of registered users at 
 
 | Decision | Rationale |
 |----------|----------|
-| **Gemini for all graph nodes** | Consistent structured-JSON output across plan / extract / reflect / rank; low temperature (0.2) for planning reduces variance |
-| **Mistral as optional async judge** | Keeps the LLM judge off the critical response path; a different model family from Gemini avoids self-evaluation bias; eval can be added/removed without touching the graph. (`services/eval/run-calibration.ts`, the offline calibration script, still targets Anthropic — recalibrating it against Mistral is open work, see `docs/ROADMAP.md` Phase 8.) |
+| **One model for all graph nodes, chosen per role** | Consistent structured-JSON output across plan / extract / reflect / rank; each node keeps its own temperature (planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35); provider and model come from `config/models.ts` (Scaleway `deepseek-v4-flash-0731` by default, ADR 0004) |
+| **Optional async judge on Scaleway** | Keeps the LLM judge off the critical response path; never the research model and preferably another family, against self-evaluation bias; calibration uses the same call and model, so its result describes the production judge; eval can be added/removed without touching the graph |
 | **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |

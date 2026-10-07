@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
 import { OBSCURITY_THRESHOLDS } from "./obscurityScorer.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
+import { errorMessage, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../agent/modelUtils.js";
+import type { LlmConfig } from "../config/models.js";
+import { createChatModelFactory } from "../llm/chatModel.js";
 
 export type JudgeInput = {
   bandName: string;
@@ -15,7 +18,7 @@ export type JudgeInput = {
   genericWhyFlag?: boolean;
 };
 
-type JudgeScoreObject = {
+export type JudgeScoreObject = {
   relevance?: unknown;
   obscurity_fit?: unknown;
   evidence_quality?: unknown;
@@ -85,126 +88,93 @@ export function createNoOpJudgeWorker(): JudgeWorker {
   return { async judgeEvent() {} };
 }
 
+/** The configured judge's model, or null when no judge can run (no Scaleway key). */
+export function judgeModelFor(llm: LlmConfig, fetchImpl?: typeof fetch): ChatModelClient | null {
+  if (!llm.judge) return null;
+  // Temperature 0 and JSON mode: scores are compared over time, so the judge
+  // should vary as little as the model allows, and the reply must parse.
+  return createChatModelFactory(llm.judge, { ...llm, fetchImpl })({ temperature: 0, json: true });
+}
+
 /**
- * Mistral's chat-completions endpoint.
- *
- * `MISTRAL_JUDGE_ENDPOINT` allows `https://api.eu.mistral.ai/...`, which Mistral
- * offers for EU data residency — relevant here because the judge is sent the
- * recommendation prose and the user's query context.
+ * Scores every band in one call. Throws on a failed call or an unreadable
+ * answer; the worker swallows that, calibration wants to see it.
  */
-const JUDGE_ENDPOINT = process.env.MISTRAL_JUDGE_ENDPOINT?.trim() || "https://api.mistral.ai/v1/chat/completions";
-const JUDGE_MODEL = process.env.MISTRAL_JUDGE_MODEL?.trim() || "mistral-large-latest";
+export async function judgeBands(
+  judgeModel: ChatModelClient,
+  bands: JudgeInput[],
+  timeoutMs = DEFAULT_JUDGE_TIMEOUT_MS,
+): Promise<{ scores: Record<string, JudgeScoreObject>; promptHash: string }> {
+  const { system, user } = buildJudgePrompt(bands);
+  const promptHash = createHash("sha256").update(system + user).digest("hex");
+  const response = await withTimeout(
+    judgeModel.invoke([
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ]),
+    timeoutMs,
+    "judge timeout",
+  );
+  const text = typeof response.content === "string" ? response.content : "";
+  const parsed = parseModelJsonResponse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("judge answer is not a JSON object");
+  }
+  return { scores: parsed as Record<string, JudgeScoreObject>, promptHash };
+}
+
+/**
+ * Live scoring runs after the response has been sent, so a judge on a
+ * reasoning model may take its time; it must still end eventually.
+ */
+const DEFAULT_JUDGE_TIMEOUT_MS = 60_000;
 
 export function createJudgeWorker({
-  mistralApiKey,
+  judgeModel,
+  modelId,
   evalRepository,
-  fetchImpl = globalThis.fetch,
+  timeoutMs = DEFAULT_JUDGE_TIMEOUT_MS,
 }: {
-  mistralApiKey: string;
+  judgeModel: ChatModelClient;
+  /** Recorded on every score row, so scores stay attributable when the judge changes. */
+  modelId: string;
   evalRepository: EvalRepository;
-  fetchImpl?: typeof globalThis.fetch;
+  timeoutMs?: number;
 }): JudgeWorker {
-  if (!mistralApiKey) return createNoOpJudgeWorker();
-
   return {
     async judgeEvent(eventId, bands) {
       if (bands.length === 0) return;
-
-      const { system: systemText, user: userText } = buildJudgePrompt(bands);
-      const promptHash = createHash("sha256").update(systemText + userText).digest("hex");
-
-      const requestBody = {
-        model: JUDGE_MODEL,
-        max_tokens: 4096,
-        // Mistral's API is OpenAI-shaped: the system prompt is a message, not a
-        // separate field, and there is no prompt-caching block to attach.
-        messages: [
-          { role: "system", content: systemText },
-          { role: "user", content: userText },
-        ],
-        // The prompt already demands JSON; asking the API for it as well removes
-        // a class of parse failure this worker would otherwise swallow.
-        response_format: { type: "json_object" },
-      };
-
-      const controller = new AbortController();
-      const timeoutHandle = setTimeout(() => controller.abort(), 10_000);
-
+      let result: Awaited<ReturnType<typeof judgeBands>>;
       try {
-        const response = await fetchImpl(JUDGE_ENDPOINT, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mistralApiKey}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          writeStructuredLog("warn", {
-            component: "judge_worker",
-            message: `Mistral API returned ${response.status}`,
-            eventId,
-          });
-          return;
-        }
-
-        const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        const text = data?.choices?.[0]?.message?.content ?? "";
-
-        let scores: Record<string, JudgeScoreObject>;
-        try {
-          const parsed: unknown = JSON.parse(text);
-          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-            return;
-          }
-          scores = parsed as Record<string, JudgeScoreObject>;
-        } catch {
-          writeStructuredLog("warn", {
-            component: "judge_worker",
-            message: "Failed to parse judge response JSON",
-            eventId,
-            text: text.slice(0, 200),
-          });
-          return;
-        }
-
-        await Promise.allSettled(
-          bands.map(async ({ bandName }) => {
-            const score = scores[bandName];
-            if (!score || typeof score !== "object") return;
-            await evalRepository.upsertBandEvalScore({
-              eventId,
-              bandName,
-              relevance: typeof score.relevance === "number" ? score.relevance : undefined,
-              obscurityFit: typeof score.obscurity_fit === "number" ? score.obscurity_fit : undefined,
-              evidenceQuality: typeof score.evidence_quality === "number" ? score.evidence_quality : undefined,
-              discoveryValue: typeof score.discovery_value === "number" ? score.discovery_value : undefined,
-              judgeReasoning: typeof score.reasoning === "string" ? score.reasoning : undefined,
-              judgePromptHash: promptHash,
-              modelId: JUDGE_MODEL,
-            });
-          }),
-        );
+        result = await judgeBands(judgeModel, bands, timeoutMs);
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          writeStructuredLog("warn", {
-            component: "judge_worker",
-            message: "Judge request timed out",
-            eventId,
-          });
-          return;
-        }
         writeStructuredLog("warn", {
           component: "judge_worker",
           message: "Judge request failed",
           eventId,
-          error: error instanceof Error ? error.message : String(error),
+          modelId,
+          error: errorMessage(error),
         });
-      } finally {
-        clearTimeout(timeoutHandle);
+        return;
       }
+
+      await Promise.allSettled(
+        bands.map(async ({ bandName }) => {
+          const score = result.scores[bandName];
+          if (!score || typeof score !== "object") return;
+          await evalRepository.upsertBandEvalScore({
+            eventId,
+            bandName,
+            relevance: typeof score.relevance === "number" ? score.relevance : undefined,
+            obscurityFit: typeof score.obscurity_fit === "number" ? score.obscurity_fit : undefined,
+            evidenceQuality: typeof score.evidence_quality === "number" ? score.evidence_quality : undefined,
+            discoveryValue: typeof score.discovery_value === "number" ? score.discovery_value : undefined,
+            judgeReasoning: typeof score.reasoning === "string" ? score.reasoning : undefined,
+            judgePromptHash: result.promptHash,
+            modelId,
+          });
+        }),
+      );
     },
   };
 }

@@ -1,206 +1,126 @@
-import { readFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
+/**
+ * Checks the judge against human labels before its scores are trusted.
+ *
+ *     npm run calibrate -w services/eval [-- --judge <scaleway-model> ...] [--label NAME]
+ *
+ * Uses the production judge (config/models.ts, judgeWorker.ts): Scaleway, the
+ * model from SCW_JUDGE_MODEL unless --judge names others to compare. Each run
+ * is appended to history/judge-runs.jsonl.
+ */
+import { config as loadEnv } from "dotenv";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+import { resolveLlmConfig } from "../api/src/config/models.js";
+import { judgeModelFor } from "../api/src/eval/judgeWorker.js";
 import {
-  computeAgreementRate,
-  runUnitTests,
-  type HumanLabel,
-  type CalibrationJudgeScore,
-  type UnitTestCase,
-} from "../api/src/eval/judgeCalibration.js";
-import { buildJudgePrompt, type JudgeInput } from "../api/src/eval/judgeWorker.js";
+  buildJudgeRunRecord,
+  runCalibration,
+  type CalibrationEntry,
+  type UnitTestEntry,
+} from "./calibration.ts";
+import { appendRun, readGitState } from "./history.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+export const JUDGE_HISTORY_PATH = join(__dirname, "history", "judge-runs.jsonl");
 
-type CalibrationEntry = {
-  query: string;
-  obscurityTarget?: string;
-  bandName: string;
-  whyText: string;
-  sourceSignals: string[];
-  listeners: number;
-  humanScores: { relevance: number; obscurityFit: number; evidenceQuality: number };
-};
+const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-type UnitTestEntry = {
-  id: string;
-  description: string;
-  input: JudgeInput;
-  expectedDirection: { evidenceQuality?: "low" | "high"; obscurityFit?: "low" | "high"; relevance?: "low" | "high"; discoveryValue?: "low" | "high" };
-};
+async function main(): Promise<void> {
+  loadEnv({ path: join(__dirname, "../../.env"), quiet: true });
+  const { values: args } = parseArgs({
+    options: {
+      judge: { type: "string", multiple: true },
+      votes: { type: "string" },
+      mode: { type: "string" },
+      label: { type: "string" },
+      "no-history": { type: "boolean", default: false },
+      "allow-dirty": { type: "boolean", default: false },
+    },
+  });
 
-async function callJudge(
-  bands: JudgeInput[],
-  apiKey: string,
-): Promise<Record<string, { relevance?: number; obscurity_fit?: number; evidence_quality?: number; discovery_value?: number }>> {
-  const { system, user } = buildJudgePrompt(bands);
-
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), 60_000);
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "prompt-caching-2024-07-31",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 8192,
-        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: user }],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status} ${await response.text()}`);
-    }
-
-    const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
-    const text = data?.content?.find((c) => c.type === "text")?.text ?? "";
-    return JSON.parse(text) as Record<string, { relevance?: number; obscurity_fit?: number; evidence_quality?: number; discovery_value?: number }>;
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-}
-
-function toCalibrationScore(
-  bandName: string,
-  raw: { relevance?: number; obscurity_fit?: number; evidence_quality?: number; discovery_value?: number },
-): CalibrationJudgeScore {
-  return {
-    bandName,
-    relevance: raw.relevance ?? null,
-    obscurityFit: raw.obscurity_fit ?? null,
-    evidenceQuality: raw.evidence_quality ?? null,
-    discoveryValue: raw.discovery_value ?? null,
-  };
-}
-
-function printTable(rows: Array<Record<string, string | number>>) {
-  if (rows.length === 0) return;
-  const keys = Object.keys(rows[0]);
-  const widths = keys.map((k) => Math.max(k.length, ...rows.map((r) => String(r[k]).length)));
-  const header = keys.map((k, i) => k.padEnd(widths[i])).join("  ");
-  const divider = widths.map((w) => "-".repeat(w)).join("  ");
-  console.log(header);
-  console.log(divider);
-  for (const row of rows) {
-    console.log(keys.map((k, i) => String(row[k]).padEnd(widths[i])).join("  "));
-  }
-}
-
-async function main() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.error("ANTHROPIC_API_KEY is required to run calibration.");
+  const llm = resolveLlmConfig(process.env);
+  if (!llm.judge) {
+    console.error("No judge configured: set SCW_SECRET_KEY (and optionally SCW_JUDGE_MODEL).");
     process.exit(1);
   }
-
-  const calibrationPath = join(__dirname, "judge-calibration.json");
-  const unitTestPath = join(__dirname, "judge-unit-tests.json");
-
-  const calibrationEntries: CalibrationEntry[] = JSON.parse(await readFile(calibrationPath, "utf8"));
-  const unitTestEntries: UnitTestEntry[] = JSON.parse(await readFile(unitTestPath, "utf8"));
-
-  // --- Calibration: call judge for all entries ---
-  console.log(`\nRunning judge calibration on ${calibrationEntries.length} labeled samples…`);
-
-  const calibrationInputs: JudgeInput[] = calibrationEntries.map((e) => ({
-    bandName: e.bandName,
-    query: e.query,
-    obscurityTarget: e.obscurityTarget ?? null,
-    why: e.whyText,
-    sourceSignals: e.sourceSignals,
-    listeners: e.listeners,
-    citationSupportRate: undefined,
-    genericWhyFlag: undefined,
-  }));
-
-  const calibrationRaw = await callJudge(calibrationInputs, apiKey);
-  const judgeScores: CalibrationJudgeScore[] = calibrationEntries.map((e) =>
-    toCalibrationScore(e.bandName, calibrationRaw[e.bandName] ?? {}),
-  );
-
-  const humanLabels: HumanLabel[] = calibrationEntries.map((e) => ({
-    bandName: e.bandName,
-    humanScores: e.humanScores,
-  }));
-
-  const agreementResult = computeAgreementRate(humanLabels, judgeScores);
-
-  console.log("\n=== Calibration Results ===");
-  printTable([
-    {
-      Dimension: "relevance",
-      "Agreement Rate": `${(agreementResult.perDimension.relevance * 100).toFixed(1)}%`,
-    },
-    {
-      Dimension: "obscurityFit",
-      "Agreement Rate": `${(agreementResult.perDimension.obscurityFit * 100).toFixed(1)}%`,
-    },
-    {
-      Dimension: "evidenceQuality",
-      "Agreement Rate": `${(agreementResult.perDimension.evidenceQuality * 100).toFixed(1)}%`,
-    },
-    {
-      Dimension: "OVERALL",
-      "Agreement Rate": `${(agreementResult.rate * 100).toFixed(1)}%`,
-    },
-  ]);
-
-  // --- Unit tests: call judge for all inputs ---
-  console.log(`\nRunning ${unitTestEntries.length} GroUSE-style unit tests…`);
-
-  const unitTestInputs: JudgeInput[] = unitTestEntries.map((e) => ({
-    ...e.input,
-    obscurityTarget: e.input.obscurityTarget ?? null,
-  }));
-
-  const unitTestRaw = await callJudge(unitTestInputs, apiKey);
-  const unitTestScores: CalibrationJudgeScore[] = unitTestEntries.map((e) =>
-    toCalibrationScore(e.input.bandName, unitTestRaw[e.input.bandName] ?? {}),
-  );
-
-  const unitTestCases: UnitTestCase[] = unitTestEntries.map((e) => ({
-    id: e.id,
-    description: e.description,
-    bandName: e.input.bandName,
-    expectedDirection: e.expectedDirection,
-  }));
-
-  const unitTestResult = runUnitTests(unitTestCases, unitTestScores);
-
-  console.log(`\n=== Unit Test Results: ${(unitTestResult.passRate * 100).toFixed(1)}% pass rate ===`);
-  if (unitTestResult.failures.length > 0) {
-    console.log("\nFailures:");
-    for (const f of unitTestResult.failures) {
-      console.log(`  [${f.id}] ${f.description}`);
-      console.log(`    dimension=${f.dimension}, expected=${f.expected}, actual=${f.actual ?? "null"}`);
-    }
-  } else {
-    console.log("All unit tests passed.");
+  const recordHistory = !args["no-history"];
+  const git = readGitState();
+  if (recordHistory && git?.dirty && !args["allow-dirty"]) {
+    console.error("Tracked files have uncommitted changes; commit first, or pass --allow-dirty or --no-history.");
+    process.exit(2);
   }
 
-  // --- Exit logic ---
-  const overallRate = agreementResult.rate;
-  if (overallRate < 0.6) {
-    console.error(`\nFAIL: Judge–human agreement ${(overallRate * 100).toFixed(1)}% is below the 60% hard threshold. Judge is not trustworthy.`);
+  const calibrationEntries: CalibrationEntry[] = JSON.parse(readFileSync(join(__dirname, "judge-calibration.json"), "utf8"));
+  const unitTestEntries: UnitTestEntry[] = JSON.parse(readFileSync(join(__dirname, "judge-unit-tests.json"), "utf8"));
+  // --judge model[:reasoning], e.g. gpt-oss-120b:low (that model cannot turn reasoning off).
+  const judges = (args.judge?.length ? args.judge : [`${llm.judge.model}:${llm.judge.reasoningEffort ?? "none"}`]).map((spec) => {
+    const [model, effort] = spec.split(":");
+    return { model: model!, reasoningEffort: effort || "none" };
+  });
+  const votes = Math.max(1, Number.parseInt(args.votes ?? "1", 10) || 1);
+  const mode = args.mode === "per-band" ? "per-band" : "batch";
+
+  let worst = 1;
+  for (const { model, reasoningEffort } of judges) {
+    const judgeModel = judgeModelFor({ ...llm, judge: { provider: "scaleway", model, reasoningEffort } })!;
+    console.log(
+      `\nJudge ${model} (reasoning ${reasoningEffort}, ${votes} vote(s), ${mode}): ` +
+        `${calibrationEntries.length} labelled examples, ${unitTestEntries.length} unit tests…`,
+    );
+    const startedAt = new Date();
+    let result;
+    try {
+      result = await runCalibration({ judgeModel, calibrationEntries, unitTestEntries, judging: { votes, mode } });
+    } catch (error) {
+      // One unusable candidate must not stop the comparison of the others.
+      console.error(`  ✗ ${model} could not be calibrated: ${error instanceof Error ? error.message : String(error)}`);
+      worst = 0;
+      continue;
+    }
+
+    const { perDimension, rate } = result.agreement;
+    console.log(
+      `  agreement ${pct(rate)}  (relevance ${pct(perDimension.relevance)}, obscurityFit ${pct(perDimension.obscurityFit)}, ` +
+        `evidenceQuality ${pct(perDimension.evidenceQuality)})  ·  unit tests ${pct(result.unitTests.passRate)}  ·  ` +
+        `${((Date.now() - startedAt.getTime()) / 1000).toFixed(0)} s` +
+        (result.judging.failedCalls ? `  ·  ${result.judging.failedCalls} failed call(s) left out` : ""),
+    );
+    for (const f of result.unitTests.failures) {
+      console.log(`  ✗ [${f.id}] ${f.dimension}: expected ${f.expected}, got ${f.actual ?? "no score"} — ${f.description}`);
+    }
+
+    if (recordHistory) {
+      appendRun(
+        JUDGE_HISTORY_PATH,
+        buildJudgeRunRecord(result, {
+          judgeModel: model,
+          reasoningEffort,
+          startedAt,
+          label: args.label ?? null,
+          git,
+          calibrationEntries,
+          unitTestEntries,
+        }),
+      );
+    }
+    worst = Math.min(worst, rate);
+  }
+
+  if (recordHistory) console.log(`\nRecorded in ${JUDGE_HISTORY_PATH}`);
+  // Below 60% a judge is not trustworthy; 60–80% is usable with care.
+  if (worst < 0.6) {
+    console.error("FAIL: a judge agrees with the human labels less than 60% of the time.");
     process.exit(1);
   }
-  if (overallRate < 0.8) {
-    console.warn(`\nWARN: Judge–human agreement ${(overallRate * 100).toFixed(1)}% is below the 80% advisory threshold. Review calibration data.`);
-  } else {
-    console.log(`\nOK: Judge–human agreement ${(overallRate * 100).toFixed(1)}% meets the 80% threshold.`);
-  }
+  if (worst < 0.8) console.warn("WARN: a judge agrees with the human labels less than 80% of the time.");
 }
 
-main().catch((err) => {
-  console.error("Calibration failed:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err: unknown) => {
+    console.error("Calibration failed:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

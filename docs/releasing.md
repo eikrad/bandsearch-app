@@ -72,6 +72,35 @@ hidden. From 1.0 on, `feat` bumps the minor and a breaking change the major vers
 The **Commit messages** check fails a pull request with a commit that lacks a prefix,
 since release-please would silently leave that commit out.
 
+## How to merge pull requests
+
+release-please reads every commit on `main`, merge commits included, and treats each line
+in a commit body that looks like a Conventional Commit as a change of its own. A GitHub
+merge commit carries the pull request's title in its body, so a feature PR titled
+`feat(desktop): …` merged with a merge commit lands in the CHANGELOG twice: once from the
+commit itself, once from the merge commit. If the `staging` → `main` PR carries the same
+line in its body, it lands a third time. This is why 0.4.1 lists most entries twice.
+
+| Pull request                                  | Merge with            | Title                                  |
+| --------------------------------------------- | --------------------- | -------------------------------------- |
+| feature branch → `staging`                    | **Rebase and merge**  | anything; it never reaches the history |
+| `staging` → `main`                            | Create a merge commit | `chore: merge staging into main`       |
+| release-please's `chore(main): release X.Y.Z` | Create a merge commit | unchanged                              |
+| back-merge `main` → `staging`                 | Create a merge commit | unchanged (`chore: …`)                 |
+
+- **Rebase, not squash, for feature PRs.** Rebase puts each commit on `staging` unchanged
+  and adds no merge commit, so every change appears once and the per-phase commits stay
+  in the history. Squash would also avoid the duplicates, but collapses a PR into one
+  commit and one CHANGELOG line.
+- **Never rebase or squash `staging` → `main`.** Either rewrites the commits, so `main`
+  and `staging` stop sharing history and every later release conflicts.
+- **`chore:` titles for the merges into and out of `main`.** `chore` is hidden in the
+  CHANGELOG, so the merge commit adds no entry. A plain title such as "Release" works
+  too; a `feat:` or `fix:` title does not.
+
+One-time setup: repository **Settings** → General → Pull Requests → enable **Allow rebase
+merging**, and keep **Allow merge commits** enabled for the `staging` → `main` merges.
+
 ## One-time setup: the release token
 
 Pull requests opened with the workflow's own `GITHUB_TOKEN` do not trigger other

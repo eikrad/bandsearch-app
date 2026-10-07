@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { POSTGRES_REMOVED_MESSAGE } from "../preferences/preferenceRepository.js";
+import { resolveLlmConfig } from "./models.js";
 
 function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -21,10 +22,7 @@ function generateSecret(): string {
 }
 
 export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
-  const geminiApiKey = String(env.GEMINI_API_KEY ?? "").trim();
-  if (!geminiApiKey) {
-    throw new Error("GEMINI_API_KEY is required");
-  }
+  const llm = resolveLlmConfig(env);
 
   const port = parseNumber(env.PORT, 3001);
   const musicBrainzTimeoutMs = parseNumber(env.MUSICBRAINZ_TIMEOUT_MS, 5000);
@@ -75,11 +73,14 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
   const researchTargetVerifiedCandidates = parseNumber(env.RESEARCH_TARGET_VERIFIED_CANDIDATES, 8);
 
   return {
-    geminiApiKey,
+    llm,
+    geminiApiKey: llm.geminiApiKey,
+    researchModel: llm.research.model,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
-    mistralApiKey: String(env.MISTRAL_API_KEY ?? "").trim(),
     evalDashboardPassword: String(env.EVAL_DASHBOARD_PASSWORD ?? "").trim(),
     braveApiKey,
+    // Eval only: record and replay Brave/MusicBrainz/Last.fm answers (#250).
+    evalReplayDir: String(env.EVAL_REPLAY_DIR ?? "").trim(),
     pipelineReadyTimeoutMs,
     researchMaxInitialSearches,
     researchMaxReflectionSearches,

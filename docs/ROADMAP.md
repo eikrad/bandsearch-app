@@ -15,49 +15,81 @@ says what to do, the numbered sections say what it belongs to.
 ## Work queue — in order
 
 Revisit this list whenever something lands or a new blocker appears; it is a
-plan, not a second permanent structure.
+plan, not a second permanent structure. Every open item links its issue; an
+issue without a place here is listed under 8.
 
-1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161). It had to come first:
-   a 502 during a cold start read as "auth disabled", so the app would have
-   entered pass-through mode during the very test 9.5 is meant to be.
-2. **Phase 9.5 — verify Render + Turso end-to-end.** The bottleneck. Unblocks
-   Android, the deploy gate and the eval data, and it is the one thing claimed
-   as infrastructure that has never actually been run.
-3. ~~**The card action work — #151–#154 and #163–#167.**~~ Mostly done. PR #192
-   (`feature/card-action-redesign`, merged 2026-08-31) built rating stars, the
-   Save/Saved toggle, and the Category/Note sheet behind the `···` button —
-   closing #151 (dead `···` button), #152 (Save/Rate hidden on mobile), #163
-   (duplicate saves), #165 (Category/Note uneditable) and #166 (ADR 0002: only
-   an edited note reaches the prompt). #153, #155, #164, #167 and #175 were
-   already closed on GitHub before that PR. **Still open: #154** (card action
-   touch targets are ~32px, below the 44px minimum) — no `minWidth`/`minHeight`
-   sizing was added for the action row in #192. Several of the closed-in-code
-   issues (#151, #152, #163, #165, #166) remain open on GitHub only because
-   this repo's PRs target `staging`, where `Closes #N` never auto-fires — see
-   `AGENTS.md`; close them by hand once this entry is read.
-4. **Phase 10 — signing key, then the first `v0.4.0` release.** In that order.
-   This is the first real proof the updater works; the pipeline has only ever
-   run against a throwaway `v0.2.1-test` tag.
-5. **Phase 11 — Android.** Unblocked once 9.5 passes. Start with #159 (endpoint
-   default), then #156 (the seven views, the largest item).
-6. **Whenever there is room:** Phase 8 F6/F7/F8, Architecture 9 (ESM),
-   Phase 10's macOS check (#145).
+*Reordered 2026-10-05:* the Scaleway migration (#237) and the eval rebuild
+behind it took the lead; Phase 10's release turned out done (v0.4.1); the card
+action work is down to #154; search quality (#257), the desktop's Render
+default (#238) and the privacy items before real users had no place in the
+queue and now do.
+
+1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161).
+2. **#237 in production, together with Phase 9.5 (#144).** Merge the Scaleway
+   default (#256) into `staging`; set `SCW_SECRET_KEY` on Render (a key of its
+   own); merge `staging` → `main`; then run the 9.5 checklist on Render. That
+   verifies Render + Turso — never done, the old bottleneck — and Scaleway in
+   production in one pass. Rollback: `LLM_PROVIDER=gemini` on Render.
+   Done so far, all on `staging`:
+   - ✓ Golden-run history + dashboard, model id in provenance (#242, #209, #134)
+   - ✓ Planner/reflection failures degrade instead of 502 (#247, #241)
+   - ✓ Scaleway behind `LLM_PROVIDER`, role-based model config, live judge and
+     calibration on Scaleway (#249, #204 part 1)
+   - ✓ Stable measurement: replay, Last.fm tags, repeats with paired statistics
+     (#252, #250)
+   - ✓ Constraint queries checked deterministically against MusicBrainz (#254, #253)
+   - ✓ Model comparison: judge `glm-5.2`, research `deepseek-v4-flash-0731`, on
+     par with Gemini, ~11 s slower per query (#255, #204 part 2, ADR 0004)
+   - ✓ Scaleway is the default provider; desktop key vendor-neutral, privacy
+     policy and UI name Scaleway (#256). Before this reaches `main`, set
+     `SCW_SECRET_KEY` on Render; rollback is `LLM_PROVIDER=gemini` there
+3. **#257 — improve search quality, one measured change at a time.** Evidence
+   quality of the why texts (the judge's weakest dimension, ~0.5), then hard
+   constraints, then reflection (#180, never runs today). Each change measured
+   with 3 judged golden runs against the deepseek baseline.
+4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
+   for a few days. Small; can slot in between #257 changes.
+5. **#238 — desktop defaults to the Render deployment**, local sidecar as an
+   explicit choice. Needs 9.5 passed.
+6. **Privacy before real users:** #132 (telemetry opt-out, Art. 21), #135
+   (operator becomes controller), #136 (Art. 4 AI-literacy note, DPIA
+   screening). Then #248 (judge scores on live searches), which needs #132.
+7. **Phase 11 — Android.** #159 (endpoint default, shares the default with
+   #238), then #156 (the seven views, the largest item), #157, #158. #259 (spoken
+   replies) is an undecided idea after #157.
+8. **Whenever there is room:**
+   - #251 judge as a quality gate — after #257's reflection work
+   - #154 card action touch targets (the one card-action item left)
+   - Phase 8 F6/F7/F8: #140, #142, #143
+   - Architecture 9, ESM migration: #146
+   - Phase 10 macOS update check: #145
+   - #245 release re-runs that skip build and publish
+   - 9.6 CI/CD deploy gate (no issue yet; optional)
+   - Tech debt: #133, #168, #171, #172, #173, #174, #205
+   - Once there is real traffic: #239 (PPI), #240 (input drift)
+
+~~4. The card action work — #151–#154 and #163–#167.~~ Moved: done in #192
+except #154, which is now under 8.
+~~5. Phase 10 — signing key, then the first `v0.4.0` release.~~ Done: v0.4.1
+was built, signed and published by the release pipeline on 2026-10-05 (after a
+failed upload and a manual rebuild, see #245). Only the macOS check (#145) is
+left, under 8.
 
 The constraints this order satisfies:
 
 ```
-9.5  verify Render + Turso end-to-end   ← the bottleneck, never done
- ├─→ Phase 11  Android (cannot work without a reachable API)
- ├─→ 9.6       CI/CD deploy gate (optional)
- └─→ Phase 8   "Future" search_quality_check (needs production eval data)
+#237 Scaleway default ─┐
+                       ├─→ main + SCW_SECRET_KEY on Render ─→ 9.5 verified (#144)
+9.5  Render + Turso ───┘        ├─→ #238 desktop defaults to Render
+                                ├─→ Phase 11 Android (cannot work without a reachable API)
+                                ├─→ 9.6 CI/CD deploy gate (optional)
+                                └─→ #248 live judge scores (also needs #132)
 
-Phase 10  signing key + GitHub secrets
- └─→ Phase 10  first versioned release v0.4.0
-      └─→ first real proof the updater works
+#257 search quality ─→ reflection (#180) ─→ #251 judge gate
+#237 stable on Render for a few days ─→ remove Gemini
 
 Independent, can start any time:
- · Phase 8 F6 / F7 / F8      · Architecture 9 (ESM migration)
- · Phase 10 macOS check      · #154, the one card-action item left (44px touch targets)
+ · #154 · #145 · #146 · #140/#142/#143 · #245 · tech debt
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that
@@ -178,13 +210,13 @@ Three-layer system to measure recommendation quality over time: automatic obscur
 - [x] Step 2: Last.fm obscurity scoring — async worker enriches events with `listeners` count and tier (`cult` / `underground` / `obscure`) per band after the response is sent ✓ Done
 - [x] Step 3: Obscurity target setting — three-button UI (`Cult Following` / `Underground` / `Truly Obscure`), `obscurityTarget` field threaded through request body → planner prompt → event log ✓ Done
 - [x] Step 4: Search source quality + deterministic evidence checks — URL heuristic for discovery sources plus `citation_support_rate` and `generic_why_flag` per band; stored per event, no LLM needed ✓ Done
-- [x] Step 5: LLM-as-judge worker — async Claude judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; activated by `MISTRAL_API_KEY`. **Corrected 2026-08-31:** this entry used to call the variable name "a known mismatch" because the key was sent to Anthropic's API. The name was right and the implementation was wrong — a Mistral key posted to `api.anthropic.com` can only 401, which is what production logged. The judge now calls Mistral; silently skipped if absent ✓ Done
-- [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done
+- [x] Step 5: LLM-as-judge worker — async judge scoring each band on relevance, obscurity fit, evidence quality, and discovery value; never on the request path ✓ Done. Provider history: designed for Claude, built on Mistral (`MISTRAL_API_KEY`; until 2026-08-31 the key was wrongly posted to Anthropic), **moved to Scaleway on 2026-10-05** (`SCW_SECRET_KEY`, `SCW_JUDGE_MODEL`, ADR 0004, #237).
+- [x] Step 5b: Judge calibration — ~20–30 hand-labeled recommendations + ~15–20 GroUSE-style unit tests; compute judge–human agreement rate before trusting Layer 2 dashboard deltas ✓ Done. Ran for the first time on 2026-10-05, against the production judge on Scaleway: 97.3% agreement (`services/eval/history/judge-runs.jsonl`); before, `run-calibration.ts` called Anthropic and never ran (#204).
 - [x] Step 6: Baseline snapshots — `eval_baselines` table + `POST /eval/baseline` endpoint; named snapshots of aggregated metrics before experiments; filterable by `pipeline_version` ✓ Done
 - [x] Step 7: Developer dashboard — `GET /eval/dashboard` serving a standalone HTML+Chart.js page with overview panel (current vs. baseline delta), pipeline funnel panel, human–LLM alignment metrics, trend charts, obscurity distribution, and event log; guarded by `EVAL_DASHBOARD_ENABLED=true` ✓ Done
 - [x] Step 8: User feedback button — single batch-level reaction bar after recommendations render (`Spot on` / `Too mainstream` / `Wrong direction`); disappears after 12 s or next user input ✓ Done
 - [x] Step 9: Golden dataset — `services/eval/golden-set.json` with 10 curated queries including sonic-property `nuggets` and `antiBands`; `run-golden.ts` computing `antiBandRate@8` (CI fail if > 50%; `--strict` for zero-tolerance) and `nuggetCoverage@8` against MusicBrainz tags/genres (fail below per-entry `minNuggetCoverage`) ✓ Done. **Corrected 2026-09-16:** (1) removed `precision@8`, which duplicated `nuggetCoverage@8` under a misnomer; (2) rewired `nuggets` from band names → sonic properties scored against MB tags — the band-name version was exact-match recall, which the design explicitly rejected. No `expectedBands` field; see `docs/architecture/2026-05-29-eval-architecture.md`
-- [ ] Step 9b: Persist golden-run snapshots — `run-golden.ts` currently prints PASS/FAIL and exits; there is no history of `nuggetCoverage@8` / `antiBandRate@8` to compare before/after prompt or pipeline changes. Live eval has `eval_baselines` + dashboard deltas; golden regression needs the same idea (JSON report and/or store + diff against previous run). See #209.
+- [x] Step 9b: Persist golden-run snapshots — `run-golden.ts` used to print PASS/FAIL and exit; there was no history of `nuggetCoverage@8` / `antiBandRate@8` to compare before/after prompt or pipeline changes. Live eval had `eval_baselines` + dashboard deltas; golden regression needed the same idea (JSON report and/or store + diff against previous run). See #209. ✓ Done (2026-10-05): every run is recorded in `services/eval/history/golden-runs.jsonl` with the API-reported model, per-query latency and top 8; `npm run dashboard -w services/eval` writes a self-contained comparison page (sign test, top-8 overlap vs. the noise floor of repeat runs). Prerequisite for the Scaleway migration (#237).
 
 **Future (after data exists) — blocked by Phase 9.5:** the data this depends on only
 accumulates once the eval layer runs against a real deployment.
@@ -192,9 +224,9 @@ accumulates once the eval layer runs against a real deployment.
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
 
 **Polish — deferred from the 2026-06-01 implementation review** (see `docs/architecture/2026-05-30-phase8-implementation-plan.md`, findings F1–F8; F1–F5 already fixed):
-- [ ] F6 — Reconcile the plan's stale Design Decision #2: `evalWorker.processEvent` is invoked from `routes/registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Docs-only; update the architecture spec so it matches the code.
-- [ ] F7 — Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`, so the dashboard cannot link to the full recommendation payload and baselines cannot be filtered by prompt hash / model. Add at least `recommendations_json` + `user_id` to `recommendation_events`; treat prompt-hash filtering as a separate later step. (`eval/evalRepository.ts`)
-- [ ] F8 — Tune evidence heuristics: `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that also appears in good why-text → noisy `generic_why_flag`; and `citationSupportRate` defaults to 1.0 when a why has no URLs, inflating evidence metrics. Only flag generic phrasing when it co-occurs with zero citations; distinguish "no URLs" from "all URLs supported". Validate against the calibration set before locking in. (`eval/evidenceChecker.ts`)
+- [ ] F6 (#140) — Reconcile the plan's stale Design Decision #2: `evalWorker.processEvent` is invoked from `routes/registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Docs-only; update the architecture spec so it matches the code.
+- [ ] F7 (#142) — Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`, so the dashboard cannot link to the full recommendation payload and baselines cannot be filtered by prompt hash / model. Add at least `recommendations_json` + `user_id` to `recommendation_events`; treat prompt-hash filtering as a separate later step. (`eval/evalRepository.ts`)
+- [ ] F8 (#143) — Tune evidence heuristics: `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that also appears in good why-text → noisy `generic_why_flag`; and `citationSupportRate` defaults to 1.0 when a why has no URLs, inflating evidence metrics. Only flag generic phrasing when it co-occurs with zero citations; distinguish "no URLs" from "all URLs supported". Validate against the calibration set before locking in. (`eval/evidenceChecker.ts`)
 
 ---
 
@@ -258,7 +290,9 @@ Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini
 
 ---
 
-### 9.5 — End-to-end verification
+### 9.5 — End-to-end verification (#144)
+
+*2026-10-05:* scheduled together with the Scaleway default reaching `main` (work queue item 2), so the run verifies Scaleway in production too.
 
 **Action:**
 1. Create a Turso database and run the migration script against it.
@@ -269,7 +303,7 @@ Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini
 
 ---
 
-### 9.6 — CI/CD pipeline (optional)
+### 9.6 — CI/CD pipeline (optional, no issue yet)
 
 Render auto-deploys on every push to the connected branch, so no separate deploy workflow is needed. The optional hardening step is a pre-deploy gate.
 
@@ -289,11 +323,11 @@ Tester werden direkt in der App über neue Versionen informiert. Windows & Linux
 - [x] `tauri-plugin-updater` einbinden — bereits vor diesem Zyklus erledigt (Dependency, Plugin-Registrierung, `pubkey` + Endpoint in `tauri.conf.json`); Version auf `0.4.0` synchronisiert (dieser Zyklus, `apps/desktop/test/app-version.test.ts`) ✓ Done
 - [x] Hintergrund-Check beim App-Start (Rust → Tauri-Event, event-getrieben, ein Check pro Start statt Polling) ✓ Done
 - [x] `install_update` Tauri-Command (Windows & Linux) ✓ Done
-- [ ] macOS: Frontend-seitiger GitHub-API-Check — bewusst zurückgestellt (zweiter Code-Pfad mit eigenem Versionsvergleich/Error-Handling, noch nicht die Fläche wert)
+- [ ] macOS: Frontend-seitiger GitHub-API-Check (#145) — bewusst zurückgestellt (zweiter Code-Pfad mit eigenem Versionsvergleich/Error-Handling, noch nicht die Fläche wert)
 - [x] Einheitlicher Update-Banner im Frontend — als React-Komponente (`UpdateBanner.ts`) statt „kein neues File": das restliche UI ist durchgehend `React.createElement` mit eigenem File pro View, `innerHTML` kommt sonst nirgends vor ✓ Done
 - [x] GitHub Actions Release-Workflow für Linux, Windows & macOS (Node-Sidecar-Download, `tauri-action`) — bereits vor diesem Zyklus erledigt (Phase 7, `.github/workflows/release.yml`) ✓ Done
-- [ ] Signing-Key generieren + GitHub Secrets konfigurieren — manueller Schritt, außerhalb Scope
-- [ ] Erstes versioniertes Release (`v0.4.0`) als Testlauf — manueller Schritt, außerhalb Scope. **Setzt den Signing-Key eine Zeile darüber voraus.** Dies ist der erste echte Beweis, dass der Updater funktioniert: die Release-Pipeline lief bisher nur gegen einen Wegwerf-Tag `v0.2.1-test` (2026-08-11), nie gegen aktuellen Code.
+- [x] Signing-Key generieren + GitHub Secrets konfigurieren — manueller Schritt ✓ Done (the v0.4.1 artifacts are signed)
+- [x] Erstes versioniertes Release ✓ Done: **v0.4.1**, published 2026-10-05 by the release pipeline. The first attempt's Linux upload failed and the full re-run skipped build and publish (#245); a manual build of the tag completed it. *Originally planned as `v0.4.0`; the entry read:* Setzt den Signing-Key voraus; erster echter Beweis, dass der Updater funktioniert.
 
 ---
 
@@ -323,12 +357,19 @@ mobile handling, the other seven views have none.
       on edge screens), Settings stays single-scroll, Saved Artists' style-
       reference selection bar moves to the bottom — see the spec and
       `docs/design/UI_GUIDELINES.md`'s Mobile Navigation section.
-- [ ] #157 — native microphone button (Kotlin plugin) + Settings toggle.
-      Behaviour decided: the phone's own `SpeechRecognizer` (not a bundled
-      model), off by default with a third-party notice when turned on, hidden
-      where no recognition service exists, inline dismissible hint on
-      permission denial, no auto-submit of the transcript — see the spec and
-      `docs/design/UI_GUIDELINES.md`'s Voice Input section.
+- [ ] #157 — microphone button + Settings toggle. **Engine changed 2026-10-06:**
+      `whisper-large-v3` on Scaleway, reached through a new endpoint on our API,
+      instead of Android's `SpeechRecognizer` (which sends audio to Google on
+      most phones — the reason this was put back in the queue). Dictation only;
+      off by default with a notice that the recording goes to our server and
+      Scaleway (France); no auto-submit; inline hint on permission denial or a
+      failed transcription. Needs a size/duration cap and rate limit on the new
+      endpoint, and a spike on how to record in Tauri's Android WebView — see
+      the spec and `docs/design/UI_GUIDELINES.md`'s Voice Input section.
+- [ ] #259 — spoken replies (text-to-speech). Idea only, not scoped: Scaleway
+      has no TTS model, Android's local `TextToSpeech` is the likely route, and
+      reading result cards aloud would sound bad, so a short spoken summary is
+      the realistic shape. Not before #157 has shipped.
 - [ ] #158 — own F-Droid repository; this also closes the update path, since
       `tauri-plugin-updater` does not support Android. Release mechanics
       decided: rides the same release-please pipeline and tag as desktop,
@@ -349,10 +390,10 @@ idles at 61 MB RSS, so a 256MB instance suffices either way.
 
 ## Deferred / Under Review
 
-- PWA client on shared API.
-- Optional Spotify import with explicit user consent.
-- Billing and subscription controls.
-- Optional migration to Vertex AI governance mode.
+- PWA client on shared API (#147).
+- Optional Spotify import with explicit user consent (#148).
+- Billing and subscription controls (#149).
+- ~~Optional migration to Vertex AI governance mode.~~ Dropped 2026-10-05 (#150 closed): Gemini is being removed (#237), so there is nothing left to govern.
 
 ## Architecture — Pending Deepening
 
@@ -459,7 +500,7 @@ Not reachable in the current deployment — `render.yaml` sets `PREFERENCE_STORE
 
 ---
 
-### 9. `services/api` is CommonJS in an increasingly ESM ecosystem
+### 9. `services/api` is CommonJS in an increasingly ESM ecosystem (#146)
 
 *(Was marked "← next up" until 2026-08-30. It is independent and blocks nothing, whereas 9.5 blocks Android, the deploy gate and the eval data — so it is not the next thing. Kept as a ready-to-start item.)*
 
