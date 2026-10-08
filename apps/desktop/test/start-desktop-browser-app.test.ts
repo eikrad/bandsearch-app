@@ -376,3 +376,70 @@ test("with no account yet, the delete zone stays hidden", async () => {
 
   assert.equal(viewProps.accountsEnabled, false, "nothing to delete before registering");
 });
+
+// --- closed beta: invite codes (#266) ------------------------------------------
+
+type RegisterCall = { url: string; body: Record<string, unknown> };
+
+async function startOnClosedDeployment(userCount = 0) {
+  let mountOptions: Record<string, unknown> = {};
+  const registerCalls: RegisterCall[] = [];
+  let initialRoute = "";
+  // The hash router reads globalThis.location; without one navigate() is a no-op.
+  const prevLocation = globalThis.location;
+  Object.defineProperty(globalThis, "location", { value: { hash: "" }, configurable: true, writable: true });
+
+  await startDesktopBrowserApp({
+    invokeTauri: async (cmd) =>
+      cmd === "llm_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+    updateDismissalStorage: fakeUpdateStorage(),
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith("/auth/status")) {
+        return jsonResponse({ enabled: true, userCount, authMode: "enforced", inviteRequired: true });
+      }
+      if (String(url).endsWith("/auth/register")) {
+        registerCalls.push({ url: String(url), body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+        return jsonResponse({ user: { id: "u1" }, token: "tok", recoveryCode: "rc" });
+      }
+      return jsonResponse({});
+    },
+    sleep: async () => {},
+    now: () => 0,
+    deps: {
+      bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+      bootstrapDesktopReactApp: (options) => {
+        mountOptions = options as unknown as Record<string, unknown>;
+        initialRoute = options.router?.getRoute() ?? "";
+        return fakeReactApp({ mount: async () => ({}), showUpdateBanner: () => {} });
+      },
+    },
+  });
+
+  Object.defineProperty(globalThis, "location", { value: prevLocation, configurable: true, writable: true });
+  return { mountOptions, registerCalls, initialRoute };
+}
+
+test("a first visit to an empty closed deployment lands on login, not on a register form that needs an invite", async () => {
+  const { initialRoute } = await startOnClosedDeployment(0);
+
+  assert.equal(initialRoute, "login");
+});
+
+test("the register screen is told to ask for an invite code on a closed deployment", async () => {
+  const { mountOptions } = await startOnClosedDeployment(0);
+
+  const viewProps = (mountOptions.getRegisterViewProps as () => { inviteRequired?: boolean })();
+
+  assert.equal(viewProps.inviteRequired, true);
+});
+
+test("the invite code the user typed reaches the registration request", async () => {
+  const { mountOptions, registerCalls } = await startOnClosedDeployment(0);
+
+  const onRegister = mountOptions.onRegister as (
+    email: string, displayName: string, password: string, inviteCode?: string,
+  ) => Promise<{ recoveryCode: string }>;
+  await onRegister("ann@example.com", "Ann", "pw", "abcd-1234");
+
+  assert.equal(registerCalls[0].body.inviteCode, "abcd-1234");
+});

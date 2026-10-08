@@ -11,7 +11,7 @@ export type AuthUser = { id: string; email: string; displayName: string; created
  * startup gate read that as "no auth needed" and waved the user through.
  */
 export type AuthStatus =
-  | { reachable: true; enabled: boolean; userCount: number }
+  | { reachable: true; enabled: boolean; userCount: number; inviteRequired: boolean }
   | { reachable: false; reason: AuthStatusUnreachableReason };
 
 /** `http_<status>` for an answer we cannot use, `network_error` for no answer. */
@@ -39,7 +39,7 @@ export type DeleteAccountResult =
 
 export type AuthApiClient = {
   getAuthStatus(): Promise<AuthStatus>;
-  register(input: { email: string; displayName: string; password: string }): Promise<RegisterResult>;
+  register(input: { email: string; displayName: string; password: string; inviteCode?: string }): Promise<RegisterResult>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
   resetPassword(input: { email: string; recoveryCode: string; newPassword: string }): Promise<ResetPasswordResult>;
   exportAccountData(): Promise<ExportAccountDataResult>;
@@ -85,19 +85,26 @@ export function createAuthApiClient({
         // Render serves 502/503 while a spun-down instance wakes, so a non-2xx
         // is "ask again", never an answer about auth.
         if (!res.ok) return { reachable: false, reason: `http_${res.status}` };
-        const data = (await res.json()) as { enabled?: unknown; userCount?: unknown };
+        const data = (await res.json()) as { enabled?: unknown; userCount?: unknown; inviteRequired?: unknown };
         return {
           reachable: true,
           enabled: Boolean(data.enabled),
           userCount: Number(data.userCount) || 0,
+          // Absent on an API from before closed beta: nothing to ask for.
+          inviteRequired: data.inviteRequired === true,
         };
       } catch {
         return { reachable: false, reason: "network_error" };
       }
     },
 
-    async register({ email, displayName, password }): Promise<RegisterResult> {
-      const { ok, data } = await post("/auth/register", { email, displayName, password });
+    async register({ email, displayName, password, inviteCode }): Promise<RegisterResult> {
+      const { ok, data } = await post("/auth/register", {
+        email,
+        displayName,
+        password,
+        ...(inviteCode ? { inviteCode } : {}),
+      });
       if (!ok) return { ok: false, error: extractError(data, "registration failed") };
       return { ok: true, user: data.user as AuthUser, token: data.token as string, recoveryCode: data.recoveryCode as string };
     },

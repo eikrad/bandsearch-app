@@ -53,7 +53,7 @@ test("getAuthStatus returns the reported enabled flag and user count", async () 
   const { fetchImpl, calls } = fakeFetch([jsonResponse({ enabled: true, userCount: 3 })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 3 });
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 3, inviteRequired: false });
   assert.equal(calls[0].method, "GET");
 });
 
@@ -61,7 +61,27 @@ test("getAuthStatus coerces a missing user count to zero", async () => {
   const { fetchImpl } = fakeFetch([jsonResponse({ enabled: true })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 0 });
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: true, userCount: 0, inviteRequired: false });
+});
+
+test("getAuthStatus reports that a closed deployment wants an invite code", async () => {
+  const { fetchImpl } = fakeFetch([
+    jsonResponse({ enabled: true, userCount: 0, authMode: "enforced", inviteRequired: true }),
+  ]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const status = await client.getAuthStatus();
+
+  assert.equal(status.reachable && status.inviteRequired, true);
+});
+
+test("an API that predates invites is treated as not requiring one", async () => {
+  const { fetchImpl } = fakeFetch([jsonResponse({ enabled: true, userCount: 1 })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  const status = await client.getAuthStatus();
+
+  assert.equal(status.reachable && status.inviteRequired, false);
 });
 
 test("a 5xx means the API could not answer, not that auth is disabled", async () => {
@@ -94,7 +114,7 @@ test("auth being genuinely disabled is reported as a reachable answer", async ()
   const { fetchImpl } = fakeFetch([jsonResponse({ enabled: false, userCount: 0 })]);
   const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
 
-  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: false, userCount: 0 });
+  assert.deepEqual(await client.getAuthStatus(), { reachable: true, enabled: false, userCount: 0, inviteRequired: false });
 });
 
 // ------------------------------------------------------------ data export
@@ -162,6 +182,20 @@ test("register posts the credentials and returns the token and recovery code", a
   assert.equal(result.ok === true && result.token, "tok-1");
   assert.equal(result.ok === true && result.recoveryCode, "rec-1");
   assert.deepEqual(result.ok === true && result.user, user);
+});
+
+test("register sends the invite code when the user entered one", async () => {
+  const { fetchImpl, calls } = fakeFetch([jsonResponse({ user, token: "t", recoveryCode: "r" })]);
+  const client = createAuthApiClient({ apiBaseUrl: "http://localhost:3001", fetchImpl });
+
+  await client.register({ email: "a@b.c", displayName: "A", password: "pw", inviteCode: "abcd-1234" });
+
+  assert.deepEqual(calls[0].body, {
+    email: "a@b.c",
+    displayName: "A",
+    password: "pw",
+    inviteCode: "abcd-1234",
+  });
 });
 
 test("register surfaces the API error message", async () => {

@@ -202,6 +202,29 @@ failed.
 - The `failed` copy points at Settings, since a wrong API endpoint produces the
   same symptom as an unreachable one.
 
+## Register View: Invite Code (locked)
+
+On a closed deployment (`GET /auth/status` reports `inviteRequired: true`,
+which the API does when `AUTH_MODE=enforced`; ADR 0005) registration needs an
+invite code. The Register view then gains one field; on an open deployment it
+is not rendered at all, and the view is unchanged.
+
+- **Where:** first field of the form, above Email — the code is what gates the
+  rest. Label "Invite code", same input styling as the other fields, `required`,
+  `autocomplete="off"`, spellcheck off. Case, dashes and spaces in the code do
+  not matter; the client sends it trimmed and otherwise as typed.
+- **Helper text** under the input, 12px, `textTertiary`: "Enter the code from
+  your invitation. It only works for the email address you were invited with."
+  Without it a user cannot tell why a correct code is refused when they typed a
+  different address.
+- **Errors** use the existing inline error line above the form. The API answers
+  every unusable code (wrong, expired, used, revoked, other address) with the
+  same message, "invite code is invalid or expired"; the view shows it as is and
+  does not try to explain which case it was.
+- **Routing:** with `inviteRequired` and zero users the startup gate goes to
+  Login, not Register — a visitor without an invite has nothing to do on the
+  register form, and Login still links to it for those who do.
+
 ## Interaction and State Design
 
 ### Chat and request states

@@ -214,6 +214,9 @@ export async function startDesktopBrowserApp({
   // hides it entirely — which is how #175 shipped.
   let accountsEnabled = false;
 
+  // Whether the deployment wants an invite code to register. Same source as above.
+  let inviteRequired = false;
+
   // Drives the connecting screen. Read by the mount each time it renders.
   let connectingViewProps: ConnectingViewProps = { state: "waiting" };
 
@@ -226,6 +229,7 @@ export async function startDesktopBrowserApp({
    */
   function rememberAccountsEnabled(status: Awaited<ReturnType<typeof authClient.getAuthStatus>>): void {
     accountsEnabled = status.reachable && status.enabled && status.userCount > 0;
+    inviteRequired = status.reachable && status.inviteRequired;
   }
 
   async function runAuthGate(): Promise<void> {
@@ -287,8 +291,8 @@ export async function startDesktopBrowserApp({
     setAuthToken(result.token);
   }
 
-  async function onRegister(email: string, displayName: string, password: string): Promise<{ recoveryCode: string }> {
-    const result: RegisterResult = await authClient.register({ email, displayName, password });
+  async function onRegister(email: string, displayName: string, password: string, inviteCode?: string): Promise<{ recoveryCode: string }> {
+    const result: RegisterResult = await authClient.register({ email, displayName, password, inviteCode });
     if (result.ok === false) throw new Error(result.error);
     setAuthToken(result.token);
     return { recoveryCode: result.recoveryCode };
@@ -327,6 +331,7 @@ export async function startDesktopBrowserApp({
     completeOnboarding: async () => { await settings.completeOnboarding(); await runAuthGate(); },
     onLogin,
     onRegister,
+    getRegisterViewProps: () => ({ inviteRequired }),
     onResetPassword,
     updateBannerHandlers: updateNotifications.handlers,
     getConnectingViewProps: () => connectingViewProps,
