@@ -28,6 +28,8 @@ type TursoClient = { execute: (sql: string) => Promise<unknown> };
 export type BandsearchRouteContext = {
   appVersion: string;
   recommendationsLimiter: RequestHandler;
+  /** Throttles the credential-taking /auth routes (not /auth/status). */
+  authLimiter: RequestHandler;
   resolvedBandRepository: {
     addSavedBand: (body: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
     listSavedBands: (userId?: string) => Promise<SavedBand[]>;
@@ -94,6 +96,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   const {
     appVersion,
     recommendationsLimiter,
+    authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
@@ -128,7 +131,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
 
   // Auth routes (public)
   if (resolvedAuthService) {
-    app.post("/auth/register", async (req, res) => {
+    app.post("/auth/register", authLimiter, async (req, res) => {
       if (process.env.REGISTRATION_OPEN === "false") {
         return sendError(res, 403, "registration_closed", "registration is currently closed");
       }
@@ -158,14 +161,14 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       return res.status(201).json({ user: result.user, token: result.token, recoveryCode: result.recoveryCode });
     });
 
-    app.post("/auth/login", async (req, res) => {
+    app.post("/auth/login", authLimiter, async (req, res) => {
       const { email, password } = req.body ?? {};
       const result = await resolvedAuthService.login({ email: String(email ?? ""), password: String(password ?? "") });
       if (!result.ok) return sendError(res, 401, "auth_error", result.error ?? "login failed");
       return res.status(200).json({ user: result.user, token: result.token });
     });
 
-    app.post("/auth/reset-password", async (req, res) => {
+    app.post("/auth/reset-password", authLimiter, async (req, res) => {
       const { email, recoveryCode, newPassword } = req.body ?? {};
       const result = await resolvedAuthService.resetPassword({ email: String(email ?? ""), recoveryCode: String(recoveryCode ?? ""), newPassword: String(newPassword ?? "") });
       if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "reset failed");

@@ -141,6 +141,22 @@ export function createApp({
     },
   });
 
+  // Credential guessing and invite-code guessing both go through /auth/*.
+  // 128-bit codes cannot be guessed, but passwords can, and register/reset
+  // would otherwise be a free oracle for which addresses have accounts.
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: "rate_limit_exceeded",
+        message: "too many authentication attempts",
+      },
+    },
+  });
+
   // One backend, handed on as two narrow views: the routes take the half they
   // touch, and the recommendation pipeline sees only the band side.
   const { bands: resolvedBandRepository, groups: resolvedBandGroupRepository } =
@@ -308,6 +324,7 @@ export function createApp({
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
+    authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
