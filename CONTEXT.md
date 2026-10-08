@@ -50,7 +50,11 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does. Overlap is a **stability** signal, not a quality one: varied answers to the same query are wanted (product decision 2026-10-05, so re-asking can surface new bands).
 
-- **Progressive auth** — a three-mode auth scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`).
+- **Progressive auth** — the default `AUTH_MODE`, meant for personal installs: a three-mode scheme determined at runtime by the number of registered users: 0 users → pass-through (no token needed), 1 user → auto-attach (all requests associated with the single user), ≥2 users → JWT enforced (`Authorization: Bearer <token>`). Contrast **Enforced auth**.
+
+- **Enforced auth** — `AUTH_MODE=enforced`, for a closed hosted deployment: every protected request needs a valid token for an existing, non-disabled user, with no 0/1-user shortcuts; `/artists/*` is protected; `JWT_SECRET` is required; registration needs an **Invite**. Not to be confused with the ≥2-users case of progressive auth.
+
+- **Invite** — an email-bound, single-use, 14-day registration code for a closed deployment. 128 random bits, stored only as a SHA-256 hash, issued and revoked by the operator through the CLI (`invite:create|list|revoke`). The email is not verified; the code is the secret, and the binding makes a forwarded code useless to anyone but the invited address. A **disabled** user (`user:disable`) keeps their data but is refused at login and on every request.
 
 - **Preference repository** — the abstract storage interface for saved bands, artist groups, and user accounts. Concrete adapters: SQLite (`better-sqlite3`), Turso/libSQL (direct, or a local replica synced via `turso-sync`), and in-memory. A Postgres adapter existed early on and was removed for lacking user scoping (see `docs/ROADMAP.md`, "Architecture — Pending Deepening" entry 8); `PREFERENCE_STORE=postgres` now throws on startup rather than connecting to anything.
 

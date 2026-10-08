@@ -14,7 +14,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 - **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
 - **Native desktop app** — Tauri shell for Linux, macOS, and Windows; API keys stored in the OS config directory
 - **Flexible storage** — SQLite by default, Turso for shared/cloud deployments
-- **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config
+- **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config. A hosted deployment can run closed (`AUTH_MODE=enforced`, email-bound invite codes)
 
 ## How it works
 
@@ -148,17 +148,49 @@ If a recommendation call fails, the chat view shows a banner with a short, human
 
 ## Authentication
 
-Optional local multi-user auth (bcrypt + 30-day JWT). Auth behaviour is determined by how many users are registered:
+Local multi-user auth (bcrypt + 30-day JWT) with two modes, chosen by `AUTH_MODE`.
+
+### `progressive` (default)
+
+For a personal install. Behaviour depends on how many users are registered:
 
 | Users registered | Behaviour |
 |-----------------|----------|
 | 0 | Pass-through — all requests accepted, no token needed |
-| 1 | Auto-attach — requests are automatically associated with the single user |
+| 1 | Auto-attach — requests are automatically associated with the single user, even without a valid token |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
 
-Register with `POST /auth/register`, which returns a JWT token and a **recovery code**. Store the recovery code safely — it is the only way to reset your password. Tokens expire after 30 days.
+Anyone who can reach the URL can register. Do not expose this mode to the internet.
 
-Set `JWT_SECRET` in your environment for persistent sessions across restarts.
+### `enforced` (closed beta, used by `render.yaml`)
+
+For a hosted deployment with a known set of testers ([ADR 0005](docs/adr/0005-closed-beta-via-email-bound-invites.md)):
+
+- Every protected request needs a valid token for a user that exists and is not disabled — no pass-through at 0 users, no auto-attach at 1. `/artists/*` is protected too. `/health`, `/version` and `/auth/*` stay public.
+- `JWT_SECRET` is required; the server refuses to start without it.
+- `POST /auth/register` needs an `inviteCode`. An invite is bound to one email address, can be used once, and expires after 14 days. A missing, wrong, expired, used, revoked or wrong-address code all get the same `403 invite_invalid` answer.
+- `GET /auth/status` reports `authMode` and `inviteRequired`; the desktop app shows an "Invite code" field accordingly.
+- `/auth/register`, `/auth/login` and `/auth/reset-password` are limited to 20 requests per 15 minutes per client IP (`429 rate_limit_exceeded`).
+
+The email address is **not verified**. The invite code is the secret; binding it to an address means the new account carries the address you invited, and a forwarded code does not work for anyone else.
+
+### Administering a closed beta
+
+There is no admin UI or admin endpoint: the admin is whoever holds the database credentials. The commands use the same database as the server (Turso when `PREFERENCE_STORE` is `turso` or `turso-sync` — set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` — otherwise the local SQLite file):
+
+```bash
+npm run invite:create --workspace @bandsearch/api -- --email tester@example.com [--days 14]   # prints the code once
+npm run invite:list   --workspace @bandsearch/api
+npm run invite:revoke --workspace @bandsearch/api -- --email tester@example.com
+npm run user:disable  --workspace @bandsearch/api -- --email tester@example.com   # locks them out on their next request
+npm run user:enable   --workspace @bandsearch/api -- --email tester@example.com
+```
+
+Only the SHA-256 hash of a code is stored, so a lost code cannot be shown again: revoke and issue a new one. To bootstrap a fresh deployment, run `npm run migrate:turso` first (migration `005` adds the `invites` table and `users.disabled_at`), then create an invite for yourself.
+
+### Registration switch and recovery
+
+`REGISTRATION_OPEN=false` closes `POST /auth/register` completely, in either mode (in `enforced` mode that also stops invited registrations). Registering returns a JWT and a **recovery code**. Store the recovery code safely — it is the only way to reset your password. Tokens expire after 30 days. Set `JWT_SECRET` for sessions that survive restarts.
 
 ---
 
@@ -232,7 +264,9 @@ Common optional variables:
 | `SCW_REASONING_EFFORT` / `SCW_JUDGE_REASONING_EFFORT` | `none` | Scaleway reasoning per role; `none` keeps calls fast (gemma: 101 s → 9 s for one extraction). `gpt-oss-120b` needs `low` or higher |
 | `SCW_BASE_URL` | `https://api.scaleway.ai/v1` | Project-scoped Scaleway endpoint, if you use one |
 | `PORT` | `3001` | API port |
-| `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts |
+| `AUTH_MODE` | `progressive` | `enforced` closes the deployment: tokens always required, registration by invite only ([ADR 0005](docs/adr/0005-closed-beta-via-email-bound-invites.md)) |
+| `JWT_SECRET` | *(auto-generated)* | Set for persistent sessions across restarts; required when `AUTH_MODE=enforced` |
+| `REGISTRATION_OPEN` | `true` | `false` rejects every `POST /auth/register` |
 | `PREFERENCE_STORE` | `sqlite` | `sqlite`, `memory`, `turso`, or `turso-sync` |
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
@@ -253,7 +287,7 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
    ```bash
    TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso --workspace @bandsearch/api
    ```
-2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `SCW_SECRET_KEY` (a key of its own, not the one for local evals), `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
+2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `SCW_SECRET_KEY` (a key of its own, not the one for local evals), `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. `render.yaml` sets `AUTH_MODE=enforced`, so run the migration (step 1) before deploying and then create your first invite (see [Authentication](#authentication)). These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
 3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
 
 **Free-tier limitations:** Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds, and it carries no SLA or uptime guarantee. For an always-on deployment, upgrade the service to the Starter plan ($7/month) in the Render dashboard.
