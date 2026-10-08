@@ -32,6 +32,10 @@ import { createTursoUserDataStore } from "./privacy/tursoUserDataStore.js";
 import type { UserDataStore } from "./privacy/userDataStore.js";
 import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
 import { createTursoUserRepository } from "./auth/tursoUserRepository.js";
+import { createInMemoryInviteRepository, createSqliteInviteRepository } from "./auth/inviteRepository.js";
+import type { InviteRepository } from "./auth/inviteRepository.js";
+import { createTursoInviteRepository } from "./auth/tursoInviteRepository.js";
+import { createInviteService } from "./auth/inviteService.js";
 import { createAuthService } from "./auth/authService.js";
 import { createAuthMiddleware } from "./auth/authMiddleware.js";
 import { sendError } from "./http/errors.js";
@@ -67,6 +71,7 @@ type CreateAppOptions = {
   };
   preferenceRepository?: PreferenceRepository;
   userRepository?: UserRepository;
+  inviteRepository?: InviteRepository;
   userDataStore?: UserDataStore;
   musicBrainzClient?: BandsearchRouteContext["resolvedMusicBrainzClient"];
   artistImageClient?: BandsearchRouteContext["resolvedArtistImageClient"];
@@ -82,6 +87,7 @@ export function createApp({
   recommendationPipeline,
   preferenceRepository,
   userRepository,
+  inviteRepository,
   userDataStore,
   musicBrainzClient,
   artistImageClient,
@@ -198,6 +204,18 @@ export function createApp({
       }
     })();
 
+  const resolvedInviteRepository =
+    inviteRepository ||
+    (() => {
+      if (sharedTursoClient) return createTursoInviteRepository({ client: sharedTursoClient });
+      try {
+        return createSqliteInviteRepository({ db: openSqliteDatabase() });
+      } catch {
+        return createInMemoryInviteRepository();
+      }
+    })();
+  const resolvedInviteService = createInviteService({ inviteRepository: resolvedInviteRepository });
+
   // Where a user's rows actually live, resolved the same way the other
   // repositories are. Null on backends that cannot erase (in-memory), so
   // deletion reports itself unavailable rather than silently succeeding.
@@ -301,6 +319,7 @@ export function createApp({
     resolvedAuthService: resolvedAuthService ?? undefined,
     authMiddleware: authMiddleware ?? undefined,
     authMode,
+    resolvedInviteService,
     resolvedUserDataStore,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
