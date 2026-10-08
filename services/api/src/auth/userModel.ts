@@ -5,9 +5,10 @@ export function normalizeEmail(email: string): string {
 }
 
 export function publicUser(user: User): PublicUser {
-  const { passwordHash: _ph, recoveryCodeHash: _rc, ...pub } = user;
+  const { passwordHash: _ph, recoveryCodeHash: _rc, disabledAt: _da, ...pub } = user;
   void _ph;
   void _rc;
+  void _da;
   return pub;
 }
 
@@ -19,5 +20,6 @@ export function rowToUser(row: Record<string, unknown>): User {
     passwordHash: row.password_hash as string,
     recoveryCodeHash: row.recovery_code_hash as string,
     createdAt: row.created_at as string,
+    disabledAt: (row.disabled_at as string | null | undefined) ?? null,
   };
 }

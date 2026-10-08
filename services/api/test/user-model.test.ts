@@ -18,6 +18,7 @@ test("publicUser strips passwordHash and recoveryCodeHash fields", () => {
     passwordHash: "secret",
     recoveryCodeHash: "also-secret",
     createdAt: "2024-01-01T00:00:00.000Z",
+    disabledAt: null,
   };
   const pub = publicUser(user);
   assert.equal("passwordHash" in pub, false);
@@ -32,6 +33,7 @@ test("publicUser preserves id, email, displayName, createdAt", () => {
     passwordHash: "hash",
     recoveryCodeHash: "rchash",
     createdAt: "2025-06-01T10:00:00.000Z",
+    disabledAt: null,
   };
   const pub = publicUser(user);
   assert.equal(pub.id, "42");

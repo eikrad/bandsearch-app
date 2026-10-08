@@ -121,3 +121,19 @@ test("users round-trip through the sync client", async () => {
     assert.ok(found, "email lookup must be case-insensitive on this backend too");
   });
 });
+
+test("invites and disabled users round-trip through the sync client", async () => {
+  await withRepositories(async ({ inviteRepository, userRepository }) => {
+    const invite = await inviteRepository.create({
+      email: "Ann@Example.com",
+      codeHash: "hash",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+    });
+    assert.equal(await inviteRepository.markUsed(invite.id), true);
+    assert.equal(await inviteRepository.markUsed(invite.id), false);
+
+    const user = await userRepository.create({ email: "a@x.com", displayName: "A", passwordHash: "h", recoveryCodeHash: "r" });
+    assert.equal(await userRepository.setDisabled(user.id, true), true);
+    assert.ok((await userRepository.findById(user.id))?.disabledAt);
+  });
+});

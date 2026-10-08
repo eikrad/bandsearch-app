@@ -13,6 +13,10 @@ services:
         value: production
       - key: PREFERENCE_STORE
         value: turso
+      # Closed beta: every request needs a token, registration needs an invite
+      # (ADR 0005). Needs JWT_SECRET below, or the server refuses to start.
+      - key: AUTH_MODE
+        value: enforced
       - key: EVAL_DASHBOARD_ENABLED
         value: false
       # Secrets — set via the Render dashboard, not stored here:

@@ -41,7 +41,7 @@ function renderLogin(viewProps: { error?: string | null } = {}) {
   );
 }
 
-function renderRegister(viewProps: { error?: string | null } = {}) {
+function renderRegister(viewProps: { error?: string | null; inviteRequired?: boolean } = {}) {
   return renderToStaticMarkup(
     React.createElement(RegisterView, { viewProps, handlers: noopRegisterHandlers }),
   );
@@ -118,6 +118,18 @@ test("RegisterView renders email, display name and password fields", () => {
   assert.match(html, /Password/);
   assert.match(html, /type="email"/);
   assert.match(html, /type="password"/);
+});
+
+test("RegisterView asks for an invite code on a closed deployment", () => {
+  const html = renderRegister({ inviteRequired: true });
+
+  assert.match(html, /Invite code/);
+  assert.match(html, /invited/i, "tells the user what the code is and where it comes from");
+});
+
+test("RegisterView does not mention invites on an open deployment", () => {
+  assert.doesNotMatch(renderRegister(), /Invite code/);
+  assert.doesNotMatch(renderRegister({ inviteRequired: false }), /Invite code/);
 });
 
 test("RegisterView renders the error prop", () => {

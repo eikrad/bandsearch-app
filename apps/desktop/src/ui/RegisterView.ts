@@ -4,6 +4,7 @@ const palette = {
   pageBg: "#0d0f14",
   textPrimary: "#f0f4f8",
   textSecondary: "#8896a8",
+  textTertiary: "#5a6880",
   accent: "#7aa7d9",
   border: "#1e2a3a",
   errorText: "#f87171",
@@ -33,16 +34,19 @@ const labelStyle: React.CSSProperties = {
 };
 
 export interface RegisterViewHandlers {
-  onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
+  onRegister?: (email: string, displayName: string, password: string, inviteCode?: string) => Promise<{ recoveryCode: string }>;
   onDone?: () => void;
   onNavigateLogin?: () => void;
 }
 
 export interface RegisterViewProps {
   error?: string | null;
+  /** Closed deployment: registration needs the code from an invitation. */
+  inviteRequired?: boolean;
 }
 
 export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewProps; handlers: RegisterViewHandlers }) {
+  const [inviteCode, setInviteCode] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -51,14 +55,15 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
   const [recoveryCode, setRecoveryCode] = React.useState<string | null>(null);
 
   const error = viewProps.error ?? localError;
+  const inviteRequired = viewProps.inviteRequired === true;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!email.trim() || !password || (inviteRequired && !inviteCode.trim())) return;
     setLocalError(null);
     setLoading(true);
     try {
-      const result = await handlers.onRegister?.(email.trim(), displayName.trim(), password);
+      const result = await handlers.onRegister?.(email.trim(), displayName.trim(), password, inviteRequired ? inviteCode.trim() : undefined);
       if (result?.recoveryCode) setRecoveryCode(result.recoveryCode);
     } catch (err: unknown) {
       setLocalError(err instanceof Error ? err.message : "registration failed");
@@ -103,6 +108,26 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
     React.createElement(
       "form",
       { onSubmit: handleSubmit, style: { display: "flex", flexDirection: "column", gap: "16px" } },
+      inviteRequired &&
+        React.createElement(
+          "label",
+          { style: labelStyle },
+          "Invite code",
+          React.createElement("input", {
+            type: "text",
+            value: inviteCode,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setInviteCode(e.target.value),
+            required: true,
+            autoComplete: "off",
+            spellCheck: false,
+            style: { ...inputStyle, marginTop: "6px" },
+          }),
+          React.createElement(
+            "span",
+            { style: { display: "block", fontSize: "12px", color: palette.textTertiary, marginTop: "6px", lineHeight: 1.5 } },
+            "Enter the code from your invitation. It only works for the email address you were invited with.",
+          ),
+        ),
       React.createElement(
         "label",
         { style: labelStyle },

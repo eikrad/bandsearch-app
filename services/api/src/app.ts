@@ -32,6 +32,10 @@ import { createTursoUserDataStore } from "./privacy/tursoUserDataStore.js";
 import type { UserDataStore } from "./privacy/userDataStore.js";
 import { createSqliteUserRepository, createInMemoryUserRepository } from "./auth/userRepository.js";
 import { createTursoUserRepository } from "./auth/tursoUserRepository.js";
+import { createInMemoryInviteRepository, createSqliteInviteRepository } from "./auth/inviteRepository.js";
+import type { InviteRepository } from "./auth/inviteRepository.js";
+import { createTursoInviteRepository } from "./auth/tursoInviteRepository.js";
+import { createInviteService } from "./auth/inviteService.js";
 import { createAuthService } from "./auth/authService.js";
 import { createAuthMiddleware } from "./auth/authMiddleware.js";
 import { sendError } from "./http/errors.js";
@@ -54,6 +58,8 @@ type AppRuntimeConfig = {
   llm?: LlmConfig;
   evalDashboardPassword?: string;
   jwtSecret?: string;
+  /** "progressive" (default) or "enforced" — see ADR 0005. */
+  authMode?: "progressive" | "enforced";
   evalDashboardEnabled?: boolean;
   evalRetentionDays?: number;
 };
@@ -65,6 +71,7 @@ type CreateAppOptions = {
   };
   preferenceRepository?: PreferenceRepository;
   userRepository?: UserRepository;
+  inviteRepository?: InviteRepository;
   userDataStore?: UserDataStore;
   musicBrainzClient?: BandsearchRouteContext["resolvedMusicBrainzClient"];
   artistImageClient?: BandsearchRouteContext["resolvedArtistImageClient"];
@@ -80,6 +87,7 @@ export function createApp({
   recommendationPipeline,
   preferenceRepository,
   userRepository,
+  inviteRepository,
   userDataStore,
   musicBrainzClient,
   artistImageClient,
@@ -91,6 +99,11 @@ export function createApp({
   createTursoClient,
 }: CreateAppOptions = {}) {
   const app = express();
+  // The API runs behind exactly one reverse proxy (Render). Trusting one hop
+  // makes req.ip the client address from X-Forwarded-For instead of the
+  // proxy's, so per-IP rate limits throttle the abuser, not every user at once.
+  // Direct connections (local dev, tests) carry no header and are unaffected.
+  app.set("trust proxy", 1);
   app.use(helmet());
   app.use(
     cors({
@@ -124,6 +137,22 @@ export function createApp({
       error: {
         code: "rate_limit_exceeded",
         message: "too many recommendation requests",
+      },
+    },
+  });
+
+  // Credential guessing and invite-code guessing both go through /auth/*.
+  // 128-bit codes cannot be guessed, but passwords can, and register/reset
+  // would otherwise be a free oracle for which addresses have accounts.
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: "rate_limit_exceeded",
+        message: "too many authentication attempts",
       },
     },
   });
@@ -191,6 +220,18 @@ export function createApp({
       }
     })();
 
+  const resolvedInviteRepository =
+    inviteRepository ||
+    (() => {
+      if (sharedTursoClient) return createTursoInviteRepository({ client: sharedTursoClient });
+      try {
+        return createSqliteInviteRepository({ db: openSqliteDatabase() });
+      } catch {
+        return createInMemoryInviteRepository();
+      }
+    })();
+  const resolvedInviteService = createInviteService({ inviteRepository: resolvedInviteRepository });
+
   // Where a user's rows actually live, resolved the same way the other
   // repositories are. Null on backends that cannot erase (in-memory), so
   // deletion reports itself unavailable rather than silently succeeding.
@@ -211,6 +252,12 @@ export function createApp({
     })();
 
   const jwtSecret = runtimeConfig.jwtSecret;
+  const authMode = runtimeConfig.authMode ?? "progressive";
+  // Fail closed: without a secret no middleware exists, which in enforced mode
+  // would mean an open server that believes itself closed.
+  if (authMode === "enforced" && !jwtSecret) {
+    throw new Error("JWT_SECRET is required when AUTH_MODE=enforced");
+  }
   const resolvedAuthService = jwtSecret
     ? createAuthService({
         userRepository: resolvedUserRepository,
@@ -219,7 +266,7 @@ export function createApp({
       })
     : null;
   const authMiddleware = resolvedAuthService
-    ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
+    ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository, { mode: authMode })
     : null;
 
   // Eval repository and worker share a single store so the /eval routes read
@@ -277,6 +324,7 @@ export function createApp({
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
+    authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
@@ -287,6 +335,8 @@ export function createApp({
     logger,
     resolvedAuthService: resolvedAuthService ?? undefined,
     authMiddleware: authMiddleware ?? undefined,
+    authMode,
+    resolvedInviteService,
     resolvedUserDataStore,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"

@@ -46,6 +46,15 @@ test("render.yaml uses the turso preference store in production", () => {
   );
 });
 
+test("render.yaml runs the hosted API in enforced auth mode (closed beta)", () => {
+  // Without it the public URL would be open at 0 users and would attach every
+  // anonymous request to the only user at 1 (ADR 0005).
+  assert.ok(
+    /key:\s*AUTH_MODE\s*\n\s*value:\s*enforced/.test(renderYaml),
+    "Expected AUTH_MODE: enforced",
+  );
+});
+
 test("render.yaml declares required secrets without hardcoding values", () => {
   for (const key of [
     "SCW_SECRET_KEY",
