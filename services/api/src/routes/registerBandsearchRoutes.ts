@@ -83,6 +83,7 @@ export type BandsearchRouteContext = {
     getStatus: () => Promise<{ userCount: number }>;
   };
   authMiddleware?: RequestHandler;
+  authMode?: "progressive" | "enforced";
   resolvedUserDataStore?: UserDataStore | null;
 };
 
@@ -105,6 +106,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalDashboardPassword,
     resolvedAuthService,
     authMiddleware,
+    authMode = "progressive",
     resolvedUserDataStore,
   } = ctx;
 
@@ -150,6 +152,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     app.use("/sessions", authMiddleware);
     app.use("/recommendations", authMiddleware);
     app.use("/account", authMiddleware);
+    // Artist lookups spend the operator's MusicBrainz/Wikidata/Last.fm quota,
+    // so a closed deployment gates them too. Progressive installs keep them open.
+    if (authMode === "enforced") app.use("/artists", authMiddleware);
   }
 
   // GDPR Art. 17 (erasure) and Art. 15/20 (access and portability).

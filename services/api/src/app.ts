@@ -54,6 +54,8 @@ type AppRuntimeConfig = {
   llm?: LlmConfig;
   evalDashboardPassword?: string;
   jwtSecret?: string;
+  /** "progressive" (default) or "enforced" — see ADR 0005. */
+  authMode?: "progressive" | "enforced";
   evalDashboardEnabled?: boolean;
   evalRetentionDays?: number;
 };
@@ -216,6 +218,12 @@ export function createApp({
     })();
 
   const jwtSecret = runtimeConfig.jwtSecret;
+  const authMode = runtimeConfig.authMode ?? "progressive";
+  // Fail closed: without a secret no middleware exists, which in enforced mode
+  // would mean an open server that believes itself closed.
+  if (authMode === "enforced" && !jwtSecret) {
+    throw new Error("JWT_SECRET is required when AUTH_MODE=enforced");
+  }
   const resolvedAuthService = jwtSecret
     ? createAuthService({
         userRepository: resolvedUserRepository,
@@ -224,7 +232,7 @@ export function createApp({
       })
     : null;
   const authMiddleware = resolvedAuthService
-    ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository)
+    ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository, { mode: authMode })
     : null;
 
   // Eval repository and worker share a single store so the /eval routes read
@@ -292,6 +300,7 @@ export function createApp({
     logger,
     resolvedAuthService: resolvedAuthService ?? undefined,
     authMiddleware: authMiddleware ?? undefined,
+    authMode,
     resolvedUserDataStore,
     getRecommendationReadiness:
       typeof recommendationPipeline?.getReadinessSnapshot === "function"
