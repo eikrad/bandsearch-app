@@ -91,6 +91,11 @@ export function createApp({
   createTursoClient,
 }: CreateAppOptions = {}) {
   const app = express();
+  // The API runs behind exactly one reverse proxy (Render). Trusting one hop
+  // makes req.ip the client address from X-Forwarded-For instead of the
+  // proxy's, so per-IP rate limits throttle the abuser, not every user at once.
+  // Direct connections (local dev, tests) carry no header and are unaffected.
+  app.set("trust proxy", 1);
   app.use(helmet());
   app.use(
     cors({
