@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { randomBytes } from "crypto";
 import type { UserRepository, PublicUser } from "./userRepository";
+import { publicUser } from "./userModel.js";
 import type { UserDataStore } from "../privacy/userDataStore.js";
 
 const BCRYPT_ROUNDS = 10;
@@ -69,11 +70,10 @@ export function createAuthService({
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return { ok: false as const, error: "invalid credentials" };
 
-    const { passwordHash: _ph, recoveryCodeHash: _rc, ...publicUser } = user;
-    void _ph;
-    void _rc;
+    if (user.disabledAt) return { ok: false as const, error: "account disabled" };
+
     const token = jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: JWT_EXPIRES_IN });
-    return { ok: true as const, user: publicUser, token };
+    return { ok: true as const, user: publicUser(user), token };
   }
 
   function verifyToken(token: string) {
