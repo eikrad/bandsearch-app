@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.4.2](https://github.com/eikrad/bandsearch-app/compare/v0.4.1...v0.4.2) (2026-10-07)
+
+
+### Features
+
+* **api:** artist country and band members from MusicBrainz ([1408931](https://github.com/eikrad/bandsearch-app/commit/1408931459dd77752e75b15ec17db1eb460c62e2)), closes [#253](https://github.com/eikrad/bandsearch-app/issues/253)
+* **api:** choose the research and judge models per role, with a provider switch ([b0e422e](https://github.com/eikrad/bandsearch-app/commit/b0e422e041908b5b1ff237b221b232be23d7b1cb)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+* **api:** name the generating model in recommendation provenance ([c265abf](https://github.com/eikrad/bandsearch-app/commit/c265abf839fb22ceb6583a519e8f7a4baa8c902f)), closes [#134](https://github.com/eikrad/bandsearch-app/issues/134)
+* **api:** Scaleway chat client behind the shared model interface ([92bb2a8](https://github.com/eikrad/bandsearch-app/commit/92bb2a825bc34f3b65103ee102948dc92f078a46)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+* **api:** Scaleway is the default LLM provider ([8f7dd2f](https://github.com/eikrad/bandsearch-app/commit/8f7dd2f544cbf42a9b4aedffe95123dbd254e642)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+* **desktop:** a vendor-neutral LLM key for the local sidecar, and Scaleway in the UI ([bcc69cc](https://github.com/eikrad/bandsearch-app/commit/bcc69cc9040caf73c47490d3e640a99e1b7eddc3)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+* **eval:** calibrate the production judge on Scaleway and record every run ([374e9f4](https://github.com/eikrad/bandsearch-app/commit/374e9f424c52bbe715db8c2310d57abdf2a6dd14))
+* **eval:** constraint queries — a third gate checked deterministically ([148aebd](https://github.com/eikrad/bandsearch-app/commit/148aebdc5d75f6d21eacd58bfc8aa0bfc6d6995d)), closes [#253](https://github.com/eikrad/bandsearch-app/issues/253)
+* **eval:** constraint queries checked deterministically against MusicBrainz ([037fc92](https://github.com/eikrad/bandsearch-app/commit/037fc928572bd6ed3f42995f5c1819d5cde9fc36))
+* **eval:** coverage from Last.fm tags where MusicBrainz has none; record replay ([b53a493](https://github.com/eikrad/bandsearch-app/commit/b53a493f831e9c61fd75200cc8d3d6f32336a576)), closes [#250](https://github.com/eikrad/bandsearch-app/issues/250)
+* **eval:** golden-run history, dashboard and model provenance ([e49230b](https://github.com/eikrad/bandsearch-app/commit/e49230bca140e53e7a996f7ea6d19b666dc94659))
+* **eval:** judge scores in golden runs ([46160cf](https://github.com/eikrad/bandsearch-app/commit/46160cf09dbf82dc5d425b0feb81f0ff3a662e68))
+* **eval:** judge with votes, shuffled band order and per-band calls ([9b69e4f](https://github.com/eikrad/bandsearch-app/commit/9b69e4f9544d2a2315dccf68c654bf65c710b6c2))
+* **eval:** Last.fm top tags per artist ([40b0110](https://github.com/eikrad/bandsearch-app/commit/40b01100f7205116e705b9cbd806b0551664f572)), closes [#250](https://github.com/eikrad/bandsearch-app/issues/250)
+* **eval:** model comparison — judge glm-5.2, research deepseek-v4-flash on Scaleway ([09edd87](https://github.com/eikrad/bandsearch-app/commit/09edd875bbedc2df0f69a7bf8b488499e3086af8))
+* **eval:** record and replay external lookups for eval runs ([14b3594](https://github.com/eikrad/bandsearch-app/commit/14b3594bb1d80b01b8e8d220fe42aa367a44fcb9)), closes [#250](https://github.com/eikrad/bandsearch-app/issues/250)
+* **eval:** record every golden run in a committed history ([fe7e547](https://github.com/eikrad/bandsearch-app/commit/fe7e54723ec1e6e46306bc86c38f1d11d219a5bf)), closes [#209](https://github.com/eikrad/bandsearch-app/issues/209)
+* **eval:** repeats per setup, compared per query with a paired bootstrap ([ce0413b](https://github.com/eikrad/bandsearch-app/commit/ce0413b847024de5456351fadf3baafe6259fc75)), closes [#250](https://github.com/eikrad/bandsearch-app/issues/250)
+* **eval:** run the live judge on Scaleway through the shared model interface ([182f2c7](https://github.com/eikrad/bandsearch-app/commit/182f2c7f628fa0bc047387591c32d12a4295b4b8))
+* **eval:** self-contained dashboard comparing golden runs ([7dbec76](https://github.com/eikrad/bandsearch-app/commit/7dbec76cd3d4fc7303127a2ca60351a61747f5f7)), closes [#209](https://github.com/eikrad/bandsearch-app/issues/209)
+* **eval:** six constraint queries, and docs for constraint checking ([35726c2](https://github.com/eikrad/bandsearch-app/commit/35726c29a26b7ea9b2cad8cc560d4e212e09f425)), closes [#253](https://github.com/eikrad/bandsearch-app/issues/253)
+* **eval:** stable golden measurement — replay, Last.fm tags, setups with paired statistics ([7a3061d](https://github.com/eikrad/bandsearch-app/commit/7a3061dd4f8180d568df43df7d0d749f0682093f))
+* Scaleway as the default LLM provider ([f3c12f7](https://github.com/eikrad/bandsearch-app/commit/f3c12f7d3d52ea9c949795a7a617c4e5dd433b07))
+* Scaleway behind LLM_PROVIDER, judge and calibration on Scaleway ([65fd835](https://github.com/eikrad/bandsearch-app/commit/65fd835aaf5eb314356b3741cc7a31f121fd7797))
+* Scaleway defaults chosen by measurement — deepseek-v4-flash-0731 and glm-5.2 ([b208b7a](https://github.com/eikrad/bandsearch-app/commit/b208b7aa8faa99f1e8179fc1b6a5c85fb83a9698)), closes [#204](https://github.com/eikrad/bandsearch-app/issues/204)
+
+
+### Bug Fixes
+
+* **api:** degrade instead of failing when an optional research step errors ([342a55b](https://github.com/eikrad/bandsearch-app/commit/342a55b2e2c4264083f70dba06af18d67800e222))
+* **api:** degrade instead of failing when an optional research step errors ([e80fce9](https://github.com/eikrad/bandsearch-app/commit/e80fce926be899a87fcf4042e8e5d6fc0bb336a2)), closes [#241](https://github.com/eikrad/bandsearch-app/issues/241)
+* **api:** keep tests out of the dev SQLite database ([635e805](https://github.com/eikrad/bandsearch-app/commit/635e805b8559f6bd4b3e75a45a7c16570559ddf0))
+* **api:** keep tests out of the dev SQLite database ([a479286](https://github.com/eikrad/bandsearch-app/commit/a4792864f8a22cba2d1d154b9d2e72ffe8fa3aec))
+* **api:** turn off Scaleway reasoning unless a role asks for it ([e1293a0](https://github.com/eikrad/bandsearch-app/commit/e1293a01781727d541584983c1e6c153478e64ac)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+* **eval:** an answer without any band fails the query ([d14648d](https://github.com/eikrad/bandsearch-app/commit/d14648d9cf1cff42c8bf498c67b49b7b24316f99)), closes [#253](https://github.com/eikrad/bandsearch-app/issues/253)
+* **eval:** record coverage without MusicBrainz tags as unknown, not zero ([46d431b](https://github.com/eikrad/bandsearch-app/commit/46d431b4e608c42ce24d2b1f2e1ff3ca311dd2fd)), closes [#209](https://github.com/eikrad/bandsearch-app/issues/209)
+* **eval:** ut-13 expected a judgement the judge prompt rules out; history never marks a run dirty ([d205031](https://github.com/eikrad/bandsearch-app/commit/d205031bb89897dcf03595c1e79833f175a580aa))
+* **privacy:** name Scaleway as the optional quality-scoring recipient ([09b3ac9](https://github.com/eikrad/bandsearch-app/commit/09b3ac90fca3c3e0c1f444a71f3487ff8ab66fa6)), closes [#237](https://github.com/eikrad/bandsearch-app/issues/237)
+
 ## [0.4.1](https://github.com/eikrad/bandsearch-app/compare/v0.4.0...v0.4.1) (2026-10-03)
 
 

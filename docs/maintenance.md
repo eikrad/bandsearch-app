@@ -4,6 +4,54 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-10-07
+
+### Checks performed
+- `git fetch origin`; `git checkout -B claude/eloquent-volta-ouyr43 origin/staging` (`635e805`, merge of #243).
+- Toolchain: the sandbox has no `nvm` and defaults to Node 22.22.0; CI uses Node 26. Installed Node 26.10.0
+  via `npm i node@26` in a scratch directory and put it on `PATH`. Python lint tools (`ruff`, `black`) installed via pip.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) + `npm run build --workspace
+  @bandsearch/desktop` - **green**: desktop 392/393 (1 pre-existing skip), api 761/761, eval 118/118, schemas 35/35.
+- `npm audit`: **3 vulnerabilities** at baseline (see Fixes applied). `uv export` + `pip-audit`: nothing to audit
+  (`dependencies = []`). `cargo audit` (cargo-audit already installed): 0 vulnerabilities, 7 informational warnings.
+- `npm outdated` per workspace and root; `cargo update --dry-run`.
+- **Not run:** `cargo check` / `cargo test`. `apt-get install librsvg2-dev patchelf` (and the other Tauri system
+  libraries) failed with "Unable to locate package" in this sandbox's network, so the Tauri crate cannot be built here.
+  CI has no Rust job. `test:e2e` not run (no user-facing code touched).
+
+### Fixes applied
+- **Security (npm, lockfile only, `npm audit fix`)**: `proxy-addr` 2.0.7 (critical, GHSA-jqcg-44mw-7w3h, IP spoofing
+  via IPv4-mapped IPv6 trust subnet), `ip-address` 10.4.0 (moderate, 4 advisories incl. SSRF-relevant link-local/NAT64
+  classification), `brace-expansion` (high, 3 ReDoS/stack-exhaustion advisories) - all transitive. `npm audit` now
+  reports **0 vulnerabilities**.
+- **Safe npm updates** (`npm update`, `package-lock.json` only, caret ranges unchanged):
+  `@langchain/core` 1.2.14 -> 1.2.17, `dotenv` 18.0.5 -> 18.0.6, `eslint` 10.11.0 -> 10.12.0,
+  `express-rate-limit` 8.7.0 -> 8.7.1, `globals` 17.12.0 -> 17.13.0, `typescript-eslint` 8.70.1 -> 8.71.1.
+- **Deliberately left to open Dependabot PRs** (#229-#235): `@types/node` 26.6.4, `tauri` 2.12.1, `tauri-build` 2.7.1,
+  `tauri-plugin-opener` 2.7.0, `@tauri-apps/cli` 2.12.1, `@tauri-apps/plugin-opener` 2.7.0, `@langchain/langgraph`
+  (PR targets 1.4.18; latest is 1.4.21). `@tauri-apps/api` 2.11.1 -> 2.12.1 has no PR of its own; it was **not** bumped
+  so the Tauri JS and Rust crates stay in sync - the owner should move it together with the Tauri PRs.
+- Rust: no `Cargo.lock` change (no vulnerabilities; blanket `cargo update` avoided per precedent).
+
+### Majors - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` peer range still caps TypeScript below 6.1. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.2 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 3 at baseline (1 critical, 1 high, 1 moderate) -> **0** after `npm audit fix` |
+| Python | `pip-audit` | nothing to audit (`dependencies = []`) |
+| Rust | `cargo audit` | 0 vulnerabilities; 7 informational unmaintained/unsound warnings (`proc-macro-error`, `unic-*`, `glib`), all transitive, unchanged |
+
+### Notes
+- Dual lockfiles still present: `pnpm-lock.yaml` is not used by CI (`npm ci` only) and was not touched.
+- After updates: `npm ci`, `npm run ci` and desktop build all green with the same counts as baseline.
+
+---
+
 ## 2026-09-23
 
 ### Checks performed

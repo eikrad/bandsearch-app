@@ -6,7 +6,7 @@ import { SettingsView } from "./SettingsView.js";
 import { PrivacyPolicyView } from "./PrivacyPolicyView.js";
 import { WelcomeView } from "./WelcomeView.js";
 import { LoginView } from "./LoginView.js";
-import { RegisterView } from "./RegisterView.js";
+import { RegisterView, type RegisterViewProps } from "./RegisterView.js";
 import { ResetPasswordView } from "./ResetPasswordView.js";
 import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
 import { ConnectingView } from "./ConnectingView.js";
@@ -75,7 +75,8 @@ export interface DesktopReactMountOptions {
   saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
   onLogin?: (email: string, password: string) => Promise<void>;
-  onRegister?: (email: string, displayName: string, password: string) => Promise<{ recoveryCode: string }>;
+  onRegister?: (email: string, displayName: string, password: string, inviteCode?: string) => Promise<{ recoveryCode: string }>;
+  getRegisterViewProps?: () => RegisterViewProps;
   onResetPassword?: (email: string, recoveryCode: string, newPassword: string) => Promise<{ newRecoveryCode: string }>;
   onExportAccountData?: () => Promise<Record<string, unknown>>;
   onDeleteAccount?: (password: string) => Promise<{ ok: boolean; error?: string }>;
@@ -112,6 +113,7 @@ export function createDesktopReactMount({
   updateBannerHandlers = {},
   connectingHandlers = {},
   getConnectingViewProps,
+  getRegisterViewProps,
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
   openExternalLinkImpl = openExternalLink,
@@ -161,7 +163,7 @@ export function createDesktopReactMount({
     }
 
     if (route === "register") {
-      renderRoot(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: {}, handlers: registerHandlers }));
+      renderRoot(React.createElement(RegisterView as unknown as ViewComponentLike, { viewProps: getRegisterViewProps?.() ?? {}, handlers: registerHandlers }));
       return {};
     }
 
@@ -432,8 +434,8 @@ export function createDesktopReactMount({
   };
 
   const registerHandlers = {
-    onRegister: async (email: string, displayName: string, password: string) => {
-      const result = onRegister ? await onRegister(email, displayName, password) : { recoveryCode: "" };
+    onRegister: async (email: string, displayName: string, password: string, inviteCode?: string) => {
+      const result = onRegister ? await onRegister(email, displayName, password, inviteCode) : { recoveryCode: "" };
       return result;
     },
     onDone: () => { if (router) router.navigate("home"); renderCurrent(); },

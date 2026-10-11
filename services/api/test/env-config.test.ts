@@ -233,3 +233,23 @@ test("EVAL_REPLAY_DIR turns on replay of external answers for eval runs", () => 
   assert.equal(validateRuntimeEnv({ ...REQUIRED }).evalReplayDir, "");
   assert.equal(validateRuntimeEnv({ ...REQUIRED, EVAL_REPLAY_DIR: " /tmp/replay " }).evalReplayDir, "/tmp/replay");
 });
+
+// --- AUTH_MODE (#266) ---
+
+test("validateRuntimeEnv defaults to progressive auth", () => {
+  assert.equal(validateRuntimeEnv(REQUIRED).authMode, "progressive");
+});
+
+test("validateRuntimeEnv accepts AUTH_MODE=enforced when a JWT_SECRET is configured", () => {
+  const config = validateRuntimeEnv({ ...REQUIRED, AUTH_MODE: "enforced", JWT_SECRET: "a-real-secret" });
+  assert.equal(config.authMode, "enforced");
+});
+
+test("validateRuntimeEnv refuses to start in enforced mode without JWT_SECRET", () => {
+  assert.throws(() => validateRuntimeEnv({ ...REQUIRED, AUTH_MODE: "enforced" }), /JWT_SECRET is required/);
+  assert.throws(() => validateRuntimeEnv({ ...REQUIRED, AUTH_MODE: "enforced", JWT_SECRET: "  " }), /JWT_SECRET is required/);
+});
+
+test("validateRuntimeEnv rejects an unknown AUTH_MODE rather than silently falling back to open", () => {
+  assert.throws(() => validateRuntimeEnv({ ...REQUIRED, AUTH_MODE: "enforce" }), /AUTH_MODE/);
+});

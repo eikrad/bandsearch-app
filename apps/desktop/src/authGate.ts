@@ -29,6 +29,8 @@ export function decideAuthRoute({
   if (!status.reachable) return "unavailable";
 
   if (!status.enabled) return "app";
-  if (status.userCount === 0) return "register";
+  // On a closed deployment registering needs an invite, so an empty instance is
+  // not an invitation to register: login is where an invitee finds the link to it.
+  if (status.userCount === 0 && !status.inviteRequired) return "register";
   return hasToken ? "app" : "login";
 }

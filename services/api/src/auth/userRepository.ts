@@ -8,9 +8,11 @@ export type User = {
   passwordHash: string;
   recoveryCodeHash: string;
   createdAt: string;
+  /** ISO time an operator switched the account off; null while it is active. */
+  disabledAt: string | null;
 };
 
-export type PublicUser = Omit<User, "passwordHash" | "recoveryCodeHash">;
+export type PublicUser = Omit<User, "passwordHash" | "recoveryCodeHash" | "disabledAt">;
 
 export type CreateUserInput = {
   email: string;
@@ -31,6 +33,8 @@ export type UserRepository = {
   findById(id: string): Promise<User | null>;
   updatePassword(id: string, input: UpdatePasswordInput): Promise<{ ok: true } | { ok: false; error: string }>;
   getFirstUser(): Promise<User | null>;
+  /** Switches an account off or on. Resolves false when no such user exists. */
+  setDisabled(id: string, disabled: boolean): Promise<boolean>;
 };
 
 export function createInMemoryUserRepository(): UserRepository {
@@ -51,6 +55,7 @@ export function createInMemoryUserRepository(): UserRepository {
         passwordHash,
         recoveryCodeHash,
         createdAt: new Date().toISOString(),
+        disabledAt: null,
       };
       users.set(key, user);
       return publicUser(user);
@@ -82,6 +87,16 @@ export function createInMemoryUserRepository(): UserRepository {
       const first = users.values().next().value;
       return first ? { ...first } : null;
     },
+
+    async setDisabled(id, disabled) {
+      for (const [key, user] of users.entries()) {
+        if (user.id === id) {
+          users.set(key, { ...user, disabledAt: disabled ? new Date().toISOString() : null });
+          return true;
+        }
+      }
+      return false;
+    },
   };
 }
 
@@ -93,9 +108,15 @@ export function createSqliteUserRepository({ db }: { db: import("better-sqlite3"
       display_name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       recovery_code_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      disabled_at TEXT
     );
   `);
+  // Databases created before closed beta have no disabled_at column.
+  const columns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  if (!columns.some((c) => c.name === "disabled_at")) {
+    db.exec("ALTER TABLE users ADD COLUMN disabled_at TEXT");
+  }
 
   return {
     countUsers() {
@@ -116,7 +137,7 @@ export function createSqliteUserRepository({ db }: { db: import("better-sqlite3"
         return Promise.reject(err);
       }
       return Promise.resolve(
-        publicUser({ id, email: normalizedEmail, displayName, passwordHash, recoveryCodeHash, createdAt }),
+        publicUser({ id, email: normalizedEmail, displayName, passwordHash, recoveryCodeHash, createdAt, disabledAt: null }),
       );
     },
 
@@ -143,6 +164,13 @@ export function createSqliteUserRepository({ db }: { db: import("better-sqlite3"
     getFirstUser() {
       const row = db.prepare("SELECT * FROM users LIMIT 1").get() as Record<string, unknown> | undefined;
       return Promise.resolve(row ? rowToUser(row) : null);
+    },
+
+    setDisabled(id, disabled) {
+      const result = db
+        .prepare("UPDATE users SET disabled_at = ? WHERE id = ?")
+        .run(disabled ? new Date().toISOString() : null, id);
+      return Promise.resolve(result.changes > 0);
     },
   };
 }

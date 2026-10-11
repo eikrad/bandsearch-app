@@ -60,7 +60,23 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     throw new Error("BRAVE_API_KEY (or BRAVE_SEARCH_API_KEY) is required");
   }
 
-  const jwtSecret = String(env.JWT_SECRET ?? "").trim() || generateSecret();
+  // progressive (default): open on a fresh install, forgiving with one user.
+  // enforced: every protected request needs a valid token for an active user.
+  // An unknown value is an error, not a fallback — a typo must not quietly
+  // leave a server meant to be closed wide open.
+  const authModeRaw = String(env.AUTH_MODE ?? "").trim() || "progressive";
+  if (authModeRaw !== "progressive" && authModeRaw !== "enforced") {
+    throw new Error(`AUTH_MODE must be "progressive" or "enforced" (got "${authModeRaw}")`);
+  }
+  const authMode: "progressive" | "enforced" = authModeRaw;
+
+  const configuredJwtSecret = String(env.JWT_SECRET ?? "").trim();
+  // A random per-boot secret invalidates every token on restart. Tolerable for
+  // a progressive dev install, not for a deployment that is supposed to be closed.
+  if (authMode === "enforced" && !configuredJwtSecret) {
+    throw new Error("JWT_SECRET is required when AUTH_MODE=enforced");
+  }
+  const jwtSecret = configuredJwtSecret || generateSecret();
 
   const pipelineReadyTimeoutMs = parseNumber(env.RECOMMENDATION_PIPELINE_READY_TIMEOUT_MS, 45000);
 
@@ -97,6 +113,7 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
     tursoSyncPath,
     tursoAuthToken,
     jwtSecret,
+    authMode,
     evalDashboardEnabled: normalizeBoolean(env.EVAL_DASHBOARD_ENABLED, false),
     // GDPR Art. 5(1)(e): telemetry needs a stated period, and "forever" is not one.
     evalRetentionDays: parseNumber(env.EVAL_RETENTION_DAYS, 90),
