@@ -15,6 +15,8 @@ import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
 import type { SavedBand } from "../preferences/preferenceRepository.js";
 import type { UserDataStore } from "../privacy/userDataStore.js";
+import type { InviteService } from "../auth/inviteService.js";
+import type { Invite } from "../auth/inviteRepository.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -26,6 +28,8 @@ type TursoClient = { execute: (sql: string) => Promise<unknown> };
 export type BandsearchRouteContext = {
   appVersion: string;
   recommendationsLimiter: RequestHandler;
+  /** Throttles the credential-taking /auth routes (not /auth/status). */
+  authLimiter: RequestHandler;
   resolvedBandRepository: {
     addSavedBand: (body: unknown, userId?: string) => Promise<{ ok: boolean; error?: string; savedBand?: unknown; status?: number }>;
     listSavedBands: (userId?: string) => Promise<SavedBand[]>;
@@ -83,6 +87,8 @@ export type BandsearchRouteContext = {
     getStatus: () => Promise<{ userCount: number }>;
   };
   authMiddleware?: RequestHandler;
+  authMode?: "progressive" | "enforced";
+  resolvedInviteService?: InviteService;
   resolvedUserDataStore?: UserDataStore | null;
 };
 
@@ -90,6 +96,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
   const {
     appVersion,
     recommendationsLimiter,
+    authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
     resolvedMusicBrainzClient,
@@ -105,38 +112,63 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalDashboardPassword,
     resolvedAuthService,
     authMiddleware,
+    authMode = "progressive",
+    resolvedInviteService,
     resolvedUserDataStore,
   } = ctx;
+
+  // A closed deployment only lets invited addresses register.
+  const inviteRequired = authMode === "enforced";
 
   // Always available: client needs this before any auth interaction
   app.get("/auth/status", async (_req, res) => {
     if (resolvedAuthService) {
       const { userCount } = await resolvedAuthService.getStatus();
-      return res.json({ enabled: true, userCount });
+      return res.json({ enabled: true, userCount, authMode, inviteRequired });
     }
-    return res.json({ enabled: false, userCount: 0 });
+    return res.json({ enabled: false, userCount: 0, authMode, inviteRequired: false });
   });
 
   // Auth routes (public)
   if (resolvedAuthService) {
-    app.post("/auth/register", async (req, res) => {
+    app.post("/auth/register", authLimiter, async (req, res) => {
       if (process.env.REGISTRATION_OPEN === "false") {
         return sendError(res, 403, "registration_closed", "registration is currently closed");
       }
-      const { email, displayName, password } = req.body ?? {};
+      const { email, displayName, password, inviteCode } = req.body ?? {};
+
+      // Invite first, one generic answer for every way it can be unusable.
+      // Order: look up (read only) -> create the user -> mark the invite used.
+      // No transaction spans the two repositories, and none is needed: the
+      // invite is bound to one address and users.email is UNIQUE, so two
+      // concurrent attempts with the same code both reach create() for the same
+      // address and exactly one succeeds. A crash between create and markUsed
+      // leaves a used-up invite for an address that already has its account,
+      // which is harmless. A failed create (weak input, duplicate address)
+      // never reaches markUsed, so it does not burn the invite.
+      let invite: Invite | null = null;
+      if (inviteRequired) {
+        invite =
+          typeof inviteCode === "string" && resolvedInviteService
+            ? await resolvedInviteService.findRedeemable({ code: inviteCode, email: String(email ?? "") })
+            : null;
+        if (!invite) return sendError(res, 403, "invite_invalid", "invite code is invalid or expired");
+      }
+
       const result = await resolvedAuthService.register({ email: String(email ?? ""), displayName: String(displayName ?? ""), password: String(password ?? "") });
       if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "registration failed");
+      if (invite && resolvedInviteService) await resolvedInviteService.redeem(invite.id);
       return res.status(201).json({ user: result.user, token: result.token, recoveryCode: result.recoveryCode });
     });
 
-    app.post("/auth/login", async (req, res) => {
+    app.post("/auth/login", authLimiter, async (req, res) => {
       const { email, password } = req.body ?? {};
       const result = await resolvedAuthService.login({ email: String(email ?? ""), password: String(password ?? "") });
       if (!result.ok) return sendError(res, 401, "auth_error", result.error ?? "login failed");
       return res.status(200).json({ user: result.user, token: result.token });
     });
 
-    app.post("/auth/reset-password", async (req, res) => {
+    app.post("/auth/reset-password", authLimiter, async (req, res) => {
       const { email, recoveryCode, newPassword } = req.body ?? {};
       const result = await resolvedAuthService.resetPassword({ email: String(email ?? ""), recoveryCode: String(recoveryCode ?? ""), newPassword: String(newPassword ?? "") });
       if (!result.ok) return sendError(res, 400, "auth_error", result.error ?? "reset failed");
@@ -150,6 +182,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     app.use("/sessions", authMiddleware);
     app.use("/recommendations", authMiddleware);
     app.use("/account", authMiddleware);
+    // Artist lookups spend the operator's MusicBrainz/Wikidata/Last.fm quota,
+    // so a closed deployment gates them too. Progressive installs keep them open.
+    if (authMode === "enforced") app.use("/artists", authMiddleware);
   }
 
   // GDPR Art. 17 (erasure) and Art. 15/20 (access and portability).

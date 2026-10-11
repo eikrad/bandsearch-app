@@ -10,7 +10,12 @@
     "test": "tsx --test",
     "migrate": "tsx scripts/migrate.ts",
     "migrate:turso": "tsx scripts/migrate.ts --turso",
-    "create-user": "tsx scripts/create-user.ts"
+    "create-user": "tsx scripts/create-user.ts",
+    "invite:create": "tsx scripts/admin.ts invite:create",
+    "invite:list": "tsx scripts/admin.ts invite:list",
+    "invite:revoke": "tsx scripts/admin.ts invite:revoke",
+    "user:disable": "tsx scripts/admin.ts user:disable",
+    "user:enable": "tsx scripts/admin.ts user:enable"
   },
   "dependencies": {
     "@langchain/core": "^1.2.14",

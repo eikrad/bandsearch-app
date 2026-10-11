@@ -68,6 +68,10 @@ queue and now do.
    - Tech debt: #133, #168, #171, #172, #173, #174, #205
    - Once there is real traffic: #239 (PPI), #240 (input drift)
 
+~~#266 — closed beta (enforced auth mode, email-bound invites).~~ ✓ Done, see 9.7.
+Deploy note: migrate Turso (`005`) and create your first invite before `main`
+picks up `AUTH_MODE=enforced` from `render.yaml`.
+
 ~~4. The card action work — #151–#154 and #163–#167.~~ Moved: done in #192
 except #154, which is now under 8.
 ~~5. Phase 10 — signing key, then the first `v0.4.0` release.~~ Done: v0.4.1
@@ -311,6 +315,28 @@ Render auto-deploys on every push to the connected branch, so no separate deploy
 1. Add a GitHub Actions workflow (`.github/workflows/deploy-render.yml`) that runs `npm run ci` on push to `main` and, only if tests pass, triggers a Render deploy hook (`curl -X POST $RENDER_DEPLOY_HOOK_URL`).
 2. Store the Render deploy hook URL as a GitHub Actions secret (`RENDER_DEPLOY_HOOK_URL`) — available in the Render service dashboard under Settings → Deploy Hook.
 3. Optionally disable Render's automatic git-push deploys and rely solely on the Actions-triggered hook so broken code never reaches production.
+
+### 9.7 — Closed beta: email-bound invites and enforced auth ✓ Done
+
+**Issue:** #266. **Decision:** [ADR 0005](adr/0005-closed-beta-via-email-bound-invites.md).
+
+The hosted API was open to anyone with the URL. `AUTH_MODE=enforced` closes it:
+tokens always required (user must exist and not be disabled), `JWT_SECRET`
+required, `/artists/*` protected, registration only with an email-bound,
+single-use, 14-day invite code (128 bits, stored as a SHA-256 hash). ✓ Done
+
+- `trust proxy` so rate limits key on the client IP behind Render (also repairs
+  the `/recommendations` limit). ✓ Done
+- Rate limit on `/auth/register|login|reset-password` (20 per 15 min per IP). ✓ Done
+- Operator CLI: `invite:create|list|revoke`, `user:disable|enable`; migration
+  `005` (`invites`, `users.disabled_at`). ✓ Done
+- Desktop: invite-code field on Register, gate routes to Login on an empty
+  closed instance. ✓ Done
+- `render.yaml` sets `AUTH_MODE=enforced`. **Before deploying:** run
+  `npm run migrate:turso`, then `invite:create` for yourself. ✓ Done
+
+Not done (non-goals): admin UI and `is_admin`, email verification and sending,
+waitlist.
 
 ---
 

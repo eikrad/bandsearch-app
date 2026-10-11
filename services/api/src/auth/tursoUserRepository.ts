@@ -52,5 +52,13 @@ export function createTursoUserRepository({ client }: { client: TursoClient }): 
       const result = await client.execute({ sql: "SELECT * FROM users LIMIT 1", args: [] });
       return result.rows.length > 0 ? rowToUser(result.rows[0]) : null;
     },
+
+    async setDisabled(id, disabled) {
+      const result = await client.execute({
+        sql: "UPDATE users SET disabled_at = ? WHERE id = ?",
+        args: [disabled ? new Date().toISOString() : null, id],
+      });
+      return result.rowsAffected > 0;
+    },
   };
 }

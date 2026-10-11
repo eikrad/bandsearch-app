@@ -43,6 +43,7 @@ async function start() {
     // Same replica for users and sessions — a second client would mean a second
     // local file and a second sync loop.
     userRepository: syncRepositories?.userRepository,
+    inviteRepository: syncRepositories?.inviteRepository,
     chatSessionRepository: syncRepositories?.chatSessionRepository,
   });
   app.listen(runtimeConfig.port, () => {

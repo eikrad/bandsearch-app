@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { waitForAuthStatus } from "../src/waitForApi.js";
 import type { AuthStatus } from "../src/authApiClient.js";
 
-const UP: AuthStatus = { reachable: true, enabled: true, userCount: 2 };
+const UP: AuthStatus = { reachable: true, enabled: true, userCount: 2, inviteRequired: false };
 const DOWN: AuthStatus = { reachable: false, reason: "http_502" };
 
 /**

@@ -2,6 +2,7 @@ import { createTursoSyncClient } from "./tursoSyncClient.js";
 import type { TursoSyncClient } from "./tursoSyncClient.js";
 import { createTursoPreferenceRepository } from "../preferences/tursoPreferenceRepository.js";
 import { createTursoUserRepository } from "../auth/tursoUserRepository.js";
+import { createTursoInviteRepository } from "../auth/tursoInviteRepository.js";
 import { createTursoChatSessionRepository } from "../sessions/tursoChatSessionRepository.js";
 import type { PreferenceRepository } from "../preferences/preferenceRepository.js";
 
@@ -29,6 +30,7 @@ export type TursoSyncRepositories = {
   client: TursoSyncClient;
   preferenceRepository: PreferenceRepository;
   userRepository: ReturnType<typeof createTursoUserRepository>;
+  inviteRepository: ReturnType<typeof createTursoInviteRepository>;
   chatSessionRepository: ReturnType<typeof createTursoChatSessionRepository>;
 };
 
@@ -55,6 +57,7 @@ export async function createTursoSyncRepositories({
     client,
     preferenceRepository: createTursoPreferenceRepository({ client }),
     userRepository: createTursoUserRepository({ client }),
+    inviteRepository: createTursoInviteRepository({ client }),
     chatSessionRepository: createTursoChatSessionRepository({ client }),
   };
 }
