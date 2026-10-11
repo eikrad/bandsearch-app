@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { decideAuthRoute } from "../src/authGate.js";
 import type { AuthStatus } from "../src/authApiClient.js";
 
-const reachable = (enabled: boolean, userCount: number): AuthStatus =>
-  ({ reachable: true, enabled, userCount });
+const reachable = (enabled: boolean, userCount: number, inviteRequired = false): AuthStatus =>
+  ({ reachable: true, enabled, userCount, inviteRequired });
 
 const unreachable: AuthStatus = { reachable: false, reason: "http_502" };
 
@@ -38,4 +38,14 @@ test("an unreachable API is unavailable even when a token is held", () => {
   // A token is not proof the server accepts it — it may be expired, or belong to
   // a different instance after an endpoint change.
   assert.equal(decideAuthRoute({ status: unreachable, hasToken: true }), "unavailable");
+});
+
+test("on a closed deployment nobody can register without an invite, so an empty instance still goes to login", () => {
+  // Sending the very first visitor to a register form they cannot submit
+  // would be a dead end; login is where an invitee finds the way to register.
+  assert.equal(decideAuthRoute({ status: reachable(true, 0, true), hasToken: false }), "login");
+});
+
+test("on a closed deployment a user holding a token goes into the app", () => {
+  assert.equal(decideAuthRoute({ status: reachable(true, 5, true), hasToken: true }), "app");
 });

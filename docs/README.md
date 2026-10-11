@@ -12,6 +12,8 @@ Navigation guide for the `docs/` folder.
 | [adr/0001-prompt-injection-guardrails.md](adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence — bracket-marker envelope and length caps |
 | [adr/0002-machine-written-notes-stay-out-of-the-prompt.md](adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt, not the model's own pre-filled explanation |
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
+| [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort, Gemini rollback |
+| [releasing.md](releasing.md) | Release process — release-please, Conventional Commits, desktop release workflow |
 | [design/UI_GUIDELINES.md](design/UI_GUIDELINES.md) | UI design guidelines — layout, components, responsive behaviour |
 | [design/UI_EXAMPLES.md](design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
 | [maintenance.md](maintenance.md) | Dependency versions, upgrade notes, and periodic maintenance tasks |
@@ -47,4 +49,7 @@ Implementation plans and design specs from earlier development phases. Kept for 
 | [superpowers/plans/2026-04-30-ui-redesign.md](superpowers/plans/2026-04-30-ui-redesign.md) | UI redesign plan (Phase 3 era) |
 | [superpowers/specs/2026-04-30-tauri-scaffold-design.md](superpowers/specs/2026-04-30-tauri-scaffold-design.md) | Tauri desktop scaffold design spec |
 | [superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md](superpowers/specs/2026-05-12-llm-musicbrainz-query-design.md) | LLM + MusicBrainz query design spec |
+| [superpowers/plans/2026-08-12-complete-typescript-migration.md](superpowers/plans/2026-08-12-complete-typescript-migration.md) | TypeScript migration plan (done) |
+| [superpowers/specs/2026-08-12-complete-typescript-migration-design.md](superpowers/specs/2026-08-12-complete-typescript-migration-design.md) | TypeScript migration design spec (done) |
+| [superpowers/plans/2026-08-30-in-app-update-notification.md](superpowers/plans/2026-08-30-in-app-update-notification.md) | In-app update notification plan (built; see ROADMAP Phase 10) |
 | [superpowers/specs/2026-06-13-stop-retry-buttons-design.md](superpowers/specs/2026-06-13-stop-retry-buttons-design.md) | Stop/retry buttons in the chat UI — design spec |
