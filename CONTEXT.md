@@ -34,7 +34,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event.
 
-- **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `MISTRAL_API_KEY`).
+- **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `SCW_SECRET_KEY`).
 
 - **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Runs on Scaleway (`SCW_JUDGE_MODEL`, never the research model) and is only active when `SCW_SECRET_KEY` is set; checked against human labels by `run-calibration.ts`; never on the critical response path.
 
