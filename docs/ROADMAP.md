@@ -24,10 +24,18 @@ action work is down to #154; search quality (#257), the desktop's Render
 default (#238) and the privacy items before real users had no place in the
 queue and now do.
 
+*Reconciled with the issues 2026-10-11:* #256 and #266 are on `staging`, so
+item 2 is now the `staging` → `main` merge (#269) with its deploy steps; #154
+moved next to #156, since both carry the same 44 px requirement; #268 had no
+place and is now under Deferred; #180's premise changed (see item 3).
+
 1. ~~**#155 — `getAuthStatus` fails open.**~~ ✓ Done (#161).
-2. **#237 in production, together with Phase 9.5 (#144).** Merge the Scaleway
-   default (#256) into `staging`; set `SCW_SECRET_KEY` on Render (a key of its
-   own); merge `staging` → `main`; then run the 9.5 checklist on Render. That
+2. **#237 in production, together with Phase 9.5 (#144).** Everything is on
+   `staging`; #269 merges it into `main`. Before merging, on Render: set
+   `SCW_SECRET_KEY` (a key of its own) and `JWT_SECRET`, run
+   `npm run migrate:turso` (migration `005`), and create your first invite
+   (`npm run invite:create`), because `render.yaml` now sets
+   `AUTH_MODE=enforced` (#266). Then run the 9.5 checklist on Render. That
    verifies Render + Turso — never done, the old bottleneck — and Scaleway in
    production in one pass. Rollback: `LLM_PROVIDER=gemini` on Render.
    Done so far, all on `staging`:
@@ -45,7 +53,9 @@ queue and now do.
      `SCW_SECRET_KEY` on Render; rollback is `LLM_PROVIDER=gemini` there
 3. **#257 — improve search quality, one measured change at a time.** Evidence
    quality of the why texts (the judge's weakest dimension, ~0.5), then hard
-   constraints, then reflection (#180, never runs today). Each change measured
+   constraints, then reflection (#180). #180 was filed against a 45 s research
+   budget; the default has been 180 s since 2026-09-16, so first check with one
+   live run whether reflection now runs before treating it as broken. Each change measured
    with 3 judged golden runs against the deepseek baseline.
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
@@ -55,12 +65,13 @@ queue and now do.
    (operator becomes controller), #136 (Art. 4 AI-literacy note, DPIA
    screening). Then #248 (judge scores on live searches), which needs #132.
 7. **Phase 11 — Android.** #159 (endpoint default, shares the default with
-   #238), then #156 (the seven views, the largest item), #157, #158. #259 (spoken
+   #238), then #156 (the seven views, the largest item) together with #154
+   (card action touch targets, the same 44 px rule), #157, #158. #259 (spoken
    replies) is an undecided idea after #157.
 8. **Whenever there is room:**
    - #251 judge as a quality gate — after #257's reflection work
-   - #154 card action touch targets (the one card-action item left)
-   - Phase 8 F6/F7/F8: #140, #142, #143
+   - Phase 8 F7/F8: #142 (narrowed to `recommendations_json`, see Phase 8),
+     #143
    - Architecture 9, ESM migration: #146
    - Phase 10 macOS update check: #145
    - #245 release re-runs that skip build and publish
@@ -93,7 +104,7 @@ The constraints this order satisfies:
 #237 stable on Render for a few days ─→ remove Gemini
 
 Independent, can start any time:
- · #154 · #145 · #146 · #140/#142/#143 · #245 · tech debt
+ · #145 · #146 · #142/#143 · #245 · tech debt
 ```
 
 When an entry moves, say so in place rather than deleting it — an entry that
@@ -228,8 +239,8 @@ accumulates once the eval layer runs against a real deployment.
 - `search_quality_check` node in LangGraph loop: if search source quality is low, planner receives feedback and regenerates queries before extraction — only worth building once dashboard data confirms the correlation
 
 **Polish — deferred from the 2026-06-01 implementation review** (see `docs/architecture/2026-05-30-phase8-implementation-plan.md`, findings F1–F8; F1–F5 already fixed):
-- [ ] F6 (#140) — Reconcile the plan's stale Design Decision #2: `evalWorker.processEvent` is invoked from `routes/registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Docs-only; update the architecture spec so it matches the code.
-- [ ] F7 (#142) — Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`, so the dashboard cannot link to the full recommendation payload and baselines cannot be filtered by prompt hash / model. Add at least `recommendations_json` + `user_id` to `recommendation_events`; treat prompt-hash filtering as a separate later step. (`eval/evalRepository.ts`)
+- F6 (#140) — Reconcile the plan's stale Design Decision #2: `evalWorker.processEvent` is invoked from `routes/registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Docs-only; update the architecture spec so it matches the code. ✓ Done
+- [ ] F7 (#142) — Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`, so the dashboard cannot link to the full recommendation payload and baselines cannot be filtered by prompt hash / model. Add `recommendations_json` to `recommendation_events`; treat prompt-hash filtering as a separate later step. (`eval/evalRepository.ts`) *Narrowed 2026-10-11:* no `user_id` — the table has none on purpose (data minimisation, #131, `privacy/userDataStore.ts`), and model ids are already stored per score in `band_eval_scores` (#134).
 - [ ] F8 (#143) — Tune evidence heuristics: `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that also appears in good why-text → noisy `generic_why_flag`; and `citationSupportRate` defaults to 1.0 when a why has no URLs, inflating evidence metrics. Only flag generic phrasing when it co-occurs with zero citations; distinguish "no URLs" from "all URLs supported". Validate against the calibration set before locking in. (`eval/evidenceChecker.ts`)
 
 ---
@@ -301,7 +312,8 @@ Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini
 **Action:**
 1. Create a Turso database and run the migration script against it.
 2. Deploy the API to Render with `PREFERENCE_STORE=turso`.
-3. Verify from the desktop app: register a user, log in, get recommendations, save artists, create groups, chat sessions persist across restarts.
+3. Verify from the desktop app: create an invite (`npm run invite:create`, the
+   instance runs `AUTH_MODE=enforced`), register with it, log in, get recommendations, save artists, create groups, chat sessions persist across restarts.
 4. Verify cold-start latency on the Render free tier is acceptable (free tier spins down after 15 min inactivity; first request takes 30–60 s — upgrade to Starter $7/month for always-on if needed).
 5. Document free-tier limitations (cold starts, no SLA) in the README.
 
@@ -419,6 +431,9 @@ idles at 61 MB RSS, so a 256MB instance suffices either way.
 - PWA client on shared API (#147).
 - Optional Spotify import with explicit user consent (#148).
 - Billing and subscription controls (#149).
+- Signup with email verification, transactional mail and email-based password
+  reset (#268). Not needed while every invite goes out by hand (ADR 0005); due
+  before any open signup or waitlist.
 - ~~Optional migration to Vertex AI governance mode.~~ Dropped 2026-10-05 (#150 closed): Gemini is being removed (#237), so there is nothing left to govern.
 
 ## Architecture — Pending Deepening
