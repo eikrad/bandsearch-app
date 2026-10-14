@@ -13,6 +13,7 @@ Navigation guide for the `docs/` folder.
 | [adr/0002-machine-written-notes-stay-out-of-the-prompt.md](adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt, not the model's own pre-filled explanation |
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
 | [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort, Gemini rollback |
+| [adr/0005-closed-beta-via-email-bound-invites.md](adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta through an enforced auth mode and email-bound invite codes |
 | [releasing.md](releasing.md) | Release process — release-please, Conventional Commits, desktop release workflow |
 | [design/UI_GUIDELINES.md](design/UI_GUIDELINES.md) | UI design guidelines — layout, components, responsive behaviour |
 | [design/UI_EXAMPLES.md](design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
