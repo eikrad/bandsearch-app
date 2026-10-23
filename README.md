@@ -71,6 +71,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
 | [docs/adr/0003-android-hosting-render-over-fly.md](docs/adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render |
 | [docs/adr/0004-llm-models-per-role-on-scaleway.md](docs/adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role |
+| [docs/adr/0005-closed-beta-via-email-bound-invites.md](docs/adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via enforced auth and email-bound invites |
 | [docs/releasing.md](docs/releasing.md) | How versions, the CHANGELOG and desktop releases are produced |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
