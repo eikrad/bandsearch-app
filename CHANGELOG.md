@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.3](https://github.com/eikrad/bandsearch-app/compare/v0.4.2...v0.4.3) (2026-10-11)
+
+
+### Features
+
+* **api:** email-bound invite repository and disabled users ([a00e3b8](https://github.com/eikrad/bandsearch-app/commit/a00e3b8112ef8300b7a24c1a9acadd1a8e8811f3))
+* **api:** enforced auth mode for closed deployments ([996b3a8](https://github.com/eikrad/bandsearch-app/commit/996b3a87be69d6ded1eb46bd03f9c2710f344324))
+* **api:** invite and user admin CLI ([464fca9](https://github.com/eikrad/bandsearch-app/commit/464fca94a10bf543d70b3e41192d6b54bd554635))
+* **api:** rate-limit auth routes ([7cb0722](https://github.com/eikrad/bandsearch-app/commit/7cb07225ec6b567da4d73a2e439e72bba6c67cc0))
+* **api:** require an invite code to register in enforced mode ([3273fd3](https://github.com/eikrad/bandsearch-app/commit/3273fd3195d171a168131949bc6dd8f2dda564d2))
+* closed beta with email-bound invites and enforced auth mode ([3deeb09](https://github.com/eikrad/bandsearch-app/commit/3deeb095c918f4a5549da856a7f486109af6ed22))
+* **desktop:** invite code on registration and gate routing ([38dbdae](https://github.com/eikrad/bandsearch-app/commit/38dbdae1e58e374b45abc77bd7f86f03e5f3504c))
+
+
+### Bug Fixes
+
+* **api:** trust proxy for client-IP rate limiting ([9dc8778](https://github.com/eikrad/bandsearch-app/commit/9dc8778b1ef749af197b60d65a13d66e4ed9d001))
+
 ## [0.4.2](https://github.com/eikrad/bandsearch-app/compare/v0.4.1...v0.4.2) (2026-10-07)
 
 
