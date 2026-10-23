@@ -81,7 +81,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 | Layer | Technology |
 |-------|------------|
-| API server | Express.js + TypeScript (Node.js 26+) |
+| API server | Express.js + TypeScript (Node.js 26.12.1+) |
 | AI pipeline | LangGraph + Scaleway Generative APIs (DeepSeek V4 Flash by default; Gemini selectable) |
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
@@ -93,7 +93,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ## Quick Start
 
-**Prerequisites:** Node.js 26+
+**Prerequisites:** Node.js 26.12.1+ (the version in `.nvmrc`)
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
@@ -297,7 +297,7 @@ See `.env.example` for all options including storage backends, timeouts, search 
 
 ## Deployment
 
-The API is a standalone Express service and can run anywhere Node.js 26+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option, deploying from `main` — feature work happens on `staging` (see [`CONTRIBUTING.md`](CONTRIBUTING.md)) and only reaches production once merged to `main`.
+The API is a standalone Express service and can run anywhere Node.js 26.12.1+ is available. Render takes the Node version from `.nvmrc`, which also sets the CI Node and the Node bundled with the desktop installers. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option, deploying from `main` — feature work happens on `staging` (see [`CONTRIBUTING.md`](CONTRIBUTING.md)) and only reaches production once merged to `main`.
 
 Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays stateless and all data (preferences, sessions, auth) lives in Turso/libSQL:
 
