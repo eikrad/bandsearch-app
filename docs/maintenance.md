@@ -18,9 +18,12 @@ Weekly dependency and health checks for the Bandsearch application.
 - All `setup-node` steps use `node-version-file: .nvmrc` instead of `node-version: 26`, so CI tests the Node
   production runs. Tests in `shared/schemas/test/` guard all three.
 - No npm package bundles its own CA store; `uv.lock` has no `certifi`. The API's HTTPS clients use Node's.
+- Desktop `Cargo.lock` (`cargo update -p`): `webpki-root-certs` 1.0.9 -> 1.0.11, `rustls-webpki` 0.103.15 ->
+  0.103.16, the minimums the advisory gives for the eMudhra distrust. `rustls-native-certs` uses the OS store.
 
 ### Checks performed
 - `npm run ci` (lint incl. `lint:py` via `uvx`, typecheck, tests) green on local Node 26.8.1.
+- `cargo check --locked` for the desktop crate green.
 - Not run: desktop build with the new sidecar (needs the release workflow).
 
 ---
