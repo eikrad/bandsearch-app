@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4](https://github.com/eikrad/bandsearch-app/compare/v0.4.3...v0.4.4) (2026-10-23)
+
+
+### Security
+
+* **desktop:** distrust the compromised eMudhra intermediates ([8f72fdb](https://github.com/eikrad/bandsearch-app/commit/8f72fdbd6f342806dd5e5261c1eb81b616b32844))
+* run Node 26.12.1 on Render, in CI and as the desktop sidecar ([de8ada2](https://github.com/eikrad/bandsearch-app/commit/de8ada21ebdeda9aaebbfa42e7c1808925f4ea3f))
+
 ## [0.4.3](https://github.com/eikrad/bandsearch-app/compare/v0.4.2...v0.4.3) (2026-10-11)
 
 
