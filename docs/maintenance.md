@@ -4,6 +4,57 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-10-14
+
+### Checks performed
+- `git fetch origin`; branch reset to `origin/staging` (`e21d66d`). Open PRs: #271 (docs roadmap), #272 (release v0.4.3 merge-back); no dependency PRs open.
+- Toolchain: sandbox default is Node 22; CI uses Node 26. Installed Node 26.11.1 via `npm i node@26` in a scratch directory.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 402/403 (1 pre-existing skip), api 843/843, eval 118/118, schemas 36/36.
+- `npm audit`: **0 vulnerabilities**. `cargo audit` (installed fresh, v0.22.2): **4 vulnerabilities** in `rustls` 0.23.45 (see below).
+- `npm outdated` per workspace.
+- **Not run:** `cargo check` / `cargo test` (Tauri system libraries cannot be installed in this sandbox). The Rust change is a patch bump of one transitive crate, lockfile only.
+
+### Fixes applied
+- **Security (Rust, lockfile only, `cargo update -p rustls`)**: `rustls` 0.23.45 -> 0.23.46 fixes RUSTSEC-2026-0346 (`Debug` output of client session values exposes TLS secrets), -0347 (buffered data sent to outer server after ECH rejection), -0348 (brotli certificate decompression can allocate up to 1 GiB before authentication), -0349 (unauthenticated ServerHello can downgrade later connections to classical key exchange). All published 2026-10-14. `cargo audit` now reports 0 vulnerabilities.
+- **Safe npm updates** (`npm update`, `package-lock.json` only, ranges in `package.json` unchanged): `@langchain/langgraph` 1.4.18 -> 1.5.0 (minor), `@playwright/test` 1.64.1, `@types/node` 26.6.5, `dotenv` 18.0.8, `express` 5.3.0, `react` / `react-dom` 19.3.1, `typescript-eslint` 8.71.2, `zod` 4.6.7. After: `npm ci`, `npm run ci` (same counts as baseline), desktop build, `npm audit` all green.
+- **Deliberately not bumped:** `@tauri-apps/api` 2.12.4, `@tauri-apps/cli` 2.12.2, `@tauri-apps/plugin-opener` 2.7.1. The Tauri JS packages and Rust crates should move together and the Rust side cannot be built here.
+
+### Majors - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` peer range still caps TypeScript below 6.1. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 0 |
+| Python | `pip-audit` | nothing to audit (`dependencies = []`) |
+| Rust | `cargo audit` | 4 (`rustls`) at baseline -> **0** after update; informational unmaintained warnings (`proc-macro-error`, `glib`, ...) unchanged, transitive |
+## 2026-10-23 (out of band: Node security release)
+
+### Trigger
+- Render notice about the eMudhra intermediate-certificate compromise (2026-10-19) and Node's 2026-10-21
+  security release (TLS hostname-check bypass, Brotli decompression RCE, eMudhra distrust). Patched Node 26:
+  `26.12.1`. See Render's [eMudhra advisory](https://render.com/docs/advisory-emudhra).
+
+### Fixes applied
+- `.nvmrc` `26` -> `26.12.1` (exact; Render resolves the API's Node from it), root `engines.node` `>=26.12.1`.
+- Desktop installers bundled a hardcoded Node `v26.5.1` sidecar (`release.yml`, all three platforms): now read
+  from `.nvmrc`. Every shipped desktop release up to v0.4.3 carries the vulnerable Node until the next release.
+- All `setup-node` steps use `node-version-file: .nvmrc` instead of `node-version: 26`, so CI tests the Node
+  production runs. Tests in `shared/schemas/test/` guard all three.
+- No npm package bundles its own CA store; `uv.lock` has no `certifi`. The API's HTTPS clients use Node's.
+- Desktop `Cargo.lock` (`cargo update -p`): `webpki-root-certs` 1.0.9 -> 1.0.11, `rustls-webpki` 0.103.15 ->
+  0.103.16, the minimums the advisory gives for the eMudhra distrust. `rustls-native-certs` uses the OS store.
+
+### Checks performed
+- `npm run ci` (lint incl. `lint:py` via `uvx`, typecheck, tests) green on local Node 26.8.1.
+- `cargo check --locked` for the desktop crate green.
+- Not run: desktop build with the new sidecar (needs the release workflow).
+
+---
+
 ## 2026-10-07
 
 ### Checks performed

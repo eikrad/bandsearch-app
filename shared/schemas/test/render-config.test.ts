@@ -83,3 +83,32 @@ test("root prepare script tolerates a missing husky binary", () => {
     'Expected root package.json scripts.prepare = "husky || true"',
   );
 });
+
+// Node's 2026-10-21 security release fixes a TLS hostname-check bypass and a
+// Brotli decompression RCE, and distrusts the compromised eMudhra intermediate
+// certificates. Render picks the API's Node version from .nvmrc.
+const PATCHED_NODE = [26, 12, 1];
+
+const nvmrc = readFileSync(resolve(__dirname, "../../../.nvmrc"), "utf8").trim();
+
+test(".nvmrc pins a Node release with the 2026-10-21 security fixes", () => {
+  // Exact, because the desktop release downloads this version as its sidecar.
+  const match = nvmrc.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  assert.ok(match, `Expected an exact x.y.z version in .nvmrc, got "${nvmrc}"`);
+  const [major, minor, patch] = match!.slice(1).map(Number);
+  const [minMajor, minMinor, minPatch] = PATCHED_NODE;
+  const patched =
+    major !== minMajor
+      ? major > minMajor
+      : minor !== minMinor
+        ? minor > minMinor
+        : patch >= minPatch;
+  assert.ok(patched, `Expected .nvmrc >= ${PATCHED_NODE.join(".")}, got ${nvmrc}`);
+});
+
+test("package.json engines require at least the .nvmrc Node version", () => {
+  const pkg = JSON.parse(
+    readFileSync(resolve(__dirname, "../../../package.json"), "utf8"),
+  );
+  assert.equal(pkg.engines?.node, `>=${nvmrc}`);
+});
