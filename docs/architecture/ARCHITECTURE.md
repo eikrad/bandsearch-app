@@ -254,19 +254,35 @@ SQLite (`DATABASE_PATH`, default `bandsearch.db`) with in-memory fallback; with 
 
 ### Auth store
 
-Same backend as preferences. Table: `users` (bcrypt-hashed passwords). JWTs with 30-day expiry; password recovery via single-use recovery codes.
+Same backend as preferences. Tables: `users` (bcrypt-hashed passwords, `disabled_at`) and `invites` (SHA-256 hashed codes bound to one email). JWTs with 30-day expiry; password recovery via single-use recovery codes.
 
 ---
 
 ## Authentication
 
-Three-tier progressive auth — determined by the number of registered users at runtime:
+`AUTH_MODE` selects one of two modes (default `progressive`).
+
+**`progressive`** (personal install) — determined by the number of registered users at runtime:
 
 | Users registered | Mode |
 |-----------------|------|
 | 0 | Pass-through — no auth checks |
 | 1 | Auto-attach — all requests associated with the single user |
 | ≥ 2 | Enforced — `Authorization: Bearer <token>` required for preference endpoints |
+
+**`enforced`** (closed beta, used by `render.yaml`; [ADR 0005](../adr/0005-closed-beta-via-email-bound-invites.md)) — every protected request needs a valid token for an existing, non-disabled user; `/health`, `/version` and `/auth/*` stay public. `JWT_SECRET` is required, and `POST /auth/register` needs an email-bound, single-use invite code. `REGISTRATION_OPEN=false` closes registration in either mode.
+
+```mermaid
+flowchart TD
+    R["Request"] --> M{"AUTH_MODE"}
+    M -- "enforced" --> T{"Valid token,\nuser not disabled?"}
+    T -- "yes" --> OK["Handle request"]
+    T -- "no" --> E401["401"]
+    M -- "progressive" --> N{"Registered users"}
+    N -- "0" --> OK
+    N -- "1" --> A["Attach the single user"] --> OK
+    N -- "2 or more" --> T
+```
 
 ---
 

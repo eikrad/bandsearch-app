@@ -71,8 +71,10 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
 | [docs/adr/0003-android-hosting-render-over-fly.md](docs/adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render |
 | [docs/adr/0004-llm-models-per-role-on-scaleway.md](docs/adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role |
+| [docs/adr/0005-closed-beta-via-email-bound-invites.md](docs/adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and `AUTH_MODE=enforced` |
 | [docs/releasing.md](docs/releasing.md) | How versions, the CHANGELOG and desktop releases are produced |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/design/UI_EXAMPLES.md](docs/design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
 ---
@@ -81,7 +83,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 | Layer | Technology |
 |-------|------------|
-| API server | Express.js + TypeScript (Node.js 26+) |
+| API server | Express.js + TypeScript (Node.js 26.12.1+) |
 | AI pipeline | LangGraph + Scaleway Generative APIs (DeepSeek V4 Flash by default; Gemini selectable) |
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
@@ -93,7 +95,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ## Quick Start
 
-**Prerequisites:** Node.js 26+
+**Prerequisites:** Node.js 26.12.1+ (the version in `.nvmrc`)
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
@@ -289,6 +291,10 @@ Common optional variables:
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
+| `RESEARCH_TIMEOUT_MS` | `180000` | Wall-clock budget for one research run; when it runs out the pipeline ends gracefully with what it has |
+| `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified bands needed before the reflection loop stops |
+| `RESEARCH_MAX_INITIAL_SEARCHES` / `RESEARCH_MAX_REFLECTION_SEARCHES` / `RESEARCH_TOTAL_SEARCH_BUDGET` | `6` / `4` / `10` | Brave search caps for the first pass, for reflection, and in total |
+| `CORS_ORIGIN` | `http://localhost:1420` | Allowed browser origin for the API |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
@@ -297,7 +303,7 @@ See `.env.example` for all options including storage backends, timeouts, search 
 
 ## Deployment
 
-The API is a standalone Express service and can run anywhere Node.js 26+ is available. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option, deploying from `main` — feature work happens on `staging` (see [`CONTRIBUTING.md`](CONTRIBUTING.md)) and only reaches production once merged to `main`.
+The API is a standalone Express service and can run anywhere Node.js 26.12.1+ is available. Render takes the Node version from `.nvmrc`, which also sets the CI Node and the Node bundled with the desktop installers. `render.yaml` at the repo root configures a [Render](https://render.com) Web Service (`bandsearch-api`, Node environment, Frankfurt region, `npm start`) as the supported hosted option, deploying from `main` — feature work happens on `staging` (see [`CONTRIBUTING.md`](CONTRIBUTING.md)) and only reaches production once merged to `main`.
 
 Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays stateless and all data (preferences, sessions, auth) lives in Turso/libSQL:
 

@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-node@v7
         if: steps.release.outputs.pr
         with:
-          node-version: 26
+          node-version-file: .nvmrc
       - uses: dtolnay/rust-toolchain@stable
         if: steps.release.outputs.pr
       - uses: astral-sh/setup-uv@v7
