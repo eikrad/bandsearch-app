@@ -71,9 +71,10 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 | [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
 | [docs/adr/0003-android-hosting-render-over-fly.md](docs/adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render |
 | [docs/adr/0004-llm-models-per-role-on-scaleway.md](docs/adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role |
-| [docs/adr/0005-closed-beta-via-email-bound-invites.md](docs/adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via enforced auth and email-bound invites |
+| [docs/adr/0005-closed-beta-via-email-bound-invites.md](docs/adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and `AUTH_MODE=enforced` |
 | [docs/releasing.md](docs/releasing.md) | How versions, the CHANGELOG and desktop releases are produced |
 | [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
+| [docs/design/UI_EXAMPLES.md](docs/design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
 | [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
 
 ---
@@ -290,6 +291,10 @@ Common optional variables:
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
+| `RESEARCH_TIMEOUT_MS` | `180000` | Wall-clock budget for one research run; when it runs out the pipeline ends gracefully with what it has |
+| `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified bands needed before the reflection loop stops |
+| `RESEARCH_MAX_INITIAL_SEARCHES` / `RESEARCH_MAX_REFLECTION_SEARCHES` / `RESEARCH_TOTAL_SEARCH_BUDGET` | `6` / `4` / `10` | Brave search caps for the first pass, for reflection, and in total |
+| `CORS_ORIGIN` | `http://localhost:1420` | Allowed browser origin for the API |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
