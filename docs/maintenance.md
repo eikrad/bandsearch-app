@@ -31,6 +31,27 @@ Weekly dependency and health checks for the Bandsearch application.
 | npm | `npm audit` | 0 |
 | Python | `pip-audit` | nothing to audit (`dependencies = []`) |
 | Rust | `cargo audit` | 4 (`rustls`) at baseline -> **0** after update; informational unmaintained warnings (`proc-macro-error`, `glib`, ...) unchanged, transitive |
+## 2026-10-23 (out of band: Node security release)
+
+### Trigger
+- Render notice about the eMudhra intermediate-certificate compromise (2026-10-19) and Node's 2026-10-21
+  security release (TLS hostname-check bypass, Brotli decompression RCE, eMudhra distrust). Patched Node 26:
+  `26.12.1`. See Render's [eMudhra advisory](https://render.com/docs/advisory-emudhra).
+
+### Fixes applied
+- `.nvmrc` `26` -> `26.12.1` (exact; Render resolves the API's Node from it), root `engines.node` `>=26.12.1`.
+- Desktop installers bundled a hardcoded Node `v26.5.1` sidecar (`release.yml`, all three platforms): now read
+  from `.nvmrc`. Every shipped desktop release up to v0.4.3 carries the vulnerable Node until the next release.
+- All `setup-node` steps use `node-version-file: .nvmrc` instead of `node-version: 26`, so CI tests the Node
+  production runs. Tests in `shared/schemas/test/` guard all three.
+- No npm package bundles its own CA store; `uv.lock` has no `certifi`. The API's HTTPS clients use Node's.
+- Desktop `Cargo.lock` (`cargo update -p`): `webpki-root-certs` 1.0.9 -> 1.0.11, `rustls-webpki` 0.103.15 ->
+  0.103.16, the minimums the advisory gives for the eMudhra distrust. `rustls-native-certs` uses the OS store.
+
+### Checks performed
+- `npm run ci` (lint incl. `lint:py` via `uvx`, typecheck, tests) green on local Node 26.8.1.
+- `cargo check --locked` for the desktop crate green.
+- Not run: desktop build with the new sidecar (needs the release workflow).
 
 ---
 

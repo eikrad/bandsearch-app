@@ -64,6 +64,19 @@ test("release workflow downloads Node sidecars for each platform", () => {
   );
 });
 
+test("release workflow bundles the Node sidecar version from .nvmrc", () => {
+  // The installers ship this Node binary. Hardcoded, it stayed on 26.5.1 and
+  // missed the 2026-10-21 Node security release.
+  assert.ok(
+    !/node-v\d+\.\d+\.\d+/.test(releaseYml),
+    "Expected no hardcoded Node version in the sidecar downloads",
+  );
+  assert.ok(
+    releaseYml.includes(".nvmrc"),
+    "Expected the sidecar version read from .nvmrc",
+  );
+});
+
 test("release workflow uses tauri-action with desktop projectPath", () => {
   assert.ok(
     releaseYml.includes("tauri-apps/tauri-action"),

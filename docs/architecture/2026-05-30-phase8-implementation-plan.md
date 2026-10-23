@@ -48,7 +48,7 @@ effect on recommendations or on the logged data.
 | F3 | ✅ Fixed | Judge prompt thresholds now derived from `OBSCURITY_THRESHOLDS` (single source of truth); `obscurityTier` passed into `JudgeInput`. Re-run `run-calibration.ts` (prompt hash changed). | `eval/judgeWorker.ts` |
 | F4 | ✅ Fixed | `obscurityDistribution` now counts all five tiers incl. `mainstream` + `unknown`; dashboard doughnut shows mainstream in red. | `eval/evalAggregator.ts`, dashboard |
 | F5 | ✅ Fixed (8.8) | `eventId` is pre-generated in the route and returned in response `meta`; `logEvent` accepts a supplied id. | `eval/evalWorker.ts`, route |
-| F6 | 🟡 Low | Integration point moved: `processEvent` is called from `registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Plan's Design Decision #2 is stale. | this doc |
+| F6 | ✅ Fixed (docs) | Integration point moved: `processEvent` is called from `registerBandsearchRoutes.ts`, not `recommendationPipeline.ts`. Design Decision #2 and the Modified Files table now say so. | this doc |
 | F7 | 🟡 Low | Event table stores no `recommendations_json`, prompt hashes, model ids, or `user_id`. Spec's "link to full recommendations" and prompt-hash filtering are not possible. | `eval/evalRepository.ts` |
 | F8 | 🟡 Low | `GENERIC_PHRASES` flags common comparison phrasing ("fans of", "similar to", "in the vein of") that appears in legitimately good why-text → noisy `genericWhyFlag`. `citationSupportRate` also defaults to 1.0 when a why has no URLs, inflating evidence metrics. | `eval/evidenceChecker.ts` |
 
@@ -88,11 +88,10 @@ void evalWorker.processEvent(context);
 → judge. The caller never touches `evalRepository` directly.
 
 > **As built (F6):** the call lives in `routes/registerBandsearchRoutes.ts`
-> inside the `POST /recommendations` handler (not in `recommendationPipeline.ts`).
-> This is acceptable — the route already strips `pipelineDiagnostics` from
-> `meta` there — but **two gaps must be closed** (see Phase 8.3b): the route
-> currently omits `obscurityTarget` from both `recommend()` and the
-> `processEvent` context (F1), and `eventId` is not surfaced for 8.8 (F5).
+> inside the `POST /recommendations` handler, not in `recommendationPipeline.ts`.
+> The route already strips `pipelineDiagnostics` from `meta` there, so it is the
+> natural place. The two gaps this left open, `obscurityTarget` missing from the
+> `processEvent` context (F1) and `eventId` not surfaced (F5), are fixed.
 
 ---
 
@@ -234,7 +233,7 @@ apps/desktop/src/components/
 |------|--------|
 | `researchGraph.ts` | 🔴 extend `invokeResearchGraph` return → add `pipelineDiagnostics` |
 | `researchService.ts` | 🟡 thread `pipelineDiagnostics` through to callers |
-| `recommendationPipeline.ts` | 🟡 accept optional `evalWorker`; `void evalWorker.processEvent()` |
+| `registerBandsearchRoutes.ts` (`POST /recommendations`) | 🟡 `void evalWorker.processEvent()` after each successful recommendation (as built, F6; the plan had `recommendationPipeline.ts`) |
 | `app.ts` | ✓ init `evalRepository`+`evalWorker`; no-op defaults; new env vars |
 | `registerBandsearchRoutes.ts` | 🟡 add `evalRepository`+`evalDashboardEnabled` to context; call `registerEvalRoutes()` |
 | `shared/schemas/contracts.ts` | 🟡 add `ObscurityTarget` type + optional `obscurityTarget?` to request |
