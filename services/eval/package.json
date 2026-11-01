@@ -13,6 +13,6 @@
     "test": "tsx --test"
   },
   "dependencies": {
-    "dotenv": "^18.0.5"
+    "dotenv": "^18.0.9"
   }
 }
