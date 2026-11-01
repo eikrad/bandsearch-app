@@ -4,6 +4,42 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-10-28
+
+### Checks performed
+- `git fetch origin`; branch reset to `origin/staging` (`88c8846`). No open PRs at the start of the run.
+- Toolchain: sandbox default is Node 22; `.nvmrc` pins 26.12.1. Installed Node 26.12.1 via `npm i node@26` in a scratch directory.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 402/403 (1 pre-existing skip), api 843/843, eval 118/118, schemas 40/40.
+- `npm audit`: **3 vulnerabilities** at baseline (see below). `cargo audit` (v0.22.2): 3 vulnerabilities (`zip`).
+- **Not run:** `cargo check` / `cargo test` (the sandbox has no GTK/webkit system libraries, `gdk-3.0.pc` missing). CI does not compile the Rust crate either.
+
+### Fixes applied
+- **Security (npm, lockfile only, `npm audit fix`)**, all transitive via `express`:
+  - `body-parser` 2.0.0-2.3.0 -> fixed (high, GHSA-27r3-jxmh-p828, DoS via trailing bytes after a compressed request body)
+  - `qs` <= 6.16.0 -> fixed (moderate, GHSA-6pq8-jhm2-2vcw, `qs.stringify` with `arrayFormat: 'comma'` throws on a crafted array element)
+  - `ip-address` <= 10.7.3 -> fixed (moderate, GHSA-rxp7-6hxx-x8q5, quadratic-time `Address6` zone-id match)
+- **Safe npm updates** (`npm update`, `package-lock.json` only, ranges in `package.json` unchanged): `@langchain/core` 1.2.20 -> 1.3.1, `@langchain/langgraph` 1.5.1 -> 1.5.3, `@langchain/openai` 1.6.3 -> 1.8.0 (these three share `@langchain/core` as peer; moved together, `npm ls` shows no peer conflicts), `@tauri-apps/api` / `@tauri-apps/cli` 2.12.4, `@tauri-apps/plugin-opener` 2.7.2, `dotenv` 18.0.9, `@types/node` 26.6.6.
+- **Tauri crates deliberately not bumped.** The Rust side (`tauri` 2.12.1, `tauri-plugin-opener` 2.7.0) cannot be compiled here and CI does not build it, so a bump would be unverified. Tauri only requires JS and Rust to agree on major.minor (2.12), which still holds. **Suggest** running `cargo update -p tauri -p tauri-build -p tauri-plugin-opener` (2.12.2 / 2.7.2 / 2.7.2) on a machine with the Tauri toolchain.
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `zip` (Rust, transitive via `tauri-plugin-updater`) | 4.6.1 | 9.0.0 | RUSTSEC-2026-0367, -0368, -0369 (symlink / SUID handling in archive *extraction*). Only upstream `tauri-plugin-updater` can move it. Unchanged since last week. |
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` peer range still caps TypeScript below 6.1. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 3 (1 high, 2 moderate) at baseline -> **0** |
+| Python | `pip-audit` | nothing to audit (`dependencies = []`) |
+| Rust | `cargo audit` | 3 (all `zip`, awaiting upstream); informational unmaintained warnings (`proc-macro-error`, `zbus_names`, `zvariant*`, `glib`) unchanged, transitive |
+
+### Post-change verification
+- `npm ci`, `npm run ci` and `npm run build --workspace @bandsearch/desktop` green with the same counts as baseline.
+
+---
+
 ## 2026-10-21
 
 ### Checks performed
