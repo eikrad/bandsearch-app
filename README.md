@@ -63,19 +63,7 @@ See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for
 
 ## Documentation
 
-| Path | What it covers |
-|------|----------------|
-| [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Full pipeline — nodes, reflection subgraph, state fields, storage, auth, and eval layer |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase roadmap with completion status |
-| [docs/adr/0001-prompt-injection-guardrails.md](docs/adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence strategy |
-| [docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md](docs/adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt |
-| [docs/adr/0003-android-hosting-render-over-fly.md](docs/adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render |
-| [docs/adr/0004-llm-models-per-role-on-scaleway.md](docs/adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role |
-| [docs/adr/0005-closed-beta-via-email-bound-invites.md](docs/adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and `AUTH_MODE=enforced` |
-| [docs/releasing.md](docs/releasing.md) | How versions, the CHANGELOG and desktop releases are produced |
-| [docs/design/UI_GUIDELINES.md](docs/design/UI_GUIDELINES.md) | UI layout and component guidelines |
-| [docs/design/UI_EXAMPLES.md](docs/design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
-| [docs/maintenance.md](docs/maintenance.md) | Dependency upgrade notes |
+Everything beyond this README lives in [`docs/`](docs/README.md), which has an index with a one-line description per document: architecture, roadmap, ADRs, release process, evaluation, UI design specs.
 
 ---
 
@@ -294,7 +282,7 @@ Common optional variables:
 | `RESEARCH_TIMEOUT_MS` | `180000` | Wall-clock budget for one research run; when it runs out the pipeline ends gracefully with what it has |
 | `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified bands needed before the reflection loop stops |
 | `RESEARCH_MAX_INITIAL_SEARCHES` / `RESEARCH_MAX_REFLECTION_SEARCHES` / `RESEARCH_TOTAL_SEARCH_BUDGET` | `6` / `4` / `10` | Brave search caps for the first pass, for reflection, and in total |
-| `CORS_ORIGIN` | `http://localhost:1420` | Allowed browser origin for the API |
+| `CORS_ORIGIN` | `*` (`.env.example` sets `http://localhost:1420`) | Allowed browser origin for the API |
 | `EVAL_RETENTION_DAYS` | `90` | How long recommendation events are kept before the daily purge removes them |
 
 See `.env.example` for all options including storage backends, timeouts, search budgets, and CORS settings.
@@ -329,18 +317,7 @@ Versions, the CHANGELOG and releases come from [release-please](https://github.c
 
 Pushing a tag no longer starts a build. For a test build, run **Actions → Build desktop installers → Run workflow** with a tag such as `v0.4.2-test`; it builds into a new draft prerelease.
 
-One-time signing setup (required before the first release):
-
-1. Generate keys (private key stays outside the repo):
-   ```bash
-   npx --workspace @bandsearch/desktop tauri signer generate -w ~/.tauri/bandsearch.key
-   ```
-2. Put the **public** key string into `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey` (already set for the current keypair).
-3. Add GitHub Actions secrets:
-   - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/bandsearch.key`
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password used at generation (empty string if none)
-
-**In-app update notification (Windows/Linux):** on every launch the app checks `latest.json` in the background; if a newer version is available, a dismissible banner appears with a one-click Install (`install_update` downloads, verifies the signature, and installs). Dismissing is per-version — a later release shows the banner again even if an earlier one was dismissed. **macOS is not covered**: without a signed macOS build there is no macOS entry in `latest.json`, so macOS testers never see the banner and must download releases manually from the GitHub Releases page.
+Signing keys, the required GitHub secrets and the in-app update banner are described in [docs/releasing.md](docs/releasing.md#signing-and-in-app-updates).
 
 ---
 
@@ -352,51 +329,19 @@ npm run ci        # lint + typecheck + test
 npm run test:e2e  # Playwright end-to-end smoke tests (spins up the API and a static frontend)
 ```
 
-Tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
+Lint, typecheck and tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
 
 ### Golden runs and the eval dashboard
 
-The golden set (`services/eval/golden-set.json`) is the regression check for
-recommendation quality. Start the API (`npm run dev` or the desktop
-sidecar), then:
+The golden set (`services/eval/golden-set.json`) is the regression check for recommendation quality. With the API running:
 
 ```bash
 npm run golden -w services/eval -- --label baseline --repeat 3   # three runs of one setup
-npm run dashboard -w services/eval                               # rebuild the dashboard on its own
+npm run dashboard -w services/eval                               # rebuild the dashboard
+npm run calibrate -w services/eval                               # check the LLM judge against human labels
 ```
 
-For comparing models, start the API **and** the runner with `EVAL_REPLAY_DIR`
-(e.g. `services/eval/replay`): Brave, MusicBrainz and Last.fm answers are
-recorded on first use and replayed afterwards, so every model sees the same
-search data and repeat runs skip MusicBrainz's 1 req/s limit. LLM calls always
-run live. Coverage uses MusicBrainz tags and, for bands without any, Last.fm
-listener tags (`LASTFM_API_KEY`). Some golden queries carry hard
-**constraints** — "from Iceland", "formed after 2015", "shares a member with
-Alcest" — that the runner checks against MusicBrainz with plain code, no LLM
-involved.
-
-Every run appends one line to `services/eval/history/golden-runs.jsonl`
-(committed): git commit, the model the API reported, and per query the
-status, `nuggetCoverage@8`, `antiBandRate@8`, latency and top 8. It then
-rewrites `services/eval/reports/dashboard.html` (gitignored), a self-contained
-page that compares each run with the latest run labelled `baseline` and with
-the previous run: flipped queries with a sign test, how much the top 8 changed
-against the noise floor of repeat runs, and changed settings. Its **Setups**
-section groups repeats of one configuration and compares each setup with the
-baseline's per query, with a 95% interval (paired bootstrap); only differences
-outside the noise are highlighted.
-
-The judge is checked the same way: `npm run calibrate -w services/eval` scores
-the 25 hand-labelled examples and 16 directional checks with the configured
-judge (`--judge <model>` compares candidates) and appends the agreement to
-`services/eval/history/judge-runs.jsonl`.
-
-A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
-`--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at
-another deployment, `BANDSEARCH_API_TOKEN` authenticates against one with more
-than one account. The live-traffic dashboard at `GET /eval/dashboard` (404 unless
-`EVAL_DASHBOARD_ENABLED=true`; `EVAL_DASHBOARD_PASSWORD` adds Basic Auth) is a
-different thing: it shows scores from real requests, not test runs.
+Metrics, replay mode, constraints, run history and the dashboard are described in [docs/evaluation.md](docs/evaluation.md).
 
 ---
 
@@ -407,6 +352,8 @@ apps/desktop/     — Tauri + React desktop client
 services/api/     — Express API
 services/eval/    — golden dataset, eval runner, run history and dashboard
 shared/schemas/   — shared TypeScript validation contracts
+tests/e2e/        — Playwright end-to-end smoke tests
+scripts/          — lint helpers (main.py/pyproject.toml are a placeholder so `npm run lint:py` has something to check)
 docs/             — architecture docs, ADRs, design specs, roadmap
 ```
 
