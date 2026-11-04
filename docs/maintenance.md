@@ -4,6 +4,35 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-11-04
+
+### Checks performed
+- `git fetch origin`; branch `claude/eloquent-volta-9i7142` reset to `origin/staging` (`29cbb77`). Open PRs: Dependabot #282 (`tauri-build`), #283 (`serde_json`), #284 (`tauri`), all Rust. They were **not duplicated**.
+- Toolchain: sandbox default is Node 22; CI/production use the exact version in `.nvmrc` (26.12.1), installed via `npm i node@26.12.1` in a scratch directory.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 402/403 (1 pre-existing skip), api 843/843, eval 118/118, schemas 40/40. **Nothing broken on `staging`.**
+- `npm audit`, `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (installed fresh, v0.22.2), `pip-audit` not applicable (`dependencies = []`).
+- **Not run:** `cargo check` / `cargo test` (Tauri system libraries cannot be installed in this sandbox); no Rust code or lockfile was changed. Playwright E2E not run (browser CDN blocked); CI runs it.
+
+### Fixes applied
+- **Safe npm updates** (`npm update`, `package-lock.json` only, `package.json` ranges unchanged): `@langchain/core` 1.3.1 -> 1.3.4 and `@langchain/langgraph` 1.5.3 -> 1.6.1 (bumped together so the LangChain packages stay compatible), `express-rate-limit` 8.7.1 -> 8.7.3, `eslint` 10.13.0 -> 10.14.0, `globals` 17.13.0 -> 17.14.0.
+- After: `npm run ci` green with the same counts as baseline, desktop build green.
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | **1 moderate, new this week**: `minimatch` GHSA-g3hv-75wg-m249 (DoS via glob amplification), fixed in >= 11.0.1. `eslint`, `@eslint/config-array` and `@typescript-eslint/typescript-estree` all still depend on `minimatch@^10`, so there is no fix within their ranges; `npm audit fix --force` would downgrade eslint to 9 and was rejected. Dev/lint tooling only. Re-check weekly. |
+| Python | `pip-audit` | nothing to audit |
+| Rust | `cargo audit` | 4 vulnerabilities, all `zip` 4.6.1 (RUSTSEC-2026-0367, -0368, -0369 and the new -0429), plus the usual informational unmaintained warnings (`proc-macro-error`, `zbus_names`, `zvariant*`, `glib`). |
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `zip` (Rust, transitive via `tauri-plugin-updater`) | 4.6.1 | 9.x | Fix needs a major `zip`; only upstream `tauri-plugin-updater` can move it. Low exposure: the updater only unpacks minisign-verified release archives. Re-check each week. |
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` has no TypeScript 7 support yet. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+---
+
 ## 2026-10-28
 
 ### Checks performed
