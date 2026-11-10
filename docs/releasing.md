@@ -6,6 +6,15 @@ messages. Nobody edits version numbers by hand.
 
 ## How a release happens
 
+```mermaid
+flowchart LR
+    S["staging"] --> M["main"]
+    M --> RP["release-please PR\nchore(main): release X.Y.Z"]
+    RP -->|"merge"| D["tag vX.Y.Z +\ndraft release"]
+    D --> B["build installers\nLinux · Windows · macOS"]
+    B -->|"all builds pass"| P["published as latest\nin-app updater offers it"]
+```
+
 1. Changes reach `main` the usual way: feature branch → `staging` → `main`.
 2. On every push to `main`, the **Release** workflow (`.github/workflows/release-please.yml`)
    opens or updates a pull request titled `chore(main): release X.Y.Z`. It bumps the
@@ -125,6 +134,21 @@ stored as the `RELEASE_PLEASE_TOKEN` secret:
 
 The existing `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
 are passed on to the build unchanged.
+
+## Signing and in-app updates
+
+One-time signing setup (required before the first release):
+
+1. Generate keys (private key stays outside the repo):
+   ```bash
+   npx --workspace @bandsearch/desktop tauri signer generate -w ~/.tauri/bandsearch.key
+   ```
+2. Put the **public** key string into `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey` (already set for the current keypair).
+3. Add GitHub Actions secrets:
+   - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/bandsearch.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password used at generation (empty string if none)
+
+**In-app update notification (Windows/Linux):** on every launch the app checks `latest.json` in the background; if a newer version is available, a dismissible banner appears with a one-click Install (`install_update` downloads, verifies the signature, and installs). Dismissing is per-version — a later release shows the banner again even if an earlier one was dismissed. **macOS is not covered**: without a signed macOS build there is no macOS entry in `latest.json`, so macOS testers never see the banner and must download releases manually from the GitHub Releases page.
 
 ## Changing the next version by hand
 
