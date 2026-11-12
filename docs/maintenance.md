@@ -4,6 +4,75 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-11-11
+
+### Checks performed
+- `git fetch origin`. Last week's maintenance PR **#290 is still open and unmerged**, and `staging` has moved on since (`e1f7730`, docs-only #291). To avoid conflicting lockfile and log edits, this branch is `origin/staging` **plus #290's single commit cherry-picked** (identical patch). If #290 is merged first, rebasing drops the duplicate; if it is not, merging this PR also lands #290's changes, and #290 can then be closed. Other open PRs: Dependabot #282 (`tauri-build`), #283 (`serde_json`), #284 (`tauri`), all Rust. They were **not duplicated**.
+- `staging` CI: `ci.yml` only runs on `pull_request` and pushes to `main`, so there are no direct `staging` runs. The latest PR run against it (#290: checks on ubuntu and windows, e2e, conventional-commits) was green.
+- Toolchain: Node 26.12.1 (from `.nvmrc`), installed via `npm i node@26.12.1` in a scratch directory.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 402/403 (1 pre-existing skip), api 843/843, eval 118/118, schemas 40/40. **Nothing broken on `staging`.**
+- The Tauri system libraries (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`) are available in this sandbox this week, so the Rust side was **built and tested locally** for the first time in several cycles. A local stand-in for the gitignored `binaries/node-*` sidecar was used, and regenerated `gen/schemas` files were reverted. Result: `cargo build` ok, `cargo test` 26/26.
+- Security: `npm audit`, `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (cargo-audit installed fresh), `pip-audit` not applicable (`dependencies = []`). Outdated survey: `npm outdated -ws --include-workspace-root`.
+- Playwright E2E not run locally (browser CDN blocked); CI runs it.
+
+### Fixes applied
+- **Security / soundness (Rust, `Cargo.lock` only, `cargo update -p rustix -p tokio -p async-executor`)**: `rustix` 1.1.4 -> 1.1.6 (RUSTSEC-2026-0486, xattr functions mark unwritten bytes as initialised), `tokio` 1.52.1 -> 1.54.1 (RUSTSEC-2026-0386, `AsyncFd::new` violates I/O safety; patched in >= 1.53.3), `async-executor` 1.14.0 -> 1.14.1 (1.14.0 was yanked). All transitive, semver-compatible. Verified with `cargo build` and `cargo test` (26 passed).
+- **Safe npm updates** (`npm update`, `package-lock.json` only, `package.json` ranges unchanged):
+  - LangChain, moved together: `@langchain/core` 1.3.4 -> 1.3.7, `@langchain/langgraph` 1.6.1 -> 1.7.3, `@langchain/langgraph-sdk` 1.12.10 -> 1.15.0, `@langchain/openai` 1.8.0 -> 1.8.3, `@langchain/google-genai` 2.3.4 -> 2.3.6, `@langchain/protocol` 0.0.20 -> 0.0.21. Transitive: `openai` 7.45.1 -> 7.55.0, `langsmith` 0.11.4 -> 0.12.0, both within `@langchain/*` ranges.
+  - API: `better-sqlite3` 13.0.3 -> 13.1.1, `express-rate-limit` 8.7.3 -> 8.7.4, `dotenv` 18.0.9 -> 18.0.10, `qs` 6.17.1, `ws` 8.22.2, `semver` 7.8.6.
+  - Dev tooling: `typescript-eslint` (and all `@typescript-eslint/*`) 8.72.1 -> 8.72.2, `@playwright/test` / `playwright` 1.64.1 -> 1.65.0.
+- **Deliberately not bumped:** `@tauri-apps/plugin-opener` 2.7.2 -> 2.7.3. It was reset to 2.7.2 in the lockfile because Tauri JS packages and Rust crates should move together, and the Rust Tauri bumps are pending in Dependabot #282-#284.
+- After: `npm ci`, `npm run ci` (same counts as baseline), desktop build, `cargo build` / `cargo test` all green. `npm ls` shows only the usual unmet *optional* peers.
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 10 moderate, **all the same single advisory** reported last week: `minimatch` 10.2.6 GHSA-g3hv-75wg-m249 (DoS via glob amplification, fixed in >= 11.0.1). npm now also lists every dependant (`eslint`, `@eslint/config-array`, the `@typescript-eslint/*` chain), so the count rose from 1 to 10 without any new vulnerable package. `eslint` 10.14.0 (latest) still requires `minimatch@^10`; `npm audit fix --force` would downgrade to eslint 9 and was rejected. Dev/lint tooling only, not shipped. |
+| Python | `pip-audit` | nothing to audit |
+| Rust | `cargo audit` | **4 vulnerabilities, unchanged** (`zip` 4.6.1: RUSTSEC-2026-0367, -0368, -0369, -0429). New this week and **fixed**: `rustix` RUSTSEC-2026-0486, `tokio` RUSTSEC-2026-0386, yanked `async-executor` 1.14.0. Remaining informational warnings are transitive and unchanged: unmaintained `proc-macro-error`, `zbus_names`, `zvariant*`; unsound `glib` 0.18. |
+
+### Other observations
+- `cargo clippy --all-targets -- -D warnings` (Rust 1.97) fails with one `needless_borrow` lint at `apps/desktop/src-tauri/src/main.rs:623` (`build_app_menu(&app.handle())` should be `build_app_menu(app.handle())`). No workflow runs clippy, so CI is unaffected. It was not changed here (code, not dependencies). It is a one-character fix if wanted.
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `zip` (Rust, transitive via `tauri-plugin-updater`) | 4.6.1 | 9.x | Fix needs a major `zip`; only upstream `tauri-plugin-updater` can move it. Low exposure: the updater only unpacks minisign-verified release archives. Re-check each week. |
+| `minimatch` (dev, via eslint / typescript-eslint) | 10.2.6 | 11.0.8 | Major; blocked until `eslint` and `typescript-eslint` accept `minimatch@11`. An `overrides` entry would force an untested major under eslint. |
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` has no TypeScript 7 support yet. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+---
+
+## 2026-11-04
+
+### Checks performed
+- `git fetch origin`; branch `claude/eloquent-volta-9i7142` reset to `origin/staging` (`29cbb77`). Open PRs: Dependabot #282 (`tauri-build`), #283 (`serde_json`), #284 (`tauri`), all Rust. They were **not duplicated**.
+- Toolchain: sandbox default is Node 22; CI/production use the exact version in `.nvmrc` (26.12.1), installed via `npm i node@26.12.1` in a scratch directory.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 402/403 (1 pre-existing skip), api 843/843, eval 118/118, schemas 40/40. **Nothing broken on `staging`.**
+- `npm audit`, `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (installed fresh, v0.22.2), `pip-audit` not applicable (`dependencies = []`).
+- **Not run:** `cargo check` / `cargo test` (Tauri system libraries cannot be installed in this sandbox); no Rust code or lockfile was changed. Playwright E2E not run (browser CDN blocked); CI runs it.
+
+### Fixes applied
+- **Safe npm updates** (`npm update`, `package-lock.json` only, `package.json` ranges unchanged): `@langchain/core` 1.3.1 -> 1.3.4 and `@langchain/langgraph` 1.5.3 -> 1.6.1 (bumped together so the LangChain packages stay compatible), `express-rate-limit` 8.7.1 -> 8.7.3, `eslint` 10.13.0 -> 10.14.0, `globals` 17.13.0 -> 17.14.0.
+- After: `npm run ci` green with the same counts as baseline, desktop build green.
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | **1 moderate, new this week**: `minimatch` GHSA-g3hv-75wg-m249 (DoS via glob amplification), fixed in >= 11.0.1. `eslint`, `@eslint/config-array` and `@typescript-eslint/typescript-estree` all still depend on `minimatch@^10`, so there is no fix within their ranges; `npm audit fix --force` would downgrade eslint to 9 and was rejected. Dev/lint tooling only. Re-check weekly. |
+| Python | `pip-audit` | nothing to audit |
+| Rust | `cargo audit` | 4 vulnerabilities, all `zip` 4.6.1 (RUSTSEC-2026-0367, -0368, -0369 and the new -0429), plus the usual informational unmaintained warnings (`proc-macro-error`, `zbus_names`, `zvariant*`, `glib`). |
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `zip` (Rust, transitive via `tauri-plugin-updater`) | 4.6.1 | 9.x | Fix needs a major `zip`; only upstream `tauri-plugin-updater` can move it. Low exposure: the updater only unpacks minisign-verified release archives. Re-check each week. |
+| `typescript` | 6.0.3 | 7.0.2 | Major; `typescript-eslint` has no TypeScript 7 support yet. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. |
+
+---
+
 ## 2026-10-28
 
 ### Checks performed
