@@ -4,6 +4,20 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-11-12 (merge round: open PRs cleared)
+
+At the owner's request every open PR was merged or closed:
+- **Merged:** #292 (maintenance 2026-11-04 + 2026-11-11), then Dependabot #283 (`serde_json` 1.0.151 -> 1.0.154), #284 (`tauri` 2.12.1 -> 2.12.2) and #282 (`tauri-build` 2.7.1 -> 2.7.2). All had green CI. They were merged with merge commits because this repository currently allows **only** merge commits: rebase and squash merging are disabled in the settings, although `docs/releasing.md` asks for "Rebase and merge" on feature PRs. All titles are `chore`, so the CHANGELOG is unaffected.
+- **Closed as superseded:** #290 (its commit landed via #292).
+
+Verification on the resulting `staging` (`ddc1f30`): `cargo test --locked` in `apps/desktop/src-tauri` passed 26/26, with `Cargo.lock` at `tauri` 2.12.2, `tauri-build` 2.7.2 and `serde_json` 1.0.154.
+
+The build regenerated `apps/desktop/src-tauri/gen/schemas/*.json`, because `tauri` 2.12.2 adds core permissions (`core:app:allow-exit`, `core:window:allow-set-fullscreen-on-monitor`, ...). The regenerated files are committed with this entry, so a build no longer leaves the tree dirty. No capability was changed: the app does not grant the new permissions.
+
+The Tauri JS packages (`@tauri-apps/api` 2.12.4, `@tauri-apps/cli` 2.12.4) are already ahead of the Rust crates and stay compatible within 2.x.
+
+---
+
 ## 2026-11-11
 
 ### Checks performed
