@@ -4,15 +4,16 @@
 // ones are called with `?.` in the views because not every host provides them
 // (the browser shell wires fewer than the Tauri one).
 
+import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
 
 export type ChatHandlers = {
   onModeChange(mode: string): unknown;
   onQuerySubmit(query: string): unknown;
-  onSave(artistName: string): unknown;
+  onSave(target: SavedBandTarget): unknown;
   // null clears an existing rating without unsaving the band — see
   // cardActionLogic.ts's nextRatingForStarTap.
-  onRate(artistName: string, rating: number | null): unknown;
+  onRate(target: SavedBandTarget, rating: number | null): unknown;
   onObscurityTargetChange?(target: string | undefined): unknown;
   onCopyCard?(title: string, why: string): unknown;
   onCopyAll?(text: string): unknown;
@@ -25,8 +26,8 @@ export type ChatHandlers = {
   onOpenLink?(url: string): unknown;
   /** Save toggled off — removes the band entirely (not the same as clearing a rating). */
   onUnsave?(savedBandId: string, artistName: string): unknown;
-  /** The ··· sheet's persistence call. savedBandId is null when the artist isn't saved yet — editing implies saving. */
-  onSaveCategoryNote?(artistName: string, savedBandId: string | null, updates: { categories: string[]; note: string }): unknown;
+  /** Editing implies saving; identity is resolved against current saved bands. */
+  onSaveCategoryNote?(target: SavedBandTarget, updates: CategoryNoteUpdates): unknown;
 };
 
 /** One saved artist as the saved-artists screen renders it. */

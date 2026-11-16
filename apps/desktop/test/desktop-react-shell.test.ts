@@ -45,18 +45,18 @@ test("desktop react shell save and rate actions call app handlers", async () => 
     app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
       getState: () => ({ messages: [] }),
-      saveBand: async (artistName) => {
-        calls.push({ type: "save", artistName });
+      saveBand: async (target) => {
+        calls.push({ type: "save", artistName: target.name });
       },
-      rateBand: async (artistName, rating) => {
-        calls.push({ type: "rate", artistName, rating });
+      rateBand: async (target, rating) => {
+        calls.push({ type: "rate", artistName: target.name, rating });
       },
     }),
   });
 
-  await shell.saveBand("Fen");
+  await shell.saveBand({ name: "Fen" });
   const afterSave = shell.getViewProps();
-  await shell.rateBand("Fen", 5);
+  await shell.rateBand({ name: "Fen" }, 5);
   const afterRate = shell.getViewProps();
 
   assert.equal(calls.length, 2);
@@ -125,7 +125,7 @@ test("desktop react shell clears action status after timeout", async () => {
     },
   });
 
-  await shell.saveBand("Fen");
+  await shell.saveBand({ name: "Fen" });
   assert.equal(shell.getViewProps().actionStatus?.message, "Saved Fen.");
   scheduled();
   assert.equal(shell.getViewProps().actionStatus, null);

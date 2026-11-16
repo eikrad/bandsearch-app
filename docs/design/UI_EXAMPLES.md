@@ -11,11 +11,16 @@ This file provides practical examples that translate `UI_GUIDELINES.md` into imp
 - "Why selected" is concise and specific.
 - Country/genres are short metadata lines.
 - Connection text references prior bands in plain language.
-- *(Not yet built — see the note in UI_GUIDELINES.md. The shipped card still shows Save / Rate / ···.)*
 - Rating stars and Save are always visible, on every screen size; Category/Note are compact actions.
 - Tapping a star saves the band with that rating — rating implies saving.
 - Saving does not imply rating: Save alone keeps a band unrated, which is a real state.
 - Both are reversible on the card: the active star clears the rating, Saved removes the band.
+- Saving an earlier Odessa recommendation acts on that card's MusicBrainz ID,
+  even when a later turn recommends a different artist named Odessa.
+- A repeated recommendation of the same artist shows the existing rating and
+  annotations. Its newer explanation never replaces the saved note.
+- Saving only a category leaves an untouched suggested note out of preference
+  context. Editing or clearing the note records the user's own input.
 
 Example content structure:
 

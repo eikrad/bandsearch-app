@@ -292,6 +292,17 @@ flowchart TD
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
 - **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings, Privacy policy (`#/privacy`) and a Connecting screen while the API starts (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback), `ObscurityTargetPicker` and `UpdateBanner` (in-app update notice)
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
+- **Saved-band actions:** `savedBandActions.ts` owns identity matching, creation,
+  rating, Category/Note updates, removal, and client collection updates. Cards
+  carry a typed target with artist name, optional MusicBrainz ID, and suggested
+  note through the view, mount, and shell; actions never recover identity from
+  the latest assistant message. `chatAppModel.ts` uses the same matching rule for
+  saved state. Before creating an uncached artist, the module reads stored bands
+  to preserve annotations even when the collection has not loaded yet. The
+  module orders writes by interaction so a slow Save cannot overwrite a later
+  rating or annotation. Failed writes leave the next action able to run. The
+  Category/Note sheet sends only fields the user edits, preserving untouched
+  categories and note provenance (ADR 0002).
 
 ---
 
