@@ -1,4 +1,5 @@
 import type { CardViewProps, ChatViewProps, MessageViewProps } from "../chatRenderAdapter.js";
+import type { CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import type { PlatformLink } from "../platformLinks.js";
 import * as React from "react";
@@ -179,11 +180,13 @@ function CategoryNoteSheet({
 }: {
   card: CardViewProps;
   theme: ReturnType<typeof getTheme>;
-  onSave: (categories: string[], note: string) => void;
+  onSave: (updates: CategoryNoteUpdates) => void;
   onClose: () => void;
 }) {
   const [categoriesText, setCategoriesText] = React.useState(card.categories.join(", "));
+  const [categoriesTouched, setCategoriesTouched] = React.useState(false);
   const [note, setNote] = React.useState(card.note);
+  const [noteTouched, setNoteTouched] = React.useState(false);
   const isPrefilled = !card.noteEdited && card.note.length > 0;
 
   const fieldLabelStyle: React.CSSProperties = {
@@ -228,7 +231,10 @@ function CategoryNoteSheet({
       React.createElement("input", {
         type: "text",
         value: categoriesText,
-        onChange: (event: React.ChangeEvent<HTMLInputElement>) => setCategoriesText(event.target.value),
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+          setCategoriesText(event.target.value);
+          setCategoriesTouched(true);
+        },
         style: fieldStyle,
       }),
     ),
@@ -245,7 +251,10 @@ function CategoryNoteSheet({
         : null,
       React.createElement("textarea", {
         value: note,
-        onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => setNote(event.target.value),
+        onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+          setNote(event.target.value);
+          setNoteTouched(true);
+        },
         rows: 3,
         style: { ...fieldStyle, resize: "vertical" as const },
       }),
@@ -274,7 +283,10 @@ function CategoryNoteSheet({
         "button",
         {
           type: "button",
-          onClick: () => onSave(parseCategoriesInput(categoriesText), note),
+          onClick: () => onSave({
+            ...(categoriesTouched ? { categories: parseCategoriesInput(categoriesText) } : {}),
+            ...(noteTouched ? { note } : {}),
+          }),
           style: {
             backgroundColor: theme.accent,
             color: "#0a0d14",
@@ -330,7 +342,7 @@ function renderCardActions(
           onClick: () =>
             card.saved && card.savedBandId
               ? handlers.onUnsave?.(card.savedBandId, card.title)
-              : handlers.onSave(card.title),
+              : handlers.onSave(card.target),
         },
         card.saved ? "Saved" : "Save",
       ),
@@ -342,7 +354,7 @@ function renderCardActions(
         key: "rating-stars",
         rating: card.rating,
         theme,
-        onRate: (rating: number | null) => handlers.onRate(card.title, rating),
+        onRate: (rating: number | null) => handlers.onRate(card.target, rating),
       }),
     );
   }
@@ -477,8 +489,8 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
       ? React.createElement(CategoryNoteSheet, {
           card,
           theme,
-          onSave: (categories: string[], note: string) => {
-            handlers.onSaveCategoryNote?.(card.title, card.savedBandId, { categories, note });
+          onSave: (updates: CategoryNoteUpdates) => {
+            handlers.onSaveCategoryNote?.(card.target, updates);
             setSheetOpen(false);
           },
           onClose: () => setSheetOpen(false),
@@ -639,7 +651,7 @@ function DesktopResultsRail({ cards, theme, isMobile, handlers }: { cards: CardV
       { style: { display: "grid", gap: "10px" } },
       cards.map((card) =>
         React.createElement(RecommendationCard, {
-          key: card.title,
+          key: card.target.musicbrainzArtistId?.trim() || card.title,
           card,
           theme,
           isMobile,
@@ -770,7 +782,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
             { style: { display: "grid", gap: "10px" } },
             cards.map((card) =>
               React.createElement(RecommendationCard, {
-                key: card.title,
+                key: card.target.musicbrainzArtistId?.trim() || card.title,
                 card,
                 theme,
                 isMobile,
@@ -1057,7 +1069,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
                   { style: { display: "grid", gap: "8px" } },
                   viewProps.cards.map((card) =>
                     React.createElement(RecommendationCard, {
-                      key: card.title,
+                      key: card.target.musicbrainzArtistId?.trim() || card.title,
                       card,
                       theme,
                       isMobile,

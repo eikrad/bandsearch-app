@@ -246,13 +246,13 @@ test("the mounted screen imports bands through the app", async () => {
 });
 
 test("the mounted screen adds a searched artist through the app", async () => {
-  const saved: string[] = [];
-  const screen = mountSavedScreen(fakeShellApp({ saveBand: async (name: string) => { saved.push(name); return {}; } }));
+  const saved: unknown[] = [];
+  const screen = mountSavedScreen(fakeShellApp({ saveBand: async (target) => { saved.push(target); return {}; } }));
   await screen.mount.mount();
 
   await screen.handlers().onAddArtist?.({ id: "mb-1", name: "Duster" });
 
-  assert.deepEqual(saved, ["Duster"]);
+  assert.deepEqual(saved, [{ name: "Duster", musicbrainzArtistId: "mb-1", suggestedNote: "Added via search." }]);
 });
 
 test("the mounted screen deletes a saved artist through the app", async () => {

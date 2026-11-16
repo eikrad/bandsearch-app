@@ -4,7 +4,6 @@ import {
   createChatClient,
   createInitialChatState,
   applyAssistantMessage,
-  normalizeArtistId,
 } from "../src/chatClient.js";
 import type { ChatMessage } from "../src/chatClient.js";
 import { jsonResponse, errorResponse } from "./helpers/fakeResponse.js";
@@ -355,11 +354,6 @@ test("chat client omits obscurityTarget from request body when not provided", as
   await client.fetchRecommendations("dark ambient");
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
-});
-
-test("normalizeArtistId creates stable local fallback id", () => {
-  assert.equal(normalizeArtistId("Alcest"), "local-alcest");
-  assert.equal(normalizeArtistId("Les Discrets"), "local-les-discrets");
 });
 
 test("chat client fetches saved bands from GET /preferences", async () => {

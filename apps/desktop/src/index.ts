@@ -1,3 +1,4 @@
+import type { SavedBandTarget, CategoryNoteUpdates } from "./savedBandActions.js";
 import { createChatRenderAdapter } from "./chatRenderAdapter.js";
 import { createDesktopReactShell } from "./ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "./ui/mountDesktopReactApp.js";
@@ -15,13 +16,12 @@ export { bootstrapDesktopApp };
  * and is assembled in `startDesktopBrowserApp`, not here.
  */
 type DesktopAppCollaborator = ChatAppCollaborator & {
-  saveBand?(artistName: string): unknown;
-  rateBand?(artistName: string, rating: number | null): unknown;
+  saveBand?(target: SavedBandTarget): unknown;
+  rateBand?(target: SavedBandTarget, rating: number | null): unknown;
   deleteSavedBand?(savedBandId: string): unknown;
   saveCategoryNote?(
-    artistName: string,
-    savedBandId: string | null,
-    updates: { categories: string[]; note: string },
+    target: SavedBandTarget,
+    updates: CategoryNoteUpdates,
   ): unknown;
 };
 
@@ -46,11 +46,11 @@ function bootstrapDesktopReactShell({
 }) {
   const renderAdapter = bootstrapDesktopRenderAdapter({ app, viewport });
   const mergedActionHandlers = {
-    onSave: actionHandlers.onSave || ((artistName: string) => app.saveBand?.(artistName)),
+    onSave: actionHandlers.onSave || ((target: SavedBandTarget) => app.saveBand?.(target)),
     // Forwards whatever rating the star row sent — no default here. A
     // hardcoded fallback is exactly how "Rate" used to always write 5 (#153).
     onRate:
-      actionHandlers.onRate || ((artistName: string, rating: number | null) => app.rateBand?.(artistName, rating)),
+      actionHandlers.onRate || ((target: SavedBandTarget, rating: number | null) => app.rateBand?.(target, rating)),
     onUnsave:
       actionHandlers.onUnsave
       || ((savedBandId: string, artistName: string) => {
@@ -59,8 +59,8 @@ function bootstrapDesktopReactShell({
       }),
     onSaveCategoryNote:
       actionHandlers.onSaveCategoryNote
-      || ((artistName: string, savedBandId: string | null, updates: { categories: string[]; note: string }) =>
-        app.saveCategoryNote?.(artistName, savedBandId, updates)),
+      || ((target: SavedBandTarget, updates: CategoryNoteUpdates) =>
+        app.saveCategoryNote?.(target, updates)),
   };
   const shell = createDesktopReactShell({
     renderAdapter,

@@ -1,3 +1,4 @@
+import type { SavedBandTarget } from "./savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "./domain.js";
 import type { SavedArtistsViewProps } from "./ui/viewTypes.js";
 
@@ -10,7 +11,7 @@ export type SavedArtistsShellCollaborator = {
   clearArtistSelection(): void;
   setPendingStyleRef(ids: string[]): void;
   searchArtists(query: string): Promise<ArtistSearchResult[]>;
-  saveBand(name: string, options?: { note?: string }): Promise<unknown>;
+  saveBand(target: SavedBandTarget): Promise<unknown>;
   deleteSavedBand(id: string): Promise<unknown>;
   exportPreferences(): Promise<unknown[]>;
   importPreferences(bands: unknown[]): Promise<unknown>;
@@ -103,7 +104,11 @@ export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollabo
       }
     },
     async addArtist(mbArtist: ArtistSearchResult) {
-      await app.saveBand(mbArtist.name, { note: mbArtist.disambiguation || "Added via search." });
+      await app.saveBand({
+        name: mbArtist.name,
+        musicbrainzArtistId: mbArtist.id,
+        suggestedNote: mbArtist.disambiguation || "Added via search.",
+      });
       await reloadAll();
     },
     async deleteSavedArtist(id: string) {

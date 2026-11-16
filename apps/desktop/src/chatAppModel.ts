@@ -4,10 +4,12 @@ import type {
   SavedBand,
   ChatStateMessage,
 } from "./domain.js";
+import { findSavedBand, type SavedBandTarget } from "./savedBandActions.js";
 
 export type { RecommendationItem, RecommendationMeta, SavedBand, ChatStateMessage };
 
 export type RenderableRecommendation = {
+  target: SavedBandTarget;
   title: string;
   why: string;
   country: string;
@@ -41,25 +43,18 @@ export type ChatAppCollaborator = {
   cancelSearch?(): void;
 };
 
-function findSavedBandForItem(item: RecommendationItem, savedBands: SavedBand[]): SavedBand | null {
-  // musicbrainzArtistId is the same id saveBand/rateBand key their own lookups
-  // on (#163) — matching by name here too let two different artists sharing a
-  // name show one's saved/rated state on the other's card. Not every card
-  // carries an mbid (e.g. a deterministic fallback), so name stays the
-  // fallback rather than the rule.
-  if (item.musicbrainzArtistId) {
-    const byId = savedBands.find((s) => s.musicbrainzArtistId === item.musicbrainzArtistId);
-    if (byId) return byId;
-  }
-  return savedBands.find((s) => s.name === item.artist) ?? null;
-}
-
 function toRenderableRecommendation(
   item: RecommendationItem,
   savedBands: SavedBand[],
 ): RenderableRecommendation {
-  const savedBand = findSavedBandForItem(item, savedBands);
+  const target: SavedBandTarget = {
+    name: item.artist,
+    musicbrainzArtistId: item.musicbrainzArtistId,
+    suggestedNote: item.why,
+  };
+  const savedBand = findSavedBand(target, savedBands);
   return {
+    target,
     title: item.artist,
     why: item.why || "",
     country: item.country || "",
@@ -67,11 +62,11 @@ function toRenderableRecommendation(
     signals: Array.isArray(item.sourceSignals) ? item.sourceSignals : [],
     connection: item.connection || "",
     imageUrl: item.imageUrl ?? null,
-    saved: savedBand !== null,
+    saved: savedBand !== undefined,
     rating: savedBand?.rating ?? null,
     savedBandId: savedBand?.id ?? null,
     categories: savedBand?.categories ?? [],
-    note: savedBand?.note ?? "",
+    note: savedBand?.note ?? item.why ?? "",
     noteEdited: savedBand?.noteEdited ?? false,
   };
 }

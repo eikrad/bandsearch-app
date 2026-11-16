@@ -143,10 +143,7 @@ Card visual spec:
 
 Action row policy (locked, all viewports):
 
-> **Not yet built.** The card still renders the old `Save` / `Rate` / `···` text
-> buttons. This section is the target, not a description of the shipped UI —
-> tracked in #151, #152, #154 and #165. `rating` being optional (#164) is done;
-> the controls below are not.
+The card renders rating stars, Save/Saved, Category/Note (`···`), and Copy.
 
 | Control | Visibility | Behaviour |
 |---|---|---|
@@ -170,6 +167,15 @@ Action row policy (locked, all viewports):
 - **No control may render without an action behind it.** If Category/Note is not
   implemented, the `···` button is not rendered at all. A visible control that
   does nothing on click is a defect, not a placeholder.
+- **Actions belong to the selected card**, including earlier turns. A present
+  MusicBrainz ID determines identity; two artists sharing a name but carrying
+  different IDs never share saved state or annotations. Normalized-name fallback
+  applies only when the card has no ID. Cards for the same identity share saved
+  state, rating, categories, and note across turns.
+- **Existing annotations survive repeated recommendations.** Save preserves an
+  existing saved band; Rate changes only its rating. A newer explanation never
+  replaces a saved note. An open Category/Note draft belongs to its artist and
+  must not carry over when a different same-named artist replaces the card.
 
 Category/Note sheet (behind `···`):
 
@@ -180,6 +186,12 @@ Category/Note sheet (behind `···`):
 - **Note** is pre-filled with the model's explanation of why the artist was
   recommended. It is shown as such, and only counts as the user's own input once
   they edit it. See ADR 0002.
+- Saving categories without touching the note preserves its provenance. Editing
+  an unsaved card saves the artist first; an actual note edit then marks that
+  note as user-authored. Clearing the textarea saves an empty note, without
+  restoring the suggested explanation. Category/Note edits preserve the rating.
+- The sheet writes only the fields the user edits. Editing a note leaves
+  categories unchanged; editing categories leaves the note unchanged.
 
 ## Connecting State (locked)
 
