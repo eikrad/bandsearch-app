@@ -438,7 +438,7 @@ idles at 61 MB RSS, so a 256MB instance suffices either way.
 
 ## Architecture — Pending Deepening
 
-The following refactors were identified during architecture review but not yet implemented. Each has a clear action and known files.
+The following entries record architecture-review findings and their implementation status.
 
 ### 1. Extract auto-group inference out of the route handler ✓ Done
 
@@ -552,3 +552,21 @@ Adding `@tursodatabase/sync` (Phase 5.5) surfaced this: the package is ESM-only,
 `turso/tursoSyncClient.ts` currently works around it with a `new Function("s", "return import(s)")` escape hatch. That is contained and commented, but it is a workaround, and the next ESM-only dependency will need its own.
 
 **Action:** Set `"type": "module"` on `services/api`, move the tsconfig to an ESM module target, and fix the fallout — `__dirname` / `__filename` (used in `scripts/migrate.ts` and several tests), `require()` interop, and any `import.meta` restrictions that flip the other way. `apps/desktop` has the same shape and would follow separately. Worth pairing with a check of whether tsx is still needed at runtime, or whether a build step would serve the API better in production.
+
+---
+
+### 10. Saved-band actions preserve the selected card's identity ✓ Done
+
+Implementation complete on the feature branch; integration through `staging`
+to `main` is pending.
+
+`apps/desktop/src/savedBandActions.ts` owns saved-band matching and writes.
+Historical cards and artist-search results carry their own MusicBrainz identity;
+different IDs never match by name. Repeated saves preserve annotations, including
+when stored bands have not loaded into the client yet. Rating and Category/Note
+updates preserve unrelated fields and note provenance. Card rendering uses the
+same identity rule, and a different same-named artist cannot inherit a note draft.
+
+Coverage includes real browser card actions through the saved-band HTTP write,
+note provenance, shared state across turns, rating clearing/removal, and app
+regressions for normalized-name fallback and preservation of stored annotations.

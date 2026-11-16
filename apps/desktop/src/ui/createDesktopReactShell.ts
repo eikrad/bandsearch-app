@@ -1,3 +1,4 @@
+import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatViewProps } from "../chatRenderAdapter.js";
 import type { DesktopChatUiStack } from "../desktopChatUiStack.js";
 import type { ChatHandlers } from "./viewTypes.js";
@@ -78,29 +79,29 @@ export function createDesktopReactShell({
         throw new Error("query failed", { cause: error });
       }
     },
-    async saveBand(artistName: string) {
+    async saveBand(target: SavedBandTarget) {
       try {
-        const result = await handlers.onSave(artistName);
-        actionStatus = { type: "success", message: `Saved ${artistName}.` };
+        const result = await handlers.onSave(target);
+        actionStatus = { type: "success", message: `Saved ${target.name}.` };
         scheduleStatusClear();
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Save failed for ${artistName}.` };
+        actionStatus = { type: "error", message: `Save failed for ${target.name}.` };
         scheduleStatusClear();
         throw error;
       }
     },
-    async rateBand(artistName: string, rating: number | null) {
+    async rateBand(target: SavedBandTarget, rating: number | null) {
       try {
-        const result = await handlers.onRate(artistName, rating);
+        const result = await handlers.onRate(target, rating);
         actionStatus =
           rating === null
-            ? { type: "success", message: `Cleared the rating for ${artistName}.` }
-            : { type: "success", message: `Rated ${artistName}: ${rating}/5.` };
+            ? { type: "success", message: `Cleared the rating for ${target.name}.` }
+            : { type: "success", message: `Rated ${target.name}: ${rating}/5.` };
         scheduleStatusClear();
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Rating failed for ${artistName}.` };
+        actionStatus = { type: "error", message: `Rating failed for ${target.name}.` };
         scheduleStatusClear();
         throw error;
       }
@@ -118,17 +119,16 @@ export function createDesktopReactShell({
       }
     },
     async saveCategoryNote(
-      artistName: string,
-      savedBandId: string | null,
-      updates: { categories: string[]; note: string },
+      target: SavedBandTarget,
+      updates: CategoryNoteUpdates,
     ) {
       try {
-        const result = await handlers.onSaveCategoryNote(artistName, savedBandId, updates);
-        actionStatus = { type: "success", message: `Updated ${artistName}.` };
+        const result = await handlers.onSaveCategoryNote(target, updates);
+        actionStatus = { type: "success", message: `Updated ${target.name}.` };
         scheduleStatusClear();
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Could not update ${artistName}.` };
+        actionStatus = { type: "error", message: `Could not update ${target.name}.` };
         scheduleStatusClear();
         throw error;
       }

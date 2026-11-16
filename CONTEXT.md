@@ -22,6 +22,8 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Saved band** — an artist the user has kept in their preference memory. Saving is itself a signal of interest; it does not require the user to judge the artist. A saved band may carry a rating, categories and a note, all optional.
 
+- **Saved-band actions** — Save, Rate, Category/Note, and removal, applied to the artist selected on a recommendation card or in artist search. A present MusicBrainz ID is authoritative: a different ID never matches by name. Only an artist without an ID uses normalized-name fallback. Cards for the same identity share saved state and annotations across turns. Saving an existing band preserves its annotations; rating changes only the rating, and Category/Note changes those fields without replacing untouched note text or provenance. The selected recommendation's suggested note is used only on first save.
+
 - **Rating** — an optional 1–5 judgement on a saved band. A band that is saved but not yet rated is a distinct, legitimate state: "I want to remember this, I have not decided how much I like it." A rating expresses strength of preference only — it never determines ranking or ordering by itself; its whole effect is that it appears in the preference context the recommendation prompt reads.
 
 - **Category** — a free-text tag the user puts on one saved band. Categories **shape what gets recommended**: they are part of the preference context sent to the model. Distinct from an artist group despite the similar wording — see below.

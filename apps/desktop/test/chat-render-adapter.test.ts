@@ -13,6 +13,7 @@ function makeCard(
 ): RenderableRecommendation {
   return {
     title,
+    target: { name: title },
     why: "Some reason",
     country: "GB",
     genres: ["post-metal"],

@@ -14,7 +14,9 @@ Navigation guide for the `docs/` folder.
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
 | [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort, Gemini rollback |
 | [adr/0005-closed-beta-via-email-bound-invites.md](adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and an enforced auth mode (`AUTH_MODE=enforced`) |
-| [releasing.md](releasing.md) | Release process — release-please, Conventional Commits, desktop release workflow |
+| [evaluation.md](evaluation.md) | Offline evaluation — golden runs, replay mode, constraints, run history and dashboard, judge calibration |
+| [adr/README.md](adr/README.md) | Index of all Architecture Decision Records |
+| [releasing.md](releasing.md) | Release process — release-please, Conventional Commits, desktop release workflow, signing keys and in-app updates |
 | [design/UI_GUIDELINES.md](design/UI_GUIDELINES.md) | UI design guidelines — layout, components, responsive behaviour |
 | [design/UI_EXAMPLES.md](design/UI_EXAMPLES.md) | UI copy examples and interaction patterns |
 | [maintenance.md](maintenance.md) | Dependency versions, upgrade notes, and periodic maintenance tasks |

@@ -9,6 +9,7 @@ const MODE_OPTIONS = [
 
 function buildCardViewProps(card: RenderableRecommendation) {
   return {
+    target: card.target,
     title: card.title,
     why: card.why,
     country: card.country,

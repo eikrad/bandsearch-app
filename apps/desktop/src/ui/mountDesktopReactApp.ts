@@ -1,3 +1,4 @@
+import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { ChatAppView } from "./ChatAppView.js";
@@ -18,13 +19,12 @@ export type MountShell = {
   getViewProps(): unknown;
   updateMode(mode: string): Promise<unknown>;
   submitQuery(query: string): Promise<unknown> | unknown;
-  saveBand?(artistName: string): Promise<unknown> | unknown;
-  rateBand?(artistName: string, rating: number | null): Promise<unknown> | unknown;
+  saveBand?(target: SavedBandTarget): Promise<unknown> | unknown;
+  rateBand?(target: SavedBandTarget, rating: number | null): Promise<unknown> | unknown;
   unsaveBand?(savedBandId: string, artistName: string): Promise<unknown> | unknown;
   saveCategoryNote?(
-    artistName: string,
-    savedBandId: string | null,
-    updates: { categories: string[]; note: string },
+    target: SavedBandTarget,
+    updates: CategoryNoteUpdates,
   ): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
@@ -256,9 +256,9 @@ export function createDesktopReactMount({
       }
       return renderCurrent();
     },
-    onSave: async (artistName: string) => {
+    onSave: async (target: SavedBandTarget) => {
       try {
-        await shell.saveBand?.(artistName);
+        await shell.saveBand?.(target);
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }
@@ -267,9 +267,9 @@ export function createDesktopReactMount({
     // No default rating here — #153 was this call hardcoding 5 regardless of
     // what the user actually tapped. The star row always sends an explicit
     // value (a number, or null to clear).
-    onRate: async (artistName: string, rating: number | null) => {
+    onRate: async (target: SavedBandTarget, rating: number | null) => {
       try {
-        await shell.rateBand?.(artistName, rating);
+        await shell.rateBand?.(target, rating);
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }
@@ -284,12 +284,11 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onSaveCategoryNote: async (
-      artistName: string,
-      savedBandId: string | null,
-      updates: { categories: string[]; note: string },
+      target: SavedBandTarget,
+      updates: CategoryNoteUpdates,
     ) => {
       try {
-        await shell.saveCategoryNote?.(artistName, savedBandId, updates);
+        await shell.saveCategoryNote?.(target, updates);
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }

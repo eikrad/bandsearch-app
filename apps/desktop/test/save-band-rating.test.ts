@@ -3,51 +3,54 @@ import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
 
-/** Captures what the app posts to /preferences. */
-function appWithCapturedSaves() {
-  const posted: Array<Record<string, unknown>> = [];
+/** Captures saved-band writes at the HTTP seam. */
+function appWithCapturedWrites() {
+  const writes: Array<Record<string, unknown>> = [];
   const app = bootstrapDesktopApp({
     apiBaseUrl: "http://api.test",
     fetchImpl: (async (url: string, init?: RequestInit) => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
-      if (String(url).endsWith("/preferences") && init?.method === "POST") {
-        posted.push(body);
-        return jsonResponse({ savedBand: { id: "b1", name: body.name, rating: body.rating ?? null, categories: [], note: "" } });
+      if (init?.method === "GET" && String(url).endsWith("/preferences")) {
+        return jsonResponse({ savedBands: [] });
+      }
+      if ((init?.method === "POST" && String(url).endsWith("/preferences")) || init?.method === "PATCH") {
+        writes.push(body);
+        return jsonResponse({ savedBand: { id: "b1", name: body.name ?? "Codeine", rating: body.rating ?? null, categories: [], note: "" } });
       }
       return jsonResponse({ savedBand: { id: "b1", name: "x", rating: null, categories: [], note: "" } });
     }) as unknown as typeof fetch,
   });
-  return { app, posted };
+  return { app, writes };
 }
 
 test("saving a band without a rating sends no rating", async () => {
   // The defect in #164: Save wrote `rating: options.rating || 3`, so every
   // "just remember this" silently became a middling three-star judgement the
   // user never made and never saw.
-  const { app, posted } = appWithCapturedSaves();
+  const { app, writes } = appWithCapturedWrites();
 
-  await app.saveBand("Codeine");
+  await app.saveBand({ name: "Codeine" });
 
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].rating ?? null, null, "Save must not invent a rating");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].rating ?? null, null, "Save must not invent a rating");
 });
 
-test("saving a band with an explicit rating sends that rating", async () => {
-  const { app, posted } = appWithCapturedSaves();
+test("rating an unsaved band sends the chosen rating", async () => {
+  const { app, writes } = appWithCapturedWrites();
 
-  await app.saveBand("Codeine", { rating: 4 });
+  await app.rateBand({ name: "Codeine" }, 4);
 
-  assert.equal(posted[0].rating, 4);
+  assert.equal(writes.at(-1)?.rating, 4);
 });
 
 test("a rating of 1 is not mistaken for no rating", async () => {
   // A guard, not a fix: `|| 3` only swallowed 0, which is not a valid rating
   // anyway. Kept so a future `?? `/`||` mix-up at the low end gets caught.
-  const { app, posted } = appWithCapturedSaves();
+  const { app, writes } = appWithCapturedWrites();
 
-  await app.saveBand("Codeine", { rating: 1 });
+  await app.rateBand({ name: "Codeine" }, 1);
 
-  assert.equal(posted[0].rating, 1, "the lowest rating must survive");
+  assert.equal(writes.at(-1)?.rating, 1, "the lowest rating must survive");
 });
 
 test("an unrated style reference does not claim a rating in the prompt", async () => {
@@ -70,7 +73,7 @@ test("an unrated style reference does not claim a rating in the prompt", async (
     }) as unknown as typeof fetch,
   });
 
-  await app.saveBand("Codeine");
+  await app.saveBand({ name: "Codeine" });
   app.toggleArtistSelection("b1");
   await app.requestRecommendations("something like that");
 

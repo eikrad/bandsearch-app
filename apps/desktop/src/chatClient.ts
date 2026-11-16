@@ -345,10 +345,3 @@ export function applyAssistantMessage<S extends Pick<ChatState, "messages">>(
   };
   return { ...state, messages: [...state.messages, nextMessage] };
 }
-
-export function normalizeArtistId(artistName: string): string {
-  return `local-${String(artistName || "unknown")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")}`;
-}

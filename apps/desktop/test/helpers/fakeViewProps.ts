@@ -27,6 +27,7 @@ export function chatViewProps(overrides: Partial<ChatViewProps> = {}): ChatViewP
 // Same idea for a single recommendation card: the adapter builds every field,
 // so a test that only cares about the title must still supply the rest.
 const BASE_CARD: CardViewProps = {
+  target: { name: "Fen" },
   title: "Fen",
   why: "",
   country: "",
@@ -49,7 +50,7 @@ const BASE_CARD: CardViewProps = {
 };
 
 export function cardViewProps(overrides: Partial<CardViewProps> = {}): CardViewProps {
-  return { ...BASE_CARD, ...overrides };
+  return { ...BASE_CARD, target: { name: overrides.title ?? BASE_CARD.title, suggestedNote: overrides.why }, ...overrides };
 }
 
 // The saved-artists screen state is likewise fully populated by the model.

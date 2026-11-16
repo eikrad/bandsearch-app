@@ -1,3 +1,4 @@
+import type { SavedBandTarget, CategoryNoteUpdates } from "../src/savedBandActions.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ReactNode } from "react";
@@ -26,8 +27,8 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
     }),
     updateMode: async (mode) => calls.push({ type: "mode", mode }),
     submitQuery: async (query) => calls.push({ type: "query", query }),
-    saveBand: async (artistName) => calls.push({ type: "save", artistName }),
-    rateBand: async (artistName, rating) => calls.push({ type: "rate", artistName, rating }),
+    saveBand: async (target) => calls.push({ type: "save", artistName: target.name }),
+    rateBand: async (target, rating) => calls.push({ type: "rate", artistName: target.name, rating }),
   };
 
   const mount = createDesktopReactMount({
@@ -41,8 +42,8 @@ test("desktop react mount renders and wires interaction callbacks", async () => 
 
   await mount.handlers.onModeChange("preference-aware");
   await mount.handlers.onQuerySubmit("I like blackgaze");
-  await mount.handlers.onSave("Fen");
-  await mount.handlers.onRate("Fen", 4);
+  await mount.handlers.onSave({ name: "Fen" });
+  await mount.handlers.onRate({ name: "Fen" }, 4);
 
   assert.equal(calls.some((item) => item.type === "mode"), true);
   assert.equal(calls.some((item) => item.type === "query"), true);
@@ -73,7 +74,7 @@ test("onSave re-renders even when shell.saveBand rejects, so a failed save is no
   mount.mount();
   const rendersBeforeSave = renders.length;
 
-  await mount.handlers.onSave("Fen");
+  await mount.handlers.onSave({ name: "Fen" });
 
   assert.ok(renders.length > rendersBeforeSave, "a render happened after the rejected save");
 });
@@ -101,7 +102,7 @@ test("onRate re-renders even when shell.rateBand rejects, so a failed rating is 
   mount.mount();
   const rendersBeforeRate = renders.length;
 
-  await mount.handlers.onRate("Fen", 4);
+  await mount.handlers.onRate({ name: "Fen" }, 4);
 
   assert.ok(renders.length > rendersBeforeRate, "a render happened after the rejected rating");
 });
@@ -135,13 +136,13 @@ test("onUnsave calls shell.unsaveBand and re-renders even when it rejects", asyn
 
 test("onSaveCategoryNote calls shell.saveCategoryNote and re-renders even when it rejects", async () => {
   const renders: ReactNode[] = [];
-  const calls: Array<{ artistName: string; savedBandId: string | null; updates: { categories: string[]; note: string } }> = [];
+  const calls: Array<{ target: SavedBandTarget; updates: CategoryNoteUpdates }> = [];
   const shell: MountShell = {
     getViewProps: () => ({}),
     updateMode: async () => {},
     submitQuery: async () => {},
-    saveCategoryNote: async (artistName, savedBandId, updates) => {
-      calls.push({ artistName, savedBandId, updates });
+    saveCategoryNote: async (target, updates) => {
+      calls.push({ target, updates });
       throw new Error("network error");
     },
   };
@@ -154,9 +155,9 @@ test("onSaveCategoryNote calls shell.saveCategoryNote and re-renders even when i
 
   mount.mount();
   const rendersBeforeSave = renders.length;
-  await mount.handlers.onSaveCategoryNote("Fen", "band-1", { categories: ["blackgaze"], note: "My words" });
+  await mount.handlers.onSaveCategoryNote({ name: "Fen", musicbrainzArtistId: "mb-fen" }, { categories: ["blackgaze"], note: "My words" });
 
-  assert.deepEqual(calls, [{ artistName: "Fen", savedBandId: "band-1", updates: { categories: ["blackgaze"], note: "My words" } }]);
+  assert.deepEqual(calls, [{ target: { name: "Fen", musicbrainzArtistId: "mb-fen" }, updates: { categories: ["blackgaze"], note: "My words" } }]);
   assert.ok(renders.length > rendersBeforeSave, "a render happened after the rejected save");
 });
 
