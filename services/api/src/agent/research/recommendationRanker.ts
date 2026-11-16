@@ -1,4 +1,4 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
@@ -155,6 +155,7 @@ const RANK_OBSCURITY: Record<string, string> = {
 export type CreateRecommendationRankerOptions = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   model?: string;
   /**
    * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
@@ -199,6 +200,7 @@ export function buildRankUserPartsForTest(input: {
 export async function createRecommendationRanker({
   apiKey,
   timeoutMs = 12000,
+  signal,
   model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
   chatModel,
@@ -212,11 +214,10 @@ export async function createRecommendationRanker({
   }
 
   const temperature = 0.35;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
     model,
     apiKey: trimmedKey,
     temperature,
-    thinkingConfig: { thinkingBudget: 0 },
   });
 
   return async function rank(input) {
@@ -242,7 +243,8 @@ export async function createRecommendationRanker({
     });
     prompt.push({ role: "user", content: parts.join("\n") });
 
-    const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "recommendation ranker timeout");
+    signal?.throwIfAborted();
+    const response = await withTimeout(modelClient.invoke(prompt, { signal }), timeoutMs, "recommendation ranker timeout");
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     let normalized = normalizeRankPayload(parsed);
@@ -259,7 +261,8 @@ export async function createRecommendationRanker({
           content: `${(prompt[prompt.length - 1] as { content: string }).content}\n\nYour previous answer omitted required evidence URLs in why fields. Repeat with each why containing a full https URL from evidence_urls.`,
         },
       ];
-      const response2 = await withTimeout(modelClient.invoke(retryPrompt), timeoutMs, "recommendation ranker retry");
+      signal?.throwIfAborted();
+      const response2 = await withTimeout(modelClient.invoke(retryPrompt, { signal }), timeoutMs, "recommendation ranker retry");
       const raw2 = typeof response2.content === "string" ? response2.content : "";
       const parsed2 = parseModelJsonResponse(raw2);
       normalized = normalizeRankPayload(parsed2);

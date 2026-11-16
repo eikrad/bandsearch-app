@@ -597,8 +597,8 @@ Turso overrides, memory mode and refused startup.
 
 ### 12. Recommendation feedback ownership and account data ✓ Done
 
-Implementation complete; integration into `staging` is pending. Promotion to
-`main` is handled by the repository owner.
+Merged into `staging` in #299. Promotion to `main` is handled by the repository
+owner.
 
 `eval/recommendationFeedback.ts` owns feedback validation, authenticated ownership
 and coordinated account export/deletion. The route ignores a body-supplied
@@ -618,3 +618,26 @@ and invalid credentials, enforced disabled-account rejection, wrong passwords,
 cleanup failure/retry, dashboard disablement, and another user's surviving
 feedback across SQLite, Turso and the sync adapter. Repository contracts cover
 user-scoped reads/erasure and retention for SQLite and memory.
+
+
+---
+
+### 13. Enforce the research budget through final ranking ✓ Done
+
+Implementation complete; integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`researchBudget.ts` owns operation caps, the complete graph deadline,
+cancellation and cleanup. Research reserves up to 12 seconds (at most one third
+of a small configured budget) for final ranking. At the research cutoff, the
+graph keeps completed verification results and bypasses later research stages.
+Ranking and its retry share one cap within the total deadline; a failed ranker
+still returns an error.
+
+Model and HTTP calls receive cancellation, including Brave retries and
+Brave/MusicBrainz rate-limit waits. Controlled-clock tests run the actual graph
+with stalled model and HTTP clients, covering the total deadline, partial
+verification, skipped research, Last.fm cancellation and the shared ranking retry
+cap. Real Scaleway/Gemini adapters with fake HTTP transports cover cancellation
+propagation and complete Gemini answers; Gemini uses streaming internally and
+has background SDK retries disabled. No live provider calls are needed.

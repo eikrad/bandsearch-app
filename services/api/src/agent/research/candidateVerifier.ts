@@ -93,7 +93,7 @@ export async function verifyCandidatesWithMusicBrainz(
   mb: MusicBrainzVerifyClient,
   candidates: ExtractedCandidate[],
   anchorArtists: string[],
-  options: { minSearchScore?: number } = {},
+  options: { minSearchScore?: number; shouldContinue?: () => boolean } = {},
 ): Promise<VerifiedCandidate[]> {
   const anchors = normalizeAnchorSet(anchorArtists);
   const minSearchScore = typeof options.minSearchScore === "number" ? options.minSearchScore : 35;
@@ -101,6 +101,7 @@ export async function verifyCandidatesWithMusicBrainz(
   const out: VerifiedCandidate[] = [];
 
   for (const c of candidates) {
+    if (options.shouldContinue?.() === false) break;
     const nameKey = String(c.name || "").trim().toLowerCase();
     if (!nameKey || anchors.has(nameKey)) continue;
 
@@ -124,6 +125,7 @@ export async function verifyCandidatesWithMusicBrainz(
       continue;
     }
 
+    if (options.shouldContinue?.() === false) break;
     try {
       const details = await mb.lookupArtist(hit.id);
       out.push({

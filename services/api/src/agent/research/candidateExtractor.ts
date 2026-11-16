@@ -1,4 +1,4 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { wrapSearchHitBlock } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
@@ -137,6 +137,7 @@ function formatHitsForPrompt(hits: SearchHitInput[]): string {
 export type CreateCandidateExtractorOptions = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   model?: string;
   /** Upper bound on candidates the model should emit; smaller = faster generation. */
   maxCandidates?: number;
@@ -152,6 +153,7 @@ export type CreateCandidateExtractorOptions = {
 export async function createCandidateExtractor({
   apiKey,
   timeoutMs = 12000,
+  signal,
   model = DEFAULT_RESEARCH_MODEL,
   maxCandidates = CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES,
   modelClient: injectedModelClient,
@@ -166,11 +168,10 @@ export async function createCandidateExtractor({
   }
 
   const temperature = 0.1;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
     model,
     apiKey: trimmedKey,
     temperature,
-    thinkingConfig: { thinkingBudget: 0 },
   });
 
   const systemPrompt = buildExtractorSystemPrompt(maxCandidates);
@@ -184,7 +185,8 @@ export async function createCandidateExtractor({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "candidate extractor timeout");
+    signal?.throwIfAborted();
+    const response = await withTimeout(modelClient.invoke(prompt, { signal }), timeoutMs, "candidate extractor timeout");
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     // Hard cap as a safety net in case the model exceeds the requested count.

@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { fetchWithTimeoutAndRetry } from "./httpClient.js";
 
 const DEFAULT_BASE_URL = "https://musicbrainz.org/ws/2";
@@ -57,11 +59,14 @@ function countryOf(data: MusicBrainzArtistResponse): string | null {
 let sharedChain: Promise<unknown> = Promise.resolve();
 let sharedLastStart = 0;
 
-function scheduleMusicBrainzRequest<T>(minIntervalMs: number, fn: () => Promise<T>): Promise<T> {
+function scheduleMusicBrainzRequest<T>(minIntervalMs: number, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
   if (minIntervalMs <= 0) return fn();
   const run = sharedChain.then(async () => {
+    signal?.throwIfAborted();
     const wait = sharedLastStart + minIntervalMs - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    if (wait > 0) await delay(wait, undefined, { signal });
+    signal?.throwIfAborted();
     sharedLastStart = Date.now();
     return fn();
   });
@@ -75,6 +80,7 @@ export function createMusicBrainzClient({
   timeoutMs = 5000,
   retries = 1,
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
+  signal,
 }: {
   fetchImpl?: typeof fetch;
   baseUrl?: string;
@@ -82,9 +88,10 @@ export function createMusicBrainzClient({
   retries?: number;
   /** Floor between request starts. `0` disables (tests / stubs). Default 1100. */
   minIntervalMs?: number;
+  signal?: AbortSignal;
 } = {}) {
   const request = <T>(fn: () => Promise<T>): Promise<T> =>
-    scheduleMusicBrainzRequest(minIntervalMs, fn);
+    scheduleMusicBrainzRequest(minIntervalMs, fn, signal);
 
   return {
     async searchArtists(query: string) {
@@ -96,6 +103,7 @@ export function createMusicBrainzClient({
           url,
           timeoutMs,
           retries,
+          signal,
           headers: {
             "user-agent": USER_AGENT,
             accept: "application/json",
@@ -130,6 +138,7 @@ export function createMusicBrainzClient({
           url,
           timeoutMs,
           retries,
+          signal,
           headers: {
             "user-agent": USER_AGENT,
             accept: "application/json",
@@ -204,6 +213,7 @@ export function createMusicBrainzClient({
           url,
           timeoutMs,
           retries,
+          signal,
           headers: { "user-agent": USER_AGENT, accept: "application/json" },
         });
         if (!response.ok) {

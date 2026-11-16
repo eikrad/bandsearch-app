@@ -10,6 +10,7 @@ type FetchLike = (url: string, init?: { signal?: AbortSignal; headers?: Record<s
 export type LastFmClientConfig = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   fetchImpl?: FetchLike;
 };
 
@@ -63,11 +64,12 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `&artist=${encodeURIComponent(trimmed)}` +
         `&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
+      config.signal?.throwIfAborted();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(url, {
-          signal: controller.signal,
+          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
           headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
         });
         if (!response.ok) {
@@ -97,11 +99,12 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `&limit=${limit}` +
         `&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
+      config.signal?.throwIfAborted();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(url, {
-          signal: controller.signal,
+          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
           headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
         });
         if (!response.ok) return [];
@@ -127,11 +130,12 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `${LASTFM_API_ENDPOINT}?method=artist.gettoptags${lookup}` +
         `&autocorrect=1&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
+      config.signal?.throwIfAborted();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(url, {
-          signal: controller.signal,
+          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
           headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
         });
         if (!response.ok) return null;

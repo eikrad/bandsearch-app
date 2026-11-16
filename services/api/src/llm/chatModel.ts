@@ -1,7 +1,6 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-
 import type { ChatModelClient } from "../agent/modelUtils.js";
 import type { LlmConfig, ModelRef } from "../config/models.js";
+import { createGeminiChatClient } from "./geminiChat.js";
 import { createScalewayChatClient, SCALEWAY_DEFAULT_BASE_URL } from "./scalewayChat.js";
 
 /**
@@ -21,11 +20,10 @@ export function createChatModelFactory(ref: ModelRef, keys: ChatModelKeys): Chat
     const apiKey = keys.geminiApiKey.trim();
     if (!apiKey) throw new Error("GEMINI_API_KEY is required for a Gemini model");
     return ({ temperature }) =>
-      new ChatGoogleGenerativeAI({
+      createGeminiChatClient({
         model: ref.model,
         apiKey,
         temperature,
-        thinkingConfig: { thinkingBudget: 0 },
       });
   }
 

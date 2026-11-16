@@ -98,9 +98,16 @@ async function runBraveQueries(
   const hits: SearchHitInput[] = [];
   let calls = 0;
   for (const q of queries) {
-    if (calls >= budgetLeft) break;
-    const res = await brave.search(q, { count: perQueryCount });
+    if (calls >= budgetLeft || config.budget.remaining() <= 0) break;
+    let res;
     calls += 1;
+    try {
+      res = await config.budget.run(config.budget.remaining(), (signal) =>
+        brave.search(q, { count: perQueryCount, signal }));
+    } catch (error) {
+      if (config.budget.remaining() <= 0) break;
+      throw error;
+    }
     for (const r of res.results) {
       hits.push({ sourceQuery: q, title: r.title, url: r.url, description: r.description });
     }
@@ -111,26 +118,28 @@ async function runBraveQueries(
 export async function buildResearchGraph(deps: ResearchGraphDeps, budget: ResearchBudget) {
   const log = deps.onLog ?? (() => {});
 
-  const mb = createMusicBrainzClient({
+  const research = budget.reserve(12000);
+  const mbClient = (signal: AbortSignal) => createMusicBrainzClient({
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
     fetchImpl: deps.fetchImpl,
+    signal,
     ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
-
-  const lastFm: LastFmClient | null = deps.lastFmApiKey
-    ? createLastFmClient({ apiKey: deps.lastFmApiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl })
-    : null;
+  const mb = {
+    searchArtists: (query: string) => research.run(research.remaining(), (signal) => mbClient(signal).searchArtists(query)),
+    lookupArtist: (id: string) => research.run(research.remaining(), (signal) => mbClient(signal).lookupArtist(id)),
+  };
 
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
-    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
+    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget: research, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
     geminiApiKey: deps.geminiApiKey,
     mb,
     runQueries,
-    budget,
+    budget: research,
     maxRounds: 2,
     maxReflectionSearches: deps.maxReflectionSearches,
     targetVerifiedCount: deps.targetVerifiedCount,
@@ -142,44 +151,42 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
-    .addNode("plan", async (state) => {
+    .addNode("plan", async (state) => research.run(20000, async (signal) => {
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(20000),
+        timeoutMs: research.allocate(20000),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
       });
-      let plan: SearchPlan;
-      try {
-        plan = await planWeb({
-          userQuery: state.userQuery,
-          preferenceContext: state.preferenceContext,
-          messages: state.messages,
-          obscurityTarget: state.obscurityTarget,
-        });
-      } catch (error) {
-        // A planner that times out or errors must not fail the request: the
-        // broad fallback queries still find candidates, just less precisely.
-        log("warn", "research_plan_fallback", { reason: errorMessage(error) });
-        plan = fallbackSearchPlan(state.userQuery);
-      }
+      const plan = await planWeb({
+        userQuery: state.userQuery,
+        preferenceContext: state.preferenceContext,
+        messages: state.messages,
+        obscurityTarget: state.obscurityTarget,
+      });
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
         queryCount: plan.queries.length,
       });
       return { searchPlan: plan };
-    })
+    }).catch((error: unknown) => {
+      // Broad searches can still succeed when planning fails within its cap.
+      log("warn", "research_plan_fallback", { reason: errorMessage(error) });
+      return { searchPlan: fallbackSearchPlan(state.userQuery) };
+    }))
     .addNode("brave_initial", async (state) => {
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];
       const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, 8);
       log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
       return { braveHits: hits, searchCallsUsed: calls };
     })
-    .addNode("extract", async (state) => {
+    .addNode("extract", async (state) => research.run(18000, async (signal) => {
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(18000),
+        timeoutMs: research.allocate(18000),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
@@ -191,10 +198,13 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });
       return { extractedCandidates: candidates };
-    })
+    }).catch((error: unknown) => {
+      if (research.remaining() > 0) throw error;
+      return {};
+    }))
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors);
+      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, { shouldContinue: () => research.remaining() > 0 });
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
         phase: "initial",
@@ -205,65 +215,73 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     })
     .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("enrich_lastfm", async (state) => {
-      if (!lastFm) return {};
-      const anchors = state.searchPlan?.anchorArtists ?? [];
-      if (!state.verifiedCandidates?.length) return {};
+      const apiKey = deps.lastFmApiKey;
+      if (!apiKey || research.remaining() <= 0) return {};
+      return research.run(5000, async (signal) => {
+        const lastFm: LastFmClient = createLastFmClient({ apiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl, signal });
+        const anchors = state.searchPlan?.anchorArtists ?? [];
+        if (!state.verifiedCandidates?.length) return {};
 
-      // Fetch similar-artist signals and listener counts in parallel.
-      const [similarResults, listenerResults] = await Promise.all([
-        anchors.length
-          ? Promise.all(anchors.map((a) => lastFm.getSimilarArtists(a)))
-          : Promise.resolve([]),
-        Promise.allSettled(
-          state.verifiedCandidates.map((c) =>
-            lastFm.getListenerCount(c.canonicalName || c.name),
+        // Fetch similar-artist signals and listener counts in parallel.
+        const [similarResults, listenerResults] = await Promise.all([
+          anchors.length
+            ? Promise.all(anchors.map((a) => lastFm.getSimilarArtists(a)))
+            : Promise.resolve([]),
+          Promise.allSettled(
+            state.verifiedCandidates.map((c) =>
+              lastFm.getListenerCount(c.canonicalName || c.name),
+            ),
           ),
-        ),
-      ]);
+        ]);
 
-      const similarMap = new Map<string, { anchor: string; match: number }>();
-      for (let i = 0; i < anchors.length; i++) {
-        for (const s of similarResults[i] ?? []) {
-          const key = s.name.toLowerCase();
-          const existing = similarMap.get(key);
-          if (!existing || s.match > existing.match) {
-            similarMap.set(key, { anchor: anchors[i], match: s.match });
+        const similarMap = new Map<string, { anchor: string; match: number }>();
+        for (let i = 0; i < anchors.length; i++) {
+          for (const s of similarResults[i] ?? []) {
+            const key = s.name.toLowerCase();
+            const existing = similarMap.get(key);
+            if (!existing || s.match > existing.match) {
+              similarMap.set(key, { anchor: anchors[i], match: s.match });
+            }
           }
         }
-      }
 
-      let matchCount = 0;
-      const enriched = state.verifiedCandidates.map((c, idx) => {
-        const key = (c.canonicalName || c.name).trim().toLowerCase();
-        const hit = similarMap.get(key);
-        const listenerCount =
-          listenerResults[idx].status === "fulfilled" ? listenerResults[idx].value : null;
+        let matchCount = 0;
+        const enriched = state.verifiedCandidates.map((c, idx) => {
+          const key = (c.canonicalName || c.name).trim().toLowerCase();
+          const hit = similarMap.get(key);
+          const listenerCount =
+            listenerResults[idx].status === "fulfilled" ? listenerResults[idx].value : null;
 
-        let next: VerifiedCandidate = { ...c, listenerCount };
-        if (hit) {
-          matchCount++;
-          const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
-          next = {
-            ...next,
-            evidenceUrls: [...next.evidenceUrls, similarUrl],
-            evidenceSnippets: [...next.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
-          };
-        }
-        return next;
+          let next: VerifiedCandidate = { ...c, listenerCount };
+          if (hit) {
+            matchCount++;
+            const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
+            next = {
+              ...next,
+              evidenceUrls: [...next.evidenceUrls, similarUrl],
+              evidenceSnippets: [...next.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
+            };
+          }
+          return next;
+        });
+
+        log("info", "research_lastfm_enrichment", {
+          anchorCount: anchors.length,
+          candidateCount: state.verifiedCandidates.length,
+          matchCount,
+          listenersFetched: listenerResults.filter((r) => r.status === "fulfilled" && r.value != null).length,
+        });
+        return { verifiedCandidates: enriched };
+      }).catch((error: unknown) => {
+        log("warn", "research_lastfm_skipped", { reason: errorMessage(error) });
+        return {};
       });
-
-      log("info", "research_lastfm_enrichment", {
-        anchorCount: anchors.length,
-        candidateCount: state.verifiedCandidates.length,
-        matchCount,
-        listenersFetched: listenerResults.filter((r) => r.status === "fulfilled" && r.value != null).length,
-      });
-      return { verifiedCandidates: enriched };
     })
-    .addNode("rank", async (state) => {
+    .addNode("rank", async (state) => budget.run(12000, async (signal) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
-        timeoutMs: Math.max(budget.allocate(12000), 12000),
+        timeoutMs: budget.allocate(12000),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
@@ -286,13 +304,13 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
       });
       return { recommendations, assistantReply };
-    })
+    }))
     .addEdge(START, "plan")
-    .addEdge("plan", "brave_initial")
-    .addEdge("brave_initial", "extract")
-    .addEdge("extract", "verify")
-    .addEdge("verify", "reflect_if_needed")
-    .addEdge("reflect_if_needed", "enrich_lastfm")
+    .addConditionalEdges("plan", () => research.remaining() > 0 ? "brave_initial" : "rank", ["brave_initial", "rank"])
+    .addConditionalEdges("brave_initial", () => research.remaining() > 0 ? "extract" : "rank", ["extract", "rank"])
+    .addConditionalEdges("extract", () => research.remaining() > 0 ? "verify" : "rank", ["verify", "rank"])
+    .addConditionalEdges("verify", () => research.remaining() > 0 ? "reflect_if_needed" : "rank", ["reflect_if_needed", "rank"])
+    .addConditionalEdges("reflect_if_needed", () => research.remaining() > 0 ? "enrich_lastfm" : "rank", ["enrich_lastfm", "rank"])
     .addEdge("enrich_lastfm", "rank")
     .addEdge("rank", END);
 
@@ -318,41 +336,45 @@ export async function invokeResearchGraph(
   model: string;
 }> {
   const budget = createResearchBudget(deps.researchTimeoutMs);
-  const graph = await buildResearchGraph(deps, budget);
-  const result = await graph.invoke({
-    userQuery: input.userQuery,
-    preferenceContext: input.preferenceContext,
-    messages: input.messages,
-    mode: input.mode,
-    obscurityTarget: input.obscurityTarget,
-    braveHits: [],
-    newHits: [],
-    searchCallsUsed: 0,
-    extractedCandidates: [],
-    verifiedCandidates: [],
-    reflectionUsed: false,
-    roundsCompleted: 0,
-    nextExtraQueries: [],
-    recommendations: [],
-    assistantReply: "",
-  });
+  try {
+    const graph = await buildResearchGraph(deps, budget);
+    const result = await budget.run(budget.remaining(), (signal) => graph.invoke({
+      userQuery: input.userQuery,
+      preferenceContext: input.preferenceContext,
+      messages: input.messages,
+      mode: input.mode,
+      obscurityTarget: input.obscurityTarget,
+      braveHits: [],
+      newHits: [],
+      searchCallsUsed: 0,
+      extractedCandidates: [],
+      verifiedCandidates: [],
+      reflectionUsed: false,
+      roundsCompleted: 0,
+      nextExtraQueries: [],
+      recommendations: [],
+      assistantReply: "",
+    }, { signal }));
 
-  const pipelineDiagnostics: PipelineDiagnostics = {
-    braveHitCount: Array.isArray(result.braveHits) ? result.braveHits.length : 0,
-    extractedCandidateCount: Array.isArray(result.extractedCandidates) ? result.extractedCandidates.length : 0,
-    verifiedCount: Array.isArray(result.verifiedCandidates)
-      ? result.verifiedCandidates.filter((v: VerifiedCandidate) => v.verified).length
-      : 0,
-    reflectionTriggered: Boolean(result.reflectionUsed),
-    searchBudgetUsed: typeof result.searchCallsUsed === "number" ? result.searchCallsUsed : 0,
-  };
+    const pipelineDiagnostics: PipelineDiagnostics = {
+      braveHitCount: Array.isArray(result.braveHits) ? result.braveHits.length : 0,
+      extractedCandidateCount: Array.isArray(result.extractedCandidates) ? result.extractedCandidates.length : 0,
+      verifiedCount: Array.isArray(result.verifiedCandidates)
+        ? result.verifiedCandidates.filter((v: VerifiedCandidate) => v.verified).length
+        : 0,
+      reflectionTriggered: Boolean(result.reflectionUsed),
+      searchBudgetUsed: typeof result.searchCallsUsed === "number" ? result.searchCallsUsed : 0,
+    };
 
-  return {
-    recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
-    assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
-    pipelineDiagnostics,
-    // Every node runs on deps.model today. Should they ever diverge, this must
-    // name the ranker's model: the ranker writes the user-visible `why` prose.
-    model: deps.model ?? DEFAULT_RESEARCH_MODEL,
-  };
+    return {
+      recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
+      assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
+      pipelineDiagnostics,
+      // Every node runs on deps.model today. Should they ever diverge, this must
+      // name the ranker's model: the ranker writes the user-visible `why` prose.
+      model: deps.model ?? DEFAULT_RESEARCH_MODEL,
+    };
+  } finally {
+    budget.close();
+  }
 }
