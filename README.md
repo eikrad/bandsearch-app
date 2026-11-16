@@ -236,10 +236,9 @@ column without being added to that list.
 
 ## Storage
 
-Bandsearch uses two persistence domains:
-
-- **Preferences store** (`saved_bands`, groups) — configurable via `PREFERENCE_STORE`.
-- **Session store** (`chat_sessions`, `chat_messages`) — local SQLite in `DATABASE_PATH` (default `bandsearch.db`); with `PREFERENCE_STORE=turso` it lives in Turso too.
+`PREFERENCE_STORE` selects preferences, artist groups, users, invites and chat
+sessions together. Account export and deletion use that same database. Startup
+refuses an unavailable selected backend rather than substituting another store.
 
 | `PREFERENCE_STORE` | Description |
 |--------------------|-------------|
@@ -247,6 +246,11 @@ Bandsearch uses two persistence domains:
 | `memory` | In-process only, data lost on restart |
 | `turso` | Turso cloud SQLite — every statement goes over the network |
 | `turso-sync` | Local replica synced with Turso Cloud — reads and writes stay local, so the app keeps working offline |
+
+SQLite account repositories share one connection, including when no path is
+supplied and the database is `:memory:`. In `memory` mode all account repositories
+are ephemeral; account export and deletion report unavailable. Optional eval
+telemetry retains its separate local store.
 
 See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 

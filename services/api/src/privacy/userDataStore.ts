@@ -8,11 +8,10 @@ import type { SavedBand } from "../preferences/preferenceRepository.js";
  * list. Split apart, the Art. 15 export drifts out of step with the Art. 17
  * erasure the first time a table is added to one and not the other.
  *
- * There are intentionally no foreign keys behind this. SQLite enforces them
- * only when `foreign_keys=ON`, which is per-connection and set on exactly one
- * of this app's connections, while libSQL enforces by default — so a cascade
- * would fire on Turso and silently not fire on SQLite. Explicit deletes are
- * the only construction that behaves identically on both backends.
+ * Erasure uses explicit deletes rather than relying on foreign-key cascades.
+ * New SQLite account connections enable foreign keys, but older files and
+ * independently supplied adapters may have different enforcement settings.
+ * The shared table list keeps erasure consistent across those configurations.
  */
 
 export type UserScopedTable = {

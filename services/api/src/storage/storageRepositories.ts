@@ -1,0 +1,32 @@
+import type { PreferenceRepository } from "../preferences/preferenceRepository.js";
+import type { UserRepository } from "../auth/userRepository.js";
+import type { InviteRepository } from "../auth/inviteRepository.js";
+import type { UserDataStore } from "../privacy/userDataStore.js";
+import type { ChatSessionRepository } from "../sessions/chatSessionRepository.js";
+import type { TursoClient } from "../turso/tursoClient.js";
+import { createTursoPreferenceRepository } from "../preferences/tursoPreferenceRepository.js";
+import { createTursoUserRepository } from "../auth/tursoUserRepository.js";
+import { createTursoInviteRepository } from "../auth/tursoInviteRepository.js";
+import { createTursoChatSessionRepository } from "../sessions/tursoChatSessionRepository.js";
+import { createTursoUserDataStore } from "../privacy/tursoUserDataStore.js";
+
+/** The account repositories selected together for one backend. */
+export type StorageRepositories = {
+  preferenceRepository: PreferenceRepository;
+  userRepository: UserRepository;
+  inviteRepository: InviteRepository;
+  chatSessionRepository: ChatSessionRepository;
+  /** Memory has no durable account export or erasure. */
+  userDataStore: UserDataStore | null;
+};
+
+/** Both cloud and replica adapters use this complete set on their own client. */
+export function createTursoRepositories(client: TursoClient): StorageRepositories {
+  return {
+    preferenceRepository: createTursoPreferenceRepository({ client }),
+    userRepository: createTursoUserRepository({ client }),
+    inviteRepository: createTursoInviteRepository({ client }),
+    chatSessionRepository: createTursoChatSessionRepository({ client }),
+    userDataStore: createTursoUserDataStore({ client }),
+  };
+}

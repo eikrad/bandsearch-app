@@ -557,8 +557,7 @@ Adding `@tursodatabase/sync` (Phase 5.5) surfaced this: the package is ESM-only,
 
 ### 10. Saved-band actions preserve the selected card's identity ✓ Done
 
-Implementation complete on the feature branch; integration through `staging`
-to `main` is pending.
+Merged through `staging` in #294 and reached `main` in #295.
 
 `apps/desktop/src/savedBandActions.ts` owns saved-band matching and writes.
 Historical cards and artist-search results carry their own MusicBrainz identity;
@@ -570,3 +569,28 @@ same identity rule, and a different same-named artist cannot inherit a note draf
 Coverage includes real browser card actions through the saved-band HTTP write,
 note provenance, shared state across turns, rating clearing/removal, and app
 regressions for normalized-name fallback and preservation of stored annotations.
+
+---
+
+### 11. Assemble a consistent account storage set ✓ Done
+
+Implementation complete; PR integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`services/api/src/storage/createStorage.ts` selects preferences, users, invites,
+chat sessions and account export/erasure together. Direct Turso and `turso-sync`
+use the same complete adapter set; sync export/deletion no longer falls through
+to an unrelated SQLite database. Partial overrides leave the other defaults on
+the selected backend. SQLite account repositories share one connection, so
+`:memory:` export includes saved bands. Memory mode is ephemeral for every
+account repository. Backend startup failures are reported without substituting
+another store.
+
+Regression coverage exercises real registration, saved bands, group membership,
+chat messages, export and account deletion on SQLite, local libSQL and the sync
+engine, including another user's surviving account. It also covers partial
+Turso overrides, memory mode and refused startup.
+
+**Follow-up:** Optional eval telemetry still uses a separate local store.
+With Turso accounts and the eval dashboard enabled, account export/erasure does
+not include feedback held in that local store. Consolidate that path separately.

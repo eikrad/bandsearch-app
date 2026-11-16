@@ -235,7 +235,26 @@ The `services/eval` workspace holds the golden dataset (`golden-set.json`), judg
 
 ## Storage
 
-Two persistence domains, both backed by an abstract repository pattern to allow swapping backends without changing business logic.
+`storage/createStorage.ts` assembles preferences, users, invites, chat sessions
+and account export/erasure as one `StorageRepositories` set. `server.ts` awaits
+`openStorage()` and passes that complete set to `createApp()` and its preference
+repository to the recommendation pipeline. Consumers still receive only the
+repository interfaces they use.
+
+`createStorage()` supports synchronous SQLite, memory and direct Turso setup;
+`openStorage()` additionally opens the asynchronous sync replica. Direct Turso
+and the replica share `createTursoRepositories()` so neither can omit the account
+data store. Each set uses one client, or one SQLite connection with foreign keys
+enabled. SQLite schema initialization lives with the adapters, including the
+saved-band schema formerly initialized by the standalone preference factory.
+
+The existing individual `createApp()` repository overrides remain available for
+tests. An override replaces only that repository; it does not change the backend
+of the remaining defaults. Supplying custom repositories is an explicit choice:
+the caller must supply compatible account export/erasure when needed. Supplying
+a complete `storage` set takes precedence over individual overrides. An
+incomplete sync set or an unavailable selected database refuses startup; account
+repositories never silently fall back to another database or memory.
 
 ### Preferences store (`PREFERENCE_STORE`)
 
@@ -250,11 +269,18 @@ Tables: `saved_bands` (rating, categories, notes), `artist_groups`
 
 ### Session store
 
-SQLite (`DATABASE_PATH`, default `bandsearch.db`) with in-memory fallback; with `PREFERENCE_STORE=turso` sessions live in Turso (`tursoChatSessionRepository`). Tables: `chat_sessions`, `chat_messages`.
+Selected alongside preferences: SQLite (`DATABASE_PATH`, default
+`bandsearch.db`), memory, direct Turso or the sync replica. Tables:
+`chat_sessions`, `chat_messages`.
 
 ### Auth store
 
 Same backend as preferences. Tables: `users` (bcrypt-hashed passwords, `disabled_at`) and `invites` (SHA-256 hashed codes bound to one email). JWTs with 30-day expiry; password recovery via single-use recovery codes.
+
+Memory mode keeps all account repositories ephemeral and has no durable account
+export/erasure (`userDataStore: null`). Optional eval telemetry keeps its existing
+separate local store; consolidating it, including feedback export/erasure for a
+Turso account, is separate work.
 
 ---
 
