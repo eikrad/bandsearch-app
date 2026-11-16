@@ -6,8 +6,8 @@ dotenvConfig({ path: resolve(__dirname, "../../../.env") });
 
 import { createApp } from "./app.js";
 import { validateRuntimeEnv } from "./config/env.js";
-import { createPreferenceRepository, splitPreferenceRepository } from "./preferences/preferenceRepository.js";
-import { createTursoSyncRepositories } from "./turso/tursoSyncRepositories.js";
+import { splitPreferenceRepository } from "./preferences/preferenceRepository.js";
+import { openStorage } from "./storage/createStorage.js";
 import { createRecommendationPipeline } from "./recommendationPipeline.js";
 
 async function start() {
@@ -16,19 +16,13 @@ async function start() {
     console.warn(JSON.stringify({ level: "warn", component: "llm_config", message: warning }));
   }
 
-  // turso-sync keeps a local replica, which has to be opened before anything
-  // can read from it; the other stores build synchronously.
-  const syncRepositories =
-    runtimeConfig.preferenceStore === "turso-sync"
-      ? await createTursoSyncRepositories(runtimeConfig)
-      : null;
-  const preferenceRepository = syncRepositories?.preferenceRepository ?? createPreferenceRepository(runtimeConfig);
+  const storage = await openStorage(runtimeConfig);
 
   const recommendationPipeline = createRecommendationPipeline({
     runtimeConfig,
     // The pipeline only reads saved bands to build prompt context; it has no
     // business with groups, so it is handed the band half explicitly.
-    preferenceRepository: splitPreferenceRepository(preferenceRepository).bands,
+    preferenceRepository: splitPreferenceRepository(storage.preferenceRepository).bands,
   });
 
   await Promise.race([
@@ -38,13 +32,8 @@ async function start() {
 
   const app = createApp({
     runtimeConfig,
-    preferenceRepository,
+    storage,
     recommendationPipeline,
-    // Same replica for users and sessions — a second client would mean a second
-    // local file and a second sync loop.
-    userRepository: syncRepositories?.userRepository,
-    inviteRepository: syncRepositories?.inviteRepository,
-    chatSessionRepository: syncRepositories?.chatSessionRepository,
   });
   app.listen(runtimeConfig.port, () => {
     console.log(JSON.stringify({ level: "info", message: "Bandsearch API listening", port: runtimeConfig.port }));

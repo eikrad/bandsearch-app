@@ -16,6 +16,7 @@ import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference
 import type { SavedBand } from "../preferences/preferenceRepository.js";
 import type { UserDataStore } from "../privacy/userDataStore.js";
 import type { InviteService } from "../auth/inviteService.js";
+import type { ChatSessionRepository } from "../sessions/chatSessionRepository.js";
 import type { Invite } from "../auth/inviteRepository.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
@@ -54,13 +55,7 @@ export type BandsearchRouteContext = {
     lookupArtist?: (mbid: string) => Promise<{ id: string; name: string; genres: string[]; tags: string[] }>;
   };
   resolvedArtistImageClient: { getArtistImageUrl: (name: string) => Promise<string | null> };
-  resolvedChatSessionRepository: {
-    createSession: (input: { title: string }, userId?: string) => Promise<Record<string, unknown>>;
-    listSessions: (userId?: string) => Promise<Record<string, unknown>[]>;
-    getSession: (id: string, userId?: string) => Promise<Record<string, unknown> | null>;
-    getMessages: (id: string) => Promise<Record<string, unknown>[]>;
-    addMessage: (id: string, msg: { role: string; content: string }) => Promise<Record<string, unknown>>;
-  };
+  resolvedChatSessionRepository: ChatSessionRepository;
   resolvedRecommendationPipeline?: {
     recommend: (req: Record<string, unknown>) => Promise<{
       recommendations: unknown[];

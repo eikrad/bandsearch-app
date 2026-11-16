@@ -3,6 +3,14 @@ import type { Database } from "better-sqlite3";
 
 const DEFAULT_USER = "anonymous";
 
+export type ChatSessionRepository = {
+  createSession(input: { title: string }, userId?: string): Promise<Record<string, unknown>>;
+  listSessions(userId?: string): Promise<Record<string, unknown>[]>;
+  getSession(id: string, userId?: string): Promise<Record<string, unknown> | null>;
+  getMessages(id: string): Promise<Record<string, unknown>[]>;
+  addMessage(id: string, message: { role: string; content: string }): Promise<Record<string, unknown>>;
+};
+
 type Session = { id: string; userId: string; title: string; createdAt: string; updatedAt: string };
 type Message = { id: string; sessionId: string; role: string; content: string; createdAt: string };
 

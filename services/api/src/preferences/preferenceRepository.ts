@@ -8,15 +8,6 @@ export const POSTGRES_REMOVED_MESSAGE =
   "PREFERENCE_STORE=postgres is no longer supported — the Postgres adapter was removed "
   + "because it had no user scoping. Use PREFERENCE_STORE=turso (shared/cloud) or sqlite (local).";
 
-type PragmaTableRow = { name: string };
-
-function addColumnIfMissing(db: import("better-sqlite3").Database, table: string, column: string, definition: string) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as PragmaTableRow[];
-  if (!cols.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
-}
-
 type Group = { id: string; name: string; memberIds: string[] };
 
 export type SavedBand = {
@@ -154,38 +145,5 @@ export function createPreferenceRepository(runtimeConfig: PreferenceConfig = {})
   // an unconfigured caller (tests) never writes into a file in the cwd.
   const db = new Database(runtimeConfig.databasePath || ":memory:");
   db.pragma("foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS saved_bands (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'anonymous',
-      musicbrainz_artist_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      -- Nullable: a band can be saved before the user has judged it.
-      rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
-      categories TEXT NOT NULL DEFAULT '[]',
-      note TEXT NOT NULL DEFAULT '',
-      -- 0 until the user explicitly edits the note; a pre-filled note stays
-      -- visible but is excluded from the recommendation prompt (#166).
-      note_edited INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS artist_groups (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'anonymous',
-      name TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS artist_group_members (
-      group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
-      saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
-      added_at TEXT NOT NULL,
-      PRIMARY KEY (group_id, saved_band_id)
-    );
-  `);
-  addColumnIfMissing(db, "saved_bands", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
-  addColumnIfMissing(db, "saved_bands", "note_edited", "INTEGER NOT NULL DEFAULT 0");
-  addColumnIfMissing(db, "artist_groups", "user_id", "TEXT NOT NULL DEFAULT 'anonymous'");
   return createSqlitePreferenceRepository({ db });
 }
