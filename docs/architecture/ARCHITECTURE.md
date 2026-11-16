@@ -227,6 +227,21 @@ Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendati
 
 A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
 
+`POST /eval/feedback` uses the application's progressive/enforced authentication
+middleware when enabled. Its payload contains `eventId` and `feedbackType`;
+`userId` in the payload is ignored. Only the authenticated request identity can
+own a feedback row. Progressive personal installs without an account can still
+record anonymous feedback. The other eval routes retain their existing access
+rules.
+
+`eval/recommendationFeedback.ts` owns validation, writing with that identity, and
+the combined account-data interface. Export combines the account database's
+feedback with the local eval store and deduplicates by row ID. Erasure removes
+local feedback before the account database so a local cleanup failure leaves a
+retryable account. This is an ordered operation across stores, not a distributed
+transaction. Existing local rows remain readable without a migration; rows
+recorded as anonymous are not retrospectively assigned to a user.
+
 The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
 
 > **Judge provider history.** Designed for Claude; built on Mistral (until 2026-08-31 the Mistral key was wrongly posted to Anthropic, and `model_id` stayed hard-coded to `claude-opus-4-8` until 2026-09-04); **moved to Scaleway on 2026-10-05** together with calibration, which until then still called Anthropic and never ran. Both now use the same call (`judgeBands`) and the same configured model (#237, #204, [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)).
@@ -277,10 +292,14 @@ Selected alongside preferences: SQLite (`DATABASE_PATH`, default
 
 Same backend as preferences. Tables: `users` (bcrypt-hashed passwords, `disabled_at`) and `invites` (SHA-256 hashed codes bound to one email). JWTs with 30-day expiry; password recovery via single-use recovery codes.
 
-Memory mode keeps all account repositories ephemeral and has no durable account
-export/erasure (`userDataStore: null`). Optional eval telemetry keeps its existing
-separate local store; consolidating it, including feedback export/erasure for a
-Turso account, is separate work.
+Memory mode keeps all account repositories and eval feedback ephemeral and has
+no durable account export/erasure (`userDataStore: null`). Optional eval telemetry
+retains its local store because feedback references its events. The
+recommendation-feedback module composes that store with account export/erasure
+for SQLite, Turso and the sync replica. The local store remains readable when
+the dashboard is disabled; dashboard visibility does not remove existing
+account data. Startup refuses an unavailable local feedback store rather than
+substituting an empty in-memory store.
 
 ---
 

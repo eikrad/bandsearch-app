@@ -284,13 +284,24 @@ export function runEvalRepositoryContract(adapterName: string, createRepository:
 
   // -------------------------------------------------------------- feedback
 
-  test(label("logFeedback accepts a feedback row"), async () => {
+  test(label("feedback can be exported and erased for one user without losing other users or events"), async () => {
     const repo = await createRepository();
     const eventId = await repo.logEvent(sampleEvent);
 
-    // Nothing reads feedback back through this interface yet; the contract is
-    // that recording it succeeds and never throws on the response path.
-    await repo.logFeedback({ eventId, feedbackType: "good" });
+    await repo.logFeedback({ eventId, feedbackType: "good", userId: "user-a" });
     await repo.logFeedback({ eventId, feedbackType: "too_mainstream", userId: "user-b" });
+    const feedback = await repo.listUserFeedback("user-a");
+    assert.equal(feedback.length, 1);
+    assert.equal(feedback[0].eventId, eventId);
+    assert.equal(feedback[0].feedbackType, "good");
+    assert.equal(typeof feedback[0].id, "string");
+    assert.equal(typeof feedback[0].createdAt, "string");
+    assert.equal(await repo.eraseUserFeedback("user-a"), 1);
+    assert.deepEqual(await repo.listUserFeedback("user-a"), []);
+    assert.equal((await repo.listUserFeedback("user-b"))[0].feedbackType, "too_mainstream");
+    assert.equal(await repo.eraseUserFeedback("user-a"), 0);
+    assert.equal((await repo.listEvents()).length, 1);
+    await repo.purgeEventsOlderThan("9999-01-01T00:00:00.000Z");
+    assert.deepEqual(await repo.listUserFeedback("user-b"), []);
   });
 }

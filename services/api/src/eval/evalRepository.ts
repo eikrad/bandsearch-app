@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import type { AggregatedMetrics } from "./evalAggregator.js";
 import type { FeedbackType } from "../../../../shared/schemas/src/contracts.js";
+import type { ExportedFeedback } from "../privacy/userDataStore.js";
 
 export type { FeedbackType };
 
@@ -78,6 +79,8 @@ export type EvalRepository = {
   listBaselines(): Promise<EvalBaseline[]>;
   getLatestBaseline(): Promise<EvalBaseline | null>;
   logFeedback(input: FeedbackInput): Promise<void>;
+  listUserFeedback(userId: string): Promise<ExportedFeedback[]>;
+  eraseUserFeedback(userId: string): Promise<number>;
   /**
    * GDPR Art. 5(1)(e): telemetry is kept for a stated period, not forever.
    * Deletes events created before `cutoffIso` along with their scores and
@@ -116,6 +119,8 @@ export function createNoOpEvalRepository(): EvalRepository {
       return null;
     },
     async logFeedback() {},
+    async listUserFeedback() { return []; },
+    async eraseUserFeedback() { return 0; },
   };
 }
 
@@ -123,6 +128,7 @@ export function createInMemoryEvalRepository(): EvalRepository {
   const events: RecommendationEvent[] = [];
   const bandScores: BandEvalScore[] = [];
   const baselines: EvalBaseline[] = [];
+  const feedback: (ExportedFeedback & { userId: string })[] = [];
   return {
     async purgeEventsOlderThan(cutoffIso) {
       const expired = events.filter((e) => e.createdAt < cutoffIso).map((e) => e.id);
@@ -130,6 +136,9 @@ export function createInMemoryEvalRepository(): EvalRepository {
         events.splice(events.findIndex((e) => e.id === id), 1);
         for (let i = bandScores.length - 1; i >= 0; i -= 1) {
           if (bandScores[i].eventId === id) bandScores.splice(i, 1);
+        }
+        for (let i = feedback.length - 1; i >= 0; i -= 1) {
+          if (feedback[i].eventId === id) feedback.splice(i, 1);
         }
       }
       return expired.length;
@@ -183,7 +192,22 @@ export function createInMemoryEvalRepository(): EvalRepository {
       if (baselines.length === 0) return null;
       return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     },
-    async logFeedback() {},
+    async logFeedback(input) {
+      feedback.push({ id: randomUUID(), eventId: input.eventId, feedbackType: input.feedbackType, userId: input.userId ?? "anonymous", createdAt: new Date().toISOString() });
+    },
+    async listUserFeedback(userId) {
+      return feedback.filter((row) => row.userId === userId).map(({ userId: _userId, ...row }) => {
+        void _userId;
+        return row;
+      }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async eraseUserFeedback(userId) {
+      let erased = 0;
+      for (let i = feedback.length - 1; i >= 0; i -= 1) {
+        if (feedback[i].userId === userId) { feedback.splice(i, 1); erased += 1; }
+      }
+      return erased;
+    },
   };
 }
 
@@ -463,6 +487,15 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       db.prepare(
         `INSERT INTO recommendation_feedback (id, event_id, user_id, feedback_type, created_at) VALUES (?, ?, ?, ?, ?)`,
       ).run(id, input.eventId, input.userId ?? "anonymous", input.feedbackType, createdAt);
+    },
+    async listUserFeedback(userId) {
+      const rows = db.prepare(
+        "SELECT id, event_id, feedback_type, created_at FROM recommendation_feedback WHERE user_id = ? ORDER BY created_at ASC",
+      ).all(userId) as { id: string; event_id: string; feedback_type: string; created_at: string }[];
+      return rows.map((row) => ({ id: row.id, eventId: row.event_id, feedbackType: row.feedback_type, createdAt: row.created_at }));
+    },
+    async eraseUserFeedback(userId) {
+      return db.prepare("DELETE FROM recommendation_feedback WHERE user_id = ?").run(userId).changes;
     },
   };
 }

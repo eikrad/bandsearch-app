@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Express, Request, Response, NextFunction } from "express";
 import { sendError } from "../http/errors.js";
-import type { EvalRepository, FeedbackInput } from "./evalRepository.js";
-import { validateFeedbackType } from "../../../../shared/schemas/src/contracts.js";
+import type { RecommendationFeedback } from "./recommendationFeedback.js";
+import type { EvalRepository } from "./evalRepository.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
 import type { AggregatedMetrics } from "./evalAggregator.js";
 
@@ -11,10 +11,11 @@ export type EvalRouteContext = {
   evalRepository: EvalRepository;
   evalDashboardEnabled: boolean;
   evalDashboardPassword?: string;
+  recommendationFeedback: RecommendationFeedback;
 };
 
 export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
-  const { evalRepository, evalDashboardEnabled, evalDashboardPassword } = ctx;
+  const { evalRepository, evalDashboardEnabled, evalDashboardPassword, recommendationFeedback } = ctx;
 
   const dashboardHtml = evalDashboardEnabled
     ? readFileSync(join(__dirname, "dashboard", "index.html"), "utf8")
@@ -83,20 +84,8 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
   });
 
   app.post("/eval/feedback", async (req, res) => {
-    const { eventId, feedbackType, userId } = req.body ?? {};
-    if (!eventId || typeof eventId !== "string") {
-      return sendError(res, 400, "validation_error", "eventId is required");
-    }
-    const validatedType = validateFeedbackType(feedbackType);
-    if (!validatedType) {
-      return sendError(res, 400, "validation_error", "feedbackType must be one of: good, too_mainstream, wrong_direction");
-    }
-    const input: FeedbackInput = {
-      eventId,
-      feedbackType: validatedType,
-      userId: typeof userId === "string" ? userId : undefined,
-    };
-    await evalRepository.logFeedback(input);
+    const result = await recommendationFeedback.submit(req.body, req.userId);
+    if (!result.ok) return sendError(res, 400, "validation_error", result.error);
     return res.status(200).json({ ok: true });
   });
 

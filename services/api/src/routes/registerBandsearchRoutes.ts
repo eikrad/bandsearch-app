@@ -10,6 +10,7 @@ import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { registerEvalRoutes } from "../eval/evalRoutes.js";
 import { createNoOpEvalRepository } from "../eval/evalRepository.js";
+import type { RecommendationFeedback } from "../eval/recommendationFeedback.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
@@ -71,6 +72,7 @@ export type BandsearchRouteContext = {
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
   evalWorker?: EvalWorker;
   evalRepository?: EvalRepository;
+  recommendationFeedback: RecommendationFeedback;
   evalDashboardEnabled?: boolean;
   evalDashboardPassword?: string;
   resolvedAuthService?: {
@@ -103,6 +105,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     createTursoClient,
     evalWorker,
     evalRepository,
+    recommendationFeedback,
     evalDashboardEnabled = false,
     evalDashboardPassword,
     resolvedAuthService,
@@ -177,6 +180,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     app.use("/sessions", authMiddleware);
     app.use("/recommendations", authMiddleware);
     app.use("/account", authMiddleware);
+    if (evalDashboardEnabled) app.use("/eval/feedback", authMiddleware);
     // Artist lookups spend the operator's MusicBrainz/Wikidata/Last.fm quota,
     // so a closed deployment gates them too. Progressive installs keep them open.
     if (authMode === "enforced") app.use("/artists", authMiddleware);
@@ -513,5 +517,6 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalRepository: evalRepository ?? createNoOpEvalRepository(),
     evalDashboardEnabled,
     evalDashboardPassword,
+    recommendationFeedback,
   });
 }
