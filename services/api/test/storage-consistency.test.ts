@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { createClient } from "@libsql/client";
 import { createApp } from "../src/app.js";
 import { createTursoUserRepository } from "../src/auth/tursoUserRepository.js";
@@ -13,6 +14,29 @@ import { createTursoSyncRepositories } from "../src/turso/tursoSyncRepositories.
 import { assertArray, assertRecord } from "./helpers/typeAssertions.js";
 
 const jwtSecret = "storage-consistency-test-secret";
+
+async function withStorageDirectory(name: string, run: (directory: string) => Promise<void>) {
+  const childDirectory = process.env.BANDSEARCH_STORAGE_TEST_DIRECTORY;
+  if (childDirectory) return run(childDirectory);
+
+  const directory = await mkdtemp(path.join(tmpdir(), "storage-consistency-"));
+  try {
+    // The local libSQL driver can retain native file handles until GC even after
+    // client.close(). Windows cannot unlink them. Keep the real adapter tests,
+    // but let process exit release every handle before the parent removes files.
+    const pattern = `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
+    await new Promise<void>((resolve, reject) => {
+      execFile(process.execPath, ["--import", "tsx", "--test", "--test-name-pattern", pattern, __filename], {
+        env: { ...process.env, NODE_TEST_CONTEXT: undefined, BANDSEARCH_STORAGE_TEST_DIRECTORY: directory },
+      }, (error, stdout, stderr) => {
+        if (error) reject(new Error(`${error.message}\n${stdout}\n${stderr}`, { cause: error }));
+        else resolve();
+      });
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 async function withApp(
   app: ReturnType<typeof createApp>,
@@ -104,8 +128,7 @@ async function exerciseAccountLifecycle(storage: StorageRepositories) {
 }
 
 for (const backend of ["sqlite", "turso", "turso-sync"] as const) {
-  test(`${backend} accounts export and erase the bands and chat history they actually use`, async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "storage-consistency-"));
+  test(`${backend} accounts export and erase the bands and chat history they actually use`, async (context) => withStorageDirectory(context.name, async (directory) => {
     const databasePath = path.join(directory, "account.db");
     // Cloud and replica schemas are normally installed by the operator. Exercise
     // the real adapters locally with every migration, without cloud access.
@@ -126,14 +149,12 @@ for (const backend of ["sqlite", "turso", "turso-sync"] as const) {
       await exerciseAccountLifecycle(storage);
     } finally {
       await storage.close();
-      await rm(directory, { recursive: true, force: true });
     }
-  });
+  }));
 }
 
 for (const override of ["userRepository", "chatSessionRepository"] as const) {
-  test(`overriding ${override} leaves the other Turso repositories on Turso`, async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "storage-override-"));
+  test(`overriding ${override} leaves the other Turso repositories on Turso`, async (context) => withStorageDirectory(context.name, async (directory) => {
     const url = `file:${path.join(directory, "turso.db")}`;
     const client = createClient({ url });
     try {
@@ -162,9 +183,8 @@ for (const override of ["userRepository", "chatSessionRepository"] as const) {
       }
     } finally {
       client.close();
-      await rm(directory, { recursive: true, force: true });
     }
-  });
+  }));
 }
 
 test("a default SQLite account exports saved bands from its in-memory database", async () => {
