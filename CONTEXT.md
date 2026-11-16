@@ -38,6 +38,8 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `SCW_SECRET_KEY`).
 
+- **Recommendation feedback** — a user's reaction to a recommendation batch: good, too mainstream, or wrong direction. It belongs to the user's account when one is identified, and is included in account export and deletion. A personal install without an account can record anonymous feedback. Unlike a rating, it evaluates a batch rather than one saved band.
+
 - **LLM-as-judge** — an async eval worker that scores each recommended band on relevance, obscurity fit, evidence quality, and discovery value. Runs on Scaleway (`SCW_JUDGE_MODEL`, never the research model) and is only active when `SCW_SECRET_KEY` is set; checked against human labels by `run-calibration.ts`; never on the critical response path.
 
 - **Golden dataset** — a curated set of queries in `services/eval/golden-set.json` with `nuggets` (atomic sonic properties — genre, era, trait) and `antiBands` (bands that must not appear). The eval runner (`run-golden.ts`) scores `nuggetCoverage@8` against MusicBrainz tags/genres of the top-8 recommendations (fail below per-entry `minNuggetCoverage`, default 0.5) and `antiBandRate@8` (fail if > 50%; `--strict` fails on any hit). There is no `expectedBands` list: open-ended retrieval has no single correct answer set.

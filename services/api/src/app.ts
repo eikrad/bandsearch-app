@@ -8,6 +8,7 @@ import { createNoOpEvalRepository, createInMemoryEvalRepository, createSqliteEva
 import type { EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
+import { createRecommendationFeedback } from "./eval/recommendationFeedback.js";
 import { createLastFmClient } from "./eval/lastFmClient.js";
 import { createJudgeWorker, createNoOpJudgeWorker, judgeModelFor } from "./eval/judgeWorker.js";
 
@@ -146,7 +147,7 @@ export function createApp({
     userRepository: resolvedUserRepository,
     inviteRepository: resolvedInviteRepository,
     chatSessionRepository: resolvedChatSessionRepository,
-    userDataStore: resolvedUserDataStore,
+    userDataStore: accountDataStore,
   } = resolvedStorage;
   const resolvedInviteService = createInviteService({ inviteRepository: resolvedInviteRepository });
 
@@ -167,6 +168,28 @@ export function createApp({
       lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
+  // Optional local eval telemetry has its own SQLite connection. Account
+  // repositories are assembled together above and never fall back to it.
+  let evalDatabase: Database.Database | undefined;
+  const openEvalDatabase = () => {
+    evalDatabase ??= new Database(runtimeConfig.databasePath || ":memory:");
+    return evalDatabase;
+  };
+
+  // Keep the local store readable for account feedback even with the dashboard
+  // disabled: older rows do not stop belonging to an account when UI is hidden.
+  // Refuse an unavailable store rather than reporting incomplete export/erasure
+  // through a silent in-memory fallback. Memory installs remain ephemeral.
+  const resolvedEvalRepository: EvalRepository =
+    evalRepository ??
+    (() => {
+      if (runtimeConfig.preferenceStore === "memory") return createInMemoryEvalRepository();
+      if (!runtimeConfig.evalDashboardEnabled && !accountDataStore) return createNoOpEvalRepository();
+      return createSqliteEvalRepository({ db: openEvalDatabase() });
+    })();
+  const recommendationFeedback = createRecommendationFeedback({ repository: resolvedEvalRepository, userDataStore: accountDataStore });
+  const resolvedUserDataStore = recommendationFeedback.userDataStore;
+
   const jwtSecret = runtimeConfig.jwtSecret;
   const authMode = runtimeConfig.authMode ?? "progressive";
   // Fail closed: without a secret no middleware exists, which in enforced mode
@@ -185,32 +208,9 @@ export function createApp({
     ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository, { mode: authMode })
     : null;
 
-  // Optional local eval telemetry has its own SQLite connection. Account
-  // repositories are assembled together above and never fall back to it.
-  let evalDatabase: Database.Database | undefined;
-  const openEvalDatabase = () => {
-    evalDatabase ??= new Database(runtimeConfig.databasePath || ":memory:");
-    return evalDatabase;
-  };
-
-  // Eval repository and worker share a single store so the /eval routes read
-  // exactly what the worker writes. When no store is injected we keep events
-  // in memory while the dashboard is enabled, otherwise everything is a no-op.
-  const resolvedEvalRepository: EvalRepository =
-    evalRepository ??
-    (() => {
-      if (!runtimeConfig.evalDashboardEnabled) return createNoOpEvalRepository();
-      try {
-        return createSqliteEvalRepository({ db: openEvalDatabase() });
-      } catch {
-        return createInMemoryEvalRepository();
-      }
-    })();
-  // GDPR Art. 5(1)(e): enforce the stated retention period for pipeline
-  // telemetry. Only armed where the eval store is real — with the no-op
-  // repository (the production default, EVAL_DASHBOARD_ENABLED=false) there is
-  // nothing persisted to purge. .unref() so it never holds the process open,
-  // which would hang `node --test` and the CLI scripts.
+  // While eval is enabled, enforce its retention period. Account feedback stays
+  // accessible for export/erasure even when the dashboard is disabled. .unref()
+  // prevents the daily timer from holding the process open in tests and CLIs.
   if (runtimeConfig.evalDashboardEnabled) {
     const retentionDays = runtimeConfig.evalRetentionDays ?? 90;
     const purgeExpiredEvents = () => {
@@ -268,6 +268,7 @@ export function createApp({
         : null,
     evalWorker: resolvedEvalWorker,
     evalRepository: resolvedEvalRepository,
+    recommendationFeedback,
     evalDashboardEnabled: runtimeConfig.evalDashboardEnabled ?? false,
     evalDashboardPassword: runtimeConfig.evalDashboardPassword,
   });

@@ -574,8 +574,8 @@ regressions for normalized-name fallback and preservation of stored annotations.
 
 ### 11. Assemble a consistent account storage set ✓ Done
 
-Implementation complete; PR integration into `staging` is pending. Promotion to
-`main` is handled by the repository owner.
+Merged into `staging` in #298. Promotion to `main` is handled by the repository
+owner.
 
 `services/api/src/storage/createStorage.ts` selects preferences, users, invites,
 chat sessions and account export/erasure together. Direct Turso and `turso-sync`
@@ -591,6 +591,30 @@ chat messages, export and account deletion on SQLite, local libSQL and the sync
 engine, including another user's surviving account. It also covers partial
 Turso overrides, memory mode and refused startup.
 
-**Follow-up:** Optional eval telemetry still uses a separate local store.
-With Turso accounts and the eval dashboard enabled, account export/erasure does
-not include feedback held in that local store. Consolidate that path separately.
+**Follow-up resolved by entry 12:** Include local eval feedback in account data.
+
+---
+
+### 12. Recommendation feedback ownership and account data ✓ Done
+
+Implementation complete; integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`eval/recommendationFeedback.ts` owns feedback validation, authenticated ownership
+and coordinated account export/deletion. The route ignores a body-supplied
+`userId` and uses the existing progressive/enforced auth rules. Export includes
+feedback from the account database and the local eval database without duplicate
+rows. Local feedback is erased before the account database, preserving a
+retryable account if cleanup fails; this is not a cross-database transaction.
+
+Feedback stays with its eval events, preserving existing local rows without a
+migration. Disabling the dashboard keeps its routes hidden while preserving
+account export/deletion of historical feedback. Anonymous rows are not guessed
+onto accounts. An unavailable local store refuses startup instead of silently
+substituting memory.
+
+Integration tests cover shared/separate databases, forged ownership, missing
+and invalid credentials, enforced disabled-account rejection, wrong passwords,
+cleanup failure/retry, dashboard disablement, and another user's surviving
+feedback across SQLite, Turso and the sync adapter. Repository contracts cover
+user-scoped reads/erasure and retention for SQLite and memory.

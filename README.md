@@ -225,19 +225,21 @@ Two GDPR endpoints back the Settings controls:
 | `GET /account/export` | Art. 15/20 — everything held about the account: profile, saved bands, groups, chat sessions with messages, feedback |
 | `POST /account/delete` | Art. 17 — erases every user-scoped row, password-confirmed |
 
-Erasure is an explicit transactional delete driven by one shared
-`USER_SCOPED_TABLES` list (`services/api/src/privacy/userDataStore.ts`), not a
-foreign-key cascade: SQLite enforces foreign keys per connection while libSQL
-enforces by default, so a cascade would fire on Turso and silently not fire on
-SQLite. A test walks the real schema and fails if a table gains a `user_id`
-column without being added to that list.
+Account-database erasure uses explicit deletes driven by the shared
+`USER_SCOPED_TABLES` list (`services/api/src/privacy/userDataStore.ts`). The
+recommendation-feedback module also includes locally stored eval feedback in
+export and deletion when accounts live in Turso. It removes local feedback
+before erasing the account database, leaving the account available for retry if
+local cleanup fails; the two databases do not share a transaction. A schema test
+checks that every table with a `user_id` column belongs to the erasure list.
 
 ---
 
 ## Storage
 
 `PREFERENCE_STORE` selects preferences, artist groups, users, invites and chat
-sessions together. Account export and deletion use that same database. Startup
+sessions together. Account export and deletion cover that database and local
+recommendation feedback. Startup
 refuses an unavailable selected backend rather than substituting another store.
 
 | `PREFERENCE_STORE` | Description |
@@ -250,7 +252,12 @@ refuses an unavailable selected backend rather than substituting another store.
 SQLite account repositories share one connection, including when no path is
 supplied and the database is `:memory:`. In `memory` mode all account repositories
 are ephemeral; account export and deletion report unavailable. Optional eval
-telemetry retains its separate local store.
+telemetry retains its separate local store in `DATABASE_PATH`. Feedback uses the
+authenticated account identity, ignoring any `userId` in the request body. The
+feedback endpoint remains disabled with the eval dashboard, but existing
+account-linked feedback is still exported and erased. Previously anonymous
+feedback stays anonymous; ownership is not guessed or reassigned. An unavailable
+local feedback store refuses startup rather than silently hiding account data.
 
 See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 
