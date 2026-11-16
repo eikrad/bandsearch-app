@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/eikrad/bandsearch-app/compare/v0.4.4...v0.4.5) (2026-11-16)
+
+
+### Bug Fixes
+
+* **desktop:** preserve artist identity across saved-band actions ([5fd2ff7](https://github.com/eikrad/bandsearch-app/commit/5fd2ff72a6a68caa4ff50109e28d02ac56118ac5))
+
 ## [0.4.4](https://github.com/eikrad/bandsearch-app/compare/v0.4.3...v0.4.4) (2026-10-23)
 
 
