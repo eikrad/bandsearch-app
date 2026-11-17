@@ -49,39 +49,39 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
 
   return new StateGraph(REFLECTION_SCHEMA)
     .addNode("assess", async (state) => {
-      const reflector = await createRecommendationReflector({
-        apiKey: deps.geminiApiKey,
-        timeoutMs: deps.budget.allocate(6000),
-        maxExtraQueries: deps.maxReflectionSearches,
-        modelClient: deps.modelClient,
-        chatModel: deps.chatModel,
-        model: deps.model,
-      });
-      const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
-      let reflection;
-      try {
-        reflection = await reflector({
+      if (deps.budget.remaining() <= 0) return { nextExtraQueries: [] };
+      return deps.budget.run(6000, async (signal) => {
+        const reflector = await createRecommendationReflector({
+          apiKey: deps.geminiApiKey,
+          timeoutMs: deps.budget.allocate(6000),
+          signal,
+          maxExtraQueries: deps.maxReflectionSearches,
+          modelClient: deps.modelClient,
+          chatModel: deps.chatModel,
+          model: deps.model,
+        });
+        const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
+        const reflection = await reflector({
           userQuery: state.userQuery,
           plan: state.searchPlan ?? { anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: [] },
           verifiedCandidates: state.verifiedCandidates,
           targetVerifiedCount: deps.targetVerifiedCount,
           searchBudgetRemaining: budgetLeft,
         });
-      } catch (error) {
-        // Reflection only adds searches; without it the run keeps what it found.
+        const extraQueries = reflection.sufficient
+          ? []
+          : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
+        log("info", "research_reflection_assess", {
+          round: (state.roundsCompleted ?? 0) + 1,
+          sufficient: reflection.sufficient,
+          extraQueries: extraQueries.length,
+          gaps: reflection.gaps,
+        });
+        return { reflectionUsed: true, nextExtraQueries: extraQueries };
+      }).catch((error: unknown) => {
         log("warn", "research_reflection_skipped", { reason: errorMessage(error) });
         return { nextExtraQueries: [] };
-      }
-      const extraQueries = reflection.sufficient
-        ? []
-        : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
-      log("info", "research_reflection_assess", {
-        round: (state.roundsCompleted ?? 0) + 1,
-        sufficient: reflection.sufficient,
-        extraQueries: extraQueries.length,
-        gaps: reflection.gaps,
       });
-      return { reflectionUsed: true, nextExtraQueries: extraQueries };
     })
     .addNode("search", async (state) => {
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
@@ -103,22 +103,23 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       };
     })
     .addNode("extract_r", async (state) => {
-      const extract = await createCandidateExtractor({
-        apiKey: deps.geminiApiKey,
-        timeoutMs: deps.budget.allocate(12000),
-        modelClient: deps.modelClient,
-        chatModel: deps.chatModel,
-        model: deps.model,
-      });
-      const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      try {
+      if (deps.budget.remaining() <= 0) return {};
+      return deps.budget.run(12000, async (signal) => {
+        const extract = await createCandidateExtractor({
+          apiKey: deps.geminiApiKey,
+          timeoutMs: deps.budget.allocate(12000),
+          signal,
+          modelClient: deps.modelClient,
+          chatModel: deps.chatModel,
+          model: deps.model,
+        });
+        const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
         const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
         return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
-      } catch (error) {
-        // The candidates from the first round are still good; keep them.
+      }).catch((error: unknown) => {
         log("warn", "research_reflection_extract_failed", { reason: errorMessage(error) });
         return {};
-      }
+      });
     })
     .addNode("verify_r", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
@@ -129,7 +130,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       }
       const toVerify = state.extractedCandidates.filter((c) => !seen.has(c.name.toLowerCase()));
       const fresh = toVerify.length > 0
-        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors)
+        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, { shouldContinue: () => deps.budget.remaining() > 0 })
         : [];
       const merged = mergeVerifiedCandidates([...state.verifiedCandidates, ...fresh]);
       const round = (state.roundsCompleted ?? 0) + 1;

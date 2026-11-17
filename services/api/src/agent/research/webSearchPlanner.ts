@@ -1,10 +1,10 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
 import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -155,6 +155,7 @@ export function fallbackSearchPlan(userQuery: string): SearchPlan {
 export type CreateWebSearchPlannerOptions = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   model?: string;
   /**
    * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
@@ -168,6 +169,7 @@ export type CreateWebSearchPlannerOptions = {
 export async function createWebSearchPlanner({
   apiKey,
   timeoutMs = 20000,
+  signal,
   model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
   chatModel,
@@ -179,11 +181,10 @@ export async function createWebSearchPlanner({
   }
 
   const temperature = 0.2;
-  const plannerModel: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
+  const plannerModel: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
     model,
     apiKey: trimmedKey,
     temperature,
-    thinkingConfig: { thinkingBudget: 0 },
   });
 
   const plannerSystemPrompt = PLANNER_ROLE;
@@ -193,7 +194,7 @@ export async function createWebSearchPlanner({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    const response = await withTimeout(plannerModel.invoke(prompt), timeoutMs, "web search planner timeout");
+    const response = await invokeModel(plannerModel, prompt, { signal, timeoutMs, timeoutMessage: "web search planner timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     try {
       const parsed = parseModelJsonResponse(raw);

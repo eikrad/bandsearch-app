@@ -8,7 +8,7 @@
  * a network call.
  */
 export type ChatModelClient = {
-  invoke(prompt: Array<{ role: string; content: string }>): Promise<{ content: unknown }>;
+  invoke(prompt: Array<{ role: string; content: string }>, options?: { signal?: AbortSignal }): Promise<{ content: unknown }>;
 };
 
 /**
@@ -88,7 +88,20 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMe
   const timeout = new Promise<T>((_, reject) => {
     timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
   });
-  return Promise.race([promise.finally(() => clearTimeout(timer!)), timeout]);
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!));
+}
+
+/**
+ * One model call within a research run: never starts once the run is cancelled,
+ * forwards cancellation to the provider and rejects with `timeoutMessage` at `timeoutMs`.
+ */
+export async function invokeModel(
+  client: ChatModelClient,
+  prompt: Array<{ role: string; content: string }>,
+  { signal, timeoutMs, timeoutMessage }: { signal?: AbortSignal; timeoutMs: number; timeoutMessage: string },
+): Promise<{ content: unknown }> {
+  signal?.throwIfAborted();
+  return withTimeout(client.invoke(prompt, { signal }), timeoutMs, timeoutMessage);
 }
 
 /** A thrown value as loggable text. */

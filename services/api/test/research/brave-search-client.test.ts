@@ -1,4 +1,5 @@
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { createBraveSearchClient as createClient } from "../../src/integrations/braveSearch.js";
 
@@ -184,4 +185,71 @@ test("search throttles sequential requests to the minimum spacing", async () => 
     sleeps.some((ms) => ms >= 1000),
     `second back-to-back request should be delayed ~1100ms, got sleeps=${JSON.stringify(sleeps)}`,
   );
+});
+
+async function flushMicrotasks() {
+  for (let i = 0; i < 5; i++) await setImmediate();
+}
+
+test("cancellation interrupts the wait after a 429 and sends no retry", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const controller = new AbortController();
+  let requests = 0;
+  const fetchImpl: typeof fetch = async () => {
+    requests += 1;
+    return jsonResponse({ error: "rate limited" }, 429);
+  };
+  const client = createBraveSearchClient({
+    fetchImpl,
+    apiKey: "k",
+    retries: 0,
+    minRequestSpacingMs: 0,
+    rateLimitRetryMs: 60_000,
+  });
+
+  let settled = false;
+  const outcome = client.search("q", { signal: controller.signal })
+    .then(() => { settled = true; return null; }, (error: unknown) => { settled = true; return error; });
+  await flushMicrotasks();
+  controller.abort(new Error("research deadline"));
+  try {
+    await flushMicrotasks();
+    assert.equal(settled, true, "the rate-limit wait must end when the run is cancelled");
+    assert.ok(await outcome, "a cancelled search rejects instead of returning results");
+    t.mock.timers.tick(120_000);
+    await flushMicrotasks();
+    assert.equal(requests, 1, "no retry is sent after cancellation");
+  } finally {
+    t.mock.timers.tick(120_000);
+    await outcome;
+  }
+});
+
+test("cancellation interrupts the spacing wait before the next request", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const controller = new AbortController();
+  let requests = 0;
+  const fetchImpl: typeof fetch = async () => {
+    requests += 1;
+    return jsonResponse({ web: { results: [] } });
+  };
+  const client = createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0, minRequestSpacingMs: 60_000 });
+
+  await client.search("first");
+  let settled = false;
+  const outcome = client.search("second", { signal: controller.signal })
+    .then(() => { settled = true; return null; }, (error: unknown) => { settled = true; return error; });
+  await flushMicrotasks();
+  controller.abort(new Error("research deadline"));
+  try {
+    await flushMicrotasks();
+    assert.equal(settled, true, "the spacing wait must end when the run is cancelled");
+    assert.ok(await outcome);
+    t.mock.timers.tick(120_000);
+    await flushMicrotasks();
+    assert.equal(requests, 1, "the second request is never sent");
+  } finally {
+    t.mock.timers.tick(120_000);
+    await outcome;
+  }
 });

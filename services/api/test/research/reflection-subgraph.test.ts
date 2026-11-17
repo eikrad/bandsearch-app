@@ -199,6 +199,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
   // the drain to "a search has happened" avoids depending on how many times
   // the graph asks for the remaining time.
   const drainingBudget = {
+    ...createResearchBudget(120_000),
     allocate: (cap: number) => cap,
     remaining: () => (searchCalls.length === 0 ? 120_000 : 1_000),
   };
