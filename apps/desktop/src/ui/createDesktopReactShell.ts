@@ -1,6 +1,5 @@
 import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatViewProps } from "../chatRenderAdapter.js";
-import type { DesktopChatUiStack } from "../desktopChatUiStack.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -17,6 +16,9 @@ interface CreateDesktopReactShellOptions {
     onModeChange: (mode: string) => unknown;
     onSubmitQuery: (query: string) => unknown;
     onObscurityTargetChange?: (target: string | undefined) => unknown;
+    onRetrySearch?: () => unknown;
+    onCancelSearch?: () => unknown;
+    setViewport?: (viewport: string) => void;
     getViewProps: () => ChatViewProps;
   };
   actionHandlers?: Partial<ChatHandlers>;
@@ -26,8 +28,6 @@ interface CreateDesktopReactShellOptions {
   // the seam does not need the full setTimeout signature (which drags in
   // __promisify__ and forces fakes to be Node Timeouts).
   setTimeoutImpl?: (handler: () => void, timeout: number) => TimerHandle;
-  cancelSearchImpl?: () => void;
-  retryLastSearchImpl?: () => Promise<unknown> | void;
 }
 
 export function createDesktopReactShell({
@@ -36,8 +36,6 @@ export function createDesktopReactShell({
   statusTimeoutMs = 3000,
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
-  cancelSearchImpl,
-  retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
   let actionStatus: ActionStatus = null;
   let clearStatusTimer: TimerHandle | null = null;
@@ -51,6 +49,20 @@ export function createDesktopReactShell({
     }, delayMs);
   }
 
+  /**
+   * Search and Retry fail the same way: an inline error the user can act on.
+   * A stopped search is not a failure — the model settles it without an error.
+   */
+  async function runSearch(start: () => unknown) {
+    try {
+      return await start();
+    } catch (error) {
+      actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
+      scheduleStatusClear(errorStatusTimeoutMs);
+      throw new Error("query failed", { cause: error });
+    }
+  }
+
   const handlers = {
     onModeChange: (mode: string) => renderAdapter.onModeChange(mode),
     onQuerySubmit: (query: string) => renderAdapter.onSubmitQuery(query),
@@ -62,7 +74,6 @@ export function createDesktopReactShell({
   };
 
   const shell = {
-    desktopUi: undefined as DesktopChatUiStack | undefined,
     getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();
       return { ...base, actionStatus };
@@ -70,14 +81,20 @@ export function createDesktopReactShell({
     async updateMode(mode: string) {
       return handlers.onModeChange(mode);
     },
+    updateObscurityTarget(target: string | undefined) {
+      return handlers.onObscurityTargetChange(target);
+    },
+    setViewport(viewport: string) {
+      renderAdapter.setViewport?.(viewport);
+    },
     async submitQuery(query: string) {
-      try {
-        return await handlers.onQuerySubmit(query);
-      } catch (error) {
-        actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
-        scheduleStatusClear(errorStatusTimeoutMs);
-        throw new Error("query failed", { cause: error });
-      }
+      return runSearch(() => handlers.onQuerySubmit(query));
+    },
+    async retryLastSearch() {
+      return runSearch(() => renderAdapter.onRetrySearch?.());
+    },
+    cancelSearch() {
+      renderAdapter.onCancelSearch?.();
     },
     async saveBand(target: SavedBandTarget) {
       try {
@@ -132,12 +149,6 @@ export function createDesktopReactShell({
         scheduleStatusClear();
         throw error;
       }
-    },
-    cancelSearch() {
-      cancelSearchImpl?.();
-    },
-    async retryLastSearch() {
-      return retryLastSearchImpl?.();
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

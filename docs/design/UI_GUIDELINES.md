@@ -306,6 +306,10 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 ### Error states
 - Show request errors inline in chat context.
 - Provide a clear retry action near the failed interaction.
+- Retry re-runs the failed question in place: the question appears once, is not
+  sent again as conversation history, and is saved to the chat session once.
+- A failed retry shows the same inline error as a failed search. Stopping a
+  search or a retry is not an error and shows none (#304).
 
 ### Feedback states
 - Use local confirmations for Save/Rate actions.

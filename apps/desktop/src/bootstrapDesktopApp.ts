@@ -45,6 +45,9 @@ export function bootstrapDesktopApp({
   };
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
+  // The question saved to a session that has no saved answer yet, so a retry
+  // does not record it a second time. Keyed by session: a new chat must save it.
+  let persistedQuestion: { sessionId: string; query: string } | null = null;
 
   // Created lazily on the first message rather than at app boot: creating one
   // eagerly on every launch would leave orphaned empty sessions for anyone who
@@ -110,7 +113,12 @@ export function bootstrapDesktopApp({
       if (pendingSelectedArtistIds.length > 0) pendingSelectedArtistIds = [];
       let priorityContext = buildPriorityContext(state.savedBands, effectiveIds);
       if (mode === "preference-aware" && effectiveIds.length > 0) priorityContext = "";
-      const conversationHistory = (state.messages || []).flatMap((m) => {
+      // Retrying a failed question re-runs it: the unanswered message is reused,
+      // not shown twice or sent again as history.
+      const messages = state.messages || [];
+      const last = messages[messages.length - 1];
+      const earlier = last?.role === "user" && last.content === query ? messages.slice(0, -1) : messages;
+      const conversationHistory = earlier.flatMap((m) => {
         if (m.role === "user") return [{ role: "user", content: m.content }];
         if (m.role === "assistant") {
           const text =
@@ -123,7 +131,7 @@ export function bootstrapDesktopApp({
         }
         return [];
       });
-      state = { ...state, messages: [...(state.messages || []), { role: "user", content: query }] };
+      state = { ...state, messages: [...earlier, { role: "user", content: query }] };
       const controller = new AbortController();
       currentAbortController = controller;
       try {
@@ -135,10 +143,11 @@ export function bootstrapDesktopApp({
         if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
         // Persistence is best-effort: a failed write here must not break the
         // chat, so errors are swallowed rather than surfaced to the caller.
-        if (sessionId) {
+        const alreadySaved = persistedQuestion?.sessionId === sessionId && persistedQuestion.query === query;
+        if (sessionId && !alreadySaved) {
           await chatClient
             .appendSessionMessage(sessionId, { role: "user", content: query }, controller.signal)
-            .catch(() => {});
+            .then(() => { persistedQuestion = { sessionId, query }; }, () => {});
         }
         const result = await chatClient.fetchRecommendations(
           query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget, controller.signal,
@@ -149,6 +158,7 @@ export function bootstrapDesktopApp({
           await chatClient
             .appendSessionMessage(sessionId, { role: "assistant", content: assistantMessage.content }, controller.signal)
             .catch(() => {});
+          persistedQuestion = null;
         }
         return result;
       } catch (error) {

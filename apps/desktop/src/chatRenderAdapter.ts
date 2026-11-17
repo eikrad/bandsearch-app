@@ -1,6 +1,22 @@
 import { buildPlatformLinks } from "./platformLinks.js";
-import type { ConversationMessage, RenderableRecommendation } from "./chatAppModel.js";
-import type { DesktopChatUiStack } from "./desktopChatUiStack.js";
+import type { ChatAppModel, ConversationMessage, RenderableRecommendation } from "./chatAppModel.js";
+
+/** The chat state and commands the chat screen renders and sends. */
+export type ChatScreenModel = Pick<
+  ChatAppModel,
+  | "getMode"
+  | "setMode"
+  | "getObscurityTarget"
+  | "setObscurityTarget"
+  | "isLoading"
+  | "isShowFeedbackBar"
+  | "dismissFeedbackBar"
+  | "getConversation"
+  | "submitQuery"
+  | "retryLastSearch"
+  | "cancelSearch"
+  | "submitFeedback"
+>;
 
 const MODE_OPTIONS = [
   { value: "fresh", label: "Fresh search" },
@@ -67,10 +83,13 @@ export type ChatViewProps = ReturnType<typeof buildViewProps> & {
   actionStatus?: { type: "success" | "error"; message: string } | null;
 };
 
-function buildViewProps(desktopUi: DesktopChatUiStack) {
-  const viewport = desktopUi.getViewport();
-  const conversation = desktopUi.getConversation();
-  const loading = desktopUi.isLoading();
+function normalizeViewport(viewport: string): "mobile" | "desktop" {
+  return viewport === "mobile" ? "mobile" : "desktop";
+}
+
+function buildViewProps(chat: ChatScreenModel, viewport: "mobile" | "desktop") {
+  const conversation = chat.getConversation();
+  const loading = chat.isLoading();
 
   const messageViewProps = conversation ? buildMessageViewProps(conversation) : null;
   const cards = getLatestCards(conversation);
@@ -79,42 +98,59 @@ function buildViewProps(desktopUi: DesktopChatUiStack) {
     headerTitle: "Bandsearch",
     headerSubtitle: "Niche music recommendations",
     viewport,
-    modeValue: desktopUi.getMode(),
+    modeValue: chat.getMode(),
     modeOptions: MODE_OPTIONS,
     isLoading: loading,
     queryPlaceholder: "Describe bands you like...",
     queryDisabled: loading,
-    obscurityTarget: desktopUi.getObscurityTarget(),
-    showFeedbackBar: desktopUi.isShowFeedbackBar(),
+    obscurityTarget: chat.getObscurityTarget(),
+    showFeedbackBar: chat.isShowFeedbackBar(),
     cards,
     messages: messageViewProps && messageViewProps.length > 0 ? messageViewProps : undefined,
   };
 }
 
-export function createChatRenderAdapter({ desktopUi }: { desktopUi: DesktopChatUiStack }) {
+export function createChatRenderAdapter({
+  chat,
+  viewport = "desktop",
+}: {
+  chat: ChatScreenModel;
+  viewport?: string;
+}) {
+  let currentViewport = normalizeViewport(viewport);
+  const viewProps = () => buildViewProps(chat, currentViewport);
   return {
-    getViewProps() {
-      return buildViewProps(desktopUi);
+    getViewProps: viewProps,
+    setViewport(next: string) {
+      currentViewport = normalizeViewport(next);
     },
     onModeChange(mode: string) {
-      desktopUi.setMode(mode);
-      return buildViewProps(desktopUi);
+      chat.setMode(mode);
+      return viewProps();
     },
     onObscurityTargetChange(target: string | undefined) {
-      desktopUi.setObscurityTarget(target);
-      return buildViewProps(desktopUi);
+      chat.setObscurityTarget(target);
+      return viewProps();
     },
     async onSubmitQuery(query: string) {
-      await desktopUi.submitQuery(query);
-      return buildViewProps(desktopUi);
+      await chat.submitQuery(query);
+      return viewProps();
+    },
+    async onRetrySearch() {
+      await chat.retryLastSearch();
+      return viewProps();
+    },
+    onCancelSearch() {
+      chat.cancelSearch();
+      return viewProps();
     },
     async onFeedback(feedbackType: string) {
-      await desktopUi.submitFeedback(feedbackType);
-      return buildViewProps(desktopUi);
+      await chat.submitFeedback(feedbackType);
+      return viewProps();
     },
     onFeedbackDismiss() {
-      desktopUi.dismissFeedbackBar();
-      return buildViewProps(desktopUi);
+      chat.dismissFeedbackBar();
+      return viewProps();
     },
   };
 }

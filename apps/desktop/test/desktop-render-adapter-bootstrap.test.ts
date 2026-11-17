@@ -16,7 +16,7 @@ test("desktop render adapter bootstrap exposes initial view props", () => {
   assert.equal(Array.isArray(props.modeOptions), true);
 });
 
-test("desktopUi.setViewport updates view props viewport", () => {
+test("setViewport updates view props viewport", () => {
   const adapter = bootstrapDesktopRenderAdapter({
     app: fakeDesktopApp({
       requestRecommendations: async () => ({ recommendations: [], meta: { modeUsed: "fresh" } }),
@@ -25,6 +25,6 @@ test("desktopUi.setViewport updates view props viewport", () => {
   });
 
   assert.equal(adapter.getViewProps().viewport, "desktop");
-  adapter.desktopUi.setViewport("mobile");
+  adapter.setViewport("mobile");
   assert.equal(adapter.getViewProps().viewport, "mobile");
 });

@@ -19,11 +19,9 @@ type BootstrapCall = {
 
 type BootstrappedReactApp = ReturnType<typeof bootstrapDesktopReactApp>;
 
-// The real bootstrap hands back a full mount API and UI stack; these tests only
-// drive `mount` and the viewport hook, so the rest is narrowed away here.
-type ReactAppDouble = Partial<Omit<BootstrappedReactApp, "desktopUi">> & {
-  desktopUi?: { setViewport: (viewport: string) => void };
-};
+// The real bootstrap hands back a full mount API; these tests only drive
+// `mount` and the viewport hook, so the rest is narrowed away here.
+type ReactAppDouble = Partial<BootstrappedReactApp>;
 
 function fakeReactApp(overrides: ReactAppDouble): BootstrappedReactApp {
   return overrides as BootstrappedReactApp;
@@ -119,7 +117,7 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
               calls.push({ type: "mount" });
               return {};
             },
-            desktopUi: { setViewport: () => {} },
+            setViewport: () => {},
           });
         },
       },

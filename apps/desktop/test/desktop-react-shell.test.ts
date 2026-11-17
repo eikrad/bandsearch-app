@@ -131,24 +131,24 @@ test("desktop react shell clears action status after timeout", async () => {
   assert.equal(shell.getViewProps().actionStatus, null);
 });
 
-test("createDesktopReactShell exposes cancelSearch and retryLastSearch from provided impls", async () => {
+test("createDesktopReactShell sends Stop and Retry to the render adapter", async () => {
   let cancelled = false;
   let retried = false;
   const shell = createDesktopReactShell({
     renderAdapter: {
       onModeChange: () => {},
       onSubmitQuery: async () => {},
+      onCancelSearch: () => { cancelled = true; },
+      onRetrySearch: async () => { retried = true; },
       getViewProps: () => chatViewProps({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
     },
-    cancelSearchImpl: () => { cancelled = true; },
-    retryLastSearchImpl: () => { retried = true; },
   });
 
   shell.cancelSearch();
-  assert.equal(cancelled, true, "cancelSearch delegates to impl");
+  assert.equal(cancelled, true, "Stop reaches the adapter");
 
   await shell.retryLastSearch();
-  assert.equal(retried, true, "retryLastSearch delegates to impl");
+  assert.equal(retried, true, "Retry reaches the adapter");
 });
 
 // ─── Phase 8.3b: ObscurityTargetPicker rendered in shell ─────────────────────

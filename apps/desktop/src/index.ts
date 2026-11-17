@@ -3,9 +3,8 @@ import { createChatRenderAdapter } from "./chatRenderAdapter.js";
 import { createDesktopReactShell } from "./ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "./ui/mountDesktopReactApp.js";
 import type { DesktopReactMountOptions } from "./ui/mountDesktopReactApp.js";
-import type { ChatAppCollaborator } from "./chatAppModel.js";
+import { createChatAppModel, type ChatAppCollaborator } from "./chatAppModel.js";
 import type { ChatHandlers } from "./ui/viewTypes.js";
-import { createDesktopChatUiStack } from "./desktopChatUiStack.js";
 import { bootstrapDesktopApp } from "./bootstrapDesktopApp.js";
 
 export { bootstrapDesktopApp };
@@ -25,14 +24,8 @@ type DesktopAppCollaborator = ChatAppCollaborator & {
   ): unknown;
 };
 
-function bootstrapDesktopUi(options: { app: DesktopAppCollaborator; viewport?: string }) {
-  return createDesktopChatUiStack(options);
-}
-
 function bootstrapDesktopRenderAdapter({ app, viewport = "desktop" }: { app: DesktopAppCollaborator; viewport?: string }) {
-  const desktopUi = bootstrapDesktopUi({ app, viewport });
-  // The adapter carries the stack so the shell can reach cancel/retry.
-  return Object.assign(createChatRenderAdapter({ desktopUi }), { desktopUi });
+  return createChatRenderAdapter({ chat: createChatAppModel({ app }), viewport });
 }
 
 function bootstrapDesktopReactShell({
@@ -62,14 +55,7 @@ function bootstrapDesktopReactShell({
       || ((target: SavedBandTarget, updates: CategoryNoteUpdates) =>
         app.saveCategoryNote?.(target, updates)),
   };
-  const shell = createDesktopReactShell({
-    renderAdapter,
-    actionHandlers: mergedActionHandlers,
-    cancelSearchImpl: () => renderAdapter.desktopUi.cancelSearch(),
-    retryLastSearchImpl: () => renderAdapter.desktopUi.retryLastSearch(),
-  });
-  shell.desktopUi = renderAdapter.desktopUi;
-  return shell;
+  return createDesktopReactShell({ renderAdapter, actionHandlers: mergedActionHandlers });
 }
 
 /**
@@ -94,7 +80,7 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
   const mountApi = createDesktopReactMount({ shell, ...mountOptions });
   return {
     ...mountApi,
-    desktopUi: shell.desktopUi,
+    setViewport: (next: string) => shell.setViewport(next),
     refreshView() {
       return mountApi.mount();
     },
@@ -102,7 +88,6 @@ function bootstrapDesktopReactApp(options: BootstrapDesktopReactAppOptions) {
 }
 
 export {
-  bootstrapDesktopUi,
   bootstrapDesktopRenderAdapter,
   bootstrapDesktopReactShell,
   bootstrapDesktopReactApp,

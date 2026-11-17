@@ -618,3 +618,20 @@ and invalid credentials, enforced disabled-account rejection, wrong passwords,
 cleanup failure/retry, dashboard disablement, and another user's surviving
 feedback across SQLite, Turso and the sync adapter. Repository contracts cover
 user-scoped reads/erasure and retention for SQLite and memory.
+
+---
+
+### 14. Chat Retry shares the search outcome path (#304) ✓ Done
+
+Implementation complete; integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`chatAppModel.ts` owns submit, retry and cancel; the pass-through
+`desktopChatUiStack.ts` is gone. `chatRenderAdapter.ts` reads the model directly
+and owns the viewport, and the shell runs Search and Retry through one path. A
+failed retry now shows the same inline error as a failed search instead of
+nothing, and Stop stays silent. Retry re-runs an unanswered question in place:
+it is shown once, not sent again as history, and saved to the session once.
+
+Tests drive the real app, render adapter and shell against a fake API server:
+a failed retry, a stopped retry, and a retried failure that succeeds.
