@@ -161,7 +161,7 @@ flowchart TD
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
-Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to `maxRounds` (default 2) additional search-extract-verify cycles when the initial pass does not yield enough verified candidates.
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. The reflector first assesses whether the verified candidates meet the target; while it asks for more and at least 25 s of research time remain, the subgraph runs up to `maxRounds` (default 2) additional search-extract-verify cycles.
 
 ```mermaid
 flowchart TD
@@ -188,7 +188,7 @@ flowchart TD
 limits the whole operation, including retries, even if a transport ignores
 cancellation. The graph closes every scope on success or failure.
 
-A child research scope ends up to 12 s early, reserving at most one third of a
+A child research scope ends up to 12 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
 small configured budget for final ranking. Main-graph conditional edges bypass
 remaining research stages and enter `rank` at that cutoff. Verification keeps
 completed candidates and stops between searches/lookups; optional reflection and
@@ -200,8 +200,9 @@ signal. Gemini SDK retries are disabled because that retry loop can continue
 after cancellation; graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
 
 Ranking, including its evidence-repair retry, shares one 12 s cap and must finish
-before the total deadline. A failed ranker returns an error; it does not fabricate
-recommendations from partial research. A successful ranker can still return an
+before the total deadline. A failed or timed-out ranker fails the request with the route's generic
+`502 recommendation_unavailable`; it does not fabricate recommendations from
+partial research. A successful ranker can still return an
 empty discovery result.
 
 ---

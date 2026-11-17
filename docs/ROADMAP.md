@@ -632,12 +632,13 @@ cancellation and cleanup. Research reserves up to 12 seconds (at most one third
 of a small configured budget) for final ranking. At the research cutoff, the
 graph keeps completed verification results and bypasses later research stages.
 Ranking and its retry share one cap within the total deadline; a failed ranker
-still returns an error.
+fails the request.
 
 Model and HTTP calls receive cancellation, including Brave retries and
 Brave/MusicBrainz rate-limit waits. Controlled-clock tests run the actual graph
 with stalled model and HTTP clients, covering the total deadline, partial
-verification, skipped research, Last.fm cancellation and the shared ranking retry
-cap. Real Scaleway/Gemini adapters with fake HTTP transports cover cancellation
-propagation and complete Gemini answers; Gemini uses streaming internally and
+verification, skipped research, a cutoff during reflection, Last.fm cancellation
+and the shared ranking retry cap. Brave client tests cover cancelled spacing and
+429 waits. A failed ranker surfaces as `502 recommendation_unavailable`. Real
+Scaleway/Gemini adapters with fake HTTP transports cover cancellation propagation and complete Gemini answers; Gemini uses streaming internally and
 has background SDK retries disabled. No live provider calls are needed.

@@ -14,9 +14,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Verified candidate** — an extracted candidate confirmed by MusicBrainz `lookupArtist` and enriched with `mbid`, genres, tags, and URL relations.
 
-- **Reflection subgraph** — a nested LangGraph subgraph that runs up to `maxRounds` additional search-extract-verify cycles when the initial pass yields fewer than `RESEARCH_TARGET_VERIFIED_CANDIDATES` verified hits.
+- **Reflection subgraph** — a nested LangGraph subgraph that asks the reflector whether the verified candidates meet `RESEARCH_TARGET_VERIFIED_CANDIDATES`, then runs up to `maxRounds` additional search-extract-verify cycles while the reflector asks for more and at least 25 s of research time remain.
 
-- **Research budget** — a wall-clock time limit (`RESEARCH_TIMEOUT_MS`) for the complete research graph, including final ranking and retries. Research ends early to reserve up to 12 seconds (at most one third of the configured budget) for ranking. At that cutoff, in-flight research is cancelled, completed verification results are kept, and remaining research stages are skipped. Ranking must finish within both its 12-second cap and the total deadline; failure returns a timeout error.
+- **Research budget** — a wall-clock time limit (`RESEARCH_TIMEOUT_MS`) for the complete research graph, including final ranking and retries. Research ends early to reserve up to 12 seconds (at most one third of the configured budget) for ranking. At that cutoff, in-flight research is cancelled, completed verification results are kept, and remaining research stages are skipped. Ranking must finish within both its 12-second cap and the total deadline; if it cannot, or the ranker fails, the request fails (`502 recommendation_unavailable`) instead of returning unranked research.
 
 - **Preference context** — a formatted string built from the user's saved bands (ratings, categories, notes) and injected into the LLM prompts for `preference-aware` mode recommendations.
 
