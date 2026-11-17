@@ -1,8 +1,8 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { capAndTrim, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";
@@ -76,6 +76,7 @@ export function tryParseReflectionFromModelText(raw: string, maxExtraQueries: nu
 export type CreateRecommendationReflectorOptions = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   maxExtraQueries?: number;
   model?: string;
   /**
@@ -90,6 +91,7 @@ export type CreateRecommendationReflectorOptions = {
 export async function createRecommendationReflector({
   apiKey,
   timeoutMs = 6000,
+  signal,
   maxExtraQueries = 4,
   model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
@@ -110,11 +112,10 @@ export async function createRecommendationReflector({
   }
 
   const temperature = 0.15;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
     model,
     apiKey: trimmedKey,
     temperature,
-    thinkingConfig: { thinkingBudget: 0 },
   });
 
   async function invokeOnce(systemText: string, userContent: string): Promise<ReflectionResult | null> {
@@ -122,7 +123,7 @@ export async function createRecommendationReflector({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "reflector timeout");
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "reflector timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     try {
       const parsed = parseModelJsonResponse(raw);

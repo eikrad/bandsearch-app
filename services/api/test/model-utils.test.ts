@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseModelJsonResponse, withTimeout } from "../src/agent/modelUtils.js";
+import { invokeModel, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../src/agent/modelUtils.js";
 
 // ── parseModelJsonResponse ─────────────────────────────────────────────────
 
@@ -47,6 +47,33 @@ test("withTimeout resolves when promise settles before timeout", async () => {
 test("withTimeout rejects when timeout fires first", async () => {
   const slow = new Promise((resolve) => setTimeout(() => resolve("late"), 200));
   await assert.rejects(withTimeout(slow, 10), /timeout/i);
+});
+
+// ── invokeModel ────────────────────────────────────────────────────────────
+
+const prompt = [{ role: "user", content: "hi" }];
+
+test("invokeModel forwards the cancellation signal to the model", async () => {
+  const controller = new AbortController();
+  let received: AbortSignal | undefined;
+  const client: ChatModelClient = { invoke: async (_prompt, options) => { received = options?.signal; return { content: "ok" }; } };
+  const response = await invokeModel(client, prompt, { signal: controller.signal, timeoutMs: 1000, timeoutMessage: "node timeout" });
+  assert.equal(response.content, "ok");
+  assert.equal(received, controller.signal);
+});
+
+test("invokeModel never starts a call once the run is cancelled", async () => {
+  const controller = new AbortController();
+  controller.abort(new Error("research deadline"));
+  let calls = 0;
+  const client: ChatModelClient = { invoke: async () => { calls++; return { content: "late" }; } };
+  await assert.rejects(invokeModel(client, prompt, { signal: controller.signal, timeoutMs: 1000, timeoutMessage: "node timeout" }), /research deadline/);
+  assert.equal(calls, 0);
+});
+
+test("invokeModel rejects with the caller's message when the model outlives its cap", async () => {
+  const client: ChatModelClient = { invoke: () => new Promise(() => {}) };
+  await assert.rejects(invokeModel(client, prompt, { timeoutMs: 10, timeoutMessage: "planner timeout" }), /planner timeout/);
 });
 
 test("parseModelJsonResponse ignores a reasoning model's <think> block", () => {

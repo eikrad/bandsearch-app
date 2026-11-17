@@ -138,10 +138,15 @@ flowchart TD
     plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
     brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
-    verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
+    verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(assesses whether more search is needed)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
     enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
+    plan -. research cutoff .-> rank
+    brave_initial -. research cutoff .-> rank
+    extract -. research cutoff .-> rank
+    verify -. research cutoff .-> rank
+    reflect_if_needed -. research cutoff .-> rank
 ```
 
 | Node | Model / Service | Description |
@@ -150,13 +155,13 @@ flowchart TD
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
 | `extract` | LLM | Identifies band names from snippets; filters out anchor artists |
 | `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
-| `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
+| `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
-Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to `maxRounds` (default 2) additional search-extract-verify cycles when the initial pass does not yield enough verified candidates.
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. The reflector first assesses whether the verified candidates meet the target; while it asks for more and at least 25 s of research time remain, the subgraph runs up to `maxRounds` (default 2) additional search-extract-verify cycles.
 
 ```mermaid
 flowchart TD
@@ -178,7 +183,27 @@ flowchart TD
 
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 180 s — needs headroom for MusicBrainz's ~1 req/s IP limit when verifying many candidates, and for Brave Search's 1 req/s free-plan throttle). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+`ResearchBudget` owns the complete graph deadline (`RESEARCH_TIMEOUT_MS`, default
+180 s), operation caps, abort signals and timer cleanup. Its `run(cap, work)`
+limits the whole operation, including retries, even if a transport ignores
+cancellation. The graph closes every scope on success or failure.
+
+A child research scope ends up to 12 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
+small configured budget for final ranking. Main-graph conditional edges bypass
+remaining research stages and enter `rank` at that cutoff. Verification keeps
+completed candidates and stops between searches/lookups; optional reflection and
+Last.fm enrichment cannot consume the reserve. Model calls and HTTP requests
+receive abort signals; retries and Brave/MusicBrainz rate-limit waits stop when
+cancelled. The Gemini adapter uses the pinned SDK's streaming transport while
+returning the assembled message to callers: its non-streaming path drops the
+signal. Gemini SDK retries are disabled because that retry loop can continue
+after cancellation; graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
+
+Ranking, including its evidence-repair retry, shares one 12 s cap and must finish
+before the total deadline. A failed or timed-out ranker fails the request with the route's generic
+`502 recommendation_unavailable`; it does not fabricate recommendations from
+partial research. A successful ranker can still return an
+empty discovery result.
 
 ---
 
@@ -370,7 +395,7 @@ flowchart TD
 |----------|----------|
 | **One model for all graph nodes, chosen per role** | Consistent structured-JSON output across plan / extract / reflect / rank; each node keeps its own temperature (planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35); provider and model come from `config/models.ts` (Scaleway `deepseek-v4-flash-0731` by default, ADR 0004) |
 | **Optional async judge on Scaleway** | Keeps the LLM judge off the critical response path; never the research model and preferably another family, against self-evaluation bias; calibration uses the same call and model, so its result describes the production judge; eval can be added/removed without touching the graph |
-| **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
+| **Budget-aware graph** | Complete graph deadline and cancellation owned by `researchBudget.ts`; research stages preserve time for final ranking, whose retries share one cap |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
 | **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |

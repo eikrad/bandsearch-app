@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { fetchWithTimeoutAndRetry } from "./httpClient.js";
 
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
@@ -29,7 +31,7 @@ export function normalizeQueryKey(query: string) {
   return String(query || "").trim().toLowerCase();
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const defaultSleep = (ms: number, signal?: AbortSignal) => delay(ms, undefined, { signal });
 
 export function createBraveSearchClient(opts: {
   fetchImpl?: typeof fetch;
@@ -44,8 +46,9 @@ export function createBraveSearchClient(opts: {
   rateLimitRetryMs?: number;
   /** How many times to retry a 429 before giving up and returning empty results. */
   rateLimitMaxRetries?: number;
-  sleepImpl?: (ms: number) => Promise<void>;
+  sleepImpl?: (ms: number, signal?: AbortSignal) => Promise<void>;
   nowImpl?: () => number;
+  signal?: AbortSignal;
 } = {}) {
   const {
     fetchImpl = fetch,
@@ -59,6 +62,7 @@ export function createBraveSearchClient(opts: {
     rateLimitMaxRetries = 2,
     sleepImpl = defaultSleep,
     nowImpl = Date.now,
+    signal: defaultSignal,
   } = opts;
   const key = String(apiKey ?? "").trim();
   if (!key) {
@@ -68,17 +72,21 @@ export function createBraveSearchClient(opts: {
   const cache = dedupCache ?? null;
   let lastRequestAt = 0;
 
-  async function throttle() {
+  async function throttle(signal?: AbortSignal) {
+    signal?.throwIfAborted();
     if (minRequestSpacingMs <= 0) return;
     const wait = minRequestSpacingMs - (nowImpl() - lastRequestAt);
     if (wait > 0) {
-      await sleepImpl(wait);
+      await sleepImpl(wait, signal);
+      signal?.throwIfAborted();
     }
     lastRequestAt = nowImpl();
   }
 
   return {
-    async search(query: string, options: { count?: number } = {}) {
+    async search(query: string, options: { count?: number; signal?: AbortSignal } = {}) {
+      const signal = options.signal ?? defaultSignal;
+      signal?.throwIfAborted();
       const qKey = normalizeQueryKey(query);
       if (!qKey) {
         return { results: [] as SearchResult[], fromDuplicateCache: false };
@@ -104,12 +112,13 @@ export function createBraveSearchClient(opts: {
 
       let response: Awaited<ReturnType<typeof fetchWithTimeoutAndRetry>> | null = null;
       for (let rateAttempt = 0; rateAttempt <= rateLimitMaxRetries; rateAttempt += 1) {
-        await throttle();
-        response = await fetchWithTimeoutAndRetry({ fetchImpl, url, timeoutMs, retries, headers });
+        await throttle(signal);
+        response = await fetchWithTimeoutAndRetry({ fetchImpl, url, timeoutMs, retries, headers, signal });
         if (response.status !== 429) break;
         // Rate limited (Brave Free plan = 1 req/sec). Wait and retry; soft-fail if it persists.
         if (rateAttempt < rateLimitMaxRetries) {
-          await sleepImpl(rateLimitRetryMs);
+          await sleepImpl(rateLimitRetryMs, signal);
+          signal?.throwIfAborted();
         }
       }
 
