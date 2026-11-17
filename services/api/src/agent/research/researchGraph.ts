@@ -10,7 +10,7 @@ import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput 
 import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
-import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
+import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -118,8 +118,9 @@ async function runBraveQueries(
 export async function buildResearchGraph(deps: ResearchGraphDeps, budget: ResearchBudget) {
   const log = deps.onLog ?? (() => {});
 
-  const research = budget.reserve(12000);
-  const mbClient = (signal: AbortSignal) => createMusicBrainzClient({
+  // Research ends early so final ranking always has its reserve within the total deadline.
+  const researchScope = budget.reserve(RANKING_RESERVE_MS);
+  const musicBrainzFor = (signal: AbortSignal) => createMusicBrainzClient({
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
     fetchImpl: deps.fetchImpl,
@@ -127,19 +128,23 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
   const mb = {
-    searchArtists: (query: string) => research.run(research.remaining(), (signal) => mbClient(signal).searchArtists(query)),
-    lookupArtist: (id: string) => research.run(research.remaining(), (signal) => mbClient(signal).lookupArtist(id)),
+    searchArtists: (query: string) => researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).searchArtists(query)),
+    lookupArtist: (id: string) => researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).lookupArtist(id)),
   };
+
+  // At the research cutoff every remaining stage is skipped and the graph ranks what it has.
+  const untilCutoff = <Next extends string>(next: Next): [() => Next | "rank", Array<Next | "rank">] =>
+    [() => (researchScope.remaining() > 0 ? next : "rank"), [next, "rank"]];
 
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
-    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget: research, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
+    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget: researchScope, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
     geminiApiKey: deps.geminiApiKey,
     mb,
     runQueries,
-    budget: research,
+    budget: researchScope,
     maxRounds: 2,
     maxReflectionSearches: deps.maxReflectionSearches,
     targetVerifiedCount: deps.targetVerifiedCount,
@@ -151,10 +156,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
-    .addNode("plan", async (state) => research.run(20000, async (signal) => {
+    .addNode("plan", async (state) => researchScope.run(20000, async (signal) => {
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
-        timeoutMs: research.allocate(20000),
+        timeoutMs: researchScope.allocate(20000),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
@@ -182,10 +187,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
       return { braveHits: hits, searchCallsUsed: calls };
     })
-    .addNode("extract", async (state) => research.run(18000, async (signal) => {
+    .addNode("extract", async (state) => researchScope.run(18000, async (signal) => {
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
-        timeoutMs: research.allocate(18000),
+        timeoutMs: researchScope.allocate(18000),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
@@ -199,12 +204,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       log("info", "research_candidates_extracted", { count: candidates.length });
       return { extractedCandidates: candidates };
     }).catch((error: unknown) => {
-      if (research.remaining() > 0) throw error;
+      if (researchScope.remaining() > 0) throw error;
       return {};
     }))
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, { shouldContinue: () => research.remaining() > 0 });
+      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, { shouldContinue: () => researchScope.remaining() > 0 });
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
         phase: "initial",
@@ -216,8 +221,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("enrich_lastfm", async (state) => {
       const apiKey = deps.lastFmApiKey;
-      if (!apiKey || research.remaining() <= 0) return {};
-      return research.run(5000, async (signal) => {
+      if (!apiKey || researchScope.remaining() <= 0) return {};
+      return researchScope.run(5000, async (signal) => {
         const lastFm: LastFmClient = createLastFmClient({ apiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl, signal });
         const anchors = state.searchPlan?.anchorArtists ?? [];
         if (!state.verifiedCandidates?.length) return {};
@@ -277,10 +282,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         return {};
       });
     })
-    .addNode("rank", async (state) => budget.run(12000, async (signal) => {
+    .addNode("rank", async (state) => budget.run(RANKING_RESERVE_MS, async (signal) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(12000),
+        timeoutMs: budget.allocate(RANKING_RESERVE_MS),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
@@ -306,11 +311,11 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       return { recommendations, assistantReply };
     }))
     .addEdge(START, "plan")
-    .addConditionalEdges("plan", () => research.remaining() > 0 ? "brave_initial" : "rank", ["brave_initial", "rank"])
-    .addConditionalEdges("brave_initial", () => research.remaining() > 0 ? "extract" : "rank", ["extract", "rank"])
-    .addConditionalEdges("extract", () => research.remaining() > 0 ? "verify" : "rank", ["verify", "rank"])
-    .addConditionalEdges("verify", () => research.remaining() > 0 ? "reflect_if_needed" : "rank", ["reflect_if_needed", "rank"])
-    .addConditionalEdges("reflect_if_needed", () => research.remaining() > 0 ? "enrich_lastfm" : "rank", ["enrich_lastfm", "rank"])
+    .addConditionalEdges("plan", ...untilCutoff("brave_initial"))
+    .addConditionalEdges("brave_initial", ...untilCutoff("extract"))
+    .addConditionalEdges("extract", ...untilCutoff("verify"))
+    .addConditionalEdges("verify", ...untilCutoff("reflect_if_needed"))
+    .addConditionalEdges("reflect_if_needed", ...untilCutoff("enrich_lastfm"))
     .addEdge("enrich_lastfm", "rank")
     .addEdge("rank", END);
 

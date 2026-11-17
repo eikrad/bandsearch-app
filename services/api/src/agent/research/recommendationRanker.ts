@@ -4,7 +4,7 @@ import type { ChatMessage, RecommendationMode } from "../../../../../shared/sche
 import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
@@ -243,8 +243,7 @@ export async function createRecommendationRanker({
     });
     prompt.push({ role: "user", content: parts.join("\n") });
 
-    signal?.throwIfAborted();
-    const response = await withTimeout(modelClient.invoke(prompt, { signal }), timeoutMs, "recommendation ranker timeout");
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     let normalized = normalizeRankPayload(parsed);
@@ -261,8 +260,7 @@ export async function createRecommendationRanker({
           content: `${(prompt[prompt.length - 1] as { content: string }).content}\n\nYour previous answer omitted required evidence URLs in why fields. Repeat with each why containing a full https URL from evidence_urls.`,
         },
       ];
-      signal?.throwIfAborted();
-      const response2 = await withTimeout(modelClient.invoke(retryPrompt, { signal }), timeoutMs, "recommendation ranker retry");
+      const response2 = await invokeModel(modelClient, retryPrompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker retry" });
       const raw2 = typeof response2.content === "string" ? response2.content : "";
       const parsed2 = parseModelJsonResponse(raw2);
       normalized = normalizeRankPayload(parsed2);

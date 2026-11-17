@@ -13,6 +13,15 @@ function deferred() {
   return { promise, resolve };
 }
 
+/** Sends the ranker's prompt to `ranker` and every other node's prompt to `others`. */
+function rankerVia(ranker: ChatModelClient, others: ChatModelClient): ChatModelClient {
+  return {
+    invoke: (prompt, options) => prompt[0]?.content.startsWith("You recommend niche bands")
+      ? ranker.invoke(prompt, options)
+      : others.invoke(prompt, options),
+  };
+}
+
 const input = { userQuery: "obscure blackgaze", preferenceContext: "", messages: [], mode: "fresh" as const };
 
 async function flushGraph() {
@@ -93,7 +102,8 @@ test("verification keeps completed candidates, cancels a stalled lookup and leav
     const value = await result;
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1);
     assert.equal(value.recommendations.length, 1);
-    assert.equal(requests.length, 5, "no third candidate or Last.fm work starts");
+    assert.equal(requests.some((address) => address.includes("Third")), false, "the third candidate is never looked up");
+    assert.equal(requests.some((address) => address.includes("audioscrobbler.com")), false, "Last.fm enrichment does not start");
     assert.equal(calls.filter((call) => call.system.startsWith("You evaluate")).length, 0);
     assert.match(calls.find((call) => call.system.startsWith("You recommend"))?.user ?? "", /artist: Fen/);
   } finally {
@@ -219,6 +229,55 @@ test("deadline cancellation stops Brave retries and skips later research nodes",
   }
 });
 
+test("the research cutoff during reflection cancels its search and ranks the evidence already verified", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const reflectionSearch = deferred();
+  const requests: string[] = [];
+  let reflectionSignal: AbortSignal | null | undefined;
+  const { client, calls } = fakeModelClient({
+    extract: () => ({ candidates: [{ name: "Fen", evidenceUrls: ["https://blog.example/fen"] }] }),
+    reflect: () => ({ sufficient: false, gaps: ["one band only"], extraQueries: ["more blackgaze"] }),
+    rank: () => ({ reply: "Try Fen.", recommendations: [{ artist: "Fen", why: "See https://blog.example/fen", sourceSignals: [] }] }),
+  });
+  const { fetchImpl: answers } = fakeFetch({
+    brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
+    musicbrainzSearch: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
+    musicbrainzLookup: () => ({ id: "fen", name: "Fen" }),
+  });
+  const fetchImpl: typeof fetch = async (url, init) => {
+    const address = String(url);
+    requests.push(address);
+    if (address.includes("q=more%20blackgaze")) {
+      reflectionSignal = init?.signal;
+      reflectionSearch.resolve();
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+    }
+    return answers(url, init);
+  };
+  let settled = false;
+  const result = invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm", musicBrainzMinIntervalMs: 0 }), input)
+    .then((value) => { settled = true; return value; });
+  const outcome = result.catch((error: unknown) => error);
+  await reflectionSearch.promise;
+  try {
+    t.mock.timers.tick(48_000);
+    await flushGraph();
+    assert.equal(settled, true, "research stops at 48 seconds, preserving the 12-second ranking reserve");
+    assert.equal(reflectionSignal?.aborted, true, "the reflection search receives cancellation");
+    const value = await result;
+    assert.equal(value.pipelineDiagnostics.verifiedCount, 1, "the verified candidate from the initial pass is kept");
+    assert.equal(value.recommendations.length, 1);
+    assert.equal(calls.filter((call) => call.system.startsWith("You extract")).length, 1, "reflection extraction is skipped");
+    assert.equal(requests.filter((address) => address.includes("audioscrobbler.com")).length, 0, "Last.fm enrichment is skipped");
+    assert.match(calls.find((call) => call.system.startsWith("You recommend"))?.user ?? "", /artist: Fen/);
+  } finally {
+    t.mock.timers.tick(60_000);
+    await outcome;
+  }
+});
+
 test("a verification lookup cancelled in the MusicBrainz queue never reaches the transport", async (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
   const searched = deferred();
@@ -280,7 +339,7 @@ for (const provider of ["gemini", "scaleway"] as const) {
     );
     const { fetchImpl } = fakeFetch({});
     const outcome = invokeResearchGraph(graphDeps({
-      chatModel: (settings) => settings.temperature === 0.35 ? modelFactory(settings) : answers,
+      chatModel: (settings) => rankerVia(modelFactory(settings), answers),
       fetchImpl,
       researchTimeoutMs: 3000,
     }), input).catch((error: unknown) => error);
@@ -319,7 +378,7 @@ test("the Gemini adapter assembles a streamed answer before the graph returns re
     musicbrainzLookup: () => ({ id: "fen", name: "Fen" }),
   });
   const result = await invokeResearchGraph(graphDeps({
-    chatModel: (settings) => settings.temperature === 0.35 ? modelFactory(settings) : client,
+    chatModel: (settings) => rankerVia(modelFactory(settings), client),
     fetchImpl,
     musicBrainzMinIntervalMs: 0,
   }), input);

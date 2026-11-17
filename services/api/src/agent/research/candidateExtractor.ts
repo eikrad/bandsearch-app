@@ -2,7 +2,7 @@ import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { wrapSearchHitBlock } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -185,8 +185,7 @@ export async function createCandidateExtractor({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    signal?.throwIfAborted();
-    const response = await withTimeout(modelClient.invoke(prompt, { signal }), timeoutMs, "candidate extractor timeout");
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "candidate extractor timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     // Hard cap as a safety net in case the model exceeds the requested count.

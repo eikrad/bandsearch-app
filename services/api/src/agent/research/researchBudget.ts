@@ -1,3 +1,6 @@
+/** Time held back from research for final ranking; at most one third of a small budget. */
+export const RANKING_RESERVE_MS = 12_000;
+
 export type ResearchBudget = {
   allocate(cap: number): number;
   remaining(): number;

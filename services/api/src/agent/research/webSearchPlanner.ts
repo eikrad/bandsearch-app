@@ -4,7 +4,7 @@ import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js
 import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -194,8 +194,7 @@ export async function createWebSearchPlanner({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    signal?.throwIfAborted();
-    const response = await withTimeout(plannerModel.invoke(prompt, { signal }), timeoutMs, "web search planner timeout");
+    const response = await invokeModel(plannerModel, prompt, { signal, timeoutMs, timeoutMessage: "web search planner timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     try {
       const parsed = parseModelJsonResponse(raw);

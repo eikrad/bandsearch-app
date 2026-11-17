@@ -2,7 +2,7 @@ import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { capAndTrim, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";
@@ -123,8 +123,7 @@ export async function createRecommendationReflector({
       { role: "system" as const, content: systemText },
       { role: "user" as const, content: userContent },
     ];
-    signal?.throwIfAborted();
-    const response = await withTimeout(modelClient.invoke(prompt, { signal }), timeoutMs, "reflector timeout");
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "reflector timeout" });
     const raw = typeof response.content === "string" ? response.content : "";
     try {
       const parsed = parseModelJsonResponse(raw);

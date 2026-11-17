@@ -52,6 +52,28 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchImpl: FetchLike = config.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
 
+  /**
+   * One Last.fm call. Failures and non-OK answers become `fallback`, since the
+   * enrichment is best effort; a cancelled run rejects before any request starts.
+   */
+  async function request<T>(url: string, fallback: T, parse: (body: unknown) => T): Promise<T> {
+    config.signal?.throwIfAborted();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(url, {
+        signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
+        headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
+      });
+      if (!response.ok) return fallback;
+      return parse(await response.json());
+    } catch {
+      return fallback;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return {
     async getListenerCount(artistName: string): Promise<number | null> {
       const trimmed = artistName.trim();
@@ -64,29 +86,12 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `&artist=${encodeURIComponent(trimmed)}` +
         `&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
-      config.signal?.throwIfAborted();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(url, {
-          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
-          headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
-        });
-        if (!response.ok) {
-          return null;
-        }
-        const body = (await response.json()) as LastFmInfoResponse;
-        if (body.error) {
-          return null;
-        }
-        const raw = body.artist?.stats?.listeners;
-        const listeners = Number(raw);
+      return request(url, null, (raw) => {
+        const body = raw as LastFmInfoResponse;
+        if (body.error) return null;
+        const listeners = Number(body.artist?.stats?.listeners);
         return Number.isFinite(listeners) ? listeners : null;
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timer);
-      }
+      });
     },
 
     async getSimilarArtists(artistName: string, limit = 50): Promise<SimilarArtist[]> {
@@ -99,26 +104,13 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `&limit=${limit}` +
         `&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
-      config.signal?.throwIfAborted();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(url, {
-          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
-          headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
-        });
-        if (!response.ok) return [];
-        const body = (await response.json()) as LastFmSimilarResponse;
+      return request(url, [], (raw) => {
+        const body = raw as LastFmSimilarResponse;
         if (body.error) return [];
-        const raw = body.similarartists?.artist ?? [];
-        return raw
+        return (body.similarartists?.artist ?? [])
           .filter((a) => a.name?.trim())
           .map((a) => ({ name: a.name!.trim(), match: Number(a.match) || 0 }));
-      } catch {
-        return [];
-      } finally {
-        clearTimeout(timer);
-      }
+      });
     },
 
     async getTopTags(artistName: string, mbid?: string): Promise<LastFmTag[] | null> {
@@ -130,26 +122,14 @@ export function createLastFmClient(config: LastFmClientConfig): LastFmClient {
         `${LASTFM_API_ENDPOINT}?method=artist.gettoptags${lookup}` +
         `&autocorrect=1&api_key=${encodeURIComponent(apiKey)}&format=json`;
 
-      config.signal?.throwIfAborted();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(url, {
-          signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal,
-          headers: { "User-Agent": "Bandsearch/1.0 (https://github.com/eikrad/bandsearch-app)" },
-        });
-        if (!response.ok) return null;
-        const body = (await response.json()) as LastFmTopTagsResponse;
+      return request(url, null, (raw) => {
+        const body = raw as LastFmTopTagsResponse;
         if (body.error === LASTFM_ERROR_NOT_FOUND) return [];
         if (body.error) return null;
         return (body.toptags?.tag ?? [])
           .filter((t) => t.name?.trim())
           .map((t) => ({ name: t.name!.trim(), count: Number(t.count) || 0 }));
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timer);
-      }
+      });
     },
   };
 }
