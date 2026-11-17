@@ -622,9 +622,9 @@ user-scoped reads/erasure and retention for SQLite and memory.
 
 ---
 
-### 13. Enforce the research budget through final ranking ✓ Done
+### 13. Enforce the research budget through final ranking (#301) ✓ Done
 
-Implementation complete; integration into `staging` is pending. Promotion to
+Implemented in #300; integration into `staging` is pending. Promotion to
 `main` is handled by the repository owner.
 
 `researchBudget.ts` owns operation caps, the complete graph deadline,
