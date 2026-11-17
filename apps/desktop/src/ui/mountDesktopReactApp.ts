@@ -28,7 +28,7 @@ export type MountShell = {
   ): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
-  desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
+  updateObscurityTarget?(target: string | undefined): unknown;
 };
 
 // The mount dispatches to views with differing prop shapes, so prop types are
@@ -298,7 +298,7 @@ export function createDesktopReactMount({
       openExternalLinkImpl(url);
     },
     onObscurityTargetChange: (target: string | undefined) => {
-      shell.desktopUi?.setObscurityTarget?.(target);
+      shell.updateObscurityTarget?.(target);
       return renderCurrent();
     },
     onStop: () => {
@@ -311,7 +311,7 @@ export function createDesktopReactMount({
         await renderCurrent();
         if (pending) await pending;
       } catch {
-        // error surfaced via actionStatus
+        // Error is surfaced via actionStatus in the shell; always re-render.
       }
       return renderCurrent();
     },

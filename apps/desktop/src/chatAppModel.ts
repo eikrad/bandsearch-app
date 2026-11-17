@@ -134,6 +134,9 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
       if (!lastQuery || loadingState) return;
       return runSubmitQuery(lastQuery);
     },
+    cancelSearch() {
+      app.cancelSearch?.();
+    },
     async submitFeedback(feedbackType: string) {
       feedbackDismissed = true;
       const eventId = lastMeta.eventId;

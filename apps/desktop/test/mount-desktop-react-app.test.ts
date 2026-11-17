@@ -218,3 +218,22 @@ test("createDesktopReactMount exposes onRetry handler that calls shell.retryLast
   await mountApi.handlers.onRetry?.();
   assert.equal(retried, true, "onRetry calls shell.retryLastSearch");
 });
+
+test("onObscurityTargetChange sends the new target through the shell and re-renders", async () => {
+  const targets: Array<string | undefined> = [];
+  let renders = 0;
+  const mountApi = createDesktopReactMount({
+    shell: {
+      getViewProps: () => { renders++; return { modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }; },
+      submitQuery: async () => {},
+      updateMode: async () => {},
+      updateObscurityTarget: (target) => { targets.push(target); },
+    },
+    createRootImpl: () => fakeReactRoot(),
+    resolveContainer: () => fakeContainer({ id: "root" }),
+  });
+
+  await mountApi.handlers.onObscurityTargetChange?.("obscure");
+  assert.deepEqual(targets, ["obscure"]);
+  assert.ok(renders > 0, "the picker change is rendered");
+});

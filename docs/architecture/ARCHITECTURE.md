@@ -362,6 +362,13 @@ flowchart TD
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
 - **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings, Privacy policy (`#/privacy`) and a Connecting screen while the API starts (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback), `ObscurityTargetPicker` and `UpdateBanner` (in-app update notice)
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
+- **Chat search path:** `chatAppModel.ts` owns the search lifecycle — submit,
+  retry, cancel, loading and the last query. `chatRenderAdapter.ts` turns the
+  model into view props and owns the viewport. `createDesktopReactShell.ts`
+  owns what the user sees: Search and Retry share one path, so either failure
+  shows the same inline error, while a stopped search settles without one. The
+  mount only re-renders. `bootstrapDesktopApp.ts` reuses an unanswered question
+  on retry instead of appending it again (#304).
 - **Saved-band actions:** `savedBandActions.ts` owns identity matching, creation,
   rating, Category/Note updates, removal, and client collection updates. Cards
   carry a typed target with artist name, optional MusicBrainz ID, and suggested

@@ -216,6 +216,19 @@ test("chatAppModel.submitQuery swallows AbortError and resets loadingState", asy
   assert.equal(vm.isLoading(), false, "loading cleared after abort");
 });
 
+test("chatAppModel.cancelSearch stops the app's in-flight search", () => {
+  let cancelled = false;
+  const vm = createChatAppModel({
+    app: {
+      requestRecommendations: async () => ({}),
+      getState: () => ({ messages: [], savedBands: [] }),
+      cancelSearch: () => { cancelled = true; },
+    },
+  });
+  vm.cancelSearch();
+  assert.equal(cancelled, true);
+});
+
 test("bootstrapDesktopApp.cancelSearch is a no-op when idle", () => {
   const app = bootstrapDesktopApp({
     fetchImpl: async () => (jsonResponse({ recommendations: [], meta: {} })),

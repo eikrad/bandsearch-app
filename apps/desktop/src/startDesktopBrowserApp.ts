@@ -32,12 +32,12 @@ function resolveInitialViewport(fallbackViewport: string): string {
 
 type LegacyMQL = MediaQueryList & { addListener?: (cb: () => void) => void };
 
-function subscribeViewportChanges(desktopUi: ViewportController, rerender: () => void): void {
+function subscribeViewportChanges(target: ViewportController, rerender: () => void): void {
   const w = browserWindow();
   if (!w || typeof w.matchMedia !== "function") return;
   const mql = w.matchMedia(`(max-width: ${VIEWPORT_BREAKPOINT_MAX_PX}px)`) as LegacyMQL;
   const onViewportChange = () => {
-    desktopUi.setViewport(mql.matches ? "mobile" : "desktop");
+    target.setViewport(mql.matches ? "mobile" : "desktop");
     rerender();
   };
   if (typeof mql.addEventListener === "function") {
@@ -343,9 +343,7 @@ export async function startDesktopBrowserApp({
     },
   });
   await reactApp.mount();
-  if (reactApp.desktopUi) {
-    subscribeViewportChanges(reactApp.desktopUi, () => void reactApp.mount());
-  }
+  subscribeViewportChanges(reactApp, () => void reactApp.mount());
 
   // The UI can paint now; flushes an update that was reported during bootstrap.
   updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
