@@ -1,4 +1,6 @@
 import type { SavedBand } from "../preferences/preferenceRepository.js";
+import type { RecommendationFeedbackRow } from "../feedback/recommendationFeedback.js";
+import { rowToFeedback } from "../feedback/feedbackRepository.js";
 
 /**
  * Everything the app holds about one person, in one place.
@@ -73,12 +75,14 @@ export type ExportedChatSession = {
 
 export type ExportedGroup = { id: string; name: string; memberIds: string[] };
 
-export type ExportedFeedback = {
-  id: string;
-  eventId: string;
-  feedbackType: string;
-  createdAt: string;
-};
+/** A verdict with the batch it judged; the owner is the export's user. */
+export type ExportedFeedback = Omit<RecommendationFeedbackRow, "userId">;
+
+export function rowToExportedFeedback(row: Record<string, unknown>): ExportedFeedback {
+  const { userId: _owner, ...feedback } = rowToFeedback(row);
+  void _owner;
+  return feedback;
+}
 
 export type UserDataExport = {
   format: "bandsearch-account-export/1";
@@ -147,8 +151,9 @@ export function emptyExport(): UserDataExport {
 }
 
 export function createSqliteUserDataStore({ db }: { db: import("better-sqlite3").Database }): UserDataStore {
-  // Eval tables only exist where the eval dashboard was enabled at some point,
-  // so a table list is resolved per call rather than assumed.
+  // Tables are created by the adapters that own them, and an older or
+  // independently supplied file may lack some, so a table list is resolved per
+  // call rather than assumed.
   const tableExists = (name: string) =>
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
 
@@ -219,12 +224,7 @@ export function createSqliteUserDataStore({ db }: { db: import("better-sqlite3")
         const rows = db
           .prepare("SELECT * FROM recommendation_feedback WHERE user_id = ? ORDER BY created_at ASC")
           .all(userId) as Record<string, unknown>[];
-        bundle.recommendationFeedback = rows.map((r) => ({
-          id: String(r.id),
-          eventId: String(r.event_id),
-          feedbackType: String(r.feedback_type),
-          createdAt: String(r.created_at),
-        }));
+        bundle.recommendationFeedback = rows.map(rowToExportedFeedback);
       }
 
       return Promise.resolve(bundle);

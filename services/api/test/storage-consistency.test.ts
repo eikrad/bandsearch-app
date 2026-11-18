@@ -4,8 +4,6 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { withStorageDirectory } from "./helpers/storageDirectory.js";
-import Database from "better-sqlite3";
-import { createSqliteEvalRepository } from "../src/eval/evalRepository.js";
 import { createClient } from "@libsql/client";
 import { createApp } from "../src/app.js";
 import { createTursoUserRepository } from "../src/auth/tursoUserRepository.js";
@@ -53,78 +51,75 @@ async function applyMigrations(client: { execute(sql: string): Promise<unknown> 
 }
 
 async function exerciseAccountLifecycle(storage: StorageRepositories) {
-  const evalDatabase = new Database(":memory:");
-  const evalRepository = createSqliteEvalRepository({ db: evalDatabase });
-  const eventId = await evalRepository.logEvent({
-    query: "slowcore", mode: "fresh", pipelineVersion: "test", recommendationCount: 1,
-    pipelineDiagnostics: { braveHitCount: 1, extractedCandidateCount: 1, verifiedCount: 1, reflectionTriggered: false, searchBudgetUsed: 1 },
+  const eventId = "event-1";
+  const feedback = { query: "slowcore", mode: "fresh", obscurityTarget: "underground", bandNames: ["Bedhead"] };
+  // The eval dashboard stays off, as in production: feedback must not need it.
+  const app = createApp({ storage, runtimeConfig: { jwtSecret } });
+  await withApp(app, async (request) => {
+    const account = await request("POST", "/auth/register", { email: "one@example.com", displayName: "One", password: "pw" });
+    const other = await request("POST", "/auth/register", { email: "two@example.com", displayName: "Two", password: "pw" });
+    assert.equal(typeof account.token, "string");
+    assert.equal(typeof other.token, "string");
+    const token = String(account.token);
+    const otherToken = String(other.token);
+    assertRecord(account.user);
+    const userId = String(account.user.id);
+    await request("POST", `/recommendations/${eventId}/feedback`, { ...feedback, feedbackType: "good" }, token);
+    await request("POST", `/recommendations/${eventId}/feedback`, { ...feedback, feedbackType: "wrong_direction" }, otherToken);
+    const band = { musicbrainzArtistId: "mb-codeine", name: "Codeine", rating: 5, categories: ["slowcore"], note: "sparse" };
+    await request("POST", "/preferences", band, token);
+    await request("POST", "/preferences", { ...band, name: "Other user's band" }, otherToken);
+    const savedBands = await storage.preferenceRepository.listSavedBands(userId);
+    const createdGroup = await storage.preferenceRepository.createGroup("Slowcore", userId);
+    assert.ok(createdGroup.ok && createdGroup.group);
+    assert.equal((await storage.preferenceRepository.addArtistToGroup(createdGroup.group.id, savedBands[0].id, userId)).ok, true);
+    const created = await request("POST", "/sessions", { title: "Slowcore" }, token);
+    assertRecord(created.session);
+    const sessionId = String(created.session.id);
+    await request("POST", `/sessions/${sessionId}/messages`, { role: "user", content: "bands like Codeine" }, token);
+
+    const exported = await request("GET", "/account/export", undefined, token);
+    assertRecord(exported.user);
+    assert.equal(exported.user.email, "one@example.com");
+    assertArray(exported.recommendationFeedback);
+    assert.equal(exported.recommendationFeedback.length, 1);
+    assertRecord(exported.recommendationFeedback[0]);
+    assert.equal(exported.recommendationFeedback[0].feedbackType, "good");
+    assert.equal(exported.recommendationFeedback[0].query, "slowcore");
+    assert.deepEqual(exported.recommendationFeedback[0].bandNames, ["Bedhead"]);
+    assertArray(exported.savedBands);
+    assert.equal(exported.savedBands.length, 1);
+    assertRecord(exported.savedBands[0]);
+    assert.equal(exported.savedBands[0].name, "Codeine");
+    assert.deepEqual(exported.artistGroups, [{ id: createdGroup.group.id, name: "Slowcore", memberIds: [savedBands[0].id] }]);
+    assertArray(exported.chatSessions);
+    assert.equal(exported.chatSessions.length, 1);
+    assertRecord(exported.chatSessions[0]);
+    assert.equal(exported.chatSessions[0].title, "Slowcore");
+    assertArray(exported.chatSessions[0].messages);
+    assert.equal(exported.chatSessions[0].messages.length, 1);
+    assertRecord(exported.chatSessions[0].messages[0]);
+    assert.equal(exported.chatSessions[0].messages[0].content, "bands like Codeine");
+
+    await request("POST", "/account/delete", { password: "pw" }, token);
+    assert.equal(await storage.userRepository.findById(userId), null);
+    const remainingFeedback = await storage.recommendationFeedbackRepository.listSince("2000-01-01T00:00:00.000Z");
+    assert.deepEqual(remainingFeedback.map((row) => row.feedbackType), ["wrong_direction"]);
+    assert.notEqual(remainingFeedback[0].userId, userId);
+    assert.deepEqual(await storage.preferenceRepository.listSavedBands(userId), []);
+    assert.deepEqual(await storage.preferenceRepository.listGroups(userId), []);
+    assert.deepEqual(await storage.chatSessionRepository.listSessions(userId), []);
+    assert.deepEqual(await storage.chatSessionRepository.getMessages(sessionId), []);
+    const surviving = await request("GET", "/account/export", undefined, otherToken);
+    assertRecord(surviving.user);
+    assert.equal(surviving.user.email, "two@example.com");
+    assertArray(surviving.recommendationFeedback);
+    assert.equal(surviving.recommendationFeedback.length, 1);
+    assertRecord(surviving.recommendationFeedback[0]);
+    assert.equal(surviving.recommendationFeedback[0].feedbackType, "wrong_direction");
+    assertArray(surviving.savedBands);
+    assert.equal(surviving.savedBands.length, 1);
   });
-  const app = createApp({ storage, evalRepository, runtimeConfig: { jwtSecret, evalDashboardEnabled: true } });
-  try {
-    await withApp(app, async (request) => {
-      const account = await request("POST", "/auth/register", { email: "one@example.com", displayName: "One", password: "pw" });
-      const other = await request("POST", "/auth/register", { email: "two@example.com", displayName: "Two", password: "pw" });
-      assert.equal(typeof account.token, "string");
-      assert.equal(typeof other.token, "string");
-      const token = String(account.token);
-      const otherToken = String(other.token);
-      assertRecord(account.user);
-      const userId = String(account.user.id);
-      await request("POST", "/eval/feedback", { eventId, feedbackType: "good" }, token);
-      await request("POST", "/eval/feedback", { eventId, feedbackType: "wrong_direction" }, otherToken);
-      const band = { musicbrainzArtistId: "mb-codeine", name: "Codeine", rating: 5, categories: ["slowcore"], note: "sparse" };
-      await request("POST", "/preferences", band, token);
-      await request("POST", "/preferences", { ...band, name: "Other user's band" }, otherToken);
-      const savedBands = await storage.preferenceRepository.listSavedBands(userId);
-      const createdGroup = await storage.preferenceRepository.createGroup("Slowcore", userId);
-      assert.ok(createdGroup.ok && createdGroup.group);
-      assert.equal((await storage.preferenceRepository.addArtistToGroup(createdGroup.group.id, savedBands[0].id, userId)).ok, true);
-      const created = await request("POST", "/sessions", { title: "Slowcore" }, token);
-      assertRecord(created.session);
-      const sessionId = String(created.session.id);
-      await request("POST", `/sessions/${sessionId}/messages`, { role: "user", content: "bands like Codeine" }, token);
-
-      const exported = await request("GET", "/account/export", undefined, token);
-      assertRecord(exported.user);
-      assert.equal(exported.user.email, "one@example.com");
-      assertArray(exported.recommendationFeedback);
-      assert.equal(exported.recommendationFeedback.length, 1);
-      assertRecord(exported.recommendationFeedback[0]);
-      assert.equal(exported.recommendationFeedback[0].feedbackType, "good");
-      assertArray(exported.savedBands);
-      assert.equal(exported.savedBands.length, 1);
-      assertRecord(exported.savedBands[0]);
-      assert.equal(exported.savedBands[0].name, "Codeine");
-      assert.deepEqual(exported.artistGroups, [{ id: createdGroup.group.id, name: "Slowcore", memberIds: [savedBands[0].id] }]);
-      assertArray(exported.chatSessions);
-      assert.equal(exported.chatSessions.length, 1);
-      assertRecord(exported.chatSessions[0]);
-      assert.equal(exported.chatSessions[0].title, "Slowcore");
-      assertArray(exported.chatSessions[0].messages);
-      assert.equal(exported.chatSessions[0].messages.length, 1);
-      assertRecord(exported.chatSessions[0].messages[0]);
-      assert.equal(exported.chatSessions[0].messages[0].content, "bands like Codeine");
-
-      await request("POST", "/account/delete", { password: "pw" }, token);
-      assert.equal(await storage.userRepository.findById(userId), null);
-      assert.deepEqual(await evalRepository.listUserFeedback(userId), []);
-      assert.deepEqual(await storage.preferenceRepository.listSavedBands(userId), []);
-      assert.deepEqual(await storage.preferenceRepository.listGroups(userId), []);
-      assert.deepEqual(await storage.chatSessionRepository.listSessions(userId), []);
-      assert.deepEqual(await storage.chatSessionRepository.getMessages(sessionId), []);
-      const surviving = await request("GET", "/account/export", undefined, otherToken);
-      assertRecord(surviving.user);
-      assert.equal(surviving.user.email, "two@example.com");
-      assertArray(surviving.recommendationFeedback);
-      assert.equal(surviving.recommendationFeedback.length, 1);
-      assertRecord(surviving.recommendationFeedback[0]);
-      assert.equal(surviving.recommendationFeedback[0].feedbackType, "wrong_direction");
-      assertArray(surviving.savedBands);
-      assert.equal(surviving.savedBands.length, 1);
-    });
-  } finally {
-    evalDatabase.close();
-  }
 }
 
 for (const backend of ["sqlite", "turso", "turso-sync"] as const) {

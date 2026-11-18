@@ -3,12 +3,10 @@ import type { Request, Response, NextFunction } from "express";
 import helmetLib from "helmet";
 import cors from "cors";
 import rateLimitLib from "express-rate-limit";
-import Database from "better-sqlite3";
-import { createNoOpEvalRepository, createInMemoryEvalRepository, createSqliteEvalRepository } from "./eval/evalRepository.js";
-import type { EvalRepository } from "./eval/evalRepository.js";
+import { createNoOpEvalRepository, type EvalRepository } from "./eval/evalRepository.js";
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
-import { createRecommendationFeedback } from "./eval/recommendationFeedback.js";
+import { createRecommendationFeedback } from "./feedback/recommendationFeedback.js";
 import { createLastFmClient } from "./eval/lastFmClient.js";
 import { createJudgeWorker, createNoOpJudgeWorker, judgeModelFor } from "./eval/judgeWorker.js";
 
@@ -51,7 +49,8 @@ type AppRuntimeConfig = StorageConfig & {
 };
 
 type CreateAppOptions = Partial<StorageRepositories> & {
-  storage?: StorageRepositories;
+  /** The opened stores; an eval store is optional for callers that predate it. */
+  storage?: StorageRepositories & { evalRepository?: EvalRepository };
   recommendationPipeline?: BandsearchRouteContext["resolvedRecommendationPipeline"] & {
     whenReady?: () => Promise<void>;
     getReadinessSnapshot?: () => Record<string, unknown>;
@@ -141,14 +140,17 @@ export function createApp({
   });
 
   const resolvedStorage = storage ?? createStorage(runtimeConfig, {
-    preferenceRepository, userRepository, inviteRepository, chatSessionRepository, userDataStore,
+    preferenceRepository, userRepository, inviteRepository, chatSessionRepository, userDataStore, evalRepository,
   });
   const {
     userRepository: resolvedUserRepository,
     inviteRepository: resolvedInviteRepository,
     chatSessionRepository: resolvedChatSessionRepository,
-    userDataStore: accountDataStore,
+    userDataStore: resolvedUserDataStore,
   } = resolvedStorage;
+  // An injected eval store wins over the storage's own, so tests can watch it.
+  const resolvedEvalRepository: EvalRepository =
+    evalRepository ?? resolvedStorage.evalRepository ?? createNoOpEvalRepository();
   const resolvedInviteService = createInviteService({ inviteRepository: resolvedInviteRepository });
 
   // One backend, handed on as two narrow views: the routes take the half they
@@ -168,27 +170,19 @@ export function createApp({
       lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
-  // Optional local eval telemetry has its own SQLite connection. Account
-  // repositories are assembled together above and never fall back to it.
-  let evalDatabase: Database.Database | undefined;
-  const openEvalDatabase = () => {
-    evalDatabase ??= new Database(runtimeConfig.databasePath || ":memory:");
-    return evalDatabase;
+  // Recommendation feedback lives with the account data (ADR 0006). Its
+  // retention runs whatever the eval dashboard does: at startup, then daily.
+  // .unref() keeps the timer from holding the process open in tests and CLIs.
+  const recommendationFeedback = createRecommendationFeedback({
+    repository: resolvedStorage.recommendationFeedbackRepository,
+  });
+  const purgeExpiredFeedback = () => {
+    void recommendationFeedback.purgeExpired().catch(() => {
+      // A failed purge must never take the API down; the next tick retries.
+    });
   };
-
-  // Keep the local store readable for account feedback even with the dashboard
-  // disabled: older rows do not stop belonging to an account when UI is hidden.
-  // Refuse an unavailable store rather than reporting incomplete export/erasure
-  // through a silent in-memory fallback. Memory installs remain ephemeral.
-  const resolvedEvalRepository: EvalRepository =
-    evalRepository ??
-    (() => {
-      if (runtimeConfig.preferenceStore === "memory") return createInMemoryEvalRepository();
-      if (!runtimeConfig.evalDashboardEnabled && !accountDataStore) return createNoOpEvalRepository();
-      return createSqliteEvalRepository({ db: openEvalDatabase() });
-    })();
-  const recommendationFeedback = createRecommendationFeedback({ repository: resolvedEvalRepository, userDataStore: accountDataStore });
-  const resolvedUserDataStore = recommendationFeedback.userDataStore;
+  purgeExpiredFeedback();
+  setInterval(purgeExpiredFeedback, 24 * 60 * 60 * 1000).unref();
 
   const jwtSecret = runtimeConfig.jwtSecret;
   const authMode = runtimeConfig.authMode ?? "progressive";
@@ -208,9 +202,8 @@ export function createApp({
     ? createAuthMiddleware(resolvedAuthService, resolvedUserRepository, { mode: authMode })
     : null;
 
-  // While eval is enabled, enforce its retention period. Account feedback stays
-  // accessible for export/erasure even when the dashboard is disabled. .unref()
-  // prevents the daily timer from holding the process open in tests and CLIs.
+  // While eval is enabled, enforce its retention period. .unref() prevents the
+  // daily timer from holding the process open in tests and CLIs.
   if (runtimeConfig.evalDashboardEnabled) {
     const retentionDays = runtimeConfig.evalRetentionDays ?? 90;
     const purgeExpiredEvents = () => {

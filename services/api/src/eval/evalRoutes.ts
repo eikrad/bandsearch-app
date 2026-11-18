@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Express, Request, Response, NextFunction } from "express";
 import { sendError } from "../http/errors.js";
-import type { RecommendationFeedback } from "./recommendationFeedback.js";
 import type { EvalRepository } from "./evalRepository.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
 import type { AggregatedMetrics } from "./evalAggregator.js";
@@ -11,11 +10,10 @@ export type EvalRouteContext = {
   evalRepository: EvalRepository;
   evalDashboardEnabled: boolean;
   evalDashboardPassword?: string;
-  recommendationFeedback: RecommendationFeedback;
 };
 
 export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
-  const { evalRepository, evalDashboardEnabled, evalDashboardPassword, recommendationFeedback } = ctx;
+  const { evalRepository, evalDashboardEnabled, evalDashboardPassword } = ctx;
 
   const dashboardHtml = evalDashboardEnabled
     ? readFileSync(join(__dirname, "dashboard", "index.html"), "utf8")
@@ -81,12 +79,6 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
     });
-  });
-
-  app.post("/eval/feedback", async (req, res) => {
-    const result = await recommendationFeedback.submit(req.body, req.userId);
-    if (!result.ok) return sendError(res, 400, "validation_error", result.error);
-    return res.status(200).json({ ok: true });
   });
 
   app.get("/eval/dashboard", (req, res) => {

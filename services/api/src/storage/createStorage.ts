@@ -7,18 +7,35 @@ import { createInMemoryUserRepository, createSqliteUserRepository } from "../aut
 import { createInMemoryInviteRepository, createSqliteInviteRepository } from "../auth/inviteRepository.js";
 import { createInMemoryChatSessionRepository, createSqliteChatSessionRepository } from "../sessions/chatSessionRepository.js";
 import { createSqliteUserDataStore } from "../privacy/userDataStore.js";
+import { createInMemoryFeedbackRepository, createSqliteFeedbackRepository } from "../feedback/feedbackRepository.js";
+import {
+  createInMemoryEvalRepository,
+  createNoOpEvalRepository,
+  createSqliteEvalRepository,
+  type EvalRepository,
+} from "../eval/evalRepository.js";
 import { createTursoSyncRepositories } from "../turso/tursoSyncRepositories.js";
 import { createTursoRepositories, type StorageRepositories } from "./storageRepositories.js";
 
 export type StorageConfig = {
+  /** Chooses the database for every account repository, not only preferences. */
   preferenceStore?: string;
   databasePath?: string;
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
   tursoSyncPath?: string;
+  evalDashboardEnabled?: boolean;
 };
 
-export type Storage = StorageRepositories & { close(): Promise<void> };
+export type StorageOverrides = Partial<StorageRepositories> & { evalRepository?: EvalRepository };
+
+/**
+ * Every store the API uses. Account repositories share one backend. Eval
+ * telemetry is operator data and never lives on Turso: a local SQLite file
+ * (or memory on a memory install) while the dashboard is enabled, otherwise a
+ * no-op that records nothing.
+ */
+export type Storage = StorageRepositories & { evalRepository: EvalRepository; close(): Promise<void> };
 
 /**
  * Select defaults once. Overrides replace only the named repository; they never
@@ -28,7 +45,7 @@ export type Storage = StorageRepositories & { close(): Promise<void> };
  */
 export function createStorage(
   config: StorageConfig = {},
-  overrides: Partial<StorageRepositories> = {},
+  overrides: StorageOverrides = {},
 ): Storage {
   const store = config.preferenceStore ?? "sqlite";
   if (store === "postgres") throw new Error(POSTGRES_REMOVED_MESSAGE);
@@ -45,6 +62,9 @@ export function createStorage(
     }
     return database;
   };
+  // Eval keeps its own connection even when it shares the file with the
+  // account repositories: it was never written for foreign_keys = ON.
+  let evalDatabase: Database.Database | undefined;
   let tursoRepositories: StorageRepositories | undefined;
   const turso = () => {
     if (!tursoRepositories) {
@@ -54,14 +74,23 @@ export function createStorage(
     return tursoRepositories;
   };
   async function close() {
+    evalDatabase?.close();
     database?.close();
     client?.close();
   }
+  const selectEvalRepository = (): EvalRepository => {
+    if (overrides.evalRepository) return overrides.evalRepository;
+    if (!config.evalDashboardEnabled) return createNoOpEvalRepository();
+    if (store === "memory") return createInMemoryEvalRepository();
+    evalDatabase = new Database(config.databasePath || ":memory:");
+    return createSqliteEvalRepository({ db: evalDatabase });
+  };
 
   try {
     if (store === "turso-sync" && (
       !overrides.preferenceRepository || !overrides.userRepository || !overrides.inviteRepository
-      || !overrides.chatSessionRepository || overrides.userDataStore === undefined
+      || !overrides.chatSessionRepository || !overrides.recommendationFeedbackRepository
+      || overrides.userDataStore === undefined
     )) {
       throw new Error(TURSO_SYNC_ASYNC_MESSAGE);
     }
@@ -86,11 +115,17 @@ export function createStorage(
           : store === "memory" ? createInMemoryChatSessionRepository()
             : createSqliteChatSessionRepository({ db: sqlite() })
       ),
+      recommendationFeedbackRepository: overrides.recommendationFeedbackRepository ?? (
+        store === "turso" ? turso().recommendationFeedbackRepository
+          : store === "memory" ? createInMemoryFeedbackRepository()
+            : createSqliteFeedbackRepository({ db: sqlite() })
+      ),
       userDataStore: overrides.userDataStore !== undefined ? overrides.userDataStore : (
         store === "turso" ? turso().userDataStore
           : store === "memory" ? null
             : createSqliteUserDataStore({ db: sqlite() })
       ),
+      evalRepository: selectEvalRepository(),
       close,
     };
   } catch (error) {
@@ -102,9 +137,38 @@ export function createStorage(
 /** Startup also owns the asynchronous local replica and its sync loop. */
 export async function openStorage(config: StorageConfig = {}): Promise<Storage> {
   if (config.preferenceStore !== "turso-sync") return createStorage(config);
-  const repositories = await createTursoSyncRepositories({
+  const { client, ...repositories } = await createTursoSyncRepositories({
     ...config,
     tursoSyncPath: config.tursoSyncPath ?? "bandsearch-sync.db",
   });
-  return { ...repositories, close: () => repositories.client.close() };
+  try {
+    const storage = createStorage(config, repositories);
+    return {
+      ...storage,
+      async close() {
+        await storage.close();
+        await client.close();
+      },
+    };
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
+}
+
+/**
+ * The stores as an operator's CLI sees them. Under turso-sync it talks to the
+ * cloud database directly: that is the source of truth, and opening a second
+ * replica beside a running server would mean a second sync loop. A memory
+ * store has nothing an operator could administer.
+ */
+export function openAdminStorage(config: StorageConfig = {}): Storage {
+  if (config.preferenceStore === "memory") {
+    throw new Error("admin commands need a durable database; PREFERENCE_STORE=memory has none");
+  }
+  return createStorage({
+    ...config,
+    preferenceStore: config.preferenceStore === "turso-sync" ? "turso" : config.preferenceStore,
+    evalDashboardEnabled: false,
+  });
 }
