@@ -192,9 +192,12 @@ npm run invite:list   --workspace @bandsearch/api
 npm run invite:revoke --workspace @bandsearch/api -- --email tester@example.com
 npm run user:disable  --workspace @bandsearch/api -- --email tester@example.com   # locks them out on their next request
 npm run user:enable   --workspace @bandsearch/api -- --email tester@example.com
+npm run feedback:list --workspace @bandsearch/api -- [--days 7] [--json]   # what testers said about their recommendations
 ```
 
-Only the SHA-256 hash of a code is stored, so a lost code cannot be shown again: revoke and issue a new one. To bootstrap a fresh deployment, run `npm run migrate:turso` first (migration `005` adds the `invites` table and `users.disabled_at`), then create an invite for yourself.
+`feedback:list` prints the recommendation feedback of the last N days (7 by default): counts per type, then each verdict with the tester's address, the query, mode, obscurity target and the bands shown. `--json` gives the rows for a spreadsheet or script. Feedback is kept for 90 days ([ADR 0006](docs/adr/0006-recommendation-feedback-is-product-data.md)).
+
+Only the SHA-256 hash of a code is stored, so a lost code cannot be shown again: revoke and issue a new one. To bootstrap a fresh deployment, run `npm run migrate:turso` first (migration `005` adds the `invites` table and `users.disabled_at`, `006` the recommendation feedback table), then create an invite for yourself.
 
 ### Registration switch and recovery
 
@@ -226,21 +229,21 @@ Two GDPR endpoints back the Settings controls:
 | `POST /account/delete` | Art. 17 — erases every user-scoped row, password-confirmed |
 
 Account-database erasure uses explicit deletes driven by the shared
-`USER_SCOPED_TABLES` list (`services/api/src/privacy/userDataStore.ts`). The
-recommendation-feedback module also includes locally stored eval feedback in
-export and deletion when accounts live in Turso. It removes local feedback
-before erasing the account database, leaving the account available for retry if
-local cleanup fails; the two databases do not share a transaction. A schema test
-checks that every table with a `user_id` column belongs to the erasure list.
+`USER_SCOPED_TABLES` list (`services/api/src/privacy/userDataStore.ts`), in one
+transaction. Recommendation feedback lives in the same database as the rest of
+the account, so it is exported and erased with it. A schema test checks that
+every table with a `user_id` column belongs to the erasure list.
 
 ---
 
 ## Storage
 
-`PREFERENCE_STORE` selects preferences, artist groups, users, invites and chat
-sessions together. Account export and deletion cover that database and local
-recommendation feedback. Startup
-refuses an unavailable selected backend rather than substituting another store.
+`PREFERENCE_STORE` selects preferences, artist groups, users, invites, chat
+sessions and recommendation feedback together, despite its name. Account export
+and deletion cover that one database. Startup refuses an unavailable selected
+backend rather than substituting another store. Eval telemetry never lives on
+Turso: with `EVAL_DASHBOARD_ENABLED=true` it goes to the local SQLite file at
+`DATABASE_PATH`, otherwise nothing is recorded.
 
 | `PREFERENCE_STORE` | Description |
 |--------------------|-------------|
@@ -252,12 +255,11 @@ refuses an unavailable selected backend rather than substituting another store.
 SQLite account repositories share one connection, including when no path is
 supplied and the database is `:memory:`. In `memory` mode all account repositories
 are ephemeral; account export and deletion report unavailable. Optional eval
-telemetry retains its separate local store in `DATABASE_PATH`. Feedback uses the
-authenticated account identity, ignoring any `userId` in the request body. The
-feedback endpoint remains disabled with the eval dashboard, but existing
-account-linked feedback is still exported and erased. Previously anonymous
-feedback stays anonymous; ownership is not guessed or reassigned. An unavailable
-local feedback store refuses startup rather than silently hiding account data.
+telemetry keeps its own connection to `DATABASE_PATH`. Recommendation feedback
+(`POST /recommendations/:eventId/feedback`) works with the eval dashboard off,
+takes its owner from the authenticated identity, ignoring any `userId` in the
+request body, and carries the batch it judges. It is kept for 90 days
+([ADR 0006](docs/adr/0006-recommendation-feedback-is-product-data.md)).
 
 See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 

@@ -28,6 +28,12 @@ export function validateFeedbackType(value: unknown): FeedbackType | undefined {
 }
 
 /**
+ * How long recommendation feedback is kept (GDPR Art. 5(1)(e)). The API
+ * purges by it and the privacy policy states it, so both read it from here.
+ */
+export const FEEDBACK_RETENTION_DAYS = 90;
+
+/**
  * Body of `POST /recommendations/:eventId/feedback` (ADR 0006): the verdict
  * plus the batch it judges, as the user asked for it. Nothing else records the
  * batch in production, so the feedback carries it.

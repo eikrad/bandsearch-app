@@ -14,6 +14,7 @@ Navigation guide for the `docs/` folder.
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
 | [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort, Gemini rollback |
 | [adr/0005-closed-beta-via-email-bound-invites.md](adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and an enforced auth mode (`AUTH_MODE=enforced`) |
+| [adr/0006-recommendation-feedback-is-product-data.md](adr/0006-recommendation-feedback-is-product-data.md) | ADR: recommendation feedback lives in the main database and is read with the admin CLI, not email or an endpoint |
 | [evaluation.md](evaluation.md) | Offline evaluation — golden runs, replay mode, constraints, run history and dashboard, judge calibration |
 | [adr/README.md](adr/README.md) | Index of all Architecture Decision Records |
 | [releasing.md](releasing.md) | Release process — release-please, Conventional Commits, desktop release workflow, signing keys and in-app updates |

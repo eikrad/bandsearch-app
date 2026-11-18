@@ -600,6 +600,11 @@ Turso overrides, memory mode and refused startup.
 Merged into `staging` in #299. Promotion to `main` is handled by the repository
 owner.
 
+> **Superseded by entry 15 (ADR 0006).** Feedback no longer stays with eval
+> events: it moved into the main database, so the cross-database export and
+> erasure described below, and `eval/recommendationFeedback.ts`, are gone. The
+> authenticated-ownership rules carry over unchanged.
+
 `eval/recommendationFeedback.ts` owns feedback validation, authenticated ownership
 and coordinated account export/deletion. The route ignores a body-supplied
 `userId` and uses the existing progressive/enforced auth rules. Export includes
@@ -659,3 +664,37 @@ it is shown once, not sent again as history, and saved to the session once.
 Tests drive the real app, render adapter and shell against a fake API server:
 a failed retry, a stopped retry, and a retried failure that succeeds.
 
+---
+
+### 15. Recommendation feedback reaches the operator (#307, #306) ✓ Done
+
+Implementation complete on `feature/recommendation-feedback`; integration into
+`staging` is pending. Promotion to `main` is handled by the repository owner.
+Decision recorded in [ADR 0006](adr/0006-recommendation-feedback-is-product-data.md).
+
+In production no feedback ever arrived: the desktop mount never forwarded the
+bar's handlers, and the route behind them, `/eval/feedback`, returns 404 with
+the eval dashboard off. Feedback is now product data in the main database:
+
+- `feedback/` owns validation, the 500-character and 20-band caps, one verdict
+  per event and user, and the 90-day retention the API enforces at startup and
+  daily. Adapters for memory, SQLite and Turso; migration `006` replaces the old
+  table, and SQLite replaces it in place.
+- `POST /recommendations/:eventId/feedback` sits behind the recommendations'
+  auth and rate limit, takes the owner from the token, and carries the batch it
+  judges: query, mode, obscurity target and the bands shown. Every
+  recommendation response has an `eventId`.
+- The desktop mount and shell forward the bar's handlers; a refused verdict
+  shows an inline error (UI_GUIDELINES "Feedback states").
+- `npm run feedback:list -- [--days N] [--json]` is how the operator reads it.
+
+Leftovers of #306 that came with it: the storage module now also selects the
+eval store (a no-op with the dashboard off, local SQLite otherwise, never
+Turso), and `scripts/admin.ts` opens its stores through `openAdminStorage()`
+instead of its own backend selection.
+
+Tests: one repository contract on memory, SQLite and local libSQL; the module's
+validation, caps and retention; the route with the dashboard off, forged
+ownership, enforced auth and a disabled account; the account lifecycle on SQLite,
+Turso and `turso-sync`; the desktop click through the real app, shell and mount
+against a fake API; `feedback:list`; and the privacy disclosure.

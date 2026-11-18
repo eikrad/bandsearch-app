@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { validateFeedbackType, type FeedbackType } from "../../../../shared/schemas/src/contracts.js";
+import {
+  FEEDBACK_RETENTION_DAYS,
+  validateFeedbackType,
+  type FeedbackType,
+} from "../../../../shared/schemas/src/contracts.js";
 
 /**
  * Recommendation feedback: a user's verdict on one recommendation batch.
@@ -15,7 +19,7 @@ import { validateFeedbackType, type FeedbackType } from "../../../../shared/sche
  * endpoint.
  */
 
-export const FEEDBACK_RETENTION_DAYS = 90;
+export { FEEDBACK_RETENTION_DAYS };
 
 /** Longer queries are cut, not refused: the recommendation route accepts up to 2000. */
 export const FEEDBACK_QUERY_MAX_LENGTH = 500;
