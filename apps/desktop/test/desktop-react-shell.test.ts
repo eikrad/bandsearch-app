@@ -6,6 +6,9 @@ import { BandsearchHttpError } from "../src/chatClient.js";
 import type { ChatStateMessage } from "../src/domain.js";
 import { bootstrapDesktopReactShell } from "../src/index.js";
 import { createDesktopReactShell } from "../src/ui/createDesktopReactShell.js";
+import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
+import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
+import type { ReactElement } from "react";
 
 test("desktop react shell renders HTML with recommendation card and actions", async () => {
   const appState: { messages: ChatStateMessage[] } = { messages: [] };
@@ -176,4 +179,69 @@ test("desktop react shell renderHtml includes all three obscurity picker buttons
   assert.ok(html.includes("Cult Following"), "missing Cult Following button");
   assert.ok(html.includes("Underground"), "missing Underground button");
   assert.ok(html.includes("Truly Obscure"), "missing Truly Obscure button");
+});
+
+// #311: the shell cleared the status on its timer, but nothing repainted, so
+// "Saved Fen." stayed on screen until the next click. Driven through the real
+// mount: what matters is what was painted, not what the shell holds.
+function statusRepaintHarness() {
+  let route = "home";
+  let fireTimer: () => void = () => {};
+  const shell = createDesktopReactShell({
+    renderAdapter: {
+      getViewProps: () => chatViewProps({
+        headerTitle: "Bandsearch",
+        headerSubtitle: "",
+        viewport: "desktop",
+        modeValue: "fresh",
+        modeOptions: [],
+        queryPlaceholder: "",
+        queryDisabled: false,
+        cards: [],
+      }),
+      onModeChange: () => ({}),
+      onSubmitQuery: async () => ({}),
+    },
+    actionHandlers: { onSave: async () => ({}) },
+    setTimeoutImpl: (fn) => {
+      fireTimer = fn;
+      return 1;
+    },
+  });
+  const painted: unknown[] = [];
+  const mount = createDesktopReactMount({
+    shell,
+    router: { getRoute: () => route, navigate: (next) => { route = next; }, onRouteChange: () => {} },
+    getSettingsViewProps: () => ({ statusMessage: null }),
+    createRootImpl: () => fakeReactRoot((element) => {
+      // The mount paints a Fragment: [update banner | null, routed view].
+      const children = (element as ReactElement<{ children: ReactElement<{ viewProps: unknown }>[] }>).props.children;
+      painted.push(children[1].props.viewProps);
+    }),
+    resolveContainer: () => fakeContainer({ id: "root" }),
+  });
+  return { mount, painted, fireTimer: () => fireTimer() };
+}
+
+test("a cleared status message is repainted on the chat screen", async () => {
+  const { mount, painted, fireTimer } = statusRepaintHarness();
+  await mount.handlers.onSave({ name: "Fen", musicbrainzArtistId: "mb-fen" });
+  assert.deepEqual((painted.at(-1) as { actionStatus: unknown }).actionStatus, { type: "success", message: "Saved Fen." });
+
+  fireTimer();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal((painted.at(-1) as { actionStatus: unknown }).actionStatus, null, "the message is gone from the screen");
+});
+
+test("a status clearing while another screen is shown does not repaint that screen", async () => {
+  const { mount, painted, fireTimer } = statusRepaintHarness();
+  await mount.handlers.onSave({ name: "Fen", musicbrainzArtistId: "mb-fen" });
+  await mount.handlers.onNavigateSettings();
+  const paintsBefore = painted.length;
+
+  fireTimer();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(painted.length, paintsBefore, "settings is not re-rendered (it would repeat its IPC)");
 });

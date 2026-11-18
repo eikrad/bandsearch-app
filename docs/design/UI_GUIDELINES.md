@@ -312,7 +312,9 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
   search or a retry is not an error and shows none (#304).
 
 ### Feedback states
-- Use local confirmations for Save/Rate actions.
+- Use local confirmations for Save/Rate actions. A confirmation clears itself
+  after 3 seconds, an error after 10, without waiting for the next interaction
+  (#311).
 - Avoid disruptive global notifications for routine success events.
 - The recommendation feedback bar under a batch (Spot on / Too mainstream /
   Wrong direction) closes on the click or on dismiss; a successful verdict shows
