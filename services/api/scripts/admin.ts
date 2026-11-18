@@ -5,10 +5,12 @@
 //   npm run invite:revoke --workspace @bandsearch/api -- --email x@y.de
 //   npm run user:disable  --workspace @bandsearch/api -- --email x@y.de
 //   npm run user:enable   --workspace @bandsearch/api -- --email x@y.de
+//   npm run feedback:list --workspace @bandsearch/api -- [--days 7] [--json]
 //
-// Picks its database like the server does: Turso when PREFERENCE_STORE is
-// turso or turso-sync (the cloud database is the source of truth, a sync
-// replica only mirrors it), otherwise the local SQLite file.
+// Opens the same database as the server, through the same storage module:
+// Turso when PREFERENCE_STORE is turso or turso-sync (under turso-sync the
+// cloud database directly, since a replica only mirrors it), otherwise the
+// local SQLite file.
 
 import { config as dotenvConfig } from "dotenv";
 import { resolve } from "node:path";
@@ -16,44 +18,37 @@ import { resolve } from "node:path";
 const rootDir = resolve(__dirname, "../../..");
 dotenvConfig({ path: resolve(rootDir, ".env") });
 
-import Database from "better-sqlite3";
-import { createClient } from "@libsql/client";
 import { AdminCommandError, runAdminCommand } from "../src/auth/adminCommands.js";
-import { createSqliteInviteRepository, type InviteRepository } from "../src/auth/inviteRepository.js";
 import { createInviteService } from "../src/auth/inviteService.js";
-import { createTursoInviteRepository } from "../src/auth/tursoInviteRepository.js";
-import { createTursoUserRepository } from "../src/auth/tursoUserRepository.js";
-import { createSqliteUserRepository, type UserRepository } from "../src/auth/userRepository.js";
-
-function openStores(): { inviteRepository: InviteRepository; userRepository: UserRepository; close: () => void } {
-  const store = process.env.PREFERENCE_STORE ?? "sqlite";
-  if (store === "turso" || store === "turso-sync") {
-    const url = process.env.TURSO_DATABASE_URL;
-    if (!url) throw new AdminCommandError("TURSO_DATABASE_URL is required for PREFERENCE_STORE=" + store);
-    const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN ?? "" });
-    return {
-      inviteRepository: createTursoInviteRepository({ client }),
-      userRepository: createTursoUserRepository({ client }),
-      close: () => client.close(),
-    };
-  }
-  const db = new Database(resolve(rootDir, process.env.DATABASE_PATH || "bandsearch.db"));
-  return {
-    inviteRepository: createSqliteInviteRepository({ db }),
-    userRepository: createSqliteUserRepository({ db }),
-    close: () => db.close(),
-  };
-}
+import { createRecommendationFeedback } from "../src/feedback/recommendationFeedback.js";
+import { openAdminStorage } from "../src/storage/createStorage.js";
 
 async function main(): Promise<void> {
   const [command = "", ...args] = process.argv.slice(2);
-  const stores = openStores();
+  const store = process.env.PREFERENCE_STORE ?? "sqlite";
+  if ((store === "turso" || store === "turso-sync") && !process.env.TURSO_DATABASE_URL) {
+    throw new AdminCommandError("TURSO_DATABASE_URL is required for PREFERENCE_STORE=" + store);
+  }
+  let storage;
   try {
-    const invites = createInviteService({ inviteRepository: stores.inviteRepository });
-    const lines = await runAdminCommand(command, args, { invites, userRepository: stores.userRepository });
+    storage = openAdminStorage({
+      preferenceStore: store,
+      databasePath: resolve(rootDir, process.env.DATABASE_PATH || "bandsearch.db"),
+      tursoDatabaseUrl: process.env.TURSO_DATABASE_URL,
+      tursoAuthToken: process.env.TURSO_AUTH_TOKEN,
+    });
+  } catch (error) {
+    throw new AdminCommandError(error instanceof Error ? error.message : String(error));
+  }
+  try {
+    const lines = await runAdminCommand(command, args, {
+      invites: createInviteService({ inviteRepository: storage.inviteRepository }),
+      userRepository: storage.userRepository,
+      feedback: createRecommendationFeedback({ repository: storage.recommendationFeedbackRepository }),
+    });
     console.log(lines.join("\n"));
   } finally {
-    stores.close();
+    await storage.close();
   }
 }
 

@@ -98,13 +98,13 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute) |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response carries `meta.eventId`), `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
 | Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
 | Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [README § Privacy & transparency](../../README.md#privacy--transparency) |
-| Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `POST /eval/feedback`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
+| Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
 
 ---
 
@@ -233,12 +233,10 @@ flowchart LR
         T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
         T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
         T2["Tier 2 — LLM-as-Judge\nScaleway judge scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
-        T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
         T1 --> T15 --> T2
     end
 
-    EVAL --> DB[(recommendation_events\nllm_eval_scores\nrecommendation_feedback\neval_baselines)]
-    T3 --> DB
+    EVAL --> DB[(recommendation_events\nllm_eval_scores\neval_baselines)]
 ```
 
 | Tier | Mechanism | When | Signals |
@@ -246,26 +244,14 @@ flowchart LR
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
 | **2 — LLM-as-Judge** | Async, fire-and-forget | When `SCW_SECRET_KEY` is set (and eval is enabled) | The Scaleway judge (`SCW_JUDGE_MODEL`) scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
-| **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
-
-Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
+Eval data is stored in `recommendation_events`, `llm_eval_scores` and `eval_baselines`, in a local SQLite file (never Turso) and only while `EVAL_DASHBOARD_ENABLED=true`; otherwise the eval store is a no-op.
 
 A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
 
-`POST /eval/feedback` uses the application's progressive/enforced authentication
-middleware when enabled. Its payload contains `eventId` and `feedbackType`;
-`userId` in the payload is ignored. Only the authenticated request identity can
-own a feedback row. Progressive personal installs without an account can still
-record anonymous feedback. The other eval routes retain their existing access
-rules.
-
-`eval/recommendationFeedback.ts` owns validation, writing with that identity, and
-the combined account-data interface. Export combines the account database's
-feedback with the local eval store and deduplicates by row ID. Erasure removes
-local feedback before the account database so a local cleanup failure leaves a
-retryable account. This is an ordered operation across stores, not a distributed
-transaction. Existing local rows remain readable without a migration; rows
-recorded as anonymous are not retrospectively assigned to a user.
+Recommendation feedback (the one-tap batch reactions) is not eval data
+(#307). It lives
+with the account data, works with the dashboard off, and is read with
+`npm run feedback:list`; see [Storage](#storage).
 
 The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
 
@@ -275,11 +261,23 @@ The `services/eval` workspace holds the golden dataset (`golden-set.json`), judg
 
 ## Storage
 
-`storage/createStorage.ts` assembles preferences, users, invites, chat sessions
-and account export/erasure as one `StorageRepositories` set. `server.ts` awaits
+`storage/createStorage.ts` assembles preferences, users, invites, chat sessions,
+recommendation feedback and account export/erasure as one `StorageRepositories`
+set, and selects the eval store beside it (a no-op with the dashboard off,
+otherwise a local SQLite file on its own connection, memory on a memory
+install, never Turso). `server.ts` awaits
 `openStorage()` and passes that complete set to `createApp()` and its preference
 repository to the recommendation pipeline. Consumers still receive only the
-repository interfaces they use.
+repository interfaces they use. The admin CLI (`scripts/admin.ts`) opens the
+same stores through `openAdminStorage()`, which goes to the cloud database
+directly under `turso-sync` and refuses a memory store.
+
+Recommendation feedback (`feedback/`) keeps one row per event and user with the
+batch it judges (query, mode, obscurity target, bands shown). Account export and
+erasure cover it through the shared `USER_SCOPED_TABLES` list, in the same
+database as the rest of the account. `createApp()` purges rows older than 90
+days at startup and daily. SQLite adapters replace the old eval-era table shape
+in place; Turso gets the new table from migration `006`.
 
 `createStorage()` supports synchronous SQLite, memory and direct Turso setup;
 `openStorage()` additionally opens the asynchronous sync replica. Direct Turso

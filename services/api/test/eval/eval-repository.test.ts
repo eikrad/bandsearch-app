@@ -150,19 +150,14 @@ test("events inside the retention period are kept", async () => {
   assert.equal(remaining.length, 1, "a ten-day-old event survives a ninety-day window");
 });
 
-test("purging an event removes its scores and feedback", async () => {
+test("purging an event removes its scores", async () => {
   const db = new Database(":memory:");
   const repo = createSqliteEvalRepository({ db });
   seedEvent(db, "ev-old", new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString());
   await repo.upsertBandEvalScore({ eventId: "ev-old", bandName: "Fen", relevance: 1 });
-  await repo.logFeedback({ eventId: "ev-old", userId: "u-1", feedbackType: "good" });
 
   await repo.purgeEventsOlderThan(new Date().toISOString());
 
   const scores = await repo.listBandEvalScores("ev-old");
   assert.deepEqual(scores, [], "child scores go with the purged event");
-  const feedback = db
-    .prepare("SELECT COUNT(*) n FROM recommendation_feedback WHERE event_id = ?")
-    .get("ev-old") as { n: number };
-  assert.equal(feedback.n, 0, "child feedback goes with the purged event");
 });

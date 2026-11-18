@@ -314,6 +314,10 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 ### Feedback states
 - Use local confirmations for Save/Rate actions.
 - Avoid disruptive global notifications for routine success events.
+- The recommendation feedback bar under a batch (Spot on / Too mainstream /
+  Wrong direction) closes on the click or on dismiss; a successful verdict shows
+  no confirmation. A verdict the API refuses shows the inline error "Your
+  feedback could not be sent." — it is never dropped silently (#307).
 
 ## Responsiveness Policy
 

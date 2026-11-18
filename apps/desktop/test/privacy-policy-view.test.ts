@@ -49,3 +49,14 @@ test("the privacy policy names Scaleway as the default AI provider and Google on
   assert.match(text, /^Scaleway[^\n]*search text and conversation context/m);
   assert.match(text, /Google \(Gemini API, only if the server operator selects it\)/);
 });
+
+test("the privacy policy discloses stored recommendation feedback, who reads it and how long it is kept", () => {
+  const html = render();
+
+  // #307: feedback is stored with the batch it judges and read by the
+  // operator; a user must be able to learn both before clicking the bar.
+  assert.match(html, /feedback on recommendations/i, "stored feedback is disclosed");
+  assert.match(html, /search text/i, "the stored context is named");
+  assert.match(html, /operates the deployment reads it/i, "the operator as reader is named");
+  assert.match(html, /Feedback on recommendations is deleted after 90 days/, "its retention is stated");
+});

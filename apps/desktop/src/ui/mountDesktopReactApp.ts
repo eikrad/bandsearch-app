@@ -29,6 +29,8 @@ export type MountShell = {
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
   updateObscurityTarget?(target: string | undefined): unknown;
+  submitFeedback?(feedbackType: string): Promise<unknown>;
+  dismissFeedback?(): void;
 };
 
 // The mount dispatches to views with differing prop shapes, so prop types are
@@ -313,6 +315,21 @@ export function createDesktopReactMount({
       } catch {
         // Error is surfaced via actionStatus in the shell; always re-render.
       }
+      return renderCurrent();
+    },
+    onFeedback: async (feedbackType: string) => {
+      try {
+        const pending = shell.submitFeedback?.(feedbackType);
+        // The bar closes on the click, not when the API answers.
+        await renderCurrent();
+        await pending;
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
+    },
+    onFeedbackDismiss: () => {
+      shell.dismissFeedback?.();
       return renderCurrent();
     },
     onNavigateSaved: async () => {

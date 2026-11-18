@@ -7,6 +7,7 @@ import type {
   RecommendationResponse,
   SavedBand,
 } from "./domain.js";
+import type { RecommendationFeedbackSubmission } from "../../../shared/schemas/src/contracts.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -123,14 +124,15 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
       return response.json() as Promise<RecommendationResponse>;
     },
 
-    async sendFeedback(eventId: string, feedbackType: string) {
-      const response = await fetchImpl(`${baseUrl}/eval/feedback`, {
+    async sendFeedback(eventId: string, submission: RecommendationFeedbackSubmission) {
+      const response = await fetchImpl(`${baseUrl}/recommendations/${encodeURIComponent(eventId)}/feedback`, {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ eventId, feedbackType }),
+        body: JSON.stringify(submission),
       });
-      if (!response.ok) return;
-      return response.json();
+      // A refused click is an error the user sees, not a silent drop.
+      await ensureOk(response);
+      return response.json() as Promise<unknown>;
     },
 
     async createPreference(savedBand: unknown) {

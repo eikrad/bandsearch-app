@@ -15,7 +15,8 @@
     "invite:list": "tsx scripts/admin.ts invite:list",
     "invite:revoke": "tsx scripts/admin.ts invite:revoke",
     "user:disable": "tsx scripts/admin.ts user:disable",
-    "user:enable": "tsx scripts/admin.ts user:enable"
+    "user:enable": "tsx scripts/admin.ts user:enable",
+    "feedback:list": "tsx scripts/admin.ts feedback:list"
   },
   "dependencies": {
     "@langchain/core": "^1.2.14",

@@ -10,7 +10,7 @@ import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { registerEvalRoutes } from "../eval/evalRoutes.js";
 import { createNoOpEvalRepository } from "../eval/evalRepository.js";
-import type { RecommendationFeedback } from "../eval/recommendationFeedback.js";
+import type { RecommendationFeedback } from "../feedback/recommendationFeedback.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
@@ -180,7 +180,6 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     app.use("/sessions", authMiddleware);
     app.use("/recommendations", authMiddleware);
     app.use("/account", authMiddleware);
-    if (evalDashboardEnabled) app.use("/eval/feedback", authMiddleware);
     // Artist lookups spend the operator's MusicBrainz/Wikidata/Last.fm quota,
     // so a closed deployment gates them too. Progressive installs keep them open.
     if (authMode === "enforced") app.use("/artists", authMiddleware);
@@ -296,6 +295,16 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     });
   });
 
+  // Recommendation feedback (#307): product data, so it sits behind the
+  // same auth and rate limit as the recommendations it judges, and does not
+  // depend on the eval dashboard. The owner comes from the token, never from
+  // the body; an install without accounts stores it without one.
+  app.post("/recommendations/:eventId/feedback", recommendationsLimiter, async (req, res) => {
+    const result = await recommendationFeedback.submit(req.params.eventId, req.body, req.userId ?? null);
+    if (!result.ok) return sendError(res, 400, "validation_error", result.error);
+    return res.status(200).json({ ok: true });
+  });
+
   app.post("/recommendations", recommendationsLimiter, async (req, res) => {
     const validation = validateRecommendationRequest(req.body);
     if (validation.ok === false) {
@@ -321,9 +330,11 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         obscurityTarget: validation.obscurityTarget,
       });
 
-      const eventId = evalWorker ? randomUUID() : undefined;
+      // Every batch gets an id: feedback refers to it, and eval (when enabled)
+      // records the batch under the same id.
+      const eventId = randomUUID();
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
-      if (evalWorker && eventId) {
+      if (evalWorker) {
         void evalWorker.processEvent({
           eventId,
           query: validation.query,
@@ -354,9 +365,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: eventId !== undefined
-          ? { ...publicMeta, ...provenance, eventId }
-          : { ...publicMeta, ...provenance },
+        meta: { ...publicMeta, ...provenance, eventId },
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
@@ -517,6 +526,5 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     evalRepository: evalRepository ?? createNoOpEvalRepository(),
     evalDashboardEnabled,
     evalDashboardPassword,
-    recommendationFeedback,
   });
 }
