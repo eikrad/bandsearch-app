@@ -8,7 +8,7 @@ import { createClient } from "@libsql/client";
 import { createApp } from "../src/app.js";
 import { createTursoUserRepository } from "../src/auth/tursoUserRepository.js";
 import { createTursoChatSessionRepository } from "../src/sessions/tursoChatSessionRepository.js";
-import { createStorage, openStorage } from "../src/storage/createStorage.js";
+import { createStorage, openAdminStorage, openStorage } from "../src/storage/createStorage.js";
 import type { StorageRepositories } from "../src/storage/storageRepositories.js";
 import { createTursoSyncRepositories } from "../src/turso/tursoSyncRepositories.js";
 import { assertArray, assertRecord } from "./helpers/typeAssertions.js";
@@ -242,4 +242,28 @@ test("an incomplete sync repository set refuses startup instead of filling gaps 
     chatSessionRepository: memory.chatSessionRepository,
     runtimeConfig: { preferenceStore: "turso-sync" },
   }), /createTursoSyncRepositories/);
+});
+
+test("admin storage under turso-sync talks to the cloud database, not a replica", async (context) => withStorageDirectory(context.name, __filename, async (directory) => {
+  const cloudUrl = `file:${path.join(directory, "cloud.db")}`;
+  const replicaPath = path.join(directory, "replica.db");
+  const cloud = createClient({ url: cloudUrl });
+  try {
+    await applyMigrations(cloud);
+    const storage = openAdminStorage({ preferenceStore: "turso-sync", tursoDatabaseUrl: cloudUrl, tursoSyncPath: replicaPath });
+    try {
+      await storage.userRepository.create({ email: "one@example.com", displayName: "One", passwordHash: "h", recoveryCodeHash: "h" });
+    } finally {
+      await storage.close();
+    }
+    const rows = await cloud.execute("SELECT email FROM users");
+    assert.deepEqual(rows.rows.map((row) => row.email), ["one@example.com"]);
+    assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith("replica")), [], "no replica is opened");
+  } finally {
+    cloud.close();
+  }
+}));
+
+test("admin storage refuses a memory store, which has nothing to administer", () => {
+  assert.throws(() => openAdminStorage({ preferenceStore: "memory" }), /durable database/);
 });
