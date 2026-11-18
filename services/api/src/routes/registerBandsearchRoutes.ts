@@ -295,7 +295,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     });
   });
 
-  // Recommendation feedback (ADR 0006): product data, so it sits behind the
+  // Recommendation feedback (#307): product data, so it sits behind the
   // same auth and rate limit as the recommendations it judges, and does not
   // depend on the eval dashboard. The owner comes from the token, never from
   // the body; an install without accounts stores it without one.

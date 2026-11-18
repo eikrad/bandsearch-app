@@ -98,7 +98,7 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response carries `meta.eventId`), `POST /recommendations/:eventId/feedback` (same auth and limit; [ADR 0006](../adr/0006-recommendation-feedback-is-product-data.md)) |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response carries `meta.eventId`), `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
@@ -249,7 +249,7 @@ Eval data is stored in `recommendation_events`, `llm_eval_scores` and `eval_base
 A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
 
 Recommendation feedback (the one-tap batch reactions) is not eval data
-([ADR 0006](../adr/0006-recommendation-feedback-is-product-data.md)). It lives
+(#307). It lives
 with the account data, works with the dashboard off, and is read with
 `npm run feedback:list`; see [Storage](#storage).
 
@@ -276,7 +276,7 @@ Recommendation feedback (`feedback/`) keeps one row per event and user with the
 batch it judges (query, mode, obscurity target, bands shown). Account export and
 erasure cover it through the shared `USER_SCOPED_TABLES` list, in the same
 database as the rest of the account. `createApp()` purges rows older than 90
-days at startup and daily. SQLite adapters replace the pre-ADR-0006 table shape
+days at startup and daily. SQLite adapters replace the old eval-era table shape
 in place; Turso gets the new table from migration `006`.
 
 `createStorage()` supports synchronous SQLite, memory and direct Turso setup;

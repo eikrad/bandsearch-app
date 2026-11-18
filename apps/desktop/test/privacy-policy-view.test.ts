@@ -53,7 +53,7 @@ test("the privacy policy names Scaleway as the default AI provider and Google on
 test("the privacy policy discloses stored recommendation feedback, who reads it and how long it is kept", () => {
   const html = render();
 
-  // ADR 0006: feedback is stored with the batch it judges and read by the
+  // #307: feedback is stored with the batch it judges and read by the
   // operator; a user must be able to learn both before clicking the bar.
   assert.match(html, /feedback on recommendations/i, "stored feedback is disclosed");
   assert.match(html, /search text/i, "the stored context is named");

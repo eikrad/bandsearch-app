@@ -93,7 +93,7 @@ export function createInMemoryFeedbackRepository(): RecommendationFeedbackReposi
 }
 
 export function createSqliteFeedbackRepository({ db }: { db: Database }): RecommendationFeedbackRepository {
-  // Before ADR 0006 the eval store created this table without context and with
+  // Before #307 the eval store created this table without context and with
   // a foreign key to its events. Those rows cannot be read on their own, and
   // nothing ever read them, so the old shape is replaced rather than migrated.
   const columns = db.prepare("PRAGMA table_info(recommendation_feedback)").all() as { name: string }[];

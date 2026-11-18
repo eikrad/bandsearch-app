@@ -195,7 +195,7 @@ npm run user:enable   --workspace @bandsearch/api -- --email tester@example.com
 npm run feedback:list --workspace @bandsearch/api -- [--days 7] [--json]   # what testers said about their recommendations
 ```
 
-`feedback:list` prints the recommendation feedback of the last N days (7 by default): counts per type, then each verdict with the tester's address, the query, mode, obscurity target and the bands shown. `--json` gives the rows for a spreadsheet or script. Feedback is kept for 90 days ([ADR 0006](docs/adr/0006-recommendation-feedback-is-product-data.md)).
+`feedback:list` prints the recommendation feedback of the last N days (7 by default): counts per type, then each verdict with the tester's address, the query, mode, obscurity target and the bands shown. `--json` gives the rows for a spreadsheet or script. Feedback is kept for 90 days.
 
 Only the SHA-256 hash of a code is stored, so a lost code cannot be shown again: revoke and issue a new one. To bootstrap a fresh deployment, run `npm run migrate:turso` first (migration `005` adds the `invites` table and `users.disabled_at`, `006` the recommendation feedback table), then create an invite for yourself.
 
@@ -258,8 +258,7 @@ are ephemeral; account export and deletion report unavailable. Optional eval
 telemetry keeps its own connection to `DATABASE_PATH`. Recommendation feedback
 (`POST /recommendations/:eventId/feedback`) works with the eval dashboard off,
 takes its owner from the authenticated identity, ignoring any `userId` in the
-request body, and carries the batch it judges. It is kept for 90 days
-([ADR 0006](docs/adr/0006-recommendation-feedback-is-product-data.md)).
+request body, and carries the batch it judges. It is kept for 90 days.
 
 See `.env.example` for the connection variables needed for each backend (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `TURSO_SYNC_PATH`).
 

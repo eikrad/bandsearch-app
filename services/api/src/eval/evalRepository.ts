@@ -72,7 +72,7 @@ export type EvalRepository = {
    * GDPR Art. 5(1)(e): telemetry is kept for a stated period, not forever.
    * Deletes events created before `cutoffIso` along with their scores.
    * Returns how many events went. Recommendation feedback is not eval data
-   * (ADR 0006) and has its own retention.
+   * (#307) and has its own retention.
    */
   purgeEventsOlderThan(cutoffIso: string): Promise<number>;
 };

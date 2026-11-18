@@ -14,7 +14,7 @@ import { createTursoFeedbackRepository } from "../feedback/tursoFeedbackReposito
 
 /**
  * The account repositories selected together for one backend. Recommendation
- * feedback is account data (ADR 0006), so it lives in the same database and
+ * feedback is account data (#307), so it lives in the same database and
  * account export and erasure cover it.
  */
 export type StorageRepositories = {

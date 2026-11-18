@@ -600,7 +600,7 @@ Turso overrides, memory mode and refused startup.
 Merged into `staging` in #299. Promotion to `main` is handled by the repository
 owner.
 
-> **Superseded by entry 15 (ADR 0006).** Feedback no longer stays with eval
+> **Superseded by entry 15.** Feedback no longer stays with eval
 > events: it moved into the main database, so the cross-database export and
 > erasure described below, and `eval/recommendationFeedback.ts`, are gone. The
 > authenticated-ownership rules carry over unchanged.
@@ -670,7 +670,6 @@ a failed retry, a stopped retry, and a retried failure that succeeds.
 
 Implementation complete on `feature/recommendation-feedback`; integration into
 `staging` is pending. Promotion to `main` is handled by the repository owner.
-Decision recorded in [ADR 0006](adr/0006-recommendation-feedback-is-product-data.md).
 
 In production no feedback ever arrived: the desktop mount never forwarded the
 bar's handlers, and the route behind them, `/eval/feedback`, returns 404 with

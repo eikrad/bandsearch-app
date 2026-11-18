@@ -170,7 +170,7 @@ export function createApp({
       lastFmApiKey: runtimeConfig.lastFmApiKey ?? "",
     });
 
-  // Recommendation feedback lives with the account data (ADR 0006). Its
+  // Recommendation feedback lives with the account data (#307). Its
   // retention runs whatever the eval dashboard does: at startup, then daily.
   // .unref() keeps the timer from holding the process open in tests and CLIs.
   const recommendationFeedback = createRecommendationFeedback({

@@ -317,7 +317,7 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 - The recommendation feedback bar under a batch (Spot on / Too mainstream /
   Wrong direction) closes on the click or on dismiss; a successful verdict shows
   no confirmation. A verdict the API refuses shows the inline error "Your
-  feedback could not be sent." — it is never dropped silently (ADR 0006, #307).
+  feedback could not be sent." — it is never dropped silently (#307).
 
 ## Responsiveness Policy
 

@@ -1,5 +1,5 @@
 -- Recommendation feedback moves out of the eval layer into the main database.
--- See ADR 0006 and #307.
+-- See #307.
 --
 -- The old table (002) had a foreign key to recommendation_events, which is eval
 -- telemetry and is never written in production, and it stored no context, so

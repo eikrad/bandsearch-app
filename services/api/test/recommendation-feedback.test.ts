@@ -17,7 +17,7 @@ import { createTursoFeedbackRepository } from "../src/feedback/tursoFeedbackRepo
 import { assertArray, assertRecord } from "./helpers/typeAssertions.js";
 import { withStorageDirectory } from "./helpers/storageDirectory.js";
 
-// ADR 0006: recommendation feedback is product data in the main database. It
+// #307: recommendation feedback is product data in the main database. It
 // is written through an authenticated route that does not depend on the eval
 // dashboard, and the operator reads it with the admin CLI.
 

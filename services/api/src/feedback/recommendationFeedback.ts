@@ -8,7 +8,7 @@ import {
 /**
  * Recommendation feedback: a user's verdict on one recommendation batch.
  *
- * Product data, not eval telemetry (ADR 0006). It lives in the main database,
+ * Product data, not eval telemetry (#307). It lives in the main database,
  * next to the account it belongs to, so account export and erasure cover it
  * without reaching into a second store. Each row carries the context it was
  * given about — query, mode, obscurity target, the bands shown — because in

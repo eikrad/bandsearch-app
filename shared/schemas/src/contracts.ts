@@ -34,7 +34,7 @@ export function validateFeedbackType(value: unknown): FeedbackType | undefined {
 export const FEEDBACK_RETENTION_DAYS = 90;
 
 /**
- * Body of `POST /recommendations/:eventId/feedback` (ADR 0006): the verdict
+ * Body of `POST /recommendations/:eventId/feedback` (#307): the verdict
  * plus the batch it judges, as the user asked for it. Nothing else records the
  * batch in production, so the feedback carries it.
  */

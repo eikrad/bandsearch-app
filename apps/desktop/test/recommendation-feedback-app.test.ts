@@ -7,7 +7,7 @@ import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 
 /**
  * The feedback bar under a recommendation batch, driven through the real app,
- * shell and mount against a fake API server. ADR 0006: a click reaches the
+ * shell and mount against a fake API server (#307): a click reaches the
  * API with the batch it judges; it is never silently dropped.
  */
 

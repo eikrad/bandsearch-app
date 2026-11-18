@@ -105,7 +105,7 @@ test("an unknown command lists the available ones", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// feedback:list — the operator's view of recommendation feedback (ADR 0006)
+// feedback:list — the operator's view of recommendation feedback (#307)
 // ---------------------------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;

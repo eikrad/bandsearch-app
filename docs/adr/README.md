@@ -7,4 +7,3 @@ Architecture Decision Records for Bandsearch. Add numbered markdown files (e.g. 
 | [0003](0003-android-hosting-render-over-fly.md) | Android hosting: Render over Fly.io |
 | [0004](0004-llm-models-per-role-on-scaleway.md) | LLM models per role on Scaleway |
 | [0005](0005-closed-beta-via-email-bound-invites.md) | Closed beta via email-bound invites |
-| [0006](0006-recommendation-feedback-is-product-data.md) | Recommendation feedback is product data, read with the admin CLI |
