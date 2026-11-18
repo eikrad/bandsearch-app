@@ -5,6 +5,10 @@ import type {
   ChatStateMessage,
 } from "./domain.js";
 import { findSavedBand, type SavedBandTarget } from "./savedBandActions.js";
+import {
+  validateFeedbackType,
+  type RecommendationFeedbackSubmission,
+} from "../../../shared/schemas/src/contracts.js";
 
 export type { RecommendationItem, RecommendationMeta, SavedBand, ChatStateMessage };
 
@@ -37,8 +41,8 @@ export type ChatAppCollaborator = {
     query: string,
     mode: string,
     obscurityTarget: string | undefined,
-  ): Promise<{ meta?: RecommendationMeta }>;
-  sendFeedback?(eventId: string, feedbackType: string): Promise<unknown>;
+  ): Promise<{ meta?: RecommendationMeta; recommendations?: RecommendationItem[] }>;
+  sendFeedback?(eventId: string, submission: RecommendationFeedbackSubmission): Promise<unknown>;
   getState(): { messages?: ChatStateMessage[]; savedBands?: SavedBand[] };
   cancelSearch?(): void;
 };
@@ -83,14 +87,30 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
   // feedbackDismissed tracks user dismissal; cleared on next query so the bar
   // re-appears after each new recommendation batch.
   let feedbackDismissed = false;
+  // The batch the feedback bar judges, captured as it was asked: changing the
+  // mode or target afterwards must not rewrite what the verdict was about.
+  let lastBatch: { eventId: string; context: Omit<RecommendationFeedbackSubmission, "feedbackType"> } | null = null;
 
   async function runSubmitQuery(query: string) {
     lastQuery = query;
     feedbackDismissed = false;
     loadingState = true;
+    const askedMode = mode;
+    const askedTarget = obscurityTarget;
     try {
-      const response = await app.requestRecommendations(query, mode, obscurityTarget);
+      const response = await app.requestRecommendations(query, askedMode, askedTarget);
       lastMeta = response.meta ?? lastMeta;
+      lastBatch = response.meta?.eventId
+        ? {
+            eventId: response.meta.eventId,
+            context: {
+              query,
+              mode: askedMode,
+              obscurityTarget: askedTarget ?? null,
+              bandNames: (response.recommendations ?? []).map((item) => item.artist),
+            },
+          }
+        : null;
       return response;
     } catch (error) {
       if ((error as Error).name === "AbortError") {
@@ -137,11 +157,12 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
     cancelSearch() {
       app.cancelSearch?.();
     },
+    /** Closes the bar and sends the verdict; a refusal reaches the caller. */
     async submitFeedback(feedbackType: string) {
       feedbackDismissed = true;
-      const eventId = lastMeta.eventId;
-      if (!eventId) return;
-      await app.sendFeedback?.(eventId, feedbackType);
+      const verdict = validateFeedbackType(feedbackType);
+      if (!lastBatch || !verdict) return;
+      await app.sendFeedback?.(lastBatch.eventId, { feedbackType: verdict, ...lastBatch.context });
     },
     getConversation(): ConversationMessage[] | null {
       const appState = app.getState();

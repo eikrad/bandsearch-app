@@ -1,4 +1,4 @@
-import { formatRatingForPrompt } from "../../../shared/schemas/src/contracts.js";
+import { formatRatingForPrompt, type RecommendationFeedbackSubmission } from "../../../shared/schemas/src/contracts.js";
 import type { SavedBand } from "./domain.js";
 import type { ChatMessage } from "./chatClient.js";
 import {
@@ -170,8 +170,8 @@ export function bootstrapDesktopApp({
         currentAbortController = null;
       }
     },
-    async sendFeedback(eventId: string, feedbackType: string) {
-      return chatClient.sendFeedback(eventId, feedbackType);
+    async sendFeedback(eventId: string, submission: RecommendationFeedbackSubmission) {
+      return chatClient.sendFeedback(eventId, submission);
     },
     cancelSearch() {
       currentAbortController?.abort();

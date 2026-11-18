@@ -18,6 +18,8 @@ interface CreateDesktopReactShellOptions {
     onObscurityTargetChange?: (target: string | undefined) => unknown;
     onRetrySearch?: () => unknown;
     onCancelSearch?: () => unknown;
+    onFeedback?: (feedbackType: string) => unknown;
+    onFeedbackDismiss?: () => unknown;
     setViewport?: (viewport: string) => void;
     getViewProps: () => ChatViewProps;
   };
@@ -95,6 +97,18 @@ export function createDesktopReactShell({
     },
     cancelSearch() {
       renderAdapter.onCancelSearch?.();
+    },
+    async submitFeedback(feedbackType: string) {
+      try {
+        return await renderAdapter.onFeedback?.(feedbackType);
+      } catch (error) {
+        actionStatus = { type: "error", message: "Your feedback could not be sent." };
+        scheduleStatusClear(errorStatusTimeoutMs);
+        throw error;
+      }
+    },
+    dismissFeedback() {
+      renderAdapter.onFeedbackDismiss?.();
     },
     async saveBand(target: SavedBandTarget) {
       try {
