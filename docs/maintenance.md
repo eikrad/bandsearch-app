@@ -4,6 +4,54 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-11-18
+
+### Checks performed
+- `git fetch origin`; branch `claude/eloquent-volta-ldn9fh` created from `origin/staging` (`ff9f064`). No open PRs at the start of the run.
+- Toolchain: Node 26.12.1 (from `.nvmrc`), installed via `npm i node@26.12.1` in a scratch directory. The sandbox's own npm is 10.9.9, but Node 26.12.1 ships npm 11.20.0, which is what CI uses, so npm 11.20.0 was installed alongside and the final verification ran with it.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 406/407 (1 skip), api 874/874, eval 118/118, schemas 40/40. **Nothing broken on `staging`.** The desktop skip is `tauri-config.test.ts`, which skips while the gitignored `binaries/node-*` sidecar is missing; with the local stand-in in place (see next point) it runs and passes, so the later counts read 407/407.
+- Rust: the Tauri system libraries are available again, so the crate was built and tested before and after the update, with a local stand-in for the gitignored `binaries/node-*` sidecar. Baseline `cargo build --locked` ok, `cargo test --locked` 26/26.
+- Security: `npm audit`, `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (cargo-audit 0.23.0, installed fresh), `pip-audit` not applicable (`pyproject.toml` has `dependencies = []`, `uv.lock` holds only the project itself). Dependabot alerts are disabled for the repository, so there was nothing to read there. Outdated survey: `npm outdated -ws --include-workspace-root`, crates.io for the Tauri crates.
+- Playwright E2E **run locally this week**: Playwright 1.65.1 expects Chromium build 1255 and the browser CDN is blocked, so the pre-installed build 1243 was linked in its place. `npm run test:e2e` (same dummy keys as CI): 19/19 passed. CI runs the real browser.
+- Re-checked last week's flagged items: see the tables. Two of them are **resolved** this week (`minimatch`, `zip`).
+
+### Fixes applied
+- **Security (npm, `package-lock.json` only, via `npm update`)**: `minimatch` 10.2.6 -> 11.0.9 fixes GHSA-g3hv-75wg-m249 (DoS via glob amplification). It was blocked for two weeks because `eslint` and `typescript-eslint` required `minimatch@^10`. The new `eslint` 10.15.0 (`minimatch@^11.0.5`), `@eslint/config-array` 0.23.6 and `typescript-eslint` / `@typescript-eslint/*` 8.73.0 (`minimatch@^11.0.1`) now accept it, so no `overrides` entry was needed. `npm audit`: 9 moderate -> **0**.
+- **Security (Rust, `Cargo.lock` only)**: `tauri-plugin-updater` 2.12.0 -> 2.14.1, which moves `zip` 4.6.1 -> 9.7.0 and fixes all six `zip` advisories (RUSTSEC-2026-0367, -0368, -0369, -0429 and the two new this week, -0545 and -0548). This is a semver-compatible update of the plugin (`tauri-plugin-updater = "2"` in `Cargo.toml` is unchanged); the `zip` major comes with it. `cargo audit`: 6 vulnerabilities -> **0**. Changes in the updater between 2.12 and 2.14 that matter here (from its changelog): it verifies the package bytes against the signing key before installing, it uses `minisign-verify` 0.3 (rejects non-canonical signatures), and AppImage updates on Linux are more robust. The app only uses `check()` and `download_and_install()`, which kept their API; the build and the tests (including the updater config test) pass.
+- **Tauri, moved together (JS and Rust stay on 2.12)**:
+  - JS (`npm update`): `@tauri-apps/api` 2.12.4 -> 2.12.5, `@tauri-apps/cli` 2.12.4 -> 2.12.6, `@tauri-apps/plugin-opener` 2.7.2 -> 2.7.3.
+  - Rust (`cargo update -p tauri --precise 2.12.7`, `cargo update -p tauri-plugin-opener`): `tauri` 2.12.2 -> 2.12.7, `tauri-build` 2.7.2 -> 2.7.6, `tauri-runtime` 2.12.4, `tauri-runtime-wry` 2.12.5, `tauri-utils` 2.10.4, `tauri-codegen` / `tauri-macros` 2.7.6, `tauri-plugin-opener` 2.7.0 -> 2.7.3. A plain `cargo update -p tauri` did not move it, because the newer `tauri` also needs newer versions of `tauri-utils`/`tauri-runtime`, which other crates share; `--precise` lets cargo update them together. Note that `tauri` 2.12.7 was published on the day of this run (2.12.6 two days earlier).
+- **Other safe npm updates** (`npm update`, `package-lock.json` only, `package.json` ranges unchanged):
+  - LangChain, moved together: `@langchain/core` 1.3.7 -> 1.4.1, `@langchain/langgraph` 1.7.3 -> 1.7.5, `@langchain/langgraph-sdk` 1.15.0 -> 1.17.0, `@langchain/langgraph-checkpoint` 1.2.2 -> 1.2.3, `@langchain/openai` 1.8.3 -> 1.8.4. `@langchain/openai` 1.8.4 requires `@langchain/core` `^1.4.0`, so these could not be split. All peer ranges are satisfied (`npm ls` shows one deduped `@langchain/core`). Transitive: `openai` 7.60.0, `langsmith` 0.13.0.
+  - API: `better-sqlite3` 13.1.1 -> 13.2.0, `ws` 8.23.0, `router` 2.3.0, `encodeurl` 2.0.3.
+  - Dev tooling: `eslint` 10.15.0, `typescript-eslint` 8.73.0, `@playwright/test` / `playwright` 1.65.1.
+- **`allowScripts` in the root `package.json` updated** with `npm install-scripts approve better-sqlite3`: the entry `better-sqlite3@13.0.3` was replaced by `better-sqlite3@13.2.0`. npm 11.20 (the npm CI uses) warned on every `npm ci` that `better-sqlite3`'s install script was not covered by the allowlist. That warning had already been there since last week's bump to 13.1.1. It is a warning, not a failure, because `better-sqlite3` ships prebuilt binaries. After the update `npm ci` is silent.
+- After all changes, with npm 11.20.0: `npm ci`, `npm run ci` (desktop 407/407, api 874/874, eval 118/118, schemas 40/40), `npm run build --workspace @bandsearch/desktop`, E2E 19/19 (run with npm 10, same lockfile), `cargo build --locked` and `cargo test --locked` (26/26) all green. The Rust build did not change `gen/schemas`.
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 9 moderate at baseline, **all the single `minimatch` advisory** GHSA-g3hv-75wg-m249 and its dependants -> **0**. |
+| Python | `pip-audit` | nothing to audit (`dependencies = []`) |
+| Rust | `cargo audit` | **6 vulnerabilities at baseline, all `zip` 4.6.1** (RUSTSEC-2026-0367, -0368, -0369, -0429 and new -0545: AES entries returned without checking their authentication code; new -0548: `ZipStreamReader` uses local-header names that can differ from the central directory) -> **0** via `tauri-plugin-updater` 2.14.1. Informational warnings (transitive, no fix available): unmaintained `proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`, unsound `glib` 0.18, and **new this week**: unmaintained `chrono` 0.4.44 (RUSTSEC-2026-0543), which comes in through the Tauri dependency tree. |
+
+### Other observations
+- `cargo clippy --all-targets -- -D warnings` (Rust 1.97) still fails with the one `needless_borrow` lint at `apps/desktop/src-tauri/src/main.rs:623` (`build_app_menu(&app.handle())` should be `build_app_menu(app.handle())`). No workflow runs clippy, so CI is unaffected. Still not changed here (code, not dependencies); a one-character fix if wanted.
+- `apps/desktop/src-tauri/Cargo.toml` declares `rust-version = "1.77"`, but every current Tauri crate needs Rust 1.90 (`zip` 9 needs 1.88). The field is out of date; it does not break anything, because the release workflow builds with the latest stable Rust. Owner's call whether to raise it to 1.90.
+- **Suggested owner check before the next release:** the updater plugin jumped two minor versions and now checks the package signature before installing. A test build (`docs/releasing.md`, "Test builds") that installs an update from the previous release would confirm the in-app update flow end to end. Nothing in the local tests can cover that.
+- `pnpm-lock.yaml` is still present and not used by CI (unchanged, not touched).
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` | 6.0.3 | 7.0.2 | Major. `typescript-eslint` 8.73.0 still requires `typescript` `>=4.8.4 <6.1.0`; it supports TypeScript 7 only through the `@typescript/native` preview (7.1 dev/beta builds). Wait for a stable `typescript-eslint` release that accepts 7.x. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.3 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. Unchanged. |
+| `tauri` and Tauri crates | 2.12.7 | 3.0.0-alpha.6 | Pre-release of the next major only; nothing to do. |
+
+Resolved since last week: `minimatch` (now 11.0.9 through eslint/typescript-eslint) and `zip` (now 9.7.0 through `tauri-plugin-updater` 2.14.1).
+
+---
+
 ## 2026-11-12 (merge round: open PRs cleared)
 
 At the owner's request every open PR was merged or closed:
