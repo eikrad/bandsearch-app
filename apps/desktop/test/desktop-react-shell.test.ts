@@ -245,3 +245,29 @@ test("a status clearing while another screen is shown does not repaint that scre
 
   assert.equal(painted.length, paintsBefore, "settings is not re-rendered (it would repeat its IPC)");
 });
+
+test("a failed save stays on screen for the error timeout, not the confirmation one", async () => {
+  // UI_GUIDELINES: a confirmation clears after 3 s, an error after 10.
+  const delays: number[] = [];
+  const shell = createDesktopReactShell({
+    renderAdapter: {
+      getViewProps: () => chatViewProps({ modeValue: "fresh", modeOptions: [], cards: [] }),
+      onModeChange: () => ({}),
+      onSubmitQuery: async () => ({}),
+    },
+    actionHandlers: {
+      onSave: async () => { throw new Error("offline"); },
+      onRate: async () => { throw new Error("offline"); },
+      onUnsave: async () => { throw new Error("offline"); },
+      onSaveCategoryNote: async () => { throw new Error("offline"); },
+    },
+    setTimeoutImpl: (_fn, ms) => { delays.push(ms); return 1; },
+  });
+
+  await shell.saveBand({ name: "Fen" }).catch(() => {});
+  await shell.rateBand({ name: "Fen" }, 4).catch(() => {});
+  await shell.unsaveBand("b1", "Fen").catch(() => {});
+  await shell.saveCategoryNote({ name: "Fen" }, { note: "x" }).catch(() => {});
+
+  assert.deepEqual(delays, [10000, 10000, 10000, 10000]);
+});

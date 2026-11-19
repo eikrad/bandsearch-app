@@ -45,8 +45,9 @@ export function createDesktopReactShell({
   // action whose handler re-renders anyway. Today that is only the status timer.
   const changeListeners = new Set<() => void>();
 
-  function scheduleStatusClear(customDelayMs?: number) {
-    const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
+  // An error stays longer than a confirmation: it is the one the user has to read.
+  function scheduleStatusClear() {
+    const delayMs = actionStatus?.type === "error" ? errorStatusTimeoutMs : statusTimeoutMs;
     if (clearStatusTimer) clearTimeout(clearStatusTimer);
     clearStatusTimer = setTimeoutImpl(() => {
       actionStatus = null;
@@ -64,7 +65,7 @@ export function createDesktopReactShell({
       return await start();
     } catch (error) {
       actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
-      scheduleStatusClear(errorStatusTimeoutMs);
+      scheduleStatusClear();
       throw new Error("query failed", { cause: error });
     }
   }
@@ -112,7 +113,7 @@ export function createDesktopReactShell({
         return await renderAdapter.onFeedback?.(feedbackType);
       } catch (error) {
         actionStatus = { type: "error", message: "Your feedback could not be sent." };
-        scheduleStatusClear(errorStatusTimeoutMs);
+        scheduleStatusClear();
         throw error;
       }
     },
