@@ -1,4 +1,4 @@
-import { fitObscurityTarget } from "../../obscurityTargets.js";
+import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -16,16 +16,18 @@ export type VerifiedCandidate = {
   listenerCount?: number | null;
 };
 
-/** The ranker's pool under an obscurity target: in-range candidates, topped up to this many. */
+/** The ranker's pool under an obscurity target: in range or near it, topped up to this many. */
 export const OBSCURITY_POOL_MIN = 5;
 
 /**
- * Narrows the ranker's pool to the requested obscurity target's listener range
- * (#325), with a floor as well as a ceiling. When fewer than OBSCURITY_POOL_MIN
- * candidates are in range, the nearest misses in either direction fill up the
- * pool, in-range first. How a candidate fits, missing counts included, is
- * fitObscurityTarget's rule, which the eval shares; when it has nothing to fit
- * against, the pool passes unchanged.
+ * Narrows the ranker's pool to the requested obscurity target (#325), with a
+ * floor as well as a ceiling. Far misses are dropped in both directions; near
+ * misses stay behind the in-range candidates, because the filter cannot see a
+ * query's hard constraints and the ranker can. When fewer than
+ * OBSCURITY_POOL_MIN candidates are left, the nearest far misses fill up the
+ * pool. How a candidate fits, missing counts included, is fitObscurityTarget's
+ * rule, which the eval shares; when it has nothing to fit against, the pool
+ * passes unchanged.
  */
 export function filterCandidatesByObscurity(
   candidates: VerifiedCandidate[],
@@ -34,10 +36,10 @@ export function filterCandidatesByObscurity(
   const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), obscurityTarget);
   if (!fits) return candidates;
   const byMiss = candidates
-    .map((c, i) => ({ c, miss: fits[i]!.miss }))
-    .sort((a, b) => a.miss - b.miss);
-  const inRange = fits.filter((f) => f.fit === "inRange").length;
-  return byMiss.slice(0, Math.max(inRange, OBSCURITY_POOL_MIN)).map((x) => x.c);
+    .map((c, i) => ({ c, fit: fits[i]! }))
+    .sort((a, b) => a.fit.miss - b.fit.miss);
+  const near = fits.filter(isNearTarget).length;
+  return byMiss.slice(0, Math.max(near, OBSCURITY_POOL_MIN)).map((x) => x.c);
 }
 
 export type MusicBrainzVerifyClient = {

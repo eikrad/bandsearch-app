@@ -75,8 +75,9 @@ place and is now under Deferred; #180's premise changed (see item 3).
        ranker had been picking the smallest. Regression: `japanese-post-rock`
        traded "from Japan" for the range (the filter cannot see hard
        constraints)
-     - [ ] Filter tolerance: drop only far misses, leave near misses to the
-       ranker, so a hard constraint can outweigh the range
+     - [x] Filter tolerance: drop only far misses (more than 10× outside the
+       range), leave near misses to the ranker, so a hard constraint can
+       outweigh the range ✓ Done
      - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
        golden judge already scores both directions)
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render

@@ -95,7 +95,7 @@ test("mergeVerifiedCandidates prefers verified:true entry on collision (same mbi
   assert.equal(result[0].mbid, "mbid-pog");
 });
 
-// ─── filterCandidatesByObscurity (#325: floor and ceiling) ───────────────────
+// ─── filterCandidatesByObscurity (#325: floor, ceiling, near misses) ─────────
 
 function makeCandidate(name: string, listenerCount: number | null): VerifiedCandidate {
   return { name, listenerCount, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] };
@@ -108,12 +108,12 @@ test("without an obscurity target every candidate reaches the ranker", () => {
   assert.deepEqual(names(filterCandidatesByObscurity(candidates)), ["Huge", "Tiny"]);
 });
 
-test("with enough candidates in range, only those reach the ranker: too obscure is dropped like too mainstream", () => {
+test("far misses are dropped in both directions: more than ten times off the range", () => {
   const candidates = [
-    makeCandidate("Too obscure", 900),
+    makeCandidate("Far too obscure", 900),
     makeCandidate("Cult A", 30_000),
     makeCandidate("Cult B", 120_000),
-    makeCandidate("Too mainstream", 2_000_000),
+    makeCandidate("Far too mainstream", 6_000_000),
     makeCandidate("Cult C", 20_000),
     makeCandidate("Cult D", 500_000),
     makeCandidate("Cult E", 75_000),
@@ -124,7 +124,40 @@ test("with enough candidates in range, only those reach the ranker: too obscure 
   );
 });
 
-test("with too few in range, the nearest misses fill up the ranker's pool, in-range first", () => {
+test("near misses stay in the pool behind the in-range candidates, for the ranker to weigh against the query", () => {
+  // A query's hard constraint ("from Japan") may only be met just outside the
+  // range; the filter cannot see constraints, the ranker can.
+  const candidates = [
+    makeCandidate("Just too obscure", 15_000),
+    makeCandidate("Cult A", 30_000),
+    makeCandidate("Cult B", 120_000),
+    makeCandidate("Bit too mainstream", 900_000),
+    makeCandidate("Cult C", 20_000),
+    makeCandidate("Far too obscure", 900),
+    makeCandidate("Cult D", 500_000),
+    makeCandidate("Cult E", 75_000),
+  ];
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")),
+    ["Cult A", "Cult B", "Cult C", "Cult D", "Cult E", "Just too obscure", "Bit too mainstream"],
+  );
+});
+
+test("ten times off the range is still near; beyond that it is far", () => {
+  const candidates = [
+    ...["A", "B", "C", "D", "E"].map((n) => makeCandidate(`Cult ${n}`, 100_000)),
+    makeCandidate("Floor / 10", 2_000),
+    makeCandidate("Below floor / 10", 1_999),
+    makeCandidate("Ceiling x 10", 5_000_000),
+    makeCandidate("Above ceiling x 10", 5_000_001),
+  ];
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")).slice(5),
+    ["Floor / 10", "Ceiling x 10"],
+  );
+});
+
+test("with too few in range or near it, the nearest far misses fill up the ranker's pool", () => {
   const candidates = [
     makeCandidate("Far too obscure", 300),
     makeCandidate("Just too obscure", 15_000),

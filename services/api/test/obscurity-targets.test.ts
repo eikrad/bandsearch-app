@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../src/obscurityTargets.js";
+import { NEAR_MISS_FACTOR, OBSCURITY_TARGET_RANGES, fitObscurityTarget, isNearTarget } from "../src/obscurityTargets.js";
 
 const fits = (listeners: Array<number | null | undefined>, target: string | null | undefined) =>
   fitObscurityTarget(listeners, target)?.map((f) => f.fit) ?? null;
@@ -56,4 +56,10 @@ test("without a recognised target there is no fit to judge", () => {
   assert.equal(fitObscurityTarget([3_000], undefined), null);
   assert.equal(fitObscurityTarget([3_000], null), null);
   assert.equal(fitObscurityTarget([3_000], "mainstream"), null);
+});
+
+test("a miss up to ten times outside the range is near; further off is far", () => {
+  const near = (listeners: number[]) => fitObscurityTarget(listeners, "underground")!.map(isNearTarget);
+  assert.deepEqual(near([10_000, 200, 199, 500_000, 500_001]), [true, true, false, true, false]);
+  assert.equal(NEAR_MISS_FACTOR, 10);
 });

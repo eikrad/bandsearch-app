@@ -34,6 +34,20 @@ function rangeMiss(listeners: number, target: ObscurityTarget): number {
 export type TargetFit = { fit: ObscurityTargetFit; miss: number };
 
 /**
+ * A band at most this many times outside its target's range is a near miss
+ * (#325): for Cult Following, 2k–20k or 500k–5M listeners. A near miss may be
+ * the only way to meet a query's hard constraint ("from Japan"), so the search
+ * leaves it to the ranker, which sees the query. Anything further off is a far
+ * miss. Either way the eval counts it as outside the range.
+ */
+export const NEAR_MISS_FACTOR = 10;
+
+/** In range, or a near miss: within NEAR_MISS_FACTOR of the range. */
+export function isNearTarget(fit: TargetFit): boolean {
+  return fit.miss <= Math.log(NEAR_MISS_FACTOR);
+}
+
+/**
  * Fits the bands of one request against its obscurity target. The search's
  * filter and the eval both decide by this, so they cannot drift apart (#325):
  *
