@@ -77,7 +77,10 @@ place and is now under Deferred; #180's premise changed (see item 3).
        constraints)
      - [x] Filter tolerance: drop only far misses (more than 10× outside the
        range), leave near misses to the ranker, so a hard constraint can
-       outweigh the range ✓ Done
+       outweigh the range ✓ Done. Measured 2026-11-19 (1 run):
+       `japanese-post-rock` passes again, with Japanese bands inside the range;
+       Cult + Underground in range 32 of 33; pass rate 0.75, constraint rate
+       0.80, judge obscurity fit 0.88. One run, so within run-to-run noise
      - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
        golden judge already scores both directions)
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
