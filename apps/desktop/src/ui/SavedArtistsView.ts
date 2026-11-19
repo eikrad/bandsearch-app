@@ -1,6 +1,7 @@
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
 import type { SavedArtistItemProps, SavedArtistsHandlers, SavedArtistsViewProps } from "./viewTypes.js";
 import * as React from "react";
+import { StatusBanner } from "./StatusBanner.js";
 
 const theme = {
   pageBg: "#0d0f14",
@@ -485,6 +486,9 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArti
       ),
       React.createElement("hr", { style: styles.divider }),
     ),
+    viewProps.statusMessage
+      ? React.createElement("div", { style: { marginTop: "16px" } }, React.createElement(StatusBanner, { status: viewProps.statusMessage }))
+      : null,
     React.createElement(SearchSection, { searchResults, isSearching, handlers }),
     selectedCount > 0
       ? React.createElement(SelectionBar, { selectedCount, handlers })

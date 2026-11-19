@@ -116,3 +116,52 @@ test("navigating to the privacy policy sets a shareable hash", () => {
 
   assert.equal(hash, "#/privacy");
 });
+
+/** Like a real browser: setting the hash fires `hashchange` later, not inside the call. */
+function createBrowserLikeRouter(initialHash = "") {
+  let currentHash = initialHash;
+  const listeners: Array<() => void> = [];
+  const router = createHashRouter({
+    getHash: () => currentHash,
+    setHash: (hash) => { currentHash = hash; },
+    addListener: (fn) => listeners.push(fn),
+    removeListener: () => {},
+  });
+  return {
+    router,
+    fireHashChange: () => listeners.forEach((fn) => fn()),
+    setHashFromOutside: (hash: string) => { currentHash = hash; listeners.forEach((fn) => fn()); },
+  };
+}
+
+test("navigate tells listeners at once rather than waiting for the browser", () => {
+  const { router } = createBrowserLikeRouter("");
+  const changes: string[] = [];
+  router.onRouteChange((route) => changes.push(route));
+
+  router.navigate("saved");
+
+  assert.deepEqual(changes, ["saved"]);
+});
+
+test("the browser's echo of our own navigation is not reported a second time", () => {
+  const { router, fireHashChange } = createBrowserLikeRouter("");
+  const changes: string[] = [];
+  router.onRouteChange((route) => changes.push(route));
+
+  router.navigate("settings");
+  fireHashChange();
+
+  assert.deepEqual(changes, ["settings"]);
+});
+
+test("a hash change from outside, such as the back button, is still reported", () => {
+  const { router, setHashFromOutside } = createBrowserLikeRouter("");
+  const changes: string[] = [];
+  router.onRouteChange((route) => changes.push(route));
+
+  router.navigate("saved");
+  setHashFromOutside("#/");
+
+  assert.deepEqual(changes, ["saved", "home"]);
+});

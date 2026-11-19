@@ -239,6 +239,7 @@ async function startAgainstWakingApi(downFor: number) {
   });
   const routes: string[] = [];
   let connectingProps: (() => { state: string; attempt?: number }) | undefined;
+  let finalRoute = (): string => "";
 
   await startDesktopBrowserApp({
     // Onboarding complete, otherwise the welcome gate short-circuits the auth
@@ -259,6 +260,7 @@ async function startAgainstWakingApi(downFor: number) {
       bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
       bootstrapDesktopReactApp: (options) => {
         connectingProps = options.getConnectingViewProps;
+        finalRoute = () => options.router?.getRoute() ?? "";
         routes.push(options.router?.getRoute() ?? "");
         return fakeReactApp({
           mount: async () => { routes.push(options.router?.getRoute() ?? ""); return {}; },
@@ -268,6 +270,9 @@ async function startAgainstWakingApi(downFor: number) {
     },
   });
 
+  // Routing on renders through the router's listener, which this fake app has
+  // none of; where the user ended up is what the router says.
+  routes.push(finalRoute());
   Object.defineProperty(globalThis, "location", {
     value: prevLocation, configurable: true, writable: true,
   });

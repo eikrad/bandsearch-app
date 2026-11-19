@@ -66,4 +66,6 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Session store** — separate from the preference store; holds `chat_sessions` and `chat_messages`. Adapters: SQLite (`better-sqlite3`), in-memory, and Turso/libSQL (`tursoChatSessionRepository`). Selected via `PREFERENCE_STORE` env var alongside the preference and user repositories.
 
+- **App session** — the desktop module that decides which screen the user may see: Welcome, Connecting, Login, Register, or the app (`apps/desktop/src/appSession.ts`). It holds what that decision reads — the account flags from `/auth/status`, the token, the Connecting progress — and handles every event that changes it: startup, Retry, login, registration, password reset, account deletion and a rejected token. Events only change the token; every way into the chat goes through `enterApp()`, which asks `/auth/status` again unless this run has already let the user in. Ordinary moves between Chat, Saved Artists, Settings and Privacy are plain navigation and not its business (#313).
+
 - **Sidecar** — the Node.js API process spawned as a child process by the Tauri desktop shell. In development, it uses the system `node`. In production bundles, a bundled Node binary named `node-<target-triple>[.exe]` is expected in `apps/desktop/src-tauri/binaries/`.

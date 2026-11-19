@@ -53,18 +53,32 @@ export function createHashRouter({
   },
 }: HashRouterOptions = {}) {
   const changeCallbacks: Array<(route: string) => void> = [];
+  // The route listeners last heard about. A browser fires `hashchange` for our
+  // own navigate() too, after the fact; this tells that echo apart from a real
+  // change such as the back button, so a screen is not rendered twice.
+  let reportedRoute = hashToRoute(getHash());
 
   function getRoute(): string {
     return hashToRoute(getHash());
   }
 
+  function report(route: string): void {
+    reportedRoute = route;
+    changeCallbacks.forEach((fn) => fn(route));
+  }
+
+  /** Changes the route and tells listeners before returning, in every environment. */
   function navigate(route: string): void {
-    setHash(routeToHash(route));
+    const hash = routeToHash(route);
+    reportedRoute = hashToRoute(hash);
+    setHash(hash);
+    report(hashToRoute(hash));
   }
 
   function handleHashChange(): void {
     const route = getRoute();
-    changeCallbacks.forEach((fn) => fn(route));
+    if (route === reportedRoute) return;
+    report(route);
   }
 
   addListener(handleHashChange);

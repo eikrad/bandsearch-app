@@ -5,11 +5,9 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatAppView } from "./ChatAppView.js";
 import { formatRecommendationQueryError } from "../apiErrorMessages.js";
+import { createStatusMessage, type StatusMessage, type TimerHandle } from "../statusMessage.js";
 
-type ActionStatus = { type: "success" | "error"; message: string } | null;
-
-/** Node returns a Timeout, browsers and test fakes return a number. */
-type TimerHandle = ReturnType<typeof setTimeout> | number;
+type ActionStatus = StatusMessage | null;
 
 interface CreateDesktopReactShellOptions {
   renderAdapter: {
@@ -39,21 +37,11 @@ export function createDesktopReactShell({
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
 }: CreateDesktopReactShellOptions) {
-  let actionStatus: ActionStatus = null;
-  let clearStatusTimer: TimerHandle | null = null;
-  // Who to tell when the view props change on their own, without a user
-  // action whose handler re-renders anyway. Today that is only the status timer.
-  const changeListeners = new Set<() => void>();
-
-  function scheduleStatusClear(customDelayMs?: number) {
-    const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
-    if (clearStatusTimer) clearTimeout(clearStatusTimer);
-    clearStatusTimer = setTimeoutImpl(() => {
-      actionStatus = null;
-      clearStatusTimer = null;
-      for (const listener of changeListeners) listener();
-    }, delayMs);
-  }
+  const status = createStatusMessage({
+    confirmationMs: statusTimeoutMs,
+    errorMs: errorStatusTimeoutMs,
+    setTimeoutImpl,
+  });
 
   /**
    * Search and Retry fail the same way: an inline error the user can act on.
@@ -63,8 +51,7 @@ export function createDesktopReactShell({
     try {
       return await start();
     } catch (error) {
-      actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
-      scheduleStatusClear(errorStatusTimeoutMs);
+      status.show({ type: "error", message: formatRecommendationQueryError(error) });
       throw new Error("query failed", { cause: error });
     }
   }
@@ -82,12 +69,11 @@ export function createDesktopReactShell({
   const shell = {
     /** Calls `listener` when the view props change outside a handler. Returns an unsubscribe. */
     subscribe(listener: () => void) {
-      changeListeners.add(listener);
-      return () => { changeListeners.delete(listener); };
+      return status.subscribe(listener);
     },
     getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();
-      return { ...base, actionStatus };
+      return { ...base, actionStatus: status.get() };
     },
     async updateMode(mode: string) {
       return handlers.onModeChange(mode);
@@ -111,8 +97,7 @@ export function createDesktopReactShell({
       try {
         return await renderAdapter.onFeedback?.(feedbackType);
       } catch (error) {
-        actionStatus = { type: "error", message: "Your feedback could not be sent." };
-        scheduleStatusClear(errorStatusTimeoutMs);
+        status.show({ type: "error", message: "Your feedback could not be sent." });
         throw error;
       }
     },
@@ -122,39 +107,33 @@ export function createDesktopReactShell({
     async saveBand(target: SavedBandTarget) {
       try {
         const result = await handlers.onSave(target);
-        actionStatus = { type: "success", message: `Saved ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Saved ${target.name}.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Save failed for ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Save failed for ${target.name}.` });
         throw error;
       }
     },
     async rateBand(target: SavedBandTarget, rating: number | null) {
       try {
         const result = await handlers.onRate(target, rating);
-        actionStatus =
-          rating === null
-            ? { type: "success", message: `Cleared the rating for ${target.name}.` }
-            : { type: "success", message: `Rated ${target.name}: ${rating}/5.` };
-        scheduleStatusClear();
+        status.show({
+          type: "success",
+          message: rating === null ? `Cleared the rating for ${target.name}.` : `Rated ${target.name}: ${rating}/5.`,
+        });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Rating failed for ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Rating failed for ${target.name}.` });
         throw error;
       }
     },
     async unsaveBand(savedBandId: string, artistName: string) {
       try {
         const result = await handlers.onUnsave(savedBandId, artistName);
-        actionStatus = { type: "success", message: `Removed ${artistName} from saved artists.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Removed ${artistName} from saved artists.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Could not remove ${artistName}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Could not remove ${artistName}.` });
         throw error;
       }
     },
@@ -164,12 +143,10 @@ export function createDesktopReactShell({
     ) {
       try {
         const result = await handlers.onSaveCategoryNote(target, updates);
-        actionStatus = { type: "success", message: `Updated ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Updated ${target.name}.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Could not update ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Could not update ${target.name}.` });
         throw error;
       }
     },
