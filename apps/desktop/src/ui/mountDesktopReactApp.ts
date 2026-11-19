@@ -31,6 +31,8 @@ export type MountShell = {
   updateObscurityTarget?(target: string | undefined): unknown;
   submitFeedback?(feedbackType: string): Promise<unknown>;
   dismissFeedback?(): void;
+  /** View props changed without a handler (a status message timing out). */
+  subscribe?(listener: () => void): unknown;
 };
 
 // The mount dispatches to views with differing prop shapes, so prop types are
@@ -155,9 +157,15 @@ export function createDesktopReactMount({
     paint();
   }
 
+  // Whether the chat view is what was last painted. Changes the shell reports
+  // on its own repaint only the chat: re-rendering settings, for one, would
+  // repeat its IPC just to clear a message nobody can see.
+  let chatOnScreen = false;
+
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
     if (route !== "saved") savedArtistsLoaded = false;
+    chatOnScreen = false;
 
     if (route === "login") {
       renderRoot(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
@@ -239,9 +247,14 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
+    chatOnScreen = true;
     renderRoot(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
+
+  shell.subscribe?.(() => {
+    if (chatOnScreen) void renderCurrent();
+  });
 
   const handlers = {
     onModeChange: async (mode: string) => {

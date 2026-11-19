@@ -7,7 +7,13 @@ import { validateObscurityTarget } from "../../../../shared/schemas/src/contract
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { FeedbackReactionBar } from "./FeedbackReactionBar.js";
-import { nextRatingForStarTap, parseCategoriesInput } from "../cardActionLogic.js";
+import {
+  categoryNoteUpdates,
+  editCategories,
+  editNote,
+  nextRatingForStarTap,
+  startCategoryNoteDraft,
+} from "../cardActionLogic.js";
 
 function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
@@ -183,11 +189,8 @@ function CategoryNoteSheet({
   onSave: (updates: CategoryNoteUpdates) => void;
   onClose: () => void;
 }) {
-  const [categoriesText, setCategoriesText] = React.useState(card.categories.join(", "));
-  const [categoriesTouched, setCategoriesTouched] = React.useState(false);
-  const [note, setNote] = React.useState(card.note);
-  const [noteTouched, setNoteTouched] = React.useState(false);
-  const isPrefilled = !card.noteEdited && card.note.length > 0;
+  // What gets sent is decided by the draft (cardActionLogic.ts), not here.
+  const [draft, setDraft] = React.useState(() => startCategoryNoteDraft(card));
 
   const fieldLabelStyle: React.CSSProperties = {
     display: "grid",
@@ -230,10 +233,10 @@ function CategoryNoteSheet({
       "Category (comma-separated)",
       React.createElement("input", {
         type: "text",
-        value: categoriesText,
+        value: draft.categoriesText,
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-          setCategoriesText(event.target.value);
-          setCategoriesTouched(true);
+          const text = event.target.value;
+          setDraft((current) => editCategories(current, text));
         },
         style: fieldStyle,
       }),
@@ -242,7 +245,7 @@ function CategoryNoteSheet({
       "label",
       fieldLabelStyle,
       "Note",
-      isPrefilled
+      draft.noteIsAiSuggested
         ? React.createElement(
             "span",
             { style: { fontSize: "11px", fontStyle: "italic" } },
@@ -250,10 +253,10 @@ function CategoryNoteSheet({
           )
         : null,
       React.createElement("textarea", {
-        value: note,
+        value: draft.note,
         onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-          setNote(event.target.value);
-          setNoteTouched(true);
+          const text = event.target.value;
+          setDraft((current) => editNote(current, text));
         },
         rows: 3,
         style: { ...fieldStyle, resize: "vertical" as const },
@@ -283,10 +286,7 @@ function CategoryNoteSheet({
         "button",
         {
           type: "button",
-          onClick: () => onSave({
-            ...(categoriesTouched ? { categories: parseCategoriesInput(categoriesText) } : {}),
-            ...(noteTouched ? { note } : {}),
-          }),
+          onClick: () => onSave(categoryNoteUpdates(draft)),
           style: {
             backgroundColor: theme.accent,
             color: "#0a0d14",

@@ -41,6 +41,9 @@ export function createDesktopReactShell({
 }: CreateDesktopReactShellOptions) {
   let actionStatus: ActionStatus = null;
   let clearStatusTimer: TimerHandle | null = null;
+  // Who to tell when the view props change on their own, without a user
+  // action whose handler re-renders anyway. Today that is only the status timer.
+  const changeListeners = new Set<() => void>();
 
   function scheduleStatusClear(customDelayMs?: number) {
     const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
@@ -48,6 +51,7 @@ export function createDesktopReactShell({
     clearStatusTimer = setTimeoutImpl(() => {
       actionStatus = null;
       clearStatusTimer = null;
+      for (const listener of changeListeners) listener();
     }, delayMs);
   }
 
@@ -76,6 +80,11 @@ export function createDesktopReactShell({
   };
 
   const shell = {
+    /** Calls `listener` when the view props change outside a handler. Returns an unsubscribe. */
+    subscribe(listener: () => void) {
+      changeListeners.add(listener);
+      return () => { changeListeners.delete(listener); };
+    },
     getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();
       return { ...base, actionStatus };
