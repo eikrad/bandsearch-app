@@ -57,6 +57,17 @@ place and is now under Deferred; #180's premise changed (see item 3).
    budget; the default has been 180 s since 2026-09-16, so first check with one
    live run whether reflection now runs before treating it as broken. Each change measured
    with 3 judged golden runs against the deepseek baseline.
+   - **#325 — obscurity targets have no lower bound** (added 2026-11-19): every
+     level drifts toward Truly Obscure; 65% of Cult Following and 56% of
+     Underground picks are below their range. Targets are now listener ranges
+     (Cult 20k–500k, Underground 2k–50k, Obscure up to 5k).
+     - [x] Step 1: measure both directions — in-range rate and per-target fit in
+       the eval dashboard, two-sided judge rubric, fit counts in the research
+       log around the obscurity filter ✓ Done
+     - [ ] Step 2–5: filter, ranker and planner use the ranges (floor and
+       ceiling); fewer Bandcamp-only queries for Cult and Underground
+     - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
+       golden judge already scores both directions)
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
 5. **#238 — desktop defaults to the Render deployment**, local sidecar as an
