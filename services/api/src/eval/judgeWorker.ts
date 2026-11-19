@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
-import { OBSCURITY_THRESHOLDS } from "./obscurityScorer.js";
+import { OBSCURITY_TARGET_RANGES, obscurityTargetFit } from "../obscurityTargets.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { errorMessage, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../agent/modelUtils.js";
 import type { LlmConfig } from "../config/models.js";
@@ -13,7 +13,6 @@ export type JudgeInput = {
   why?: string;
   sourceSignals?: string[];
   listeners?: number | null;
-  obscurityTier?: string | null;
   citationSupportRate?: number;
   genericWhyFlag?: boolean;
 };
@@ -26,19 +25,21 @@ export type JudgeScoreObject = {
   reasoning?: unknown;
 };
 
-// Derive the tier description from OBSCURITY_THRESHOLDS so the judge's notion of
-// each tier stays identical to the deterministic classifier (obscurityScorer).
-// Changing the thresholds in one place keeps the prompt — and calibration — in sync.
+// Derived from OBSCURITY_TARGET_RANGES so the judge's notion of each target stays
+// identical to the in-range metric (#325). Changing a range in one place keeps
+// the prompt — and calibration — in sync.
 const fmt = (n: number) => n.toLocaleString("en-US");
+const fmtRange = ({ min, max }: { min: number; max: number }) => `${fmt(min)}–${fmt(max)}`;
 const OBSCURITY_FIT_GUIDANCE =
   `How well does the band match the requested obscurity target? ` +
-  `Tiers by Last.fm listeners — ` +
-  `cult = ${fmt(OBSCURITY_THRESHOLDS.cult)}–${fmt(OBSCURITY_THRESHOLDS.mainstream)}, ` +
-  `underground = ${fmt(OBSCURITY_THRESHOLDS.underground)}–${fmt(OBSCURITY_THRESHOLDS.cult)}, ` +
-  `obscure = under ${fmt(OBSCURITY_THRESHOLDS.underground)}, ` +
-  `mainstream = over ${fmt(OBSCURITY_THRESHOLDS.mainstream)}. ` +
-  `Each band includes its computed obscurity_tier; reward a tier at or below the target ` +
-  `and penalise bands more mainstream than requested. Ignore this if no target given.`;
+  `Target ranges by Last.fm listeners — ` +
+  `cult = ${fmtRange(OBSCURITY_TARGET_RANGES.cult)}, ` +
+  `underground = ${fmtRange(OBSCURITY_TARGET_RANGES.underground)}, ` +
+  `obscure = ${fmtRange(OBSCURITY_TARGET_RANGES.obscure)}. ` +
+  `Each band includes target_range_fit: inRange, tooObscure, tooMainstream, or unknown when Last.fm has no count. ` +
+  `Score high inside the range and lower the further outside it the band falls, in either direction: ` +
+  `a band far more obscure than the target misses it just as a band far more mainstream does. ` +
+  `For unknown, judge from the evidence. Ignore this if no target given.`;
 
 const JUDGE_SYSTEM_PROMPT = `You are an expert music recommendation quality judge. Your task is to evaluate a list of band recommendations against a user's query and produce a JSON object with one score entry per band.
 
@@ -70,7 +71,7 @@ export function buildJudgePrompt(bands: JudgeInput[]): { system: string; user: s
       why: b.why ?? "",
       source_signals: b.sourceSignals ?? [],
       listeners: b.listeners ?? null,
-      obscurity_tier: b.obscurityTier ?? null,
+      target_range_fit: obscurityTargetFit(b.listeners, b.obscurityTarget),
       citation_support_rate: b.citationSupportRate ?? null,
       generic_why_flag: b.genericWhyFlag ?? null,
     })),

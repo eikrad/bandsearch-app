@@ -585,7 +585,7 @@ test("the golden judge sees what the live judge sees: why, sources, listeners an
   assert.match(String(fen.why), /fens/);
   assert.deepEqual(fen.source_signals, ["https://fen.bandcamp.com"]);
   assert.equal(fen.listeners, 12000);
-  assert.equal(fen.obscurity_tier, "underground");
+  assert.equal(fen.target_range_fit, "inRange");
   assert.equal(fen.citation_support_rate, 1);
 });
 
