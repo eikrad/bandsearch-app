@@ -180,7 +180,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }).catch((error: unknown) => {
       // Broad searches can still succeed when planning fails within its cap.
       log("warn", "research_plan_fallback", { reason: errorMessage(error) });
-      return { searchPlan: fallbackSearchPlan(state.userQuery) };
+      return { searchPlan: fallbackSearchPlan(state.userQuery, state.obscurityTarget) };
     }))
     .addNode("brave_initial", async (state) => {
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];

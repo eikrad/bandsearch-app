@@ -1,6 +1,7 @@
 import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
-import type { ChatMessage } from "../../../../../shared/schemas/src/contracts.js";
+import { validateObscurityTarget, type ChatMessage, type ObscurityTarget } from "../../../../../shared/schemas/src/contracts.js";
+import { OBSCURITY_TARGET_RANGES } from "../../obscurityTargets.js";
 import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
@@ -113,11 +114,44 @@ export type WebSearchPlannerInput = {
   obscurityTarget?: string;
 };
 
-const OBSCURITY_CONSTRAINT: Record<string, string> = {
-  cult: "Prioritise bands with 50k–500k Last.fm listeners — niche enough to feel like a discovery, not totally unknown.",
-  underground: "Prioritise bands with under 50k Last.fm listeners — genuinely underground, avoid any mainstream crossover acts.",
-  obscure: "Prioritise bands with under 5k Last.fm listeners — truly obscure, deep-cut discoveries only.",
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+/** Where bands of each target's size get written about; Bandcamp alone skews obscure (#325). */
+const OBSCURITY_SOURCES: Record<ObscurityTarget, string> = {
+  cult:
+    "Favour sources where scene-known acts appear: site:last.fm/music/<anchor>/+similar, rateyourmusic genre lists and charts, " +
+    "sputnikmusic, reddit r/ifyoulikeblank. Use site:bandcamp.com for at most a quarter of the queries.",
+  underground:
+    "Mix sources: site:bandcamp.com for at most half the queries; the rest on last.fm similar-artist pages, rateyourmusic, reddit and niche blogs.",
+  obscure: "Bandcamp tags and FFO pages, DIY labels and niche blogs find the smallest acts.",
 };
+
+/** The planner's obscurity instruction, from the same ranges the filter and eval use (#325). */
+function obscurityConstraint(target: ObscurityTarget): string {
+  const { min, max } = OBSCURITY_TARGET_RANGES[target];
+  return `Find bands with ${fmt(min)}–${fmt(max)} Last.fm listeners; a band below the range is as wrong as one above it. ${OBSCURITY_SOURCES[target]}`;
+}
+
+const isBandcampQuery = (q: string) => /bandcamp\.com/i.test(q);
+
+/**
+ * Only the first queries are searched in the initial round, so their order
+ * decides the candidate pool. Bandcamp finds the smallest acts: for Cult
+ * Following its queries go last, for Underground they alternate with the
+ * others, other first. Nothing is dropped.
+ */
+function orderQueriesForTarget(queries: string[], target: ObscurityTarget | undefined): string[] {
+  if (target !== "cult" && target !== "underground") return queries;
+  const bandcamp = queries.filter(isBandcampQuery);
+  const other = queries.filter((q) => !isBandcampQuery(q));
+  if (target === "cult") return [...other, ...bandcamp];
+  const out: string[] = [];
+  for (let i = 0; i < Math.max(bandcamp.length, other.length); i++) {
+    if (other[i] !== undefined) out.push(other[i]);
+    if (bandcamp[i] !== undefined) out.push(bandcamp[i]);
+  }
+  return out;
+}
 
 function buildPlannerUserContent(input: WebSearchPlannerInput): string {
   const wrappedQuery = wrapUserContent(String(input.userQuery || "").trim());
@@ -126,16 +160,16 @@ function buildPlannerUserContent(input: WebSearchPlannerInput): string {
   const parts = [`current_user_query: ${wrappedQuery}`];
   if (prefBlock) parts.push(prefBlock);
   if (history) parts.push(`conversation_excerpt:\n${history}`);
-  const constraint = input.obscurityTarget ? OBSCURITY_CONSTRAINT[input.obscurityTarget] : undefined;
-  if (constraint) parts.push(`obscurity_target (${input.obscurityTarget}): ${constraint}`);
+  const target = validateObscurityTarget(input.obscurityTarget);
+  if (target) parts.push(`obscurity_target (${target}): ${obscurityConstraint(target)}`);
   return parts.join("\n\n");
 }
 
 /** Exported for testing only — do not use in production code */
 export const buildPlannerUserContentForTest = buildPlannerUserContent;
 
-/** Fallback when the model fails: single broad query from user text */
-export function fallbackSearchPlan(userQuery: string): SearchPlan {
+/** Fallback when the model fails: broad queries from the user's text, ordered for the target. */
+export function fallbackSearchPlan(userQuery: string, obscurityTarget?: string): SearchPlan {
   const q = String(userQuery || "").trim();
   const base = q.slice(0, Math.min(q.length, WEB_SEARCH_QUERY_MAX_LENGTH - 60));
   const queries = sanitizeQueries([
@@ -148,7 +182,10 @@ export function fallbackSearchPlan(userQuery: string): SearchPlan {
     styleSignals: [],
     mustHave: [],
     avoid: [],
-    queries: queries.length ? queries : ["niche band site:bandcamp.com FFO similar artists"],
+    queries: orderQueriesForTarget(
+      queries.length ? queries : ["niche band site:bandcamp.com FFO similar artists"],
+      validateObscurityTarget(obscurityTarget),
+    ),
   };
 }
 
@@ -205,17 +242,20 @@ export async function createWebSearchPlanner({
   }
 
   return async function planWebSearches(input: WebSearchPlannerInput): Promise<SearchPlan> {
-    const fallback = fallbackSearchPlan(input.userQuery);
+    const fallback = fallbackSearchPlan(input.userQuery, input.obscurityTarget);
     const userContent = buildPlannerUserContent(input);
     if (!String(input.userQuery || "").trim()) {
       return fallback;
     }
 
+    const target = validateObscurityTarget(input.obscurityTarget);
+    const ordered = (plan: SearchPlan): SearchPlan => ({ ...plan, queries: orderQueriesForTarget(plan.queries, target) });
+
     const first = await invokeOnce(plannerSystemPrompt, userContent);
-    if (first) return first;
+    if (first) return ordered(first);
 
     const second = await invokeOnce(`${plannerSystemPrompt} ${RETRY_SYSTEM_ADDENDUM}`, userContent);
-    if (second) return second;
+    if (second) return ordered(second);
 
     return fallback;
   };

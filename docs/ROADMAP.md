@@ -64,8 +64,11 @@ place and is now under Deferred; #180's premise changed (see item 3).
      - [x] Step 1: measure both directions — in-range rate and per-target fit in
        the eval dashboard, two-sided judge rubric, fit counts in the research
        log around the obscurity filter ✓ Done
-     - [ ] Step 2–5: filter, ranker and planner use the ranges (floor and
-       ceiling); fewer Bandcamp-only queries for Cult and Underground
+     - [x] Step 2–5: filter, ranker and planner use the ranges (floor and
+       ceiling); Bandcamp queries searched last for Cult, alternated for
+       Underground; one fit rule shared by search and eval
+       (`fitObscurityTarget`) ✓ Done
+     - [ ] Measure: 3 judged golden runs against the step-1 baseline
      - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
        golden judge already scores both directions)
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
