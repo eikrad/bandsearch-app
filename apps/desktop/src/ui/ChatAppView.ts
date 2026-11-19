@@ -3,6 +3,7 @@ import type { CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import type { PlatformLink } from "../platformLinks.js";
 import * as React from "react";
+import { StatusBanner } from "./StatusBanner.js";
 import { validateObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
@@ -590,26 +591,6 @@ function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme:
   );
 }
 
-function StatusBanner({ actionStatus }: { actionStatus: ChatViewProps["actionStatus"] }) {
-  if (!actionStatus) return null;
-  const isError = actionStatus.type === "error";
-  return React.createElement(
-    "p",
-    {
-      style: {
-        margin: "0 0 16px 0",
-        padding: "9px 12px",
-        borderRadius: "8px",
-        fontSize: "13px",
-        backgroundColor: isError ? "#2a1218" : "#0f2318",
-        color: isError ? "#f8a8b0" : "#7dd4a8",
-        border: `1px solid ${isError ? "#7a2a35" : "#2a6048"}`,
-      },
-    },
-    actionStatus.message,
-  );
-}
-
 function findLastAssistantWithCardsIndex(messages: MessageViewProps[] | null | undefined): number {
   if (!messages?.length) return -1;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -1000,7 +981,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
                 className: "bandsearch-chat-scroll bandsearch-chat-scroll--main",
                 style: { overflowY: "auto", paddingBottom: "8px" },
               },
-              React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+              React.createElement(StatusBanner, { status: viewProps.actionStatus }),
               React.createElement(MessageThread, {
                 messages: viewProps.messages,
                 theme,
@@ -1045,7 +1026,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
               className: "bandsearch-chat-scroll",
               style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" },
             },
-            React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+            React.createElement(StatusBanner, { status: viewProps.actionStatus }),
             React.createElement(MessageThread, {
               messages: viewProps.messages,
               theme,

@@ -1,6 +1,9 @@
 import type { SavedBandTarget } from "./savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "./domain.js";
 import type { SavedArtistsViewProps } from "./ui/viewTypes.js";
+import { createStatusMessage, type StatusMessage, type StatusMessageOptions } from "./statusMessage.js";
+
+export type ImportOutcome = { imported: number; skipped: number; failed: number };
 
 /** The slice of the bootstrapped app this shell drives. */
 export type SavedArtistsShellCollaborator = {
@@ -14,13 +17,35 @@ export type SavedArtistsShellCollaborator = {
   saveBand(target: SavedBandTarget): Promise<unknown>;
   deleteSavedBand(id: string): Promise<unknown>;
   exportPreferences(): Promise<unknown[]>;
-  importPreferences(bands: unknown[]): Promise<unknown>;
+  importPreferences(bands: unknown[]): Promise<ImportOutcome>;
   createGroup(name: string): Promise<unknown>;
   deleteGroup(id: string): Promise<unknown>;
   autoGroup(): Promise<unknown>;
 };
 
-export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollaborator }) {
+const plural = (n: number) => `${n} artist${n === 1 ? "" : "s"}`;
+
+/** What an import did, in one line. Artists the API refused make it an error. */
+export function describeImport({ imported, skipped, failed }: ImportOutcome): StatusMessage {
+  if (failed > 0) {
+    return { type: "error", message: `Imported ${plural(imported)}; ${failed} could not be imported.` };
+  }
+  const already = skipped > 0 ? `, ${skipped} already saved` : "";
+  return { type: "success", message: `Imported ${plural(imported)}${already}.` };
+}
+
+const NOT_AN_EXPORT: StatusMessage = { type: "error", message: "That file isn't a Bandsearch export." };
+
+export function createSavedArtistsShell({
+  app,
+  status: statusOptions,
+}: {
+  app: SavedArtistsShellCollaborator;
+  status?: StatusMessageOptions;
+}) {
+  // Every action reports its outcome here rather than throwing into a click
+  // handler, where a failure used to vanish without a word (#313).
+  const status = createStatusMessage(statusOptions);
   let state: {
     savedArtists: SavedBand[];
     groups: ArtistGroup[];
@@ -45,6 +70,8 @@ export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollabo
       const [bands, groups] = await Promise.all([app.listSavedBands(), app.listGroups()]);
       const appSelectedIds = app.getState().selectedArtistIds;
       state = { ...state, savedArtists: bands, groups, selectedIds: appSelectedIds };
+    } catch {
+      status.show({ type: "error", message: "Could not load your saved artists." });
     } finally {
       state = { ...state, isLoading: false };
     }
@@ -70,7 +97,12 @@ export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollabo
         searchResults: state.searchResults,
         isSearching: state.isSearching,
         groups: state.groups,
+        statusMessage: status.get(),
       };
+    },
+    /** Calls `listener` when the status line clears itself. Returns an unsubscribe. */
+    subscribe(listener: () => void) {
+      return status.subscribe(listener);
     },
     async loadSavedArtists() {
       await reloadAll();
@@ -101,38 +133,89 @@ export function createSavedArtistsShell({ app }: { app: SavedArtistsShellCollabo
         state = { ...state, searchResults: results, isSearching: false };
       } catch {
         state = { ...state, isSearching: false };
+        status.show({ type: "error", message: "Artist search failed." });
       }
     },
     async addArtist(mbArtist: ArtistSearchResult) {
-      await app.saveBand({
-        name: mbArtist.name,
-        musicbrainzArtistId: mbArtist.id,
-        suggestedNote: mbArtist.disambiguation || "Added via search.",
-      });
+      try {
+        await app.saveBand({
+          name: mbArtist.name,
+          musicbrainzArtistId: mbArtist.id,
+          suggestedNote: mbArtist.disambiguation || "Added via search.",
+        });
+      } catch {
+        status.show({ type: "error", message: `Could not add ${mbArtist.name}.` });
+        return;
+      }
+      status.show({ type: "success", message: `Added ${mbArtist.name}.` });
       await reloadAll();
     },
     async deleteSavedArtist(id: string) {
-      await app.deleteSavedBand(id);
+      const name = state.savedArtists.find((band) => band.id === id)?.name ?? "the artist";
+      try {
+        await app.deleteSavedBand(id);
+      } catch {
+        status.show({ type: "error", message: `Could not remove ${name}.` });
+        return;
+      }
+      status.show({ type: "success", message: `Removed ${name}.` });
       await reloadAll();
     },
-    async exportArtists() {
-      return app.exportPreferences();
+    /** The saved artists to download, or undefined when there is nothing to save. */
+    async exportArtists(): Promise<unknown[] | undefined> {
+      try {
+        return await app.exportPreferences();
+      } catch {
+        status.show({ type: "error", message: "Export failed." });
+        return undefined;
+      }
     },
-    async importArtists(bands: unknown[]) {
-      const result = await app.importPreferences(bands);
+    /** Imports the text of a file the user picked; anything but an export is refused here. */
+    async importFile(text: string) {
+      let bands: unknown;
+      try {
+        bands = JSON.parse(text);
+      } catch {
+        status.show(NOT_AN_EXPORT);
+        return;
+      }
+      if (!Array.isArray(bands)) {
+        status.show(NOT_AN_EXPORT);
+        return;
+      }
+      try {
+        status.show(describeImport(await app.importPreferences(bands)));
+      } catch {
+        status.show({ type: "error", message: "Import failed." });
+        return;
+      }
       await reloadAll();
-      return result;
     },
     async createGroup(name: string) {
-      await app.createGroup(name);
+      try {
+        await app.createGroup(name);
+      } catch {
+        status.show({ type: "error", message: `Could not create the group ${name}.` });
+        return;
+      }
       await reloadAll();
     },
     async deleteGroup(id: string) {
-      await app.deleteGroup(id);
+      try {
+        await app.deleteGroup(id);
+      } catch {
+        status.show({ type: "error", message: "Could not delete the group." });
+        return;
+      }
       await reloadAll();
     },
     async autoGroup() {
-      await app.autoGroup();
+      try {
+        await app.autoGroup();
+      } catch {
+        status.show({ type: "error", message: "Could not group by genre." });
+        return;
+      }
       await reloadAll();
     },
   };

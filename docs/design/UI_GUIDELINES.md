@@ -315,6 +315,17 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 - Use local confirmations for Save/Rate actions. A confirmation clears itself
   after 3 seconds, an error after 10, without waiting for the next interaction
   (#311).
+- Saved Artists has the same status line, under its header, with the same
+  timing. Every action there reports a failure in it: adding, removing,
+  searching, exporting, importing, creating or deleting a group, grouping by
+  genre, and loading the list. Adding and removing an artist confirm
+  ("Added Fen.", "Removed Fen."); an import says how many artists arrived and
+  how many were already saved, and is an error if the API refused any. A file
+  that is not a Bandsearch export is refused before anything is sent ("That
+  file isn't a Bandsearch export."). Nothing on this screen fails silently
+  (#313).
+- A status line is announced to screen readers: an error as an alert, a
+  confirmation as a polite status.
 - Avoid disruptive global notifications for routine success events.
 - The recommendation feedback bar under a batch (Spot on / Too mainstream /
   Wrong direction) closes on the click or on dismiss; a successful verdict shows

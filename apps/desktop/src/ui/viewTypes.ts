@@ -6,6 +6,7 @@
 
 import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
+import type { StatusMessage } from "../statusMessage.js";
 
 export type ChatHandlers = {
   onModeChange(mode: string): unknown;
@@ -57,6 +58,8 @@ export type SavedArtistsViewProps = {
   searchResults: ArtistSearchResult[];
   isSearching: boolean;
   groups: ArtistGroup[];
+  /** The outcome of the last action on this screen; clears itself (UI_GUIDELINES). */
+  statusMessage?: StatusMessage | null;
 };
 
 export type SavedArtistsHandlers = {
