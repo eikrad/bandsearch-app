@@ -40,6 +40,22 @@ any UI change. Read them before touching a view, and follow the values marked
   it against correction. That is worse than having no test.
 
 
+### Eval in lockstep with the search
+
+The eval measures what the search actually does, by the search's own rules.
+A rule the search decides by (a range, a threshold, a filter, how missing data
+counts) has one home in code. The search, the eval metrics, the judge prompt
+and the research logs all import it, so none of them restates it.
+
+- **Changing such a rule changes the eval in the same PR**: metrics, judge
+  prompt, judge test fixtures (`services/eval/judge-unit-tests.json`), and the
+  glossary entry in `CONTEXT.md`. A judge rubric whose prompt changes makes old
+  and new scores incomparable; say so in the PR and save a new eval baseline.
+- **Why:** the obscurity filter had only a ceiling, and the judge rewarded
+  "a tier at or below the target". The eval agreed with the bug, so it went
+  unnoticed until the user saw it: every level drifted toward Truly Obscure
+  (#325). Example of the one home: `services/api/src/obscurityTargets.ts`.
+
 ### TypeScript
 
 Application, test, and JS-toolchain config code is TypeScript only (`strict` + `noImplicitAny`). Do not add new `.js` / `.mjs` sources.

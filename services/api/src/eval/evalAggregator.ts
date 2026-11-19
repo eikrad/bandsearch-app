@@ -1,8 +1,8 @@
 import type { RecommendationEvent, BandEvalScore } from "./evalRepository.js";
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
-import { obscurityTargetFit } from "../obscurityTargets.js";
+import { fitObscurityTarget } from "../obscurityTargets.js";
 
-export type TargetFitCounts = { inRange: number; tooObscure: number; tooMainstream: number; unknown: number };
+export type TargetFitCounts = { inRange: number; tooObscure: number; tooMainstream: number };
 
 export type AggregatedMetrics = {
   eventCount: number;
@@ -12,9 +12,12 @@ export type AggregatedMetrics = {
   meanEvidenceQuality: number | null;
   meanDiscoveryValue: number | null;
   obscurityDistribution: { mainstream: number; cult: number; underground: number; obscure: number; unknown: number };
-  /** Bands per requested target, by where their listeners fall against its range (#325). */
+  /**
+   * Bands per requested target, by where their listeners fall against its range,
+   * fitted per request by the same rule the research filter uses (#325).
+   */
   obscurityTargetFit: Record<ObscurityTarget, TargetFitCounts>;
-  /** Share of bands with a listener count and a requested target that land inside its range. */
+  /** Share of fitted bands that land inside their request's target range. */
   obscurityInRangeRate: number | null;
   sourceQualityDistribution: { high: number; medium: number; low: number };
   meanCitationSupportRate: number | null;
@@ -35,7 +38,7 @@ export type MetricsDelta = {
 export type StoredMetrics = Omit<AggregatedMetrics, "obscurityTargetFit" | "obscurityInRangeRate"> &
   Partial<Pick<AggregatedMetrics, "obscurityTargetFit" | "obscurityInRangeRate">>;
 
-const noFit = (): TargetFitCounts => ({ inRange: 0, tooObscure: 0, tooMainstream: 0, unknown: 0 });
+const noFit = (): TargetFitCounts => ({ inRange: 0, tooObscure: 0, tooMainstream: 0 });
 
 function mean(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -54,7 +57,6 @@ export function aggregateMetrics(
   const obscurityDistribution = { mainstream: 0, cult: 0, underground: 0, obscure: 0, unknown: 0 };
   const sourceQualityDistribution = { high: 0, medium: 0, low: 0 };
   const targetFit: Record<ObscurityTarget, TargetFitCounts> = { cult: noFit(), underground: noFit(), obscure: noFit() };
-  const targetOf = new Map(events.map((e) => [e.id, e.obscurityTarget]));
 
   const relevances: number[] = [];
   const obscurityFits: number[] = [];
@@ -74,9 +76,6 @@ export function aggregateMetrics(
     ) {
       obscurityDistribution[score.obscurityTier]++;
     }
-    const target = targetOf.get(score.eventId);
-    const fit = obscurityTargetFit(score.listeners, target);
-    if (fit) targetFit[target as ObscurityTarget][fit]++;
     if (score.sourceQuality === "high" || score.sourceQuality === "medium" || score.sourceQuality === "low") {
       sourceQualityDistribution[score.sourceQuality]++;
     }
@@ -91,9 +90,16 @@ export function aggregateMetrics(
     }
   }
 
-  const fits = Object.values(targetFit);
-  const inRange = fits.reduce((n, f) => n + f.inRange, 0);
-  const decided = fits.reduce((n, f) => n + f.inRange + f.tooObscure + f.tooMainstream, 0);
+  // Fitted per request, like the filter: a band without a count only counts as
+  // obscure when Last.fm had counts for that request at all.
+  for (const event of events) {
+    const listeners = bandScores.filter((s) => s.eventId === event.id).map((s) => s.listeners);
+    const fits = fitObscurityTarget(listeners, event.obscurityTarget);
+    if (fits) for (const { fit } of fits) targetFit[event.obscurityTarget as ObscurityTarget][fit]++;
+  }
+  const counts = Object.values(targetFit);
+  const inRange = counts.reduce((n, f) => n + f.inRange, 0);
+  const decided = counts.reduce((n, f) => n + f.inRange + f.tooObscure + f.tooMainstream, 0);
 
   return {
     eventCount: events.length,

@@ -1,5 +1,4 @@
-import { validateObscurityTarget, type ObscurityTarget } from "../../../../../shared/schemas/src/contracts.js";
-import { OBSCURITY_TARGET_RANGES } from "../../obscurityTargets.js";
+import { fitObscurityTarget } from "../../obscurityTargets.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -21,33 +20,23 @@ export type VerifiedCandidate = {
 export const OBSCURITY_POOL_MIN = 5;
 
 /**
- * How far a listener count misses the target's range, as a log ratio: missing a
- * 20k floor by 5k is closer than missing it by 19k. 0 inside the range.
- */
-function rangeMiss(listeners: number, target: ObscurityTarget): number {
-  const { min, max } = OBSCURITY_TARGET_RANGES[target];
-  if (listeners < min) return Math.log(min / Math.max(listeners, 1));
-  if (listeners > max) return Math.log(listeners / max);
-  return 0;
-}
-
-/**
  * Narrows the ranker's pool to the requested obscurity target's listener range
  * (#325), with a floor as well as a ceiling. When fewer than OBSCURITY_POOL_MIN
  * candidates are in range, the nearest misses in either direction fill up the
- * pool, in-range first. A candidate without a Last.fm count counts as obscure;
- * with no counts at all (Last.fm off) the pool passes unchanged.
+ * pool, in-range first. How a candidate fits, missing counts included, is
+ * fitObscurityTarget's rule, which the eval shares; when it has nothing to fit
+ * against, the pool passes unchanged.
  */
 export function filterCandidatesByObscurity(
   candidates: VerifiedCandidate[],
   obscurityTarget?: string,
 ): VerifiedCandidate[] {
-  const target = validateObscurityTarget(obscurityTarget);
-  if (!target || candidates.every((c) => c.listenerCount == null)) return candidates;
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), obscurityTarget);
+  if (!fits) return candidates;
   const byMiss = candidates
-    .map((c) => ({ c, miss: rangeMiss(c.listenerCount ?? 0, target) }))
+    .map((c, i) => ({ c, miss: fits[i]!.miss }))
     .sort((a, b) => a.miss - b.miss);
-  const inRange = byMiss.filter((x) => x.miss === 0).length;
+  const inRange = fits.filter((f) => f.fit === "inRange").length;
   return byMiss.slice(0, Math.max(inRange, OBSCURITY_POOL_MIN)).map((x) => x.c);
 }
 

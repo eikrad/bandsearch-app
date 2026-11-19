@@ -36,7 +36,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event. Each target is a Last.fm listener *range*, both ends included: Cult Following 20k–500k, Underground 2k–50k, Truly Obscure up to 5k (`services/api/src/obscurityTargets.ts`, #325). The ranges overlap on purpose. A band below the range misses the target just as one above it does. These are not the **obscurity tiers** of the eval chart, which sort every band into exactly one tier with their own cut points (`eval/obscurityScorer.ts`).
 
-  Before ranking, the research filter keeps the candidates in range. If fewer than five are, the nearest misses in either direction fill up the pool. A candidate without a Last.fm count counts as obscure.
+  Before ranking, the research filter keeps the candidates in range. If fewer than five are, the nearest misses in either direction fill up the pool. A candidate without a Last.fm count counts as obscure. When no candidate has one (Last.fm off or down), nothing is filtered. The eval's in-range rate, the judge's `target_range_fit` and the research log fit bands by this same rule, through `fitObscurityTarget`, so the eval measures what the search does.
 
   **Not built yet (#325):** the planner and ranker prompts still use their own wording rather than these ranges.
 

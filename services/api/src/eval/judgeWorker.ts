@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
-import { OBSCURITY_TARGET_RANGES, obscurityTargetFit } from "../obscurityTargets.js";
+import { OBSCURITY_TARGET_RANGES, fitObscurityTarget, type ObscurityTargetFit } from "../obscurityTargets.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { errorMessage, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../agent/modelUtils.js";
 import type { LlmConfig } from "../config/models.js";
@@ -25,9 +25,9 @@ export type JudgeScoreObject = {
   reasoning?: unknown;
 };
 
-// Derived from OBSCURITY_TARGET_RANGES so the judge's notion of each target stays
-// identical to the in-range metric (#325). Changing a range in one place keeps
-// the prompt — and calibration — in sync.
+// Derived from OBSCURITY_TARGET_RANGES, and target_range_fit from the research
+// filter's own rule, so the judge scores by what the search decides (#325).
+// Changing the rule in one place keeps the prompt — and calibration — in sync.
 const fmt = (n: number) => n.toLocaleString("en-US");
 const fmtRange = ({ min, max }: { min: number; max: number }) => `${fmt(min)}–${fmt(max)}`;
 const OBSCURITY_FIT_GUIDANCE =
@@ -36,10 +36,10 @@ const OBSCURITY_FIT_GUIDANCE =
   `cult = ${fmtRange(OBSCURITY_TARGET_RANGES.cult)}, ` +
   `underground = ${fmtRange(OBSCURITY_TARGET_RANGES.underground)}, ` +
   `obscure = ${fmtRange(OBSCURITY_TARGET_RANGES.obscure)}. ` +
-  `Each band includes target_range_fit: inRange, tooObscure, tooMainstream, or unknown when Last.fm has no count. ` +
+  `Each band includes target_range_fit: inRange, tooObscure or tooMainstream. A band Last.fm has no count for counts as obscure. ` +
   `Score high inside the range and lower the further outside it the band falls, in either direction: ` +
   `a band far more obscure than the target misses it just as a band far more mainstream does. ` +
-  `For unknown, judge from the evidence. Ignore this if no target given.`;
+  `When target_range_fit is null (no target, or no listener counts at all), judge from the evidence.`;
 
 const JUDGE_SYSTEM_PROMPT = `You are an expert music recommendation quality judge. Your task is to evaluate a list of band recommendations against a user's query and produce a JSON object with one score entry per band.
 
@@ -62,16 +62,29 @@ Return ONLY a JSON object with this exact structure — no prose, no markdown fe
 
 Use the exact band names from the input. If a band is unrecognised, score conservatively at 0.5 across all dimensions.`;
 
+/** Each band's fit, by the research filter's rule, fitted together with the bands of the same target. */
+function targetRangeFits(bands: JudgeInput[]): Array<ObscurityTargetFit | null> {
+  const out: Array<ObscurityTargetFit | null> = bands.map(() => null);
+  const byTarget = new Map<string, number[]>();
+  bands.forEach((b, i) => byTarget.set(b.obscurityTarget ?? "", [...(byTarget.get(b.obscurityTarget ?? "") ?? []), i]));
+  for (const [target, indexes] of byTarget) {
+    const fits = fitObscurityTarget(indexes.map((i) => bands[i]!.listeners), target);
+    if (fits) indexes.forEach((i, k) => (out[i] = fits[k]!.fit));
+  }
+  return out;
+}
+
 export function buildJudgePrompt(bands: JudgeInput[]): { system: string; user: string } {
+  const fits = targetRangeFits(bands);
   const user = JSON.stringify(
-    bands.map((b) => ({
+    bands.map((b, i) => ({
       band_name: b.bandName,
       query: b.query,
       obscurity_target: b.obscurityTarget ?? null,
       why: b.why ?? "",
       source_signals: b.sourceSignals ?? [],
       listeners: b.listeners ?? null,
-      target_range_fit: obscurityTargetFit(b.listeners, b.obscurityTarget),
+      target_range_fit: fits[i],
       citation_support_rate: b.citationSupportRate ?? null,
       generic_why_flag: b.genericWhyFlag ?? null,
     })),
