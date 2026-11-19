@@ -38,7 +38,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
   Before ranking, the research filter keeps the candidates in range. If fewer than five are, the nearest misses in either direction fill up the pool. A candidate without a Last.fm count counts as obscure. When no candidate has one (Last.fm off or down), nothing is filtered. The eval's in-range rate, the judge's `target_range_fit` and the research log fit bands by this same rule, through `fitObscurityTarget`, so the eval measures what the search does.
 
-  **Not built yet (#325):** the planner and ranker prompts still use their own wording rather than these ranges.
+  The ranker is given the range and each candidate's `target_range_fit`, by the same rule.
+
+  **Not built yet (#325):** the planner prompt still uses its own wording rather than these ranges.
 
 - **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `SCW_SECRET_KEY`).
 

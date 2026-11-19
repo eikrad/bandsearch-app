@@ -1,7 +1,8 @@
 import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
-import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
+import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
+import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
 import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
@@ -117,10 +118,12 @@ export function attachEvidenceCitationsToRecommendations(
   return out;
 }
 
-export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string {
+export function formatEvidenceForPrompt(candidates: VerifiedCandidate[], obscurityTarget?: string): string {
   const deduped = mergeVerifiedCandidates(candidates);
+  // The filter's own rule, so the ranker sees each candidate as the filter and eval do (#325).
+  const fits = fitObscurityTarget(deduped.map((c) => c.listenerCount), obscurityTarget);
   const lines: string[] = [];
-  for (const c of deduped) {
+  for (const [i, c] of deduped.entries()) {
     const name = c.canonicalName || c.name;
     const bits = [
       `artist: ${name}`,
@@ -132,6 +135,7 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string
     if (c.mbGenres?.length) bits.push(`mb_genres: ${c.mbGenres.join(", ")}`);
     if (c.lifeSpan?.begin) bits.push(`active_from: ${c.lifeSpan.begin}, ended: ${c.lifeSpan.ended}`);
     if (c.listenerCount != null) bits.push(`lastfm_listeners: ${c.listenerCount.toLocaleString("en-US")}`);
+    if (fits) bits.push(`target_range_fit: ${fits[i]!.fit}`);
     lines.push(bits.join("\n"));
   }
   return lines.join("\n---\n");
@@ -146,11 +150,23 @@ const RANK_SYSTEM = [
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
 ].join(" ");
 
-const RANK_OBSCURITY: Record<string, string> = {
-  cult: "Prefer acts that feel like genuine discoveries — known within their scene but not household names. Deprioritise any band with major-label backing or heavy mainstream press.",
-  underground: "Strongly favour lesser-known artists. Evidence from Bandcamp, DIY labels, and niche blogs is a positive signal. If an act appears mainstream or heavily-streamed, skip them for more underground candidates.",
-  obscure: "Only pick truly obscure deep cuts — Bandcamp/DIY evidence and niche underground blog mentions only. Penalise any artist with mainstream exposure, major-label affiliation, or widespread streaming presence.",
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+const RANK_OBSCURITY_FLAVOUR: Record<ObscurityTarget, string> = {
+  cult: "Acts known within their scene but not household names.",
+  underground: "Genuinely underground acts with a real but small audience.",
+  obscure: "Deep cuts: Bandcamp, DIY and niche-blog acts.",
 };
+
+/** The ranker's obscurity instruction, from the same ranges the filter and eval use (#325). */
+function rankObscurity(target: ObscurityTarget): string {
+  const { min, max } = OBSCURITY_TARGET_RANGES[target];
+  return [
+    `Pick artists with ${fmt(min)}–${fmt(max)} Last.fm listeners. ${RANK_OBSCURITY_FLAVOUR[target]}`,
+    "A pick below the range is as wrong as one above it.",
+    "Prefer candidates whose target_range_fit is inRange; pick one outside the range only when too few inRange candidates fit the query, and then the nearest.",
+  ].join(" ");
+}
 
 export type CreateRecommendationRankerOptions = {
   apiKey: string;
@@ -186,12 +202,10 @@ export function buildRankUserPartsForTest(input: {
   const prefBlock = wrapPreferenceContext(input.preferenceContext ?? "");
   const parts = [`query: ${wrappedQuery}`, `mode: ${input.mode}`];
   if (prefBlock) parts.push(prefBlock);
-  const obscurityConstraint = input.obscurityTarget ? RANK_OBSCURITY[input.obscurityTarget] : undefined;
-  if (obscurityConstraint) {
-    parts.push(`obscurity_rank (${input.obscurityTarget}): ${obscurityConstraint}`);
-  }
+  const target = validateObscurityTarget(input.obscurityTarget);
+  if (target) parts.push(`obscurity_rank (${target}): ${rankObscurity(target)}`);
   if (input.candidates) {
-    const evidence = formatEvidenceForPrompt(input.candidates);
+    const evidence = formatEvidenceForPrompt(input.candidates, input.obscurityTarget);
     parts.push(`evidence_candidates:\n${evidence}`, "limit: 3");
   }
   return parts;

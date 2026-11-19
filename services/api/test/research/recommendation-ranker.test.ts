@@ -48,18 +48,38 @@ test("createRecommendationRanker is imported", async () => {
   await assert.rejects(() => createRecommendationRanker({ apiKey: "  " }), /apiKey is required/);
 });
 
-test("buildRankUserPartsForTest includes obscurity constraint when obscurityTarget is 'underground'", () => {
-  const parts = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh", obscurityTarget: "underground" });
-  const joined = parts.join("\n");
-  assert.match(joined, /underground/i);
-  assert.match(joined, /lesser.known|niche|bandcamp|obscur/i);
+// ─── #325: the ranker ranks by the same range the filter and eval use ─────────
+
+function candidate(name: string, listenerCount: number | null) {
+  return { name, listenerCount, verified: true, evidenceUrls: [`https://${name}.example`], evidenceSnippets: [], sourceQueries: [] };
+}
+
+test("the ranker is told the target's listener range and that a pick below it misses as much as one above", () => {
+  const ranges = { cult: "20,000–500,000", underground: "2,000–50,000", obscure: "0–5,000" } as const;
+  for (const [target, range] of Object.entries(ranges)) {
+    const joined = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh", obscurityTarget: target }).join("\n");
+    assert.ok(joined.includes(`obscurity_rank (${target})`), `${target}: the constraint is present`);
+    assert.ok(joined.includes(range), `${target}: the range ${range} is stated`);
+    assert.match(joined, /below the range is as wrong as one above/i, `${target}: both directions`);
+  }
 });
 
-test("buildRankUserPartsForTest includes obscurity constraint when obscurityTarget is 'obscure'", () => {
-  const parts = buildRankUserPartsForTest({ query: "heavy bands", mode: "fresh", obscurityTarget: "obscure" });
-  const joined = parts.join("\n");
-  assert.match(joined, /obscure/i);
-  assert.match(joined, /deep.cut|diy|bandcamp|niche/i);
+test("each candidate in the ranker's evidence carries its fit, by the filter's rule", () => {
+  const joined = buildRankUserPartsForTest({
+    query: "heavy bands",
+    mode: "fresh",
+    obscurityTarget: "cult",
+    candidates: [candidate("Small", 3_000), candidate("Scene", 40_000), candidate("Nocount", null)],
+  }).join("\n");
+  const fitOf = (name: string) => new RegExp(`artist: ${name}[\\s\\S]*?target_range_fit: (\\w+)`).exec(joined)?.[1];
+  assert.equal(fitOf("Small"), "tooObscure");
+  assert.equal(fitOf("Scene"), "inRange");
+  assert.equal(fitOf("Nocount"), "tooObscure");
+});
+
+test("without a target the evidence carries no range fit", () => {
+  const joined = buildRankUserPartsForTest({ query: "q", mode: "fresh", candidates: [candidate("Small", 3_000)] }).join("\n");
+  assert.doesNotMatch(joined, /target_range_fit/);
 });
 
 test("buildRankUserPartsForTest omits obscurity constraint when no target", () => {
