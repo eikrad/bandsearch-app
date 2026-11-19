@@ -697,3 +697,38 @@ validation, caps and retention; the route with the dashboard off, forged
 ownership, enforced auth and a disabled account; the account lifecycle on SQLite,
 Turso and `turso-sync`; the desktop click through the real app, shell and mount
 against a fake API; `feedback:list`; and the privacy disclosure.
+
+---
+
+### 16. One app session decides which screen comes next (#313) ✓ Done
+
+Implementation complete on `feature/app-session`; integration into `staging` is
+pending. Promotion to `main` is handled by the repository owner.
+
+"Which screen do I see?" was answered by closure variables in
+`startDesktopBrowserApp.ts`, `authGate.ts`, `waitForApi.ts` and about 20
+navigate-then-render pairs in the mount. `appSession.ts` now owns the startup
+gate, the Connecting retries, the account flags and the token events. Events
+only change the token; `enterApp()` asks `/auth/status` and routes, and every
+way into the chat goes through it. That fixed three bugs:
+
+- Skip on Welcome ran the gate and then went to the chat anyway, so a
+  logged-out user landed in the chat and a cold API never showed Connecting.
+- The account flags were read once: after registering the first account,
+  Settings hid export and deletion until a restart.
+- Deleting an account always went to Register, which on a closed deployment
+  needs an invite; it now goes to Login.
+
+Also in this change:
+
+- The hash router tells its listeners inside `navigate()` and ignores the
+  browser's echo, so each navigation renders once instead of twice.
+- Saved Artists reports every outcome in a status line. The 3 s / 10 s
+  lifecycle moved from the chat shell into `statusMessage.ts`, which both
+  screens use. Save, rate, remove and Category/Note errors in the chat now
+  stay up for the 10 s the spec already promised.
+- Both JSON downloads share `downloadJson`.
+
+Tests: the session against a fake auth client and router; one test per bug
+through the real startup, session, router and mount; the router's echo; and
+each Saved Artists action failing through the real shell and mount.
