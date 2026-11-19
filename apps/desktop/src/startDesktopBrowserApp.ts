@@ -5,10 +5,8 @@ import { createDesktopSettingsController } from "./desktopSettings.js";
 import { shouldOfferWelcomeScreen } from "./firstRunOnboarding.js";
 import { getAuthToken, setAuthToken, clearAuthToken } from "./authTokenStore.js";
 import { getChatSessionId, setChatSessionId } from "./chatSessionStore.js";
-import { createAuthApiClient, type LoginResult, type RegisterResult, type ResetPasswordResult } from "./authApiClient.js";
-import { decideAuthRoute } from "./authGate.js";
-import { waitForAuthStatus } from "./waitForApi.js";
-import type { ConnectingViewProps } from "./ui/viewTypes.js";
+import { createAuthApiClient } from "./authApiClient.js";
+import { createAppSession } from "./appSession.js";
 import { createAuthAwareFetch } from "./authAwareFetch.js";
 import {
   createUpdateNotificationController,
@@ -159,10 +157,8 @@ export async function startDesktopBrowserApp({
   });
   resolvedListenUpdateAvailable?.((payload) => updateNotifications.updateAvailable(payload));
   const router = createHashRouter();
-  const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => {
-    clearAuthToken();
-    router.navigate("login");
-  });
+  // A 401 can only arrive after the session below exists: nothing is fetched before it.
+  const authAwareFetch = createAuthAwareFetch(resolvedFetch, () => session.unauthorized());
 
   const normalizeBase = (url: string): string => (url.endsWith("/") ? url.slice(0, -1) : url);
   // Resolved later from the stored config; the Turso probe reads it lazily so it
@@ -191,6 +187,13 @@ export async function startDesktopBrowserApp({
   if (gate.apiEndpointUrl) resolvedBaseUrl = normalizeBase(gate.apiEndpointUrl);
 
   const authClient = createAuthApiClient({ apiBaseUrl: resolvedBaseUrl, fetchImpl: authAwareFetch });
+  const session = createAppSession({
+    auth: authClient,
+    token: { get: getAuthToken, set: setAuthToken, clear: clearAuthToken },
+    router,
+    sleep: resolvedSleep,
+    now: resolvedNow,
+  });
   const app = bootstrapApp({
     apiBaseUrl: resolvedBaseUrl,
     fetchImpl: authAwareFetch,
@@ -208,102 +211,13 @@ export async function startDesktopBrowserApp({
   const w = browserWindow();
   const initialHash = w && typeof w.location?.hash === "string" ? w.location.hash : "";
 
-  // Whether there is an account to export or delete. Read from the auth status
-  // the gate already fetches, so no extra round trip. SettingsView renders the
-  // deletion section as `!accountsEnabled ? null : …`, so leaving this unset
-  // hides it entirely — which is how #175 shipped.
-  let accountsEnabled = false;
-
-  // Whether the deployment wants an invite code to register. Same source as above.
-  let inviteRequired = false;
-
-  // Drives the connecting screen. Read by the mount each time it renders.
-  let connectingViewProps: ConnectingViewProps = { state: "waiting" };
-
-  /**
-   * Routes on one quick check, so a healthy API reaches the right screen with no
-   * detour. Only when that first check finds nothing does the connecting screen
-   * appear — and the remaining retries then happen with something on screen,
-   * which is the part `waitForAuthStatus` alone could not provide: the gate runs
-   * before `mount()`, so waiting there would show a blank window.
-   */
-  function rememberAccountsEnabled(status: Awaited<ReturnType<typeof authClient.getAuthStatus>>): void {
-    accountsEnabled = status.reachable && status.enabled && status.userCount > 0;
-    inviteRequired = status.reachable && status.inviteRequired;
-  }
-
-  async function runAuthGate(): Promise<void> {
-    const first = await authClient.getAuthStatus();
-    rememberAccountsEnabled(first);
-    const route = decideAuthRoute({ status: first, hasToken: Boolean(getAuthToken()) });
-    if (route === "unavailable") {
-      connectingViewProps = { state: "waiting", attempt: 1 };
-      router.navigate("connecting");
-      return;
-    }
-    if (route !== "app") router.navigate(route);
-  }
-
-  // Guards the retry button: root.render commits asynchronously, so a double
-  // click would otherwise start a second polling loop writing the same state.
-  let connecting = false;
-
-  /** Keeps polling after mount, then routes to wherever the answer says. */
-  async function finishConnecting(): Promise<void> {
-    if (connecting) return;
-    connecting = true;
-    try {
-    const status = await waitForAuthStatus({
-      getStatus: () => authClient.getAuthStatus(),
-      sleep: resolvedSleep,
-      now: resolvedNow,
-      onAttempt: ({ attempt }) => {
-        connectingViewProps = { state: "waiting", attempt: attempt + 1 };
-        void reactApp.mount();
-      },
-    });
-      rememberAccountsEnabled(status);
-      const route = decideAuthRoute({ status, hasToken: Boolean(getAuthToken()) });
-      if (route === "unavailable") {
-        if (!status.reachable) console.warn("[bandsearch] API unreachable:", status.reason);
-        connectingViewProps = { state: "failed" };
-      } else {
-        // Render explicitly rather than relying on the browser firing
-        // `hashchange` for our own navigation — that is an implicit dependency,
-        // and it does not exist outside a real browser at all.
-        router.navigate(route === "app" ? "home" : route);
-      }
-      await reactApp.mount();
-    } finally {
-      connecting = false;
-    }
-  }
-
-  if (shouldOfferWelcomeScreen({ hasStoredKey: gate.hasStoredKey, onboardingComplete: gate.onboardingComplete, locationHash: initialHash })) {
-    router.navigate("welcome");
-  } else {
-    await runAuthGate();
-  }
-
-  async function onLogin(email: string, password: string): Promise<void> {
-    const result: LoginResult = await authClient.login({ email, password });
-    if (result.ok === false) throw new Error(result.error);
-    setAuthToken(result.token);
-  }
-
-  async function onRegister(email: string, displayName: string, password: string, inviteCode?: string): Promise<{ recoveryCode: string }> {
-    const result: RegisterResult = await authClient.register({ email, displayName, password, inviteCode });
-    if (result.ok === false) throw new Error(result.error);
-    setAuthToken(result.token);
-    return { recoveryCode: result.recoveryCode };
-  }
-
-  async function onResetPassword(email: string, recoveryCode: string, newPassword: string): Promise<{ newRecoveryCode: string }> {
-    const result: ResetPasswordResult = await authClient.resetPassword({ email, recoveryCode, newPassword });
-    if (result.ok === false) throw new Error(result.error);
-    clearAuthToken();
-    return { newRecoveryCode: result.newRecoveryCode };
-  }
+  await session.start({
+    offerWelcome: shouldOfferWelcomeScreen({
+      hasStoredKey: gate.hasStoredKey,
+      onboardingComplete: gate.onboardingComplete,
+      locationHash: initialHash,
+    }),
+  });
 
   const reactApp = bootstrapReactApp({
     app,
@@ -311,36 +225,29 @@ export async function startDesktopBrowserApp({
     actionHandlers,
     router,
     savedArtistsShell,
-    getSettingsViewProps: async () => ({ ...(await settings.getSettingsViewProps()), accountsEnabled }),
+    getSettingsViewProps: async () => ({ ...(await settings.getSettingsViewProps()), accountsEnabled: session.accountsEnabled() }),
     onExportAccountData: async () => {
       const result = await authClient.exportAccountData();
       if (result.ok === false) throw new Error(result.error);
       return result.bundle;
     },
-    onDeleteAccount: async (password: string) => {
-      const result = await authClient.deleteAccount({ password });
-      if (result.ok === false) return { ok: false, error: result.error };
-      clearAuthToken();
-      return { ok: true };
-    },
+    onDeleteAccount: (password: string) => session.deleteAccount(password),
     saveLlmApiKey: (key: string) => settings.saveLlmApiKey(key),
     saveBraveApiKey: (key: string) => settings.saveBraveApiKey(key),
     saveTursoConfig: (url: string, token: string) => settings.saveTursoConfig(url, token),
     clearTursoConfig: () => settings.clearTursoConfig(),
     saveApiEndpointUrl: (url: string) => settings.saveApiEndpointUrl(url),
-    completeOnboarding: async () => { await settings.completeOnboarding(); await runAuthGate(); },
-    onLogin,
-    onRegister,
-    getRegisterViewProps: () => ({ inviteRequired }),
-    onResetPassword,
+    completeOnboarding: () => settings.completeOnboarding(),
+    enterApp: () => session.enterApp(),
+    onLogin: (email: string, password: string) => session.login(email, password),
+    onRegister: (email: string, displayName: string, password: string, inviteCode?: string) =>
+      session.register(email, displayName, password, inviteCode),
+    getRegisterViewProps: () => ({ inviteRequired: session.inviteRequired() }),
+    onResetPassword: (email: string, recoveryCode: string, newPassword: string) =>
+      session.resetPassword(email, recoveryCode, newPassword),
     updateBannerHandlers: updateNotifications.handlers,
-    getConnectingViewProps: () => connectingViewProps,
-    connectingHandlers: {
-      onRetry: () => {
-        connectingViewProps = { state: "waiting", attempt: 1 };
-        void finishConnecting();
-      },
-    },
+    getConnectingViewProps: () => session.connectingViewProps(),
+    connectingHandlers: { onRetry: () => { void session.retry(); } },
   });
   await reactApp.mount();
   subscribeViewportChanges(reactApp, () => void reactApp.mount());
@@ -348,9 +255,11 @@ export async function startDesktopBrowserApp({
   // The UI can paint now; flushes an update that was reported during bootstrap.
   updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));
 
+  // Connecting progress changes the screen without a navigation.
+  session.subscribe(() => void reactApp.mount());
   // Something is on screen now, so the remaining retries are visible rather than
   // spent behind a blank window.
-  if (router.getRoute() === "connecting") await finishConnecting();
+  await session.connectIfWaiting();
 
   return reactApp;
 }

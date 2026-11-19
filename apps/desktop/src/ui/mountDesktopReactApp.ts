@@ -79,6 +79,11 @@ export interface DesktopReactMountOptions {
   clearTursoConfig?: () => Promise<void>;
   saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
+  /**
+   * Every way into the chat goes through here: the app session's auth gate in
+   * the app. Absent (tests of single views), it is a plain navigation.
+   */
+  enterApp?: () => Promise<unknown>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string, inviteCode?: string) => Promise<{ recoveryCode: string }>;
   getRegisterViewProps?: () => RegisterViewProps;
@@ -112,6 +117,7 @@ export function createDesktopReactMount({
   onDeleteAccount,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
+  enterApp: enterAppThroughGate,
   onLogin,
   onRegister,
   onResetPassword,
@@ -363,7 +369,7 @@ export function createDesktopReactMount({
 
   const settingsHandlers = {
     onNavigateChat: async () => {
-      return go("home");
+      return enterApp();
     },
     onSaveApiKey: async (apiKey: string) => {
       await saveLlmApiKey(apiKey);
@@ -420,9 +426,9 @@ export function createDesktopReactMount({
         return renderCurrent();
       }
       accountStatus = null;
-      // Erasing the only account puts the install back to zero users, which is
-      // the first-run state — so send them where a fresh install starts.
-      return go("register");
+      // Where a signed-out user goes depends on who is left: Register on an
+      // emptied personal install, Login on a shared one. The gate asks.
+      return enterApp();
     },
   };
 
@@ -441,14 +447,14 @@ export function createDesktopReactMount({
     },
     onSkip: async () => {
       await completeOnboarding();
-      return go("home");
+      return enterApp();
     },
   };
 
   const loginHandlers = {
     onLogin: async (email: string, password: string) => {
       if (onLogin) await onLogin(email, password);
-      return go("home");
+      return enterApp();
     },
     onNavigateRegister: () => go("register"),
     onNavigateReset: () => go("reset-password"),
@@ -459,7 +465,7 @@ export function createDesktopReactMount({
       const result = onRegister ? await onRegister(email, displayName, password, inviteCode) : { recoveryCode: "" };
       return result;
     },
-    onDone: () => go("home"),
+    onDone: () => enterApp(),
     onNavigateLogin: () => go("login"),
   };
 
@@ -474,7 +480,7 @@ export function createDesktopReactMount({
 
   const savedHandlers = {
     onNavigate: (view: string) => {
-      return view === "chat" ? go("home") : render();
+      return view === "chat" ? enterApp() : render();
     },
     onToggleSelection: (id: string) => {
       savedArtistsShell?.toggleArtistSelection(id);
@@ -494,7 +500,7 @@ export function createDesktopReactMount({
     },
     onActivateStyleRef: async () => {
       await savedArtistsShell?.activateStyleRef?.();
-      return go("home");
+      return enterApp();
     },
     onExport: async () => {
       const bands = await savedArtistsShell?.exportArtists?.();
@@ -542,6 +548,11 @@ export function createDesktopReactMount({
   function go(route: string) {
     if (!router) return render();
     router.navigate(route);
+    return lastRender;
+  }
+  async function enterApp() {
+    if (!enterAppThroughGate) return go("home");
+    await enterAppThroughGate();
     return lastRender;
   }
 
