@@ -274,6 +274,38 @@ test("invokeResearchGraph emits a log event per node", async () => {
   }
 });
 
+test("the obscurity filter log shows where candidates fall against the target range, before and after filtering (#325)", async () => {
+  const { client } = happyPath();
+  const { fetchImpl } = fakeFetch({
+    brave: () => twoBraveHits,
+    musicbrainzSearch: (url) =>
+      musicbrainzArtists([
+        url.includes("Fen") ? { id: "mbid-fen", name: "Fen" } : { id: "mbid-ghost", name: "Ghost Bath" },
+      ]),
+    musicbrainzLookup: (url) =>
+      url.includes("mbid-fen")
+        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
+        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    lastFm: (url) => {
+      if (url.includes("artist.getsimilar")) return { similarartists: { artist: [] } };
+      const listeners = decodeURIComponent(url).includes("artist=Fen") ? "42000" : "900";
+      return { artist: { stats: { listeners } } };
+    },
+  });
+  const events: Array<{ event: string; details: Record<string, unknown> }> = [];
+
+  await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm-key", onLog: (_level, event, details) => events.push({ event, details }) }),
+    { ...input, obscurityTarget: "cult" },
+  );
+
+  const filter = events.find((e) => e.event === "research_obscurity_filter");
+  assert.ok(filter, "the filter is logged");
+  const twoCandidates = { inRange: 1, tooObscure: 1, tooMainstream: 0, unknown: 0 };
+  assert.deepEqual(filter.details.fitBefore, twoCandidates);
+  assert.deepEqual(filter.details.fitAfter, twoCandidates, "the one-sided filter keeps the too-obscure candidate");
+});
+
 // ------------------------------------------------------------ provenance
 
 test("a research run names the model that wrote its prose", async () => {
