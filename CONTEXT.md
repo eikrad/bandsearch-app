@@ -36,7 +36,9 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Obscurity target** — a user-selectable signal (`Cult Following` / `Underground` / `Truly Obscure`) passed to the planner to tune search queries toward less or more obscure artists. Stored per recommendation event. Each target is a Last.fm listener *range*, both ends included: Cult Following 20k–500k, Underground 2k–50k, Truly Obscure up to 5k (`services/api/src/obscurityTargets.ts`, #325). The ranges overlap on purpose. A band below the range misses the target just as one above it does. These are not the **obscurity tiers** of the eval chart, which sort every band into exactly one tier with their own cut points (`eval/obscurityScorer.ts`).
 
-  **Not built yet (#325):** the eval measures misses in both directions, but the research filter still applies only the old ceilings (500k / 50k / 5k) and the planner and ranker prompts still use their own wording.
+  Before ranking, the research filter keeps the candidates in range. If fewer than five are, the nearest misses in either direction fill up the pool. A candidate without a Last.fm count counts as obscure.
+
+  **Not built yet (#325):** the planner and ranker prompts still use their own wording rather than these ranges.
 
 - **Eval layer** — an async, non-blocking quality-scoring system that runs after the HTTP response is sent. Three tiers: (1) automatic metrics — Last.fm obscurity score and pipeline funnel counts; (1.5) deterministic checks — citation support rate and generic-why detection; (2) LLM-as-judge — scores each band asynchronously (optional, requires `SCW_SECRET_KEY`).
 

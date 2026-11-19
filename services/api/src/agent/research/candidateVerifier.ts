@@ -1,3 +1,5 @@
+import { validateObscurityTarget, type ObscurityTarget } from "../../../../../shared/schemas/src/contracts.js";
+import { OBSCURITY_TARGET_RANGES } from "../../obscurityTargets.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -15,24 +17,38 @@ export type VerifiedCandidate = {
   listenerCount?: number | null;
 };
 
-const OBSCURITY_THRESHOLDS: Record<string, number> = {
-  cult: 500_000,
-  underground: 50_000,
-  obscure: 5_000,
-};
+/** The ranker's pool under an obscurity target: in-range candidates, topped up to this many. */
+export const OBSCURITY_POOL_MIN = 5;
 
-const OBSCURITY_FILTER_MIN = 1;
+/**
+ * How far a listener count misses the target's range, as a log ratio: missing a
+ * 20k floor by 5k is closer than missing it by 19k. 0 inside the range.
+ */
+function rangeMiss(listeners: number, target: ObscurityTarget): number {
+  const { min, max } = OBSCURITY_TARGET_RANGES[target];
+  if (listeners < min) return Math.log(min / Math.max(listeners, 1));
+  if (listeners > max) return Math.log(listeners / max);
+  return 0;
+}
 
+/**
+ * Narrows the ranker's pool to the requested obscurity target's listener range
+ * (#325), with a floor as well as a ceiling. When fewer than OBSCURITY_POOL_MIN
+ * candidates are in range, the nearest misses in either direction fill up the
+ * pool, in-range first. A candidate without a Last.fm count counts as obscure;
+ * with no counts at all (Last.fm off) the pool passes unchanged.
+ */
 export function filterCandidatesByObscurity(
   candidates: VerifiedCandidate[],
   obscurityTarget?: string,
 ): VerifiedCandidate[] {
-  if (!obscurityTarget || !(obscurityTarget in OBSCURITY_THRESHOLDS)) return candidates;
-  const threshold = OBSCURITY_THRESHOLDS[obscurityTarget];
-  const filtered = candidates.filter(
-    (c) => c.listenerCount == null || c.listenerCount <= threshold,
-  );
-  return filtered.length >= OBSCURITY_FILTER_MIN ? filtered : candidates;
+  const target = validateObscurityTarget(obscurityTarget);
+  if (!target || candidates.every((c) => c.listenerCount == null)) return candidates;
+  const byMiss = candidates
+    .map((c) => ({ c, miss: rangeMiss(c.listenerCount ?? 0, target) }))
+    .sort((a, b) => a.miss - b.miss);
+  const inRange = byMiss.filter((x) => x.miss === 0).length;
+  return byMiss.slice(0, Math.max(inRange, OBSCURITY_POOL_MIN)).map((x) => x.c);
 }
 
 export type MusicBrainzVerifyClient = {
