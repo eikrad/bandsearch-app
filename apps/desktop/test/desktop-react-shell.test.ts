@@ -186,6 +186,7 @@ test("desktop react shell renderHtml includes all three obscurity picker buttons
 // mount: what matters is what was painted, not what the shell holds.
 function statusRepaintHarness() {
   let route = "home";
+  const routeListeners: Array<() => void> = [];
   let fireTimer: () => void = () => {};
   const shell = createDesktopReactShell({
     renderAdapter: {
@@ -211,7 +212,12 @@ function statusRepaintHarness() {
   const painted: unknown[] = [];
   const mount = createDesktopReactMount({
     shell,
-    router: { getRoute: () => route, navigate: (next) => { route = next; }, onRouteChange: () => {} },
+    router: {
+      getRoute: () => route,
+      // A router tells its listeners inside navigate(); the mount renders from that.
+      navigate: (next) => { route = next; routeListeners.forEach((fn) => fn()); },
+      onRouteChange: (fn) => { routeListeners.push(fn); },
+    },
     getSettingsViewProps: () => ({ statusMessage: null }),
     createRootImpl: () => fakeReactRoot((element) => {
       // The mount paints a Fragment: [update banner | null, routed view].

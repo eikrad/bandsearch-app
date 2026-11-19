@@ -41,6 +41,7 @@ type ViewComponentLike = React.ComponentType<Record<string, unknown>>;
 
 type MountRouter = {
   getRoute(): string;
+  /** Must tell `onRouteChange` listeners before returning: the mount renders from that. */
   navigate(route: string): void;
   onRouteChange(listener: () => void): unknown;
 };
@@ -349,12 +350,10 @@ export function createDesktopReactMount({
       // Route, not view flag: `route === "saved"` is what selects the shell
       // implementation below. Setting only the app's view flag left the hash on
       // "home" and quietly served a second, less capable copy of this screen.
-      if (router) router.navigate("saved");
-      return renderCurrent();
+      return go("saved");
     },
     onNavigateSettings: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
     onSaveTursoConfig: async (url: string, token: string) => {
       await saveTursoConfig(url, token);
@@ -364,8 +363,7 @@ export function createDesktopReactMount({
 
   const settingsHandlers = {
     onNavigateChat: async () => {
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return go("home");
     },
     onSaveApiKey: async (apiKey: string) => {
       await saveLlmApiKey(apiKey);
@@ -385,8 +383,7 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onNavigatePrivacy: async () => {
-      if (router) router.navigate("privacy");
-      return renderCurrent();
+      return go("privacy");
     },
     // Left undefined when no collaborator was injected, rather than wrapped in a
     // function that silently returns. A present-but-inert handler is exactly how
@@ -425,8 +422,7 @@ export function createDesktopReactMount({
       accountStatus = null;
       // Erasing the only account puts the install back to zero users, which is
       // the first-run state — so send them where a fresh install starts.
-      if (router) router.navigate("register");
-      return renderCurrent();
+      return go("register");
     },
   };
 
@@ -435,31 +431,27 @@ export function createDesktopReactMount({
 
   const privacyHandlers = {
     onBack: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
   };
 
   const welcomeHandlers = {
     onGoToSettings: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
     onSkip: async () => {
       await completeOnboarding();
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return go("home");
     },
   };
 
   const loginHandlers = {
     onLogin: async (email: string, password: string) => {
       if (onLogin) await onLogin(email, password);
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return go("home");
     },
-    onNavigateRegister: () => { if (router) router.navigate("register"); renderCurrent(); },
-    onNavigateReset: () => { if (router) router.navigate("reset-password"); renderCurrent(); },
+    onNavigateRegister: () => go("register"),
+    onNavigateReset: () => go("reset-password"),
   };
 
   const registerHandlers = {
@@ -467,8 +459,8 @@ export function createDesktopReactMount({
       const result = onRegister ? await onRegister(email, displayName, password, inviteCode) : { recoveryCode: "" };
       return result;
     },
-    onDone: () => { if (router) router.navigate("home"); renderCurrent(); },
-    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
+    onDone: () => go("home"),
+    onNavigateLogin: () => go("login"),
   };
 
   const resetPasswordHandlers = {
@@ -476,14 +468,13 @@ export function createDesktopReactMount({
       const result = onResetPassword ? await onResetPassword(email, recoveryCode, newPassword) : { newRecoveryCode: "" };
       return result;
     },
-    onDone: () => { if (router) router.navigate("login"); renderCurrent(); },
-    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
+    onDone: () => go("login"),
+    onNavigateLogin: () => go("login"),
   };
 
   const savedHandlers = {
     onNavigate: (view: string) => {
-      if (view === "chat" && router) router.navigate("home");
-      renderCurrent();
+      return view === "chat" ? go("home") : render();
     },
     onToggleSelection: (id: string) => {
       savedArtistsShell?.toggleArtistSelection(id);
@@ -503,8 +494,7 @@ export function createDesktopReactMount({
     },
     onActivateStyleRef: async () => {
       await savedArtistsShell?.activateStyleRef?.();
-      if (router) router.navigate("home");
-      renderCurrent();
+      return go("home");
     },
     onExport: async () => {
       const bands = await savedArtistsShell?.exportArtists?.();
@@ -541,8 +531,22 @@ export function createDesktopReactMount({
     },
   };
 
+  // The router tells its listeners inside navigate(), so a navigation's render
+  // is the one recorded here. Rendering again after navigating would paint the
+  // same screen twice.
+  let lastRender: ReturnType<typeof renderCurrent> = Promise.resolve({});
+  function render() {
+    lastRender = renderCurrent();
+    return lastRender;
+  }
+  function go(route: string) {
+    if (!router) return render();
+    router.navigate(route);
+    return lastRender;
+  }
+
   if (router) {
-    router.onRouteChange(() => renderCurrent());
+    router.onRouteChange(() => { void render(); });
   }
 
   return {
