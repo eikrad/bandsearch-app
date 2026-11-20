@@ -10,7 +10,6 @@ import { modelFamily } from "../api/src/config/models.js";
 import { createChatModelFactory } from "../api/src/llm/chatModel.js";
 import { checkEvidence } from "../api/src/eval/evidenceChecker.js";
 import { createLastFmClient } from "../api/src/eval/lastFmClient.js";
-import { classifyObscurityTier } from "../api/src/eval/obscurityScorer.js";
 import type { JudgeInput } from "../api/src/eval/judgeWorker.js";
 import { createMusicBrainzClient } from "../api/src/integrations/musicbrainz.js";
 import { createReplayFetch } from "../api/src/integrations/replayFetch.js";
@@ -498,7 +497,6 @@ export async function runGoldenEntry(
             why: r.why ?? "",
             sourceSignals: r.sourceSignals ?? [],
             listeners,
-            obscurityTier: listeners === null ? null : classifyObscurityTier(listeners),
             citationSupportRate: evidence.citationSupportRate,
             genericWhyFlag: evidence.genericWhyFlag,
           };

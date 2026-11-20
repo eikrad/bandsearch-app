@@ -122,7 +122,6 @@ export function createEvalWorker({
             why: r.why,
             sourceSignals: r.sourceSignals,
             listeners: dbScore?.listeners,
-            obscurityTier: dbScore?.obscurityTier,
             citationSupportRate: dbScore?.citationSupportRate,
             genericWhyFlag: dbScore?.genericWhyFlag,
           };

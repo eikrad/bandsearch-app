@@ -22,6 +22,7 @@
     .charts-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; }
     .chart-box { background: #1e2333; border: 1px solid #2d3748; border-radius: 8px; padding: 1rem; }
     .chart-box canvas { max-height: 220px; }
+    .target-fit-box { margin-top: 1rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     thead th { background: #1e2333; padding: 0.5rem 0.75rem; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #2d3748; }
     tbody tr:nth-child(odd) { background: #161b27; }
@@ -55,6 +56,7 @@
       <div class="chart-box"><canvas id="chart-obscurity"></canvas></div>
       <div class="chart-box"><canvas id="chart-funnel"></canvas></div>
     </div>
+    <div class="chart-box target-fit-box"><canvas id="chart-target-fit"></canvas></div>
   </section>
 
   <section>
@@ -110,6 +112,7 @@
         { label: 'Bands scored', value: current.bandCount, delta: null },
         { label: 'Relevance', value: current.meanRelevance, delta: d.meanRelevance },
         { label: 'Obscurity fit', value: current.meanObscurityFit, delta: d.meanObscurityFit },
+        { label: 'In target range', value: current.obscurityInRangeRate, delta: d.obscurityInRangeRate },
         { label: 'Evidence', value: current.meanEvidenceQuality, delta: d.meanEvidenceQuality },
         { label: 'Discovery', value: current.meanDiscoveryValue, delta: d.meanDiscoveryValue },
         { label: 'Citation rate', value: current.meanCitationSupportRate, delta: d.meanCitationSupportRate },
@@ -173,6 +176,46 @@
         options: {
           responsive: true,
           plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } }, title: { display: true, text: 'Obscurity tiers', color: '#94a3b8' } },
+        },
+      });
+    }
+
+    // Where each band's listeners fall against the requested target's range (#325).
+    // Colours validated for CVD separation on the #1e2333 chart surface; unknown recedes.
+    function renderTargetFitChart(fit) {
+      if (!fit) return;
+      const targets = [['cult', 'Cult Following'], ['underground', 'Underground'], ['obscure', 'Truly Obscure']];
+      const series = [
+        ['tooObscure', 'Too obscure', '#3987e5'],
+        ['inRange', 'In range', '#199e70'],
+        ['tooMainstream', 'Too mainstream', '#d95926'],
+        ['unknown', 'No listener count', '#475569'],
+      ];
+      new Chart(document.getElementById('chart-target-fit'), {
+        type: 'bar',
+        data: {
+          labels: targets.map(([, label]) => label),
+          datasets: series.map(([key, label, color]) => ({
+            label,
+            data: targets.map(([t]) => fit[t]?.[key] ?? 0),
+            backgroundColor: color,
+            borderColor: '#1e2333',
+            borderWidth: 2,
+            borderRadius: 4,
+            borderSkipped: false,
+          })),
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          scales: {
+            x: { stacked: true, ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } },
+            y: { stacked: true, ticks: { color: '#94a3b8' }, grid: { display: false } },
+          },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+            title: { display: true, text: 'Bands per requested target, by listener range', color: '#94a3b8' },
+          },
         },
       });
     }
@@ -266,6 +309,7 @@
         renderTiles(current, delta);
         renderTrendChart(events);
         renderObscurityChart(current.obscurityDistribution);
+        renderTargetFitChart(current.obscurityTargetFit);
         renderFunnelChart(events);
         renderEventLog(events);
 

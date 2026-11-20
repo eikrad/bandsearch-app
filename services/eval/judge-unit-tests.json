@@ -238,5 +238,35 @@
       "genericWhyFlag": false
     },
     "expectedDirection": { "obscurityFit": "low", "discoveryValue": "low" }
+  },
+  {
+    "id": "ut-17",
+    "description": "very obscure band (~400 listeners) for 'cult' target → obscurityFit should be low: too obscure is a miss too (#325)",
+    "input": {
+      "bandName": "Cellar Hymns",
+      "query": "post-punk with a cult following",
+      "obscurityTarget": "cult",
+      "why": "Leeds post-punk trio with one self-released tape. See https://cellarhymns.bandcamp.com.",
+      "sourceSignals": ["https://cellarhymns.bandcamp.com"],
+      "listeners": 400,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "low" }
+  },
+  {
+    "id": "ut-18",
+    "description": "very obscure band (~300 listeners) for 'underground' target → obscurityFit should be low: too obscure is a miss too (#325)",
+    "input": {
+      "bandName": "Salt Marsh Choir",
+      "query": "underground slowcore",
+      "obscurityTarget": "underground",
+      "why": "Dutch slowcore duo with a single demo. See https://saltmarshchoir.bandcamp.com.",
+      "sourceSignals": ["https://saltmarshchoir.bandcamp.com"],
+      "listeners": 300,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "obscurityFit": "low" }
   }
 ]

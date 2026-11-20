@@ -4,7 +4,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { sendError } from "../http/errors.js";
 import type { EvalRepository } from "./evalRepository.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
-import type { AggregatedMetrics } from "./evalAggregator.js";
+import type { AggregatedMetrics, StoredMetrics } from "./evalAggregator.js";
 
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
@@ -52,7 +52,7 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
       return res.status(200).json({ current, baseline: null, delta: null });
     }
 
-    const baselineMetrics: AggregatedMetrics = JSON.parse(latestBaseline.metricsJson);
+    const baselineMetrics: StoredMetrics = JSON.parse(latestBaseline.metricsJson);
     const delta = computeDelta(current, baselineMetrics);
 
     return res.status(200).json({

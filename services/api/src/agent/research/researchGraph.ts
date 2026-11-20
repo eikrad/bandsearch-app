@@ -1,13 +1,14 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import { validateObscurityTarget, type ChatMessage, type RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { obscurityTargetFit, type ObscurityTargetFit } from "../../obscurityTargets.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
@@ -296,6 +297,9 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         obscurityTarget: state.obscurityTarget ?? "none",
         before: state.verifiedCandidates.length,
         after: filteredCandidates.length,
+        // Shows whether in-range bands were found and filtered or ranked away, or never found (#325).
+        fitBefore: countTargetFit(state.verifiedCandidates, state.obscurityTarget),
+        fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
       });
       const { recommendations, assistantReply } = await ranker({
         query: state.userQuery,
@@ -320,6 +324,20 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addEdge("rank", END);
 
   return graph.compile();
+}
+
+/** Candidates per fit against the requested target's listener range; null without a target. */
+function countTargetFit(
+  candidates: VerifiedCandidate[],
+  target: string | undefined,
+): Record<ObscurityTargetFit, number> | null {
+  if (!validateObscurityTarget(target)) return null;
+  const counts: Record<ObscurityTargetFit, number> = { inRange: 0, tooObscure: 0, tooMainstream: 0, unknown: 0 };
+  for (const c of candidates) {
+    const fit = obscurityTargetFit(c.listenerCount, target);
+    if (fit) counts[fit]++;
+  }
+  return counts;
 }
 
 export type PipelineDiagnostics = {
