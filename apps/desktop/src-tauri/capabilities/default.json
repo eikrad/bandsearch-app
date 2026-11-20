@@ -7,7 +7,6 @@
     "core:default",
     "allow-llm-config-status",
     "allow-save-llm-api-key",
-    "opener:allow-default-urls",
-    "updater:default"
+    "opener:allow-default-urls"
   ]
 }
