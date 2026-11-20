@@ -180,8 +180,8 @@
       });
     }
 
-    // Where each band's listeners fall against the requested target's range (#325).
-    // Colours validated for CVD separation on the #1e2333 chart surface; unknown recedes.
+    // Where each band's listeners fall against the requested target's range, by the
+    // search filter's rule (#325). Colours validated for CVD separation on #1e2333.
     function renderTargetFitChart(fit) {
       if (!fit) return;
       const targets = [['cult', 'Cult Following'], ['underground', 'Underground'], ['obscure', 'Truly Obscure']];
@@ -189,7 +189,6 @@
         ['tooObscure', 'Too obscure', '#3987e5'],
         ['inRange', 'In range', '#199e70'],
         ['tooMainstream', 'Too mainstream', '#d95926'],
-        ['unknown', 'No listener count', '#475569'],
       ];
       new Chart(document.getElementById('chart-target-fit'), {
         type: 'bar',

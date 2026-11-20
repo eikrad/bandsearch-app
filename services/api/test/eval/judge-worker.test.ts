@@ -119,7 +119,21 @@ test("each band tells the judge where its listeners fall against the requested r
     assertRecord(band);
     return band.target_range_fit;
   });
-  assert.deepEqual(fits, ["tooObscure", "inRange", "unknown", null]);
+  // "No count" shares its target with a counted band, so it counts as obscure, as in the search filter.
+  assert.deepEqual(fits, ["tooObscure", "inRange", "tooObscure", null]);
+});
+
+test("with no listener count for any band, the judge gets no fit and judges from the evidence", () => {
+  const bands = [
+    { ...sampleBands[0], obscurityTarget: "cult", listeners: null },
+    { ...sampleBands[0], bandName: "Other", obscurityTarget: "cult", listeners: undefined },
+  ];
+  const parsed: unknown = JSON.parse(buildJudgePrompt(bands).user);
+  assertArray(parsed);
+  for (const band of parsed) {
+    assertRecord(band);
+    assert.equal(band.target_range_fit, null);
+  }
 });
 
 test("the judge sends all bands in one call, system prompt first", async () => {

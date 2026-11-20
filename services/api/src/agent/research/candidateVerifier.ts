@@ -1,3 +1,4 @@
+import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -15,24 +16,30 @@ export type VerifiedCandidate = {
   listenerCount?: number | null;
 };
 
-const OBSCURITY_THRESHOLDS: Record<string, number> = {
-  cult: 500_000,
-  underground: 50_000,
-  obscure: 5_000,
-};
+/** The ranker's pool under an obscurity target: in range or near it, topped up to this many. */
+export const OBSCURITY_POOL_MIN = 5;
 
-const OBSCURITY_FILTER_MIN = 1;
-
+/**
+ * Narrows the ranker's pool to the requested obscurity target (#325), with a
+ * floor as well as a ceiling. Far misses are dropped in both directions; near
+ * misses stay behind the in-range candidates, because the filter cannot see a
+ * query's hard constraints and the ranker can. When fewer than
+ * OBSCURITY_POOL_MIN candidates are left, the nearest far misses fill up the
+ * pool. How a candidate fits, missing counts included, is fitObscurityTarget's
+ * rule, which the eval shares; when it has nothing to fit against, the pool
+ * passes unchanged.
+ */
 export function filterCandidatesByObscurity(
   candidates: VerifiedCandidate[],
   obscurityTarget?: string,
 ): VerifiedCandidate[] {
-  if (!obscurityTarget || !(obscurityTarget in OBSCURITY_THRESHOLDS)) return candidates;
-  const threshold = OBSCURITY_THRESHOLDS[obscurityTarget];
-  const filtered = candidates.filter(
-    (c) => c.listenerCount == null || c.listenerCount <= threshold,
-  );
-  return filtered.length >= OBSCURITY_FILTER_MIN ? filtered : candidates;
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), obscurityTarget);
+  if (!fits) return candidates;
+  const byMiss = candidates
+    .map((c, i) => ({ c, fit: fits[i]! }))
+    .sort((a, b) => a.fit.miss - b.fit.miss);
+  const near = fits.filter(isNearTarget).length;
+  return byMiss.slice(0, Math.max(near, OBSCURITY_POOL_MIN)).map((x) => x.c);
 }
 
 export type MusicBrainzVerifyClient = {

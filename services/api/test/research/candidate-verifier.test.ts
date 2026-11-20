@@ -95,56 +95,101 @@ test("mergeVerifiedCandidates prefers verified:true entry on collision (same mbi
   assert.equal(result[0].mbid, "mbid-pog");
 });
 
-// ─── filterCandidatesByObscurity ──────────────────────────────────────────────
+// ─── filterCandidatesByObscurity (#325: floor, ceiling, near misses) ─────────
 
 function makeCandidate(name: string, listenerCount: number | null): VerifiedCandidate {
   return { name, listenerCount, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] };
 }
 
-test("filterCandidatesByObscurity returns all candidates when no obscurityTarget", () => {
-  const candidates = [makeCandidate("Band A", 1_000_000), makeCandidate("Band B", 100)];
-  assert.equal(filterCandidatesByObscurity(candidates).length, 2);
-  assert.equal(filterCandidatesByObscurity(candidates, undefined).length, 2);
+const names = (cs: VerifiedCandidate[]) => cs.map((c) => c.name);
+
+test("without an obscurity target every candidate reaches the ranker", () => {
+  const candidates = [makeCandidate("Huge", 1_000_000), makeCandidate("Tiny", 100)];
+  assert.deepEqual(names(filterCandidatesByObscurity(candidates)), ["Huge", "Tiny"]);
 });
 
-test("filterCandidatesByObscurity filters above threshold for underground (50k)", () => {
+test("far misses are dropped in both directions: more than ten times off the range", () => {
   const candidates = [
-    makeCandidate("Huge Band", 1_000_000),
-    makeCandidate("Mid Band", 30_000),
-    makeCandidate("Tiny Band", 500),
+    makeCandidate("Far too obscure", 900),
+    makeCandidate("Cult A", 30_000),
+    makeCandidate("Cult B", 120_000),
+    makeCandidate("Far too mainstream", 6_000_000),
+    makeCandidate("Cult C", 20_000),
+    makeCandidate("Cult D", 500_000),
+    makeCandidate("Cult E", 75_000),
   ];
-  const result = filterCandidatesByObscurity(candidates, "underground");
-  assert.equal(result.length, 2);
-  assert.ok(result.every(c => c.listenerCount == null || c.listenerCount <= 50_000));
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")),
+    ["Cult A", "Cult B", "Cult C", "Cult D", "Cult E"],
+  );
 });
 
-test("filterCandidatesByObscurity keeps null listenerCount (no data = likely obscure)", () => {
-  const candidates = [makeCandidate("No Data Band", null), makeCandidate("Huge Band", 2_000_000)];
-  const result = filterCandidatesByObscurity(candidates, "obscure");
-  assert.equal(result.length, 1);
-  assert.equal(result[0].name, "No Data Band");
-});
-
-test("filterCandidatesByObscurity falls back to all candidates when too few pass the filter", () => {
+test("near misses stay in the pool behind the in-range candidates, for the ranker to weigh against the query", () => {
+  // A query's hard constraint ("from Japan") may only be met just outside the
+  // range; the filter cannot see constraints, the ranker can.
   const candidates = [
-    makeCandidate("Band A", 500_000),
-    makeCandidate("Band B", 600_000),
-    makeCandidate("Band C", 700_000),
+    makeCandidate("Just too obscure", 15_000),
+    makeCandidate("Cult A", 30_000),
+    makeCandidate("Cult B", 120_000),
+    makeCandidate("Bit too mainstream", 900_000),
+    makeCandidate("Cult C", 20_000),
+    makeCandidate("Far too obscure", 900),
+    makeCandidate("Cult D", 500_000),
+    makeCandidate("Cult E", 75_000),
   ];
-  // All above underground threshold (50k) — should fall back rather than return 0
-  const result = filterCandidatesByObscurity(candidates, "underground");
-  assert.equal(result.length, 3, "should fall back to all candidates rather than returning empty");
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")),
+    ["Cult A", "Cult B", "Cult C", "Cult D", "Cult E", "Just too obscure", "Bit too mainstream"],
+  );
 });
 
-test("filterCandidatesByObscurity cult threshold is 500k", () => {
+test("ten times off the range is still near; beyond that it is far", () => {
   const candidates = [
-    makeCandidate("Pop Star", 2_000_000),
-    makeCandidate("Scene Band", 200_000),
-    makeCandidate("Niche Band", 10_000),
+    ...["A", "B", "C", "D", "E"].map((n) => makeCandidate(`Cult ${n}`, 100_000)),
+    makeCandidate("Floor / 10", 2_000),
+    makeCandidate("Below floor / 10", 1_999),
+    makeCandidate("Ceiling x 10", 5_000_000),
+    makeCandidate("Above ceiling x 10", 5_000_001),
   ];
-  const result = filterCandidatesByObscurity(candidates, "cult");
-  assert.equal(result.length, 2);
-  assert.ok(result.every(c => c.listenerCount == null || c.listenerCount <= 500_000));
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")).slice(5),
+    ["Floor / 10", "Ceiling x 10"],
+  );
+});
+
+test("with too few in range or near it, the nearest far misses fill up the ranker's pool", () => {
+  const candidates = [
+    makeCandidate("Far too obscure", 300),
+    makeCandidate("Just too obscure", 15_000),
+    makeCandidate("In range", 40_000),
+    makeCandidate("No count", null),
+    makeCandidate("Bit too mainstream", 900_000),
+    makeCandidate("Too obscure", 6_000),
+  ];
+  assert.deepEqual(
+    names(filterCandidatesByObscurity(candidates, "cult")),
+    ["In range", "Just too obscure", "Bit too mainstream", "Too obscure", "Far too obscure"],
+  );
+});
+
+test("a candidate without a listener count counts as obscure", () => {
+  const candidates = [
+    makeCandidate("No count", null),
+    makeCandidate("Huge", 2_000_000),
+    makeCandidate("Tiny", 400),
+  ];
+  assert.deepEqual(names(filterCandidatesByObscurity(candidates, "obscure")), ["No count", "Tiny", "Huge"]);
+  assert.deepEqual(names(filterCandidatesByObscurity(candidates, "underground")), ["Tiny", "Huge", "No count"]);
+});
+
+test("several candidates without a count sort last, in their original order", () => {
+  const candidates = [makeCandidate("No count 1", null), makeCandidate("No count 2", null), makeCandidate("Cult", 30_000)];
+  assert.deepEqual(names(filterCandidatesByObscurity(candidates, "cult")), ["Cult", "No count 1", "No count 2"]);
+});
+
+test("with no listener counts at all (Last.fm off) the candidates pass unchanged", () => {
+  const candidates = [makeCandidate("A", null), makeCandidate("B", null)];
+  assert.deepEqual(names(filterCandidatesByObscurity(candidates, "cult")), ["A", "B"]);
 });
 
 test("mergeVerifiedCandidates preserves all distinct artists", () => {

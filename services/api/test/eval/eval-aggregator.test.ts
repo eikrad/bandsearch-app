@@ -17,7 +17,7 @@ const sampleDiagnostics = {
   searchBudgetUsed: 3,
 };
 
-const noFit = { inRange: 0, tooObscure: 0, tooMainstream: 0, unknown: 0 };
+const noFit = { inRange: 0, tooObscure: 0, tooMainstream: 0 };
 const noTargetFit = {
   obscurityTargetFit: { cult: noFit, underground: noFit, obscure: noFit },
   obscurityInRangeRate: null,
@@ -229,7 +229,7 @@ test("computeDelta: returns null for dimensions where either value is null", () 
   assertCloseTo(delta.meanDiscoveryValue, 0, "meanDiscoveryValue");
 });
 
-test("the in-range rate is the share of bands with a listener count that land inside their request's target range", () => {
+test("the in-range rate is the share of fitted bands inside their request's range, by the search filter's rule", () => {
   const events = [
     makeEvent({ id: "cult-req", obscurityTarget: "cult" }),
     makeEvent({ id: "ug-req", obscurityTarget: "underground" }),
@@ -242,7 +242,8 @@ test("the in-range rate is the share of bands with a listener count that land in
     makeScore({ eventId: "ug-req", bandName: "E", listeners: null }),
   ];
   const result = aggregateMetrics(events, scores);
-  assertCloseTo(result.obscurityInRangeRate, 0.5, "obscurityInRangeRate");
+  // E has no count but its request has others, so it counts as obscure, as in the filter.
+  assertCloseTo(result.obscurityInRangeRate, 0.4, "obscurityInRangeRate");
 });
 
 test("target fit is counted per target, so too-obscure picks for Cult Following show up", () => {
@@ -257,9 +258,9 @@ test("target fit is counted per target, so too-obscure picks for Cult Following 
     makeScore({ eventId: "ug-req", bandName: "D", listeners: null }),
   ];
   const { obscurityTargetFit } = aggregateMetrics(events, scores);
-  assert.deepEqual(obscurityTargetFit.cult, { inRange: 1, tooObscure: 1, tooMainstream: 1, unknown: 0 });
-  assert.deepEqual(obscurityTargetFit.underground, { inRange: 0, tooObscure: 0, tooMainstream: 0, unknown: 1 });
-  assert.deepEqual(obscurityTargetFit.obscure, { inRange: 0, tooObscure: 0, tooMainstream: 0, unknown: 0 });
+  assert.deepEqual(obscurityTargetFit.cult, { inRange: 1, tooObscure: 1, tooMainstream: 1 });
+  assert.deepEqual(obscurityTargetFit.underground, noFit, "a request with no listener count at all is not fitted");
+  assert.deepEqual(obscurityTargetFit.obscure, noFit);
 });
 
 test("bands from requests without a target, or without a listener count, leave the in-range rate open", () => {

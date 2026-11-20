@@ -301,9 +301,9 @@ test("the obscurity filter log shows where candidates fall against the target ra
 
   const filter = events.find((e) => e.event === "research_obscurity_filter");
   assert.ok(filter, "the filter is logged");
-  const twoCandidates = { inRange: 1, tooObscure: 1, tooMainstream: 0, unknown: 0 };
+  const twoCandidates = { inRange: 1, tooObscure: 1, tooMainstream: 0 };
   assert.deepEqual(filter.details.fitBefore, twoCandidates);
-  assert.deepEqual(filter.details.fitAfter, twoCandidates, "the one-sided filter keeps the too-obscure candidate");
+  assert.deepEqual(filter.details.fitAfter, twoCandidates, "with fewer than five in range, the too-obscure candidate fills the pool");
 });
 
 // ------------------------------------------------------------ provenance
