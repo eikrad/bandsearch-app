@@ -7,8 +7,11 @@ use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
-use tauri::{Emitter, Manager, State, WindowEvent};
+use tauri::{generate_handler, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_updater::UpdaterExt;
+
+#[macro_use]
+mod app_commands;
 
 struct ApiProcess(Mutex<Option<Child>>);
 
@@ -618,7 +621,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![llm_config_status, save_llm_api_key, save_brave_api_key, save_turso_config, clear_turso_config, save_api_endpoint_url, complete_onboarding, install_update])
+        .invoke_handler(app_commands!(generate_handler))
         .setup(|app| {
             let menu = build_app_menu(&app.handle())?;
             app.set_menu(menu)?;
