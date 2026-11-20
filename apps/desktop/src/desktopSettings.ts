@@ -53,6 +53,7 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
           tursoFromEnv?: boolean;
           onboardingComplete?: boolean;
           apiEndpointUrl?: string;
+          defaultApiEndpointUrl?: string;
         };
       } catch {
         // A failed invoke means there is no Tauri host answering — the browser
@@ -73,7 +74,8 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
       return {
         hasStoredKey: Boolean(r?.hasStoredKey),
         onboardingComplete: Boolean(r?.onboardingComplete),
-        apiEndpointUrl: String(r?.apiEndpointUrl ?? "").trim(),
+        // Spike #319: mobile builds fall back to the compiled-in hosted API.
+        apiEndpointUrl: String(r?.apiEndpointUrl || r?.defaultApiEndpointUrl || "").trim(),
       };
     }
     try {

@@ -1,12 +1,31 @@
+// Spike #319: the sidecar helpers stay at crate root, so they are dead code on mobile
+// (24 warnings without this). Production should move them into `desktop`.
+#![cfg_attr(mobile, allow(dead_code))]
+
 use serde::{Deserialize, Serialize};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
-use tauri::{generate_handler, Emitter, Manager, State, WindowEvent};
-use tauri_plugin_updater::UpdaterExt;
+use std::sync::OnceLock;
+use tauri::{generate_handler, AppHandle, Manager};
+
+/// Desktop-only shell parts (menu, updater, Node sidecar lifecycle). Spike #319:
+/// one `cfg` gate instead of ~15 scattered attributes (shell research amendment 3).
+#[cfg(desktop)]
+mod desktop;
+#[cfg(desktop)]
+use desktop::install_update;
+
+/// The updater is not built for mobile (it ships through the release APK), but the
+/// command list in `app_commands.rs` is one list for every platform, so mobile gets
+/// a stub that refuses instead of a second list.
+#[cfg(not(desktop))]
+#[tauri::command]
+async fn install_update() -> Result<(), String> {
+    Err("in-app updates are not available on this platform".to_string())
+}
 
 #[macro_use]
 mod app_commands;
@@ -48,13 +67,6 @@ impl BandsearchConfig {
     }
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct UpdateAvailablePayload {
-    version: String,
-    can_auto_install: bool,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LlmConfigStatus {
@@ -66,6 +78,22 @@ struct LlmConfigStatus {
     brave_key_from_env: bool,
     turso_from_env: bool,
     api_endpoint_url: String,
+    /// Compiled-in endpoint used when nothing is stored (#159; amendment 4: its own
+    /// field, so Settings never shows it as a user-saved endpoint).
+    default_api_endpoint_url: String,
+}
+
+/// The hosted API mobile builds talk to when no endpoint is stored. One home (AGENTS.md).
+const HOSTED_API_ENDPOINT_URL: &str = "https://bandsearch-api.onrender.com";
+
+/// Mobile has no local sidecar, so it falls back to the hosted API; desktop's
+/// blank default keeps meaning "start the local sidecar".
+fn default_api_endpoint() -> &'static str {
+    if cfg!(mobile) {
+        HOSTED_API_ENDPOINT_URL
+    } else {
+        ""
+    }
 }
 
 /// Returns true when the named environment variable is set to a non-blank value.
@@ -113,9 +141,24 @@ fn is_valid_http_url(value: &str) -> bool {
         || (v.starts_with("https://") && v.len() > "https://".len())
 }
 
+/// Base config directory resolved once through Tauri's path API in `setup`
+/// (amendment 1: one code path; on desktop it equals `dirs::config_dir()`, on
+/// Android it is the app's `dataDir`). Unset only in unit tests.
+static CONFIG_BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
 fn config_file_path() -> Result<PathBuf, String> {
-    let base = dirs::config_dir().ok_or_else(|| "config directory not found".to_string())?;
+    let base = match CONFIG_BASE_DIR.get() {
+        Some(dir) => dir.clone(),
+        None => dirs::config_dir().ok_or_else(|| "config directory not found".to_string())?,
+    };
     Ok(base.join("bandsearch").join("config.json"))
+}
+
+/// The one seam settings commands call after persisting: reconciles the local
+/// sidecar on desktop, no-op on mobile (amendment 2).
+fn on_config_changed(_app: &AppHandle) {
+    #[cfg(desktop)]
+    desktop::reconcile_sidecar_for(_app);
 }
 
 fn load_config() -> BandsearchConfig {
@@ -447,43 +490,6 @@ fn reconcile_sidecar(api: &ApiProcess, workspace_root: &Path) {
     }
 }
 
-/// Whether this build can install an update in place. macOS ships no signed
-/// updater artifact (see the auto-update plan's deviations), so its banner is
-/// informational only. Single source of truth for the payload and its test.
-fn can_auto_install() -> bool {
-    cfg!(not(target_os = "macos"))
-}
-
-/// Checks the configured updater endpoint once and, on a hit, emits `update-available`
-/// with the new version and whether this platform can auto-install it.
-async fn check_for_update_and_notify(app: tauri::AppHandle) {
-    let Ok(updater) = app.updater() else {
-        eprintln!("[bandsearch] updater unavailable");
-        return;
-    };
-    match updater.check().await {
-        Ok(Some(update)) => {
-            let payload = UpdateAvailablePayload {
-                version: update.version,
-                can_auto_install: can_auto_install(),
-            };
-            if let Err(e) = app.emit("update-available", payload) {
-                eprintln!("[bandsearch] failed to emit update-available: {e}");
-            }
-        }
-        Ok(None) => {}
-        Err(e) => eprintln!("[bandsearch] update check failed: {e}"),
-    }
-}
-
-fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let quit = PredefinedMenuItem::quit(app, Some("Quit Bandsearch"))?;
-    let about = PredefinedMenuItem::about(app, Some("About Bandsearch"), None)?;
-    let separator = PredefinedMenuItem::separator(app)?;
-    let app_submenu = Submenu::with_items(app, "Bandsearch", true, &[&about, &separator, &quit])?;
-    Menu::with_items(app, &[&app_submenu])
-}
-
 #[tauri::command]
 fn llm_config_status() -> Result<LlmConfigStatus, String> {
     let cfg = load_config();
@@ -504,31 +510,35 @@ fn llm_config_status() -> Result<LlmConfigStatus, String> {
         brave_key_from_env,
         turso_from_env,
         api_endpoint_url: cfg.api_endpoint_url.trim().to_string(),
+        default_api_endpoint_url: default_api_endpoint().to_string(),
     })
 }
 
 #[tauri::command]
 fn save_llm_api_key(
-    workspace: State<'_, WorkspaceRoot>,
-    api: State<'_, ApiProcess>,
+    app: AppHandle,
     req: SaveLlmApiKeyRequest,
 ) -> Result<(), String> {
     let trimmed = req.api_key.trim();
     if trimmed.is_empty() {
         return Err("API key is empty".into());
     }
+    if trimmed == "spike-panic" {
+        // Spike #319 only: a deliberate panic reachable from the welcome screen, to
+        // see whether a Rust panic reaches logcat (debug: unwind; release: abort).
+        panic!("spike #319: deliberate panic from save_llm_api_key");
+    }
     let mut cfg = load_config();
     cfg.llm_api_key = trimmed.to_string();
     cfg.onboarding_completed = true;
     persist_config(&cfg)?;
-    reconcile_sidecar(api.inner(), &workspace.0);
+    on_config_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn save_brave_api_key(
-    workspace: State<'_, WorkspaceRoot>,
-    api: State<'_, ApiProcess>,
+    app: AppHandle,
     req: SaveBraveApiKeyRequest,
 ) -> Result<(), String> {
     let trimmed = req.api_key.trim();
@@ -538,14 +548,13 @@ fn save_brave_api_key(
     let mut cfg = load_config();
     cfg.brave_api_key = trimmed.to_string();
     persist_config(&cfg)?;
-    reconcile_sidecar(api.inner(), &workspace.0);
+    on_config_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn save_turso_config(
-    workspace: State<'_, WorkspaceRoot>,
-    api: State<'_, ApiProcess>,
+    app: AppHandle,
     req: SaveTursoConfigRequest,
 ) -> Result<(), String> {
     let url = req.database_url.trim();
@@ -556,27 +565,25 @@ fn save_turso_config(
     cfg.turso_database_url = url.to_string();
     cfg.turso_auth_token = req.auth_token.trim().to_string();
     persist_config(&cfg)?;
-    reconcile_sidecar(api.inner(), &workspace.0);
+    on_config_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn clear_turso_config(
-    workspace: State<'_, WorkspaceRoot>,
-    api: State<'_, ApiProcess>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let mut cfg = load_config();
     cfg.turso_database_url = String::new();
     cfg.turso_auth_token = String::new();
     persist_config(&cfg)?;
-    reconcile_sidecar(api.inner(), &workspace.0);
+    on_config_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn save_api_endpoint_url(
-    workspace: State<'_, WorkspaceRoot>,
-    api: State<'_, ApiProcess>,
+    app: AppHandle,
     req: SaveApiEndpointUrlRequest,
 ) -> Result<(), String> {
     let trimmed = req.url.trim();
@@ -588,7 +595,7 @@ fn save_api_endpoint_url(
     persist_config(&cfg)?;
     // Reconcile the sidecar: a remote endpoint stops the local one; clearing it
     // (blank URL) restarts the local sidecar with the stored keys.
-    reconcile_sidecar(api.inner(), &workspace.0);
+    on_config_changed(&app);
     Ok(())
 }
 
@@ -599,66 +606,26 @@ fn complete_onboarding() -> Result<(), String> {
     persist_config(&cfg)
 }
 
-/// Re-checks for an update (rather than trusting the earlier `update-available` event)
-/// so install always acts on a fresh, signature-verified release.
-#[tauri::command]
-async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no update available".to_string())?;
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|e| e.to_string())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    #[cfg(desktop)]
+    let builder = desktop::configure(builder);
+    builder
         .invoke_handler(app_commands!(generate_handler))
         .setup(|app| {
-            let menu = build_app_menu(&app.handle())?;
-            app.set_menu(menu)?;
-
-            let workspace_root = resolve_workspace_root();
-            load_dotenv(&workspace_root);
-            eprintln!("[bandsearch] workspace_root: {}", workspace_root.display());
+            let base = app.path().config_dir()?;
+            let _ = CONFIG_BASE_DIR.set(base.clone());
+            // Spike #319: does stderr reach logcat on Android? (Expected: no.)
             eprintln!(
-                "[bandsearch] DATABASE_PATH: {}",
-                absolute_bandsearch_db_path(&workspace_root)
+                "[bandsearch] spike: config base {} HOME={:?} dirs::config_dir={:?}",
+                base.display(),
+                std::env::var("HOME").ok(),
+                dirs::config_dir()
             );
-
-            // Spawned before reconcile_sidecar, which blocks this thread in
-            // wait_for_api_tcp for as long as the Node sidecar takes to listen.
-            // The check needs no managed state, so starting it first lets the
-            // network round trip overlap that wait instead of queueing behind it.
-            // Event-driven, not polled: one check per launch is enough for a
-            // tester-facing notification, and it keeps the untestable surface
-            // (the actual network round trip) to a single spawned task.
-            tauri::async_runtime::spawn(check_for_update_and_notify(app.handle().clone()));
-
-            let api = ApiProcess(Mutex::new(None));
-            // Start the local sidecar only when no remote endpoint is configured.
-            reconcile_sidecar(&api, &workspace_root);
-
-            app.manage(api);
-            app.manage(WorkspaceRoot(workspace_root));
-
+            #[cfg(desktop)]
+            desktop::setup(app)?;
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let WindowEvent::Destroyed = event {
-                if window.label() == "main" {
-                    if let Some(state) = window.try_state::<ApiProcess>() {
-                        stop_api_sidecar(&state);
-                    }
-                }
-            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -667,6 +634,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::desktop::*;
 
     /// Sends `command` from the main window through tauri's IPC, ACL check included.
     fn invoke_from(
@@ -974,6 +942,7 @@ mod tests {
             brave_key_from_env: false,
             turso_from_env: false,
             api_endpoint_url: "https://remote.example".to_string(),
+            default_api_endpoint_url: String::new(),
         };
         let value = serde_json::to_value(&status).expect("status must serialize");
         assert_eq!(value["apiEndpointUrl"], "https://remote.example");
