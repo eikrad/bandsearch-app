@@ -345,16 +345,100 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Allows reading whether an LLM API key (Scaleway) is stored in local config.",
+          "description": "Enables the clear_turso_config command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-llm-config-status",
-          "markdownDescription": "Allows reading whether an LLM API key (Scaleway) is stored in local config."
+          "const": "allow-clear-turso-config",
+          "markdownDescription": "Enables the clear_turso_config command without any pre-configured scope."
         },
         {
-          "description": "Allows saving the LLM API key and restarting the API sidecar.",
+          "description": "Enables the complete_onboarding command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-complete-onboarding",
+          "markdownDescription": "Enables the complete_onboarding command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-install-update",
+          "markdownDescription": "Enables the install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the llm_config_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-llm-config-status",
+          "markdownDescription": "Enables the llm_config_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_api_endpoint_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-api-endpoint-url",
+          "markdownDescription": "Enables the save_api_endpoint_url command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_brave_api_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-brave-api-key",
+          "markdownDescription": "Enables the save_brave_api_key command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_llm_api_key command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-llm-api-key",
-          "markdownDescription": "Allows saving the LLM API key and restarting the API sidecar."
+          "markdownDescription": "Enables the save_llm_api_key command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_turso_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-turso-config",
+          "markdownDescription": "Enables the save_turso_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the clear_turso_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-clear-turso-config",
+          "markdownDescription": "Denies the clear_turso_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the complete_onboarding command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-complete-onboarding",
+          "markdownDescription": "Denies the complete_onboarding command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-install-update",
+          "markdownDescription": "Denies the install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the llm_config_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-llm-config-status",
+          "markdownDescription": "Denies the llm_config_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_api_endpoint_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-api-endpoint-url",
+          "markdownDescription": "Denies the save_api_endpoint_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_brave_api_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-brave-api-key",
+          "markdownDescription": "Denies the save_brave_api_key command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_llm_api_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-llm-api-key",
+          "markdownDescription": "Denies the save_llm_api_key command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_turso_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-turso-config",
+          "markdownDescription": "Denies the save_turso_config command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
