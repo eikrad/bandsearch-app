@@ -5,8 +5,10 @@ mod app_commands;
 
 const APP_COMMANDS: &[&str] = app_commands!(command_names);
 
-/// The capability of the app's only window, the one that calls the commands.
-const CAPABILITY: &str = "capabilities/default.json";
+/// Where Tauri reads capabilities from. A command only has to be granted in one of them;
+/// that it reaches the window is checked by apps/desktop/test/command-permissions.test.ts
+/// and by the mock-runtime test in main.rs.
+const CAPABILITIES_DIR: &str = "capabilities";
 
 fn main() {
     println!(
@@ -14,6 +16,7 @@ fn main() {
         std::env::var("TARGET").unwrap()
     );
     println!("cargo:rerun-if-changed=src/app_commands.rs");
+    println!("cargo:rerun-if-changed={CAPABILITIES_DIR}");
 
     assert_every_command_is_granted();
 
@@ -30,26 +33,47 @@ fn main() {
 /// Fails the build when a command is registered but its permission is not granted:
 /// without the grant the command would build fine and be rejected at runtime.
 fn assert_every_command_is_granted() {
-    let text = std::fs::read_to_string(CAPABILITY).expect("read capabilities/default.json");
-    let capability: serde_json::Value =
-        serde_json::from_str(&text).expect("capabilities/default.json must be valid JSON");
-    let granted: Vec<&str> = capability["permissions"]
-        .as_array()
-        .expect("capabilities/default.json must list permissions")
-        .iter()
-        .filter_map(|permission| permission.as_str())
-        .collect();
+    let granted = granted_permissions();
 
     // The identifier AppManifest::commands generates for a command.
     let missing: Vec<String> = APP_COMMANDS
         .iter()
         .map(|command| format!("allow-{}", command.replace('_', "-")))
-        .filter(|permission| !granted.contains(&permission.as_str()))
+        .filter(|permission| !granted.contains(permission))
         .collect();
 
     assert!(
         missing.is_empty(),
-        "{CAPABILITY} does not grant {missing:?}: every command in src/app_commands.rs \
-         needs its allow-<name> permission there, or Tauri rejects it at runtime"
+        "no file in {CAPABILITIES_DIR}/ grants {missing:?}: every command in \
+         src/app_commands.rs needs its allow-<name> permission granted there, or Tauri \
+         rejects it at runtime"
     );
+}
+
+/// Every permission identifier granted by a capability file. Tauri accepts a permission
+/// as a plain string or as an object with an `identifier` (and a scope).
+fn granted_permissions() -> Vec<String> {
+    let mut granted = Vec::new();
+    let files = std::fs::read_dir(CAPABILITIES_DIR).expect("read the capabilities directory");
+    for file in files {
+        let path = file.expect("read a capabilities entry").path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("read a capability file");
+        let capability: serde_json::Value = serde_json::from_str(&text)
+            .unwrap_or_else(|error| panic!("{} is not valid JSON: {error}", path.display()));
+        let Some(permissions) = capability["permissions"].as_array() else {
+            continue;
+        };
+        for permission in permissions {
+            let identifier = permission
+                .as_str()
+                .or_else(|| permission["identifier"].as_str());
+            if let Some(identifier) = identifier {
+                granted.push(identifier.to_string());
+            }
+        }
+    }
+    granted
 }
