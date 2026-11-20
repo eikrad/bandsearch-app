@@ -4,6 +4,11 @@ version = "0.4.5"
 edition = "2021"
 rust-version = "1.77"
 
+# Spike #319: the mobile shell needs a shared library (amendment 7: no staticlib until iOS).
+[lib]
+name = "bandsearch_lib"
+crate-type = ["cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
