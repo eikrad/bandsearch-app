@@ -669,6 +669,74 @@ fn main() {
 mod tests {
     use super::*;
 
+    /// Sends `command` from the main window through tauri's IPC, ACL check included.
+    fn invoke_from(
+        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        command: &str,
+    ) -> Result<(), serde_json::Value> {
+        tauri::test::get_ipc_response(
+            webview,
+            tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: if cfg!(any(windows, target_os = "android")) {
+                    "http://tauri.localhost"
+                } else {
+                    "tauri://localhost"
+                }
+                .parse()
+                .unwrap(),
+                body: tauri::ipc::InvokeBody::default(),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|_| ())
+    }
+
+    /// The app on the mock runtime with this crate's real ACL (`generate_context!`
+    /// carries the capabilities and the app manifest the build resolved), and a stub
+    /// handler that answers every command without running it, so only the ACL
+    /// decides whether a command gets through.
+    fn mock_main_window() -> tauri::WebviewWindow<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_builder()
+            .invoke_handler(|invoke| {
+                invoke.resolver.resolve("reached the handler");
+                true
+            })
+            .build(tauri::generate_context!())
+            .expect("mock app must build");
+        match app.get_webview_window("main") {
+            Some(window) => window,
+            None => tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("main window must build"),
+        }
+    }
+
+    #[test]
+    fn the_acl_lets_the_main_window_call_every_app_command() {
+        let webview = mock_main_window();
+        let commands: &[&str] = app_commands!(command_names);
+        let rejected: Vec<_> = commands
+            .iter()
+            .filter_map(|command| invoke_from(&webview, command).err().map(|e| (*command, e)))
+            .collect();
+        assert!(rejected.is_empty(), "rejected by the ACL: {rejected:#?}");
+    }
+
+    #[test]
+    fn the_acl_rejects_a_command_no_permission_allows() {
+        let webview = mock_main_window();
+        let rejection = invoke_from(&webview, "not_an_app_command")
+            .expect_err("the stub handler answers everything, so only the ACL can reject");
+        assert!(
+            rejection.to_string().contains("not allowed"),
+            "expected an ACL rejection, got {rejection}"
+        );
+    }
+
     #[test]
     fn window_title_is_configured() {
         let conf = include_str!("../tauri.conf.json");

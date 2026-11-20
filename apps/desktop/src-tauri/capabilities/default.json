@@ -7,7 +7,13 @@
     "core:default",
     "allow-llm-config-status",
     "allow-save-llm-api-key",
-    "opener:allow-default-urls",
-    "updater:default"
+    "allow-save-brave-api-key",
+    "allow-save-turso-config",
+    "allow-clear-turso-config",
+    "allow-save-api-endpoint-url",
+    "allow-complete-onboarding",
+    "allow-install-update",
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
   ]
 }
