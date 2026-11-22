@@ -500,18 +500,18 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
   );
 }
 
-function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme: ReturnType<typeof getTheme>; onStop?: () => void }) {
+function SearchInProgress({ visible, label, awaitingApi, theme, onStop }: { visible: boolean; label: string; awaitingApi: boolean; theme: ReturnType<typeof getTheme>; onStop?: () => void }) {
   const [showSlowHint, setShowSlowHint] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
 
   React.useEffect(() => {
-    if (!visible) {
+    if (!visible || !awaitingApi) {
       setShowSlowHint(false);
       return;
     }
     const timer = setTimeout(() => setShowSlowHint(true), 8000);
     return () => clearTimeout(timer);
-  }, [visible]);
+  }, [visible, awaitingApi]);
 
   if (!visible) return null;
   return React.createElement(
@@ -548,7 +548,7 @@ function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme:
       React.createElement(
         "span",
         null,
-        "Finding niche recommendations…",
+        label,
         showSlowHint
           ? React.createElement(
               "span",
@@ -589,6 +589,33 @@ function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme:
         )
       : null,
   );
+}
+
+/** How close to the end counts as reading the newest message. */
+const FOLLOW_WITHIN_PX = 120;
+
+/**
+ * Keeps the newest message in view as the conversation grows, unless the user
+ * scrolled up to read something earlier. Their own message always comes into view.
+ */
+function useFollowNewest(messages: MessageViewProps[] | null | undefined) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const following = React.useRef(true);
+  const count = messages?.length ?? 0;
+  const last = messages?.[count - 1];
+  const written = last?.content?.length ?? 0;
+  const own = last?.role === "user";
+
+  React.useEffect(() => {
+    const box = ref.current;
+    if (box && (own || following.current)) box.scrollTop = box.scrollHeight;
+  }, [count, written, own]);
+
+  const onScroll = () => {
+    const box = ref.current;
+    if (box) following.current = box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_WITHIN_PX;
+  };
+  return { ref, onScroll };
 }
 
 function findLastAssistantWithCardsIndex(messages: MessageViewProps[] | null | undefined): number {
@@ -882,6 +909,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
   const searchInFlight = viewProps.isLoading === true;
+  const followNewest = useFollowNewest(viewProps.messages);
 
   const latestFromThread = getLatestAssistantCards(viewProps.messages);
   const legacyCards =
@@ -978,6 +1006,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
             React.createElement(
               "div",
               {
+                ...followNewest,
                 className: "bandsearch-chat-scroll bandsearch-chat-scroll--main",
                 style: { overflowY: "auto", paddingBottom: "8px" },
               },
@@ -1023,6 +1052,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
         : React.createElement(
             "div",
             {
+              ...followNewest,
               className: "bandsearch-chat-scroll",
               style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" },
             },
@@ -1071,7 +1101,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
           backgroundColor: theme.pageBg,
         },
       },
-      React.createElement(SearchInProgress, { visible: searchInFlight, theme, onStop: handlers.onStop }),
+      React.createElement(SearchInProgress, { visible: searchInFlight, label: viewProps.progressLabel, awaitingApi: viewProps.awaitingApi, theme, onStop: handlers.onStop }),
       React.createElement(FeedbackReactionBar, {
         visible: viewProps.showFeedbackBar === true,
         onFeedback: (type: string) => handlers.onFeedback?.(type),
@@ -1137,7 +1167,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
               whiteSpace: "nowrap",
             },
           },
-          searchInFlight ? "Searching…" : "Recommend",
+          searchInFlight ? "Answering…" : "Recommend",
         ),
       ),
       React.createElement(

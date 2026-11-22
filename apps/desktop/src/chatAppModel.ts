@@ -7,6 +7,7 @@ import type {
 import { findSavedBand, type SavedBandTarget } from "./savedBandActions.js";
 import {
   validateFeedbackType,
+  type AnswerProgress,
   type RecommendationFeedbackSubmission,
 } from "../../../shared/schemas/src/contracts.js";
 
@@ -43,7 +44,12 @@ export type ChatAppCollaborator = {
     obscurityTarget: string | undefined,
   ): Promise<{ meta?: RecommendationMeta; recommendations?: RecommendationItem[] }>;
   sendFeedback?(eventId: string, submission: RecommendationFeedbackSubmission): Promise<unknown>;
-  getState(): { messages?: ChatStateMessage[]; savedBands?: SavedBand[] };
+  getState(): {
+    messages?: ChatStateMessage[];
+    savedBands?: SavedBand[];
+    pending?: { progress: AnswerProgress | null; reply: string } | null;
+  };
+  subscribe?(listener: () => void): () => void;
   cancelSearch?(): void;
 };
 
@@ -138,6 +144,14 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
     isLoading() {
       return loadingState;
     },
+    /** What the assistant is doing while a message is answered. */
+    getProgress(): AnswerProgress | null {
+      return app.getState().pending?.progress ?? null;
+    },
+    /** Calls `listener` when an answer makes progress. Returns an unsubscribe. */
+    subscribe(listener: () => void): () => void {
+      return app.subscribe?.(listener) ?? (() => {});
+    },
     getLastMeta() {
       return lastMeta;
     },
@@ -186,6 +200,10 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
             cards,
           });
         }
+      }
+      // The reply is shown while it is written; its cards come with the answer.
+      if (appState.pending?.reply) {
+        conversation.push({ id: `assistant-${messages.length}`, role: "assistant", content: appState.pending.reply, cards: [] });
       }
       return conversation.length > 0 ? conversation : null;
     },

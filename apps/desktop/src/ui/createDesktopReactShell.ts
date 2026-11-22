@@ -20,6 +20,7 @@ interface CreateDesktopReactShellOptions {
     onFeedbackDismiss?: () => unknown;
     setViewport?: (viewport: string) => void;
     getViewProps: () => ChatViewProps;
+    subscribe?: (listener: () => void) => () => void;
   };
   actionHandlers?: Partial<ChatHandlers>;
   statusTimeoutMs?: number;
@@ -69,7 +70,8 @@ export function createDesktopReactShell({
   const shell = {
     /** Calls `listener` when the view props change outside a handler. Returns an unsubscribe. */
     subscribe(listener: () => void) {
-      return status.subscribe(listener);
+      const unsubscribes = [status.subscribe(listener), renderAdapter.subscribe?.(listener)];
+      return () => { for (const unsubscribe of unsubscribes) unsubscribe?.(); };
     },
     getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();

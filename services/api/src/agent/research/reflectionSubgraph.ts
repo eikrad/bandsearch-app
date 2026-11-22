@@ -31,6 +31,8 @@ export type ReflectionSubgraphDeps = {
   /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
   model?: string;
   artistCache?: ResearchCache["artists"];
+  /** Told when another round of searching starts. */
+  onSearchAgain?: () => void;
   /** Told the names a round found, before they are verified. */
   onExtracted?: (candidates: ExtractedCandidate[]) => void;
 };
@@ -88,6 +90,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       });
     })
     .addNode("search", async (state) => {
+      deps.onSearchAgain?.();
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
       const { hits: newHits, calls } = await deps.runQueries(
         state.nextExtraQueries ?? [],

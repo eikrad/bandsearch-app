@@ -74,6 +74,16 @@ export function fakeModelClient(
     },
   };
 
+  // Streams the same answers in two pieces, to callers that listen.
+  client.stream = async (prompt, options) => {
+    const text = String((await client.invoke(prompt, options)).content);
+    const half = Math.ceil(text.length / 2);
+    return (async function* () {
+      yield { content: text.slice(0, half) };
+      yield { content: text.slice(half) };
+    })();
+  };
+
   return { client, calls };
 }
 

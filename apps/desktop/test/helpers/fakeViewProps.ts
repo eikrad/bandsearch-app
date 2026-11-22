@@ -12,6 +12,8 @@ const BASE: ChatViewProps = {
   modeValue: "fresh",
   modeOptions: [],
   isLoading: false,
+  progressLabel: "Sending your message…",
+  awaitingApi: false,
   queryPlaceholder: "Describe bands you like...",
   queryDisabled: false,
   obscurityTarget: undefined,

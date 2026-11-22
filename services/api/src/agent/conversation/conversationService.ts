@@ -1,4 +1,4 @@
-import type { ChatMessage, RecommendationMode, TurnKind } from "../../../../../shared/schemas/src/contracts.js";
+import type { AnswerProgress, ChatMessage, RecommendationMode, TurnKind } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { filterCandidatesByObscurity, type VerifiedCandidate } from "../research/candidateVerifier.js";
 import { createRecommendationRanker } from "../research/recommendationRanker.js";
@@ -30,6 +30,13 @@ export type TurnRequest = {
   conversationKey: string | null;
 };
 
+/** Follows an answer while it is made, and can end it. */
+export type TurnListener = {
+  onProgress?: (progress: AnswerProgress) => void;
+  onReply?: (text: string) => void;
+  signal?: AbortSignal;
+};
+
 export type TurnResult = {
   turn: TurnKind;
   recommendations: unknown[];
@@ -57,11 +64,15 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
     return graphDeps.modelClient ?? graphDeps.chatModel?.({ temperature }) ?? null;
   }
 
-  async function within<T>(ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  async function within<T>(ms: number, cancelled: AbortSignal | undefined, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    cancelled?.throwIfAborted();
     const budget = createResearchBudget(ms);
+    const stop = () => budget.close();
+    cancelled?.addEventListener("abort", stop, { once: true });
     try {
       return await budget.run(ms, work);
     } finally {
+      cancelled?.removeEventListener("abort", stop);
       budget.close();
     }
   }
@@ -73,14 +84,16 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
     return filterCandidatesByObscurity(conversation.candidates.filter((c) => !isShown(c, shown)), obscurityTarget);
   }
 
-  async function route(request: TurnRequest, conversation: Conversation | undefined, unseen: VerifiedCandidate[]): Promise<TurnKind> {
+  async function route(request: TurnRequest, conversation: Conversation | undefined, unseen: VerifiedCandidate[], listener: TurnListener): Promise<TurnKind> {
     const router = modelAt(0);
     if (request.messages.length === 0 || !router) return "search";
+    listener.onProgress?.({ stage: "thinking" });
     try {
-      const decided = await within(ROUTE_TIMEOUT_MS, (signal) =>
+      const decided = await within(ROUTE_TIMEOUT_MS, listener.signal, (signal) =>
         routeTurn(router, { query: request.query, messages: request.messages, shown: conversation?.shown ?? [], unseen }, { signal, timeoutMs: ROUTE_TIMEOUT_MS }));
       return decided === null || (decided === "pick" && unseen.length < MIN_UNSEEN) ? "search" : decided;
     } catch (error) {
+      listener.signal?.throwIfAborted();
       log("warn", "conversation_route_failed", { reason: errorMessage(error) });
       return "search";
     }
@@ -98,7 +111,7 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
     });
   }
 
-  async function search(request: TurnRequest, conversation: Conversation | undefined): Promise<TurnResult> {
+  async function search(request: TurnRequest, conversation: Conversation | undefined, listener: TurnListener): Promise<TurnResult> {
     const input: ResearchGraphInput = {
       userQuery: request.query,
       preferenceContext: request.preferenceContext,
@@ -107,7 +120,7 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
       obscurityTarget: request.obscurityTarget,
       excludeNames: conversation ? shownNames(conversation) : undefined,
     };
-    const { candidates, ...result } = await invokeResearchGraph(graphDeps, input);
+    const { candidates, ...result } = await invokeResearchGraph({ ...graphDeps, ...listener }, input);
     remember(request, {
       candidates,
       shown: conversation?.shown ?? [],
@@ -118,8 +131,14 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
   }
 
   /** Ranks the unseen bands; null when none of them fits after all. */
-  async function pick(request: TurnRequest, conversation: Conversation, unseen: VerifiedCandidate[]): Promise<TurnResult | null> {
-    const { recommendations, assistantReply } = await within(PICK_TIMEOUT_MS, async (signal) => {
+  async function pick(
+    request: TurnRequest,
+    conversation: Conversation,
+    unseen: VerifiedCandidate[],
+    listener: TurnListener,
+  ): Promise<TurnResult | null> {
+    listener.onProgress?.({ stage: "choosing", candidates: unseen.length });
+    const { recommendations, assistantReply } = await within(PICK_TIMEOUT_MS, listener.signal, async (signal) => {
       const rank = await createRecommendationRanker({
         apiKey: graphDeps.geminiApiKey,
         timeoutMs: PICK_TIMEOUT_MS,
@@ -135,6 +154,7 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
         mode: request.mode,
         candidates: unseen,
         obscurityTarget: request.obscurityTarget,
+        onReply: listener.onReply,
       });
     });
     if (recommendations.length === 0) return null;
@@ -149,35 +169,36 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
     };
   }
 
-  async function answer(request: TurnRequest, conversation: Conversation | undefined): Promise<TurnResult> {
+  async function answer(request: TurnRequest, conversation: Conversation | undefined, listener: TurnListener): Promise<TurnResult> {
     const writer = modelAt(0.4);
     if (!writer) throw new Error("no chat model configured");
-    const assistantReply = await within(ANSWER_TIMEOUT_MS, (signal) => writeAnswer(
+    const assistantReply = await within(ANSWER_TIMEOUT_MS, listener.signal, (signal) => writeAnswer(
       writer,
       { query: request.query, messages: request.messages, shown: conversation?.shown ?? [] },
-      { signal, timeoutMs: ANSWER_TIMEOUT_MS },
+      { signal, timeoutMs: ANSWER_TIMEOUT_MS, onReply: listener.onReply },
     ));
     return { turn: "answer", recommendations: [], assistantReply, pipelineDiagnostics: null, model };
   }
 
   return {
-    async respond(request: TurnRequest): Promise<TurnResult> {
+    async respond(request: TurnRequest, listener: TurnListener = {}): Promise<TurnResult> {
       const conversation = request.conversationKey ? memory.get(request.conversationKey) : undefined;
       const unseen = unseenBands(conversation, request.obscurityTarget);
-      const turn = request.conversationKey ? await route(request, conversation, unseen) : "search";
+      const turn = request.conversationKey ? await route(request, conversation, unseen, listener) : "search";
       log("info", "conversation_turn", { turn, unseen: unseen.length, shown: conversation?.shown.flat().length ?? 0 });
 
-      if (turn === "answer") return answer(request, conversation);
+      if (turn === "answer") return answer(request, conversation, listener);
       if (turn === "pick" && conversation) {
         try {
-          const picked = await pick(request, conversation, unseen);
+          const picked = await pick(request, conversation, unseen, listener);
           if (picked) return picked;
           log("info", "conversation_pick_empty", {});
         } catch (error) {
+          listener.signal?.throwIfAborted();
           log("warn", "conversation_pick_failed", { reason: errorMessage(error) });
         }
       }
-      return search(request, conversation);
+      return search(request, conversation, listener);
     },
   };
 }

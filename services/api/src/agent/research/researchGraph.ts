@@ -1,7 +1,7 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import type { AnswerProgress, ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient } from "../../eval/lastFmClient.js";
@@ -51,6 +51,11 @@ export type ResearchGraphDeps = {
   cache?: ResearchCache;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
+  /** Told what the run is doing, and the reply while it is written. */
+  onProgress?: (progress: AnswerProgress) => void;
+  onReply?: (text: string) => void;
+  /** Ends the run early, as when the user stopped waiting. */
+  signal?: AbortSignal;
   onLog?: (
     level: "info" | "warn",
     event: string,
@@ -192,6 +197,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     chatModel: deps.chatModel,
     model: deps.model,
     artistCache: deps.cache?.artists,
+    onSearchAgain: () => deps.onProgress?.({ stage: "searchingAgain" }),
     onExtracted: (candidates) => lastFm?.prefetchListeners(candidates.map((c) => c.name)),
   });
 
@@ -217,6 +223,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         queryCount: plan.queries.length,
       });
       lastFm?.prefetchSimilar(plan.anchorArtists);
+      deps.onProgress?.({ stage: "searching", anchorArtists: plan.anchorArtists });
       return { searchPlan: plan };
     }).catch((error: unknown) => {
       // Broad searches can still succeed when planning fails within its cap.
@@ -243,6 +250,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });
       lastFm?.prefetchListeners(candidates.map((c) => c.name));
+      deps.onProgress?.({ stage: "checking", found: candidates.length });
       return { extractedCandidates: candidates };
     }).catch((error: unknown) => {
       if (researchScope.remaining() > 0) throw error;
@@ -286,6 +294,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         fitBefore: countTargetFit(fresh, state.obscurityTarget),
         fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
       });
+      deps.onProgress?.({ stage: "choosing", candidates: filteredCandidates.length });
       const { recommendations, assistantReply } = await ranker({
         query: state.userQuery,
         preferenceContext: state.preferenceContext,
@@ -293,6 +302,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         mode: state.mode,
         candidates: filteredCandidates,
         obscurityTarget: state.obscurityTarget,
+        onReply: deps.onReply,
       });
       log("info", "research_ranked", {
         finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
@@ -349,7 +359,11 @@ export async function invokeResearchGraph(
   /** The model that wrote the ranker's prose — the run's provenance. */
   model: string;
 }> {
+  deps.signal?.throwIfAborted();
   const budget = createResearchBudget(deps.researchTimeoutMs);
+  const stop = () => budget.close();
+  deps.signal?.addEventListener("abort", stop, { once: true });
+  deps.onProgress?.({ stage: "thinking" });
   try {
     const graph = await buildResearchGraph(deps, budget);
     const result = await budget.run(budget.remaining(), (signal) => graph.invoke({
@@ -391,6 +405,7 @@ export async function invokeResearchGraph(
       model: deps.model ?? DEFAULT_RESEARCH_MODEL,
     };
   } finally {
+    deps.signal?.removeEventListener("abort", stop);
     budget.close();
   }
 }

@@ -53,6 +53,31 @@ export type RecommendationFeedbackSubmission = {
  */
 export type TurnKind = "search" | "pick" | "answer";
 
+/** What the API is doing for a message, in the order it happens; a search may skip stages. */
+export type AnswerProgress =
+  /** Deciding how to answer, or planning the search. */
+  | { stage: "thinking" }
+  /** Searching the web; the reference artists the search starts from. */
+  | { stage: "searching"; anchorArtists: string[] }
+  /** Looking up the bands found. */
+  | { stage: "checking"; found: number }
+  /** Too few good bands: searching once more. */
+  | { stage: "searchingAgain" }
+  /** Choosing among the candidates and writing. */
+  | { stage: "choosing"; candidates: number };
+
+/**
+ * `POST /recommendations` with `Accept: text/event-stream`: server-sent events
+ * of these shapes, ending in `done` (the JSON response) or `error` (the JSON
+ * error). `reply` carries the whole text so far; only `done` is final. A
+ * request that fails or finishes before the first event gets plain JSON.
+ */
+export type AnswerEvent =
+  | { type: "progress"; progress: AnswerProgress }
+  | { type: "reply"; text: string }
+  | { type: "done"; response: unknown }
+  | { type: "error"; status: number; error: { code: string; message: string } };
+
 /**
  * How long the API remembers the bands a conversation found, in memory only.
  * The privacy policy states it, so both read it from here.

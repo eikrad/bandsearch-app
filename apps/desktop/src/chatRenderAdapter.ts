@@ -1,3 +1,4 @@
+import { progressLabel } from "./answerEvents.js";
 import { buildPlatformLinks } from "./platformLinks.js";
 import type { ChatAppModel, ConversationMessage, RenderableRecommendation } from "./chatAppModel.js";
 
@@ -9,6 +10,8 @@ export type ChatScreenModel = Pick<
   | "getObscurityTarget"
   | "setObscurityTarget"
   | "isLoading"
+  | "getProgress"
+  | "subscribe"
   | "isShowFeedbackBar"
   | "dismissFeedbackBar"
   | "getConversation"
@@ -101,6 +104,9 @@ function buildViewProps(chat: ChatScreenModel, viewport: "mobile" | "desktop") {
     modeValue: chat.getMode(),
     modeOptions: MODE_OPTIONS,
     isLoading: loading,
+    progressLabel: progressLabel(chat.getProgress()),
+    /** Nothing heard from the API yet: it may still be waking up. */
+    awaitingApi: loading && chat.getProgress() === null,
     queryPlaceholder: "Describe bands you like...",
     queryDisabled: loading,
     obscurityTarget: chat.getObscurityTarget(),
@@ -121,6 +127,7 @@ export function createChatRenderAdapter({
   const viewProps = () => buildViewProps(chat, currentViewport);
   return {
     getViewProps: viewProps,
+    subscribe: (listener: () => void) => chat.subscribe(listener),
     setViewport(next: string) {
       currentViewport = normalizeViewport(next);
     },

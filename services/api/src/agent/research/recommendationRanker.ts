@@ -5,7 +5,7 @@ import { validateObscurityTarget, validateRecommendationItem } from "../../../..
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
 import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.js";
 
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
@@ -190,7 +190,19 @@ export type RankInput = {
   mode: RecommendationMode;
   candidates: VerifiedCandidate[];
   obscurityTarget?: string;
+  /** Told the reply so far while it is written. */
+  onReply?: (text: string) => void;
 };
+
+/** Passes on a reply as it grows out of the ranker's JSON, without repeating itself. */
+function replyListener(onReply: ((text: string) => void) | undefined): ((raw: string) => void) | undefined {
+  if (!onReply) return undefined;
+  let last = "";
+  return (raw) => {
+    const reply = replySoFar(raw);
+    if (reply && reply !== last) onReply(last = reply);
+  };
+}
 
 export function buildRankUserPartsForTest(input: {
   query: string;
@@ -250,7 +262,7 @@ export async function createRecommendationRanker({
     });
     prompt.push({ role: "user", content: parts.join("\n") });
 
-    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker timeout" });
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker timeout", onText: replyListener(input.onReply) });
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     let normalized = normalizeRankPayload(parsed);
@@ -267,7 +279,7 @@ export async function createRecommendationRanker({
           content: `${(prompt[prompt.length - 1] as { content: string }).content}\n\nYour previous answer omitted required evidence URLs in why fields. Repeat with each why containing a full https URL from evidence_urls.`,
         },
       ];
-      const response2 = await invokeModel(modelClient, retryPrompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker retry" });
+      const response2 = await invokeModel(modelClient, retryPrompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker retry", onText: replyListener(input.onReply) });
       const raw2 = typeof response2.content === "string" ? response2.content : "";
       const parsed2 = parseModelJsonResponse(raw2);
       normalized = normalizeRankPayload(parsed2);
