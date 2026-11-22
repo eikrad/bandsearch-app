@@ -17,6 +17,8 @@ export type VerifiedCandidate = {
   /** ISO 3166-1 code of the artist's country, when MusicBrainz records one. */
   country?: string | null;
   listenerCount?: number | null;
+  /** Tags of Last.fm listeners, for the many small bands MusicBrainz has none for. */
+  listenerTags?: string[];
 };
 
 /** The ranker's pool under an obscurity target: in range or near it, topped up to this many. */

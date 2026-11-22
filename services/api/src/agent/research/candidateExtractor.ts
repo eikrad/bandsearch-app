@@ -1,6 +1,7 @@
 import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { capAndTrim, wrapSearchHitBlock } from "../promptGuards.js";
+import { plainText, wordsAround } from "./textSnippets.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
@@ -90,33 +91,13 @@ const MAX_HITS_PER_CANDIDATE = 4;
 const MAX_SNIPPETS_PER_CANDIDATE = 2;
 const SNIPPET_MAX_CHARS = 180;
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'", nbsp: " " };
-
-/** Brave's descriptions are HTML fragments; the evidence is their text. */
-function plainText(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/&([a-z]+|#\w+);/gi, (entity, name: string) => ENTITIES[name.toLowerCase()] ?? entity)
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 /** The words of a hit around the band's name; its title when only that names the band. */
 function snippetFor(name: string, hit: SearchHitInput): string {
   const text = plainText(hit.description);
   const at = text.toLowerCase().indexOf(name.toLowerCase());
-  if (at === -1) {
-    const title = plainText(hit.title);
-    return capAndTrim(title.toLowerCase().includes(name.toLowerCase()) || !text ? title : text, SNIPPET_MAX_CHARS);
-  }
-  if (text.length <= SNIPPET_MAX_CHARS) return text;
-  const start = Math.max(0, Math.min(at - Math.floor((SNIPPET_MAX_CHARS - name.length) / 2), text.length - SNIPPET_MAX_CHARS));
-  const end = start + SNIPPET_MAX_CHARS;
-  const words = text.slice(start, end);
-  // Cut back to whole words at either end that is not the text's own.
-  const from = start > 0 ? words.indexOf(" ") + 1 : 0;
-  const to = end < text.length ? words.lastIndexOf(" ") : words.length;
-  return `${start > 0 ? "…" : ""}${words.slice(from, to)}${end < text.length ? "…" : ""}`;
+  if (at !== -1) return wordsAround(text, at, name.length, SNIPPET_MAX_CHARS);
+  const title = plainText(hit.title);
+  return capAndTrim(title.toLowerCase().includes(name.toLowerCase()) || !text ? title : text, SNIPPET_MAX_CHARS);
 }
 
 /** The hits a candidate refers to by number; unknown and repeated numbers are ignored. */
