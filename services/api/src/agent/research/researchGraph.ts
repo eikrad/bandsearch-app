@@ -165,6 +165,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
+        maxQueries: deps.maxInitialSearches,
       });
       const plan = await planWeb({
         userQuery: state.userQuery,

@@ -119,18 +119,9 @@ export function musicbrainzArtists(artists: Array<{ id: string; name: string; sc
   return { artists: artists.map((a) => ({ score: 100, ...a })) };
 }
 
-/** The extractor's output shape. */
-export function extractedCandidates(
-  names: Array<{ name: string; evidenceUrls?: string[]; evidenceSnippets?: string[]; sourceQueries?: string[] }>,
-) {
-  return {
-    candidates: names.map((c) => ({
-      evidenceUrls: [],
-      evidenceSnippets: [],
-      sourceQueries: [],
-      ...c,
-    })),
-  };
+/** The extractor's output: each band with the numbers of the hits it appears in (the first by default). */
+export function extractedCandidates(candidates: Array<{ name: string; hits?: number[] }>) {
+  return { candidates: candidates.map((c) => ({ hits: [1], ...c })) };
 }
 
 /** A ranker payload the recommendation contract accepts. */

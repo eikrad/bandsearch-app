@@ -151,9 +151,9 @@ flowchart TD
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `plan` | LLM | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
+| `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
-| `extract` | LLM | Identifies band names from snippets; filters out anchor artists |
+| `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
 | `verify` | MusicBrainz | Searches all candidate names in one batched request (25 names each), then once more for those missed, aliases included; adds `mbid`, tags and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
 | `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |

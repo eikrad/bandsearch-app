@@ -91,7 +91,9 @@ place and is now under Deferred; #180's premise changed (see item 3).
        the recorded verifications were a different artist) ✓ Done. Measured
        live: 117.9 s → 25.1 s for the same query, 24 of 25 candidates verified
        instead of 6 of 22, no reflection round needed
-     - [ ] Step 2: shorter LLM output in plan and extract
+     - [x] Step 2: the planner plans only the queries that are searched (6, not
+       20); the extractor names hits by number and the code quotes them word for
+       word ✓ Done. Measured live: plan 2.5–3.0 s → 2.4 s, extract 6.4 s → 1.1 s
      - [ ] Step 3: only the Brave searches whose hits are read, one rate gate
      - [ ] Step 4: Last.fm in parallel, partial results kept, artist cache
      - [ ] Step 5: follow-ups answered from the chat's own candidates

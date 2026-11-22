@@ -67,7 +67,7 @@ test("verification keeps completed candidates, cancels a stalled batch and leave
   let batchSignal: AbortSignal | null | undefined;
   const { client, calls } = fakeModelClient({
     extract: () => ({ candidates: ["Fen", "Ghost Bath", "Third Band"].map((name) => ({
-      name, evidenceUrls: ["https://blog.example/discovery"], evidenceSnippets: [], sourceQueries: [],
+      name, hits: [1],
     })) }),
     rank: () => ({ reply: "Found Fen.", recommendations: [{ artist: "Fen", why: "See https://blog.example/discovery", sourceSignals: [] }] }),
   });
@@ -160,7 +160,7 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
   const started = deferred();
   const signals: Array<AbortSignal | null | undefined> = [];
   const { client } = fakeModelClient({
-    extract: () => ({ candidates: [{ name: "Fen", evidenceUrls: ["https://blog.example/fen"] }] }),
+    extract: () => ({ candidates: [{ name: "Fen", hits: [1] }] }),
     rank: () => ({ reply: "Try Fen.", recommendations: [{ artist: "Fen", why: "See https://blog.example/fen", sourceSignals: [] }] }),
   });
   const { fetchImpl: answers } = fakeFetch({
@@ -231,7 +231,7 @@ test("the research cutoff during reflection cancels its search and ranks the evi
   const requests: string[] = [];
   let reflectionSignal: AbortSignal | null | undefined;
   const { client, calls } = fakeModelClient({
-    extract: () => ({ candidates: [{ name: "Fen", evidenceUrls: ["https://blog.example/fen"] }] }),
+    extract: () => ({ candidates: [{ name: "Fen", hits: [1] }] }),
     reflect: () => ({ sufficient: false, gaps: ["one band only"], extraQueries: ["more blackgaze"] }),
     rank: () => ({ reply: "Try Fen.", recommendations: [{ artist: "Fen", why: "See https://blog.example/fen", sourceSignals: [] }] }),
   });
@@ -277,7 +277,7 @@ test("a verification batch cancelled in the MusicBrainz queue never reaches the 
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
   const searched = deferred();
   const { client } = fakeModelClient({
-    extract: () => ({ candidates: [{ name: "Fen", evidenceUrls: ["https://blog.example/fen"] }] }),
+    extract: () => ({ candidates: [{ name: "Fen", hits: [1] }] }),
   });
   const { fetchImpl: answers } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
@@ -365,7 +365,7 @@ test("the Gemini adapter assembles a streamed answer before the graph returns re
     { geminiApiKey: "test-key", scalewayApiKey: "", scalewayBaseUrl: "" },
   );
   const { client } = fakeModelClient({
-    extract: () => ({ candidates: [{ name: "Fen", evidenceUrls: ["https://blog.example/fen"] }] }),
+    extract: () => ({ candidates: [{ name: "Fen", hits: [1] }] }),
   });
   const { fetchImpl } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),

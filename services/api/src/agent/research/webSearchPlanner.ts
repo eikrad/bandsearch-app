@@ -11,7 +11,8 @@ import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
 export const WEB_SEARCH_QUERY_MAX_LENGTH = 400;
-export const WEB_SEARCH_PLAN_MAX_QUERIES = 20;
+/** Queries planned unless the caller says how many it will search. */
+export const WEB_SEARCH_PLAN_DEFAULT_QUERIES = 6;
 
 export type SearchPlan = {
   anchorArtists: string[];
@@ -39,18 +40,18 @@ const DISCOVERY_SOURCES = [
   "Match sources to genre — do not use metal-archives.com for ambient or jazz queries.",
 ].join(" ");
 
-const PLANNER_ROLE = [
+const plannerRole = (maxQueries: number) => [
   "You plan Brave web searches to discover niche bands matching the user's taste.",
   "Anchors are reference bands the user named — searches should find OTHER bands (FFO / RIYL / newer acts), not only repeat anchor names.",
   "When conversation_excerpt is present, treat current_user_query as a follow-up refinement of the ongoing session — adjust your anchors and style signals to the new direction, and add any bands already recommended in the conversation to the 'avoid' array so they are not suggested again.",
   DISCOVERY_SOURCES,
   "Each query must be a concise web search string (keywords, site: operators, \"FFO …\"). No natural-language paragraphs.",
   `Output ONLY one JSON object, no markdown fences: {"anchorArtists":[],"styleSignals":[],"mustHave":[],"avoid":[],"queries":[]}.`,
-  `queries must be at most ${WEB_SEARCH_PLAN_MAX_QUERIES} items; each query at most ${WEB_SEARCH_QUERY_MAX_LENGTH} characters, single line, non-empty after trim.`,
+  `queries must be at most ${maxQueries} items, the most promising first; each query at most ${WEB_SEARCH_QUERY_MAX_LENGTH} characters, single line, non-empty after trim.`,
 ].join(" ");
 
 /** Exported for testing only */
-export const PLANNER_SYSTEM_PROMPT_FOR_TEST = PLANNER_ROLE;
+export const PLANNER_SYSTEM_PROMPT_FOR_TEST = plannerRole(WEB_SEARCH_PLAN_DEFAULT_QUERIES);
 
 const RETRY_SYSTEM_ADDENDUM =
   "Your previous JSON was invalid. Reply with ONLY one JSON object: " +
@@ -78,7 +79,6 @@ function sanitizeQueries(queries: string[]): string[] {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(trimmed);
-    if (out.length >= WEB_SEARCH_PLAN_MAX_QUERIES) break;
   }
   return out;
 }
@@ -194,6 +194,8 @@ export type CreateWebSearchPlannerOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   model?: string;
+  /** How many queries will be searched; planning more only costs time. */
+  maxQueries?: number;
   /**
    * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
    * drive this factory's closure without a key or a network call.
@@ -208,6 +210,7 @@ export async function createWebSearchPlanner({
   timeoutMs = 20000,
   signal,
   model = DEFAULT_RESEARCH_MODEL,
+  maxQueries = WEB_SEARCH_PLAN_DEFAULT_QUERIES,
   modelClient: injectedModelClient,
   chatModel,
 }: CreateWebSearchPlannerOptions): Promise<(input: WebSearchPlannerInput) => Promise<SearchPlan>> {
@@ -224,7 +227,7 @@ export async function createWebSearchPlanner({
     temperature,
   });
 
-  const plannerSystemPrompt = PLANNER_ROLE;
+  const plannerSystemPrompt = plannerRole(maxQueries);
 
   async function invokeOnce(systemText: string, userContent: string): Promise<SearchPlan | null> {
     const prompt = [
@@ -249,7 +252,7 @@ export async function createWebSearchPlanner({
     }
 
     const target = validateObscurityTarget(input.obscurityTarget);
-    const ordered = (plan: SearchPlan): SearchPlan => ({ ...plan, queries: orderQueriesForTarget(plan.queries, target) });
+    const ordered = (plan: SearchPlan): SearchPlan => ({ ...plan, queries: orderQueriesForTarget(plan.queries, target).slice(0, maxQueries) });
 
     const first = await invokeOnce(plannerSystemPrompt, userContent);
     if (first) return ordered(first);

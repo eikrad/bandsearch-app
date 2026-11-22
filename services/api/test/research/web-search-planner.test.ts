@@ -109,3 +109,20 @@ test("PLANNER_SYSTEM_PROMPT_FOR_TEST instructs model to treat follow-ups as refi
   assert.match(PLANNER_SYSTEM_PROMPT_FOR_TEST, /follow.up|refinement/i, "should mention follow-up refinement");
   assert.match(PLANNER_SYSTEM_PROMPT_FOR_TEST, /avoid|already/i, "should instruct to avoid already-recommended bands");
 });
+
+test("the planner is asked for as many queries as will be searched, and returns no more", async () => {
+  let system = "";
+  const planner = await createWebSearchPlanner({
+    apiKey: "",
+    maxQueries: 3,
+    modelClient: {
+      async invoke(prompt) {
+        system = prompt[0]!.content;
+        return { content: JSON.stringify({ anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: ["a", "b", "c", "d"] }) };
+      },
+    },
+  });
+  const plan = await planner({ userQuery: "blackgaze" });
+  assert.match(system, /at most 3 items/);
+  assert.deepEqual(plan.queries, ["a", "b", "c"]);
+});
