@@ -1,6 +1,7 @@
 export type TtlCache<T> = {
   get(key: string): T | undefined;
   set(key: string, value: T): void;
+  deleteWhere(matches: (key: string) => boolean): void;
 };
 
 /** A bounded in-memory cache; entries expire after `ttlMs`, the oldest go first when it is full. */
@@ -20,6 +21,9 @@ export function createTtlCache<T>({ ttlMs, maxEntries }: { ttlMs: number; maxEnt
       entries.delete(key);
       entries.set(key, { value, expiresAt: Date.now() + ttlMs });
       if (entries.size > maxEntries) entries.delete(entries.keys().next().value!);
+    },
+    deleteWhere(matches) {
+      for (const key of entries.keys()) if (matches(key)) entries.delete(key);
     },
   };
 }

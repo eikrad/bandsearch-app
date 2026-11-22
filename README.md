@@ -31,7 +31,7 @@ flowchart LR
     API --> DB[("SQLite / Turso\nsaved bands · sessions · users")]
 ```
 
-The pipeline itself:
+A chat message does not always need a search: "more" or "heavier" is answered from the bands the conversation already found, a question about them in words, both within a few seconds ([conversation turns](docs/architecture/ARCHITECTURE.md#conversation-turns)). A search runs the pipeline:
 
 ```mermaid
 flowchart TD

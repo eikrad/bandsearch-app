@@ -57,6 +57,11 @@ function createStubFetch({
   };
 }
 
+/** Saving runs behind the conversation; waits until it got this far. */
+async function until(done: () => boolean) {
+  for (let i = 0; i < 100 && !done(); i++) await new Promise((r) => setTimeout(r, 1));
+}
+
 test("app.startSession creates a session and stores id in state", async () => {
   const app = bootstrapDesktopApp({ fetchImpl: createStubFetch({ sessionId: "sess-42" }) });
 
@@ -140,6 +145,7 @@ test("requestRecommendations lazily creates a session on the first message and p
   assert.equal(app.getState().currentSessionId, null, "no session before the first message");
 
   await app.requestRecommendations("I like atmospheric bands", "fresh");
+  await until(() => requests.filter((r) => r.url.includes("/messages")).length === 2);
 
   assert.equal(app.getState().currentSessionId, "sess-new");
   const sessionCreatePosts = requests.filter((r) => r.url.endsWith("/sessions") && r.method === "POST");
@@ -163,4 +169,47 @@ test("requestRecommendations reuses the resumed session instead of creating a ne
 
   const sessionCreatePosts = requests.filter((r) => r.url.endsWith("/sessions") && r.method === "POST");
   assert.equal(sessionCreatePosts.length, 0, "resumed session is reused, not recreated");
+});
+
+test("an answer does not wait for the conversation to be saved", async () => {
+  const stub = createStubFetch({ recommendations: [{ artist: "Fen", why: "test" }] });
+  const app = bootstrapDesktopApp({
+    fetchImpl: async (url, init) => (String(url).includes("/sessions") ? new Promise<Response>(() => {}) : stub(url, init)),
+  });
+  const result = await app.requestRecommendations("bands like Alcest");
+  assert.equal(result.recommendations?.length, 1);
+});
+
+test("every message of a conversation names it to the API; a new session is a new conversation", async () => {
+  const ids: unknown[] = [];
+  const stub = createStubFetch({ sessionId: "sess-9" });
+  const app = bootstrapDesktopApp({
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith("/recommendations")) ids.push(parseJsonObject(String(init?.body)).conversationId);
+      return stub(url, init);
+    },
+  });
+
+  await app.requestRecommendations("bands like Alcest");
+  await app.requestRecommendations("more");
+  await app.startSession();
+  await app.requestRecommendations("bands like Bolt Thrower");
+
+  assert.equal(typeof ids[0], "string");
+  assert.equal(ids[1], ids[0]);
+  assert.equal(ids[2], "sess-9");
+});
+
+test("a resumed conversation keeps its id", async () => {
+  const ids: unknown[] = [];
+  const stub = createStubFetch({ sessionId: "sess-1" });
+  const app = bootstrapDesktopApp({
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith("/recommendations")) ids.push(parseJsonObject(String(init?.body)).conversationId);
+      return stub(url, init);
+    },
+  });
+  await app.resumeSession("sess-1");
+  await app.requestRecommendations("more");
+  assert.deepEqual(ids, ["sess-1"]);
 });

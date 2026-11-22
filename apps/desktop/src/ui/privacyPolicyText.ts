@@ -10,7 +10,7 @@
  * mandatory on top of the GDPR duty.
  */
 
-import { FEEDBACK_RETENTION_DAYS } from "../../../../shared/schemas/src/contracts.js";
+import { CONVERSATION_MEMORY_HOURS, FEEDBACK_RETENTION_DAYS } from "../../../../shared/schemas/src/contracts.js";
 
 export const LAST_UPDATED = "2026-11-18";
 
@@ -76,6 +76,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
     paragraphs: [
       `Pipeline telemetry is deleted after ${RETENTION_DAYS} days.`,
       `Feedback on recommendations is deleted after ${FEEDBACK_RETENTION_DAYS} days, or earlier when you delete your account.`,
+      `The bands a conversation found stay in the server's memory for up to ${CONVERSATION_MEMORY_HOURS} hours, so a follow-up can be answered without another search. They are not written to a database, and are gone earlier when you delete your account.`,
       "Your account, taste profile and conversations are kept for as long as your account exists. When you delete your account, all of it is deleted with it, immediately and permanently.",
     ],
   },

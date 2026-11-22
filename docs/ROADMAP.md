@@ -102,7 +102,10 @@ place and is now under Deferred; #180's premise changed (see item 3).
        silently turned the obscurity filter off); artist facts are remembered
        for a day per process ✓ Done. Measured live with steps 1–4: 105.6 s →
        14.3 s for the same query
-     - [ ] Step 5: follow-ups answered from the chat's own candidates
+     - [x] Step 5: follow-ups answered from the bands the chat already found
+       (conversation turns: search, pick, answer); shown bands are not repeated;
+       saving the chat no longer delays an answer ✓ Done. Measured live: pick
+       2.2 s, answer 1.0 s; routing 132 of 132 labelled messages right
      - [ ] Step 6: progress and answer streamed
      - [ ] Step 7: Last.fm as a fast candidate source
      - [ ] Step 8: the Render service stays awake

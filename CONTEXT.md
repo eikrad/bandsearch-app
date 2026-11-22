@@ -6,6 +6,10 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Recommendation pipeline** — the end-to-end flow that turns a user query (plus optional preference context) into final recommendation items. The only pipeline is the research pipeline (Brave + LangGraph + MusicBrainz); there is no classic fallback. `BRAVE_API_KEY` is required.
 
+- **Conversation turn** — how one chat message is answered: by a **search** (the research graph), by a **pick** (ranking bands the conversation already found but has not shown) or by an **answer** in words (no bands). The turn router decides; when in doubt it searches.
+
+- **Conversation memory** — the bands found and shown per user and conversation, in the server's memory for two hours. It makes picks possible and keeps shown bands from being shown again. Public artist data only, never what the user wrote.
+
 - **Research graph** — the LangGraph state machine in `agent/research/researchGraph.ts` that orchestrates: web search planning, Brave search execution, candidate extraction, MusicBrainz verification, optional reflection, and final ranking.
 
 - **Search plan** — the structured output of the `plan` node: a list of targeted Brave search queries derived from the user's taste (FFO/Bandcamp-style signals, anchor artists, style descriptors).

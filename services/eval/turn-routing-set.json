@@ -1,0 +1,551 @@
+[
+ {
+  "id": "blackgaze",
+  "messages": [
+   {
+    "role": "user",
+    "content": "atmospheric black metal with shoegaze elements, dreamy"
+   },
+   {
+    "role": "assistant",
+    "content": "Olhava, Unreqvited and Etheraldine all blend atmospheric black metal with dreamy shoegaze. Do you prefer instrumental or vocal-led?"
+   }
+  ],
+  "shown": [
+   [
+    {
+     "name": "Olhava",
+     "tags": [
+      "atmospheric black metal",
+      "blackgaze"
+     ],
+     "listeners": 30000
+    },
+    {
+     "name": "Unreqvited",
+     "tags": [
+      "post-black metal",
+      "blackgaze",
+      "ambient"
+     ],
+     "listeners": 60000
+    },
+    {
+     "name": "Etheraldine",
+     "tags": [
+      "atmospheric black metal",
+      "post-black metal"
+     ],
+     "listeners": 4000
+    }
+   ]
+  ],
+  "unseen": [
+   {
+    "name": "Sundrowned",
+    "tags": [
+     "blackgaze",
+     "post-rock"
+    ],
+    "listeners": 5000
+   },
+   {
+    "name": "Adorn",
+    "tags": [
+     "atmospheric black metal"
+    ],
+    "listeners": 9000
+   },
+   {
+    "name": "Ultha",
+    "tags": [
+     "black metal",
+     "atmospheric black metal",
+     "doom metal"
+    ],
+    "listeners": 14000
+   },
+   {
+    "name": "Der Weg einer Freiheit",
+    "tags": [
+     "black metal",
+     "melodic black metal"
+    ],
+    "listeners": 90000
+   },
+   {
+    "name": "Violet Cold",
+    "tags": [
+     "blackgaze",
+     "experimental",
+     "electronic"
+    ],
+    "listeners": 70000
+   },
+   {
+    "name": "Numenorean",
+    "tags": [
+     "post-black metal",
+     "sludge"
+    ],
+    "listeners": 15000
+   },
+   {
+    "name": "Møl",
+    "tags": [
+     "blackgaze",
+     "shoegaze",
+     "post-metal"
+    ],
+    "listeners": 80000
+   },
+   {
+    "name": "Falaise",
+    "tags": [
+     "atmospheric black metal",
+     "blackgaze"
+    ],
+    "listeners": 12000
+   },
+   {
+    "name": "Asunojokei",
+    "tags": [
+     "blackgaze",
+     "post-hardcore"
+    ],
+    "listeners": 41000
+   },
+   {
+    "name": "Regarde les Hommes Tomber",
+    "tags": [
+     "black metal",
+     "sludge",
+     "post-hardcore"
+    ],
+    "listeners": 22000
+   }
+  ],
+  "turns": [
+   {
+    "message": "more",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "show me some others",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "something heavier",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "more like the second one",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "I prefer vocal-led",
+    "expect": [
+     "pick",
+     "search"
+    ]
+   },
+   {
+    "message": "die zweite gefällt mir, mehr davon",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "noget mere råt",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "a bit more black metal, less dreamy",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "thanks, these are great!",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "danke!",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "where is Olhava from?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "tell me more about Unreqvited",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "which of these is the most melancholic?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "what does blackgaze mean?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "haha ok",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "why did you pick Etheraldine?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "now something completely different: 70s dub reggae",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "bands like Slowdive instead",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "only from Iceland",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "only bands formed after 2018",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "with female vocals",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "jazz fusion please",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "do you know any dungeon synth?",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "bands that share members with Alcest",
+    "expect": [
+     "search"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "synthwave-held-out",
+  "messages": [
+   {
+    "role": "user",
+    "content": "melancholic synthwave for night drives"
+   },
+   {
+    "role": "assistant",
+    "content": "Timecop1983, Forhill and Wolfclub fit: slow, glowing pads and a wistful mood. Should the next ones be darker or poppier?"
+   },
+   {
+    "role": "user",
+    "content": "poppier"
+   },
+   {
+    "role": "assistant",
+    "content": "Then try Nina, Ollie Wride and Sally Shapiro."
+   }
+  ],
+  "shown": [
+   [
+    {
+     "name": "Timecop1983",
+     "tags": [
+      "synthwave",
+      "dreamwave"
+     ],
+     "listeners": 90000
+    },
+    {
+     "name": "Forhill",
+     "tags": [
+      "synthwave",
+      "chillwave"
+     ],
+     "listeners": 30000
+    },
+    {
+     "name": "Wolfclub",
+     "tags": [
+      "synthwave",
+      "synthpop"
+     ],
+     "listeners": 40000
+    }
+   ],
+   [
+    {
+     "name": "Nina",
+     "tags": [
+      "synthpop",
+      "synthwave"
+     ],
+     "listeners": 60000
+    },
+    {
+     "name": "Ollie Wride",
+     "tags": [
+      "synthpop",
+      "aor"
+     ],
+     "listeners": 20000
+    },
+    {
+     "name": "Sally Shapiro",
+     "tags": [
+      "italo disco",
+      "synthpop"
+     ],
+     "listeners": 90000
+    }
+   ]
+  ],
+  "unseen": [
+   {
+    "name": "Trevor Something",
+    "tags": [
+     "synthwave",
+     "synthpop"
+    ],
+    "listeners": 70000
+   },
+   {
+    "name": "Kristine",
+    "tags": [
+     "synthpop",
+     "synthwave"
+    ],
+    "listeners": 35000
+   },
+   {
+    "name": "Dana Jean Phoenix",
+    "tags": [
+     "synthwave",
+     "synthpop"
+    ],
+    "listeners": 30000
+   },
+   {
+    "name": "Mitch Murder",
+    "tags": [
+     "synthwave",
+     "outrun"
+    ],
+    "listeners": 90000
+   },
+   {
+    "name": "Oscillian",
+    "tags": [
+     "synthwave",
+     "outrun"
+    ],
+    "listeners": 15000
+   },
+   {
+    "name": "Absolute Valentine",
+    "tags": [
+     "darksynth",
+     "synthwave"
+    ],
+    "listeners": 25000
+   },
+   {
+    "name": "Madeline Goldstein",
+    "tags": [
+     "darkwave",
+     "synthpop"
+    ],
+    "listeners": 10000
+   },
+   {
+    "name": "September 87",
+    "tags": [
+     "synthwave",
+     "synthpop"
+    ],
+    "listeners": 12000
+   },
+   {
+    "name": "Roxi Drive",
+    "tags": [
+     "synthpop",
+     "synthwave"
+    ],
+    "listeners": 8000
+   }
+  ],
+  "turns": [
+   {
+    "message": "again please",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "darker after all",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "three more in the vein of Sally Shapiro",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "et par flere",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "nicht schlecht, hast du noch andere?",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "less poppy",
+    "expect": [
+     "pick"
+    ]
+   },
+   {
+    "message": "cheers",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "I already know Timecop1983, good call though",
+    "expect": [
+     "pick",
+     "answer"
+    ]
+   },
+   {
+    "message": "is Nina a person or a band?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "what's the difference between synthwave and darksynth?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "how many listeners does Forhill have?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "wer von denen ist am bekanntesten?",
+    "expect": [
+     "answer"
+    ]
+   },
+   {
+    "message": "only Danish acts",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "instrumental only",
+    "expect": [
+     "search",
+     "pick"
+    ]
+   },
+   {
+    "message": "something like Burial",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "actually I want death metal",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "has anyone from Chromatics got a side project?",
+    "expect": [
+     "search",
+     "answer"
+    ]
+   },
+   {
+    "message": "active in the 80s originally",
+    "expect": [
+     "search"
+    ]
+   },
+   {
+    "message": "bands like The Midnight and FM-84",
+    "expect": [
+     "search",
+     "pick"
+    ]
+   },
+   {
+    "message": "afrobeat",
+    "expect": [
+     "search"
+    ]
+   }
+  ]
+ }
+]

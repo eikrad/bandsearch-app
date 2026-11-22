@@ -508,6 +508,44 @@ test("POST /recommendations passes pre-generated eventId to processEvent", async
   assert.equal(processedContexts[0].eventId, stringField(recordField(result.data, "meta"), "eventId"));
 });
 
+test("an answer in words is no batch: no event id to rate, nothing for eval to score", async () => {
+  const processed: EvalEventContext[] = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async () => ({ recommendations: [], assistantReply: "You're welcome.", meta: { turn: "answer" } }),
+    },
+    evalWorker: { processEvent: async (ctx) => { processed.push(ctx); } },
+  });
+
+  const result = await makeRequest(app, "/recommendations", { query: "thanks" });
+
+  const meta = recordField(result.data, "meta");
+  assert.equal(meta.turn, "answer");
+  assert.equal("eventId" in meta, false);
+  assert.equal(meta.aiGenerated, true, "it is generated text all the same");
+  assert.equal(processed.length, 0);
+});
+
+test("the conversation id reaches the pipeline but not the eval telemetry", async () => {
+  // recommendation_events identifies no one; the id must not link its rows to a chat.
+  const asked: Record<string, unknown>[] = [];
+  const processed: EvalEventContext[] = [];
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (req: Record<string, unknown>) => {
+        asked.push(req);
+        return { recommendations: [], assistantReply: "", meta: { turn: "search" } };
+      },
+    },
+    evalWorker: { processEvent: async (ctx) => { processed.push(ctx); } },
+  });
+
+  await makeRequest(app, "/recommendations", { query: "blackgaze", conversationId: "chat-1" });
+
+  assert.equal(asked[0]!.conversationId, "chat-1");
+  assert.doesNotMatch(JSON.stringify(processed), /chat-1/);
+});
+
 test("a recommendation response carries provenance for its generated text", async () => {
   const app = createApp({
     recommendationPipeline: {
