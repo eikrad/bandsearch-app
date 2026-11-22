@@ -242,7 +242,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }))
     .addNode("lastfm_first", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      if (!lastFm || anchors.length === 0 || !asksLastFmFirst(state.obscurityTarget)) return {};
+      if (!lastFm || anchors.length === 0 || !asksLastFmFirst(state.userQuery, state.obscurityTarget)) return {};
       const found = await lastFm.similarCandidates(anchors);
       if (found.length === 0 || researchScope.remaining() <= 0) return {};
       lastFm.prefetchInfo(found.map((c) => c.name));
