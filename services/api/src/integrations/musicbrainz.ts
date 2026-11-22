@@ -23,8 +23,12 @@ type MusicBrainzSearchResponse = {
     aliases?: Array<{ name?: string }> | null;
     tags?: Array<{ name?: string }> | null;
     "life-span"?: LifeSpanResponse | null;
+    country?: string | null;
+    area?: AreaResponse | null;
   }>;
 };
+
+type AreaResponse = { "iso-3166-1-codes"?: string[]; "iso-3166-2-codes"?: string[] };
 
 type LifeSpanResponse = { begin?: string | null; end?: string | null; ended?: boolean | null };
 
@@ -39,6 +43,8 @@ export type MusicBrainzArtistRecord = {
   aliases: string[];
   tags: string[];
   lifeSpan: MusicBrainzLifeSpan;
+  /** ISO 3166-1 code; null when no area is recorded. */
+  country: string | null;
 };
 
 type MusicBrainzArtistResponse = {
@@ -46,7 +52,7 @@ type MusicBrainzArtistResponse = {
   name?: string;
   /** ISO 3166-1 code, set when the artist's area is a country. */
   country?: string | null;
-  area?: { "iso-3166-1-codes"?: string[]; "iso-3166-2-codes"?: string[] } | null;
+  area?: AreaResponse | null;
   tags?: Array<{ name?: string }>;
   genres?: Array<{ name?: string }>;
   relations?: Array<{
@@ -63,7 +69,7 @@ type MusicBrainzArtistResponse = {
  * area is a country, else the country part of a city area's ISO 3166-2 code
  * ("IS-1" → "IS"). Null when no area is recorded.
  */
-function countryOf(data: MusicBrainzArtistResponse): string | null {
+function countryOf(data: Pick<MusicBrainzArtistResponse, "country" | "area">): string | null {
   if (typeof data.country === "string" && data.country) return data.country;
   const area = data.area;
   const national = area?.["iso-3166-1-codes"]?.[0];
@@ -167,6 +173,7 @@ export function createMusicBrainzClient({
           aliases: namesOf(artist.aliases),
           tags: namesOf(artist.tags),
           lifeSpan: lifeSpanOf(artist["life-span"]),
+          country: countryOf(artist),
         }));
     },
 

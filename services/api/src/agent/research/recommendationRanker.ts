@@ -132,6 +132,7 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[], obscuri
       `snippets: ${c.evidenceSnippets.join(" / ")}`,
     ];
     if (c.mbTags?.length) bits.push(`mb_tags: ${c.mbTags.join(", ")}`);
+    if (c.country) bits.push(`country: ${c.country}`);
     if (c.lifeSpan?.begin) bits.push(`active_from: ${c.lifeSpan.begin}, ended: ${c.lifeSpan.ended}`);
     if (c.listenerCount != null) bits.push(`lastfm_listeners: ${c.listenerCount.toLocaleString("en-US")}`);
     if (fits) bits.push(`target_range_fit: ${fits[i]!.fit}`);

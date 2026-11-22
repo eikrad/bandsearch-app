@@ -11,7 +11,7 @@ function extracted(name: string): ExtractedCandidate {
 }
 
 function record(overrides: Partial<MusicBrainzArtistRecord> & { name: string }): MusicBrainzArtistRecord {
-  return { id: `mbid-${overrides.name.toLowerCase()}`, score: 100, aliases: [], tags: [], lifeSpan: { ended: false }, ...overrides };
+  return { id: `mbid-${overrides.name.toLowerCase()}`, score: 100, aliases: [], tags: [], lifeSpan: { ended: false }, country: null, ...overrides };
 }
 
 /** Answers each batch with the next list of records and remembers what was asked. */
@@ -30,7 +30,7 @@ function fakeMusicBrainz(...answers: Array<MusicBrainzArtistRecord[] | Error>) {
 
 test("every candidate is verified with one MusicBrainz request", async () => {
   const { mb, asked } = fakeMusicBrainz([
-    record({ name: "Capra", tags: ["hardcore"], lifeSpan: { begin: "2018", ended: false } }),
+    record({ name: "Capra", tags: ["hardcore"], country: "US", lifeSpan: { begin: "2018", ended: false } }),
     record({ name: "Fen" }),
   ]);
 
@@ -41,6 +41,7 @@ test("every candidate is verified with one MusicBrainz request", async () => {
   assert.deepEqual(out[0]!.mbTags, ["hardcore"]);
   assert.equal(out[0]!.lifeSpan?.begin, "2018");
   assert.equal(out[0]!.canonicalName, "Capra");
+  assert.equal(out[0]!.country, "US");
 });
 
 test("anchor artists are never looked up or returned", async () => {
