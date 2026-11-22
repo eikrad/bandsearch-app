@@ -8,6 +8,7 @@ import {
 import { writeStructuredLog } from "./http/structuredLog.js";
 import type { LlmConfig } from "./config/models.js";
 import { createChatModelFactory } from "./llm/chatModel.js";
+import { BRAVE_MIN_INTERVAL_MS } from "./integrations/braveSearch.js";
 import { createReplayFetch } from "./integrations/replayFetch.js";
 
 /** MusicBrainz asks for at most one request per second per IP. */
@@ -16,19 +17,24 @@ const MUSICBRAINZ_MIN_INTERVAL_MS = 1100;
 /**
  * How the research graph reaches Brave, MusicBrainz and Last.fm. Normally the
  * network; with a replay directory, a recording transport whose real
- * MusicBrainz calls are spaced while replays are immediate.
+ * MusicBrainz and Brave calls are spaced while replays are immediate.
  */
 export function externalLookupsFor(cfg: Pick<RecommendationRuntimeConfig, "evalReplayDir">): {
   replay: boolean;
   fetchImpl?: typeof fetch;
   musicBrainzMinIntervalMs?: number;
+  braveMinIntervalMs?: number;
 } {
   const dir = String(cfg.evalReplayDir ?? "").trim();
   if (!dir) return { replay: false };
   return {
     replay: true,
-    fetchImpl: createReplayFetch({ dir, minIntervalMsByHost: { "musicbrainz.org": MUSICBRAINZ_MIN_INTERVAL_MS } }),
+    fetchImpl: createReplayFetch({
+      dir,
+      minIntervalMsByHost: { "musicbrainz.org": MUSICBRAINZ_MIN_INTERVAL_MS, "api.search.brave.com": BRAVE_MIN_INTERVAL_MS },
+    }),
     musicBrainzMinIntervalMs: 0,
+    braveMinIntervalMs: 0,
   };
 }
 import type { SavedBandContextSource } from "./savedBandContext.js";
@@ -116,6 +122,7 @@ export function createRecommendationPipeline({
           musicBrainzRetries: cfg.musicBrainzRetries,
           fetchImpl: lookups.fetchImpl,
           musicBrainzMinIntervalMs: lookups.musicBrainzMinIntervalMs,
+          braveMinIntervalMs: lookups.braveMinIntervalMs,
           onLog: (level, event, details) => {
             pipelineLog(level, event, details);
           },

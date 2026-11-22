@@ -145,6 +145,7 @@ export function graphDeps(overrides: Partial<ResearchGraphDeps> = {}): ResearchG
     totalSearchBudget: 6,
     targetVerifiedCount: 2,
     researchTimeoutMs: 60_000,
+    braveMinIntervalMs: 0,
     ...overrides,
   };
 }

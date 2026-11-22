@@ -94,7 +94,9 @@ place and is now under Deferred; #180's premise changed (see item 3).
      - [x] Step 2: the planner plans only the queries that are searched (6, not
        20); the extractor names hits by number and the code quotes them word for
        word ✓ Done. Measured live: plan 2.5–3.0 s → 2.4 s, extract 6.4 s → 1.1 s
-     - [ ] Step 3: only the Brave searches whose hits are read, one rate gate
+     - [x] Step 3: searching stops once the 24 hits the extractor reads are
+       found (usually 3 searches, not 6); one Brave rate gate per process, so
+       search rounds and concurrent users no longer collide (429) ✓ Done
      - [ ] Step 4: Last.fm in parallel, partial results kept, artist cache
      - [ ] Step 5: follow-ups answered from the chat's own candidates
      - [ ] Step 6: progress and answer streamed

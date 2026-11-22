@@ -1,6 +1,5 @@
-import { setTimeout as delay } from "node:timers/promises";
-
 import { fetchWithTimeoutAndRetry } from "./httpClient.js";
+import { createRateGate } from "./rateGate.js";
 
 const DEFAULT_BASE_URL = "https://musicbrainz.org/ws/2";
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
@@ -89,28 +88,8 @@ function searchPhrase(text: string): string {
   return `"${text.trim().replace(/[\\"]/g, "\\$&")}"`;
 }
 
-/**
- * Process-wide gate so every MusicBrainz client in this process (API routes,
- * research graph, eval tag lookups) shares the same 1 req/s budget. Per-client
- * queues would still let two instances fire ~2/s and trip the IP ban.
- */
-let sharedChain: Promise<unknown> = Promise.resolve();
-let sharedLastStart = 0;
-
-function scheduleMusicBrainzRequest<T>(minIntervalMs: number, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  signal?.throwIfAborted();
-  if (minIntervalMs <= 0) return fn();
-  const run = sharedChain.then(async () => {
-    signal?.throwIfAborted();
-    const wait = sharedLastStart + minIntervalMs - Date.now();
-    if (wait > 0) await delay(wait, undefined, { signal });
-    signal?.throwIfAborted();
-    sharedLastStart = Date.now();
-    return fn();
-  });
-  sharedChain = run.catch(() => undefined);
-  return run as Promise<T>;
-}
+/** Every MusicBrainz client in this process (API routes, research graph, eval lookups) shares one budget. */
+const sharedGate = createRateGate();
 
 export function createMusicBrainzClient({
   fetchImpl = fetch,
@@ -130,7 +109,7 @@ export function createMusicBrainzClient({
 } = {}) {
   async function getJson<T>(url: string): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
-      const response = await scheduleMusicBrainzRequest(minIntervalMs, () => fetchWithTimeoutAndRetry({
+      const response = await sharedGate.schedule(minIntervalMs, () => fetchWithTimeoutAndRetry({
         fetchImpl,
         url,
         timeoutMs,

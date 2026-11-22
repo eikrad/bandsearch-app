@@ -121,6 +121,26 @@ test("invokeResearchGraph caps initial searches at maxInitialSearches", async ()
   assert.equal(braveCalls.length, 2, "planner offered five queries; only two are in budget");
 });
 
+test("searching stops once the extractor has as many hits as it reads", async () => {
+  const { client, calls } = fakeModelClient({
+    plan: () => ({ anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: ["q1", "q2", "q3", "q4"] }),
+  });
+  const { fetchImpl, log } = fakeFetch({
+    brave: (url) => braveResults([1, 2, 3].map((n) => ({
+      title: `${new URL(url).searchParams.get("q")} hit ${n}`, url: `https://blog.example/${n}`, description: "",
+    }))),
+  });
+
+  await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, maxInitialSearches: 4, maxExtractHits: 6 }),
+    input,
+  );
+
+  assert.equal(log.filter((c) => c.url.includes("api.search.brave.com")).length, 2, "two searches filled the six hits");
+  const extraction = calls.find((c) => nodeOf(c.system) === "extract")!.user;
+  assert.match(extraction, /q2 hit 3/);
+});
+
 test("invokeResearchGraph passes the user query through to the planner", async () => {
   const { client, calls, fetchImpl } = happyPath();
 
