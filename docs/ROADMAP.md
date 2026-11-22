@@ -109,7 +109,9 @@ place and is now under Deferred; #180's premise changed (see item 3).
      - [x] Step 6: progress and reply streamed (server-sent events, JSON for other
        clients), and a client that stops waiting cancels the search ✓ Done.
        Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups
-     - [ ] Step 7: Last.fm as a fast candidate source
+     - [x] Step 7: Last.fm first. Its similar-artist lists answer Cult Following
+       and Underground searches, with biographies as evidence; the web is
+       searched when they hold too few bands of the requested size ✓ Done
      - [ ] Step 8: the Render service stays awake
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
