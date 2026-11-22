@@ -106,6 +106,18 @@ test("findArtistsByName can also search aliases", async () => {
   assert.equal(query, 'artist:"Keiji Haino" OR alias:"Keiji Haino"');
 });
 
+test("a busy MusicBrainz is asked once more for aliases, four times more for names", async () => {
+  for (const [includeAliases, requests] of [[true, 2], [false, 5]] as const) {
+    let sent = 0;
+    const client = createMusicBrainzClient({
+      fetchImpl: async () => { sent += 1; return new Response(null, { status: 503 }); },
+      minIntervalMs: 0,
+    });
+    await assert.rejects(client.findArtistsByName(["Fen"], { includeAliases }), /503/);
+    assert.equal(sent, requests);
+  }
+});
+
 test("findArtistsByName sends nothing when there is no name to look for", async () => {
   const client = createMusicBrainzClient({
     fetchImpl: async () => { throw new Error("unexpected request"); },

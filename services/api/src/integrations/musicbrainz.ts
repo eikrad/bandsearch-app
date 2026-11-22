@@ -11,6 +11,8 @@ const DEFAULT_MIN_INTERVAL_MS = 1100;
  * for its own slot in the rate gate.
  */
 const BUSY_RETRIES = 4;
+/** For the aliases few names need, waiting out a busy server is not worth the user's time. */
+const BUSY_RETRIES_ALIASES = 1;
 
 type MusicBrainzSearchResponse = {
   artists?: Array<{
@@ -107,7 +109,7 @@ export function createMusicBrainzClient({
   minIntervalMs?: number;
   signal?: AbortSignal;
 } = {}) {
-  async function getJson<T>(url: string): Promise<T> {
+  async function getJson<T>(url: string, busyRetries = BUSY_RETRIES): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
       const response = await sharedGate.schedule(minIntervalMs, () => fetchWithTimeoutAndRetry({
         fetchImpl,
@@ -118,7 +120,7 @@ export function createMusicBrainzClient({
         headers: { "user-agent": USER_AGENT, accept: "application/json" },
       }), signal);
       if (response.ok) return (await response.json()) as T;
-      if (response.status !== 503 || attempt >= BUSY_RETRIES) {
+      if (response.status !== 503 || attempt >= busyRetries) {
         throw new Error(`musicbrainz request failed with status ${response.status}`);
       }
     }
@@ -154,6 +156,7 @@ export function createMusicBrainzClient({
         .join(" OR ");
       const data = await getJson<MusicBrainzSearchResponse>(
         `${baseUrl}/artist?query=${encodeURIComponent(query)}&fmt=json&limit=100`,
+        includeAliases ? BUSY_RETRIES_ALIASES : BUSY_RETRIES,
       );
       return (Array.isArray(data.artists) ? data.artists : [])
         .filter((artist) => Boolean(artist.id && artist.name))
