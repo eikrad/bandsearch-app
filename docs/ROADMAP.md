@@ -83,6 +83,21 @@ place and is now under Deferred; #180's premise changed (see item 3).
        0.80, judge obscurity fit 0.88. One run, so within run-to-run noise
      - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
        golden judge already scores both directions)
+   - **#336 — a search is fast enough for a conversation** (added 2026-11-22):
+     live searches took 68–118 s (mean 98.7 s), two thirds of it waiting for
+     MusicBrainz. One PR per step, measured like every #257 change.
+     - [x] Step 1: verification asks MusicBrainz for all names in one batch,
+       retries its 503s and accepts only artists of the same name (about 10% of
+       the recorded verifications were a different artist) ✓ Done. Measured
+       live: 117.9 s → 25.1 s for the same query, 24 of 25 candidates verified
+       instead of 6 of 22, no reflection round needed
+     - [ ] Step 2: shorter LLM output in plan and extract
+     - [ ] Step 3: only the Brave searches whose hits are read, one rate gate
+     - [ ] Step 4: Last.fm in parallel, partial results kept, artist cache
+     - [ ] Step 5: follow-ups answered from the chat's own candidates
+     - [ ] Step 6: progress and answer streamed
+     - [ ] Step 7: Last.fm as a fast candidate source
+     - [ ] Step 8: the Render service stays awake
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
 5. **#238 — desktop defaults to the Render deployment**, local sidecar as an

@@ -8,7 +8,6 @@ import {
   fakeFetch,
   fakeModelClient,
   graphDeps,
-  musicbrainzArtist,
   musicbrainzArtists,
   rankedRecommendations,
 } from "../helpers/researchGraphHarness.js";
@@ -49,16 +48,7 @@ function happyPath(overrides: Parameters<typeof fakeModelClient>[0] = {}) {
 
   const { fetchImpl, log } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: (url) =>
-      musicbrainzArtists([
-        url.includes("Fen")
-          ? { id: "mbid-fen", name: "Fen" }
-          : { id: "mbid-ghost", name: "Ghost Bath" },
-      ]),
-    musicbrainzLookup: (url) =>
-      url.includes("mbid-fen")
-        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
-        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
   });
 
   return { client, calls, fetchImpl, log };
@@ -150,7 +140,7 @@ test("invokeResearchGraph drops candidates MusicBrainz cannot confirm", async ()
   });
   const { fetchImpl } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: () => ({ artists: [] }),
+    musicbrainz: () => ({ artists: [] }),
   });
 
   const { pipelineDiagnostics, recommendations } = await invokeResearchGraph(
@@ -202,8 +192,7 @@ test("invokeResearchGraph survives a ranker that returns unusable JSON", async (
   const { client } = happyPath({ rank: () => ({ nonsense: true }) });
   const { fetchImpl } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }]),
-    musicbrainzLookup: () => musicbrainzArtist({ id: "mbid-fen", name: "Fen" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }]),
   });
 
   await assert.rejects(
@@ -226,14 +215,7 @@ test("invokeResearchGraph enriches candidates with Last.fm listener counts", asy
   const { client } = happyPath();
   const { fetchImpl, log } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: (url) =>
-      musicbrainzArtists([
-        url.includes("Fen") ? { id: "mbid-fen", name: "Fen" } : { id: "mbid-ghost", name: "Ghost Bath" },
-      ]),
-    musicbrainzLookup: (url) =>
-      url.includes("mbid-fen")
-        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
-        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
     lastFm: (url) =>
       url.includes("artist.getsimilar")
         ? { similarartists: { artist: [{ name: "Fen", match: "0.9" }] } }
@@ -278,14 +260,7 @@ test("the obscurity filter log shows where candidates fall against the target ra
   const { client } = happyPath();
   const { fetchImpl } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: (url) =>
-      musicbrainzArtists([
-        url.includes("Fen") ? { id: "mbid-fen", name: "Fen" } : { id: "mbid-ghost", name: "Ghost Bath" },
-      ]),
-    musicbrainzLookup: (url) =>
-      url.includes("mbid-fen")
-        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
-        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
     lastFm: (url) => {
       if (url.includes("artist.getsimilar")) return { similarartists: { artist: [] } };
       const listeners = decodeURIComponent(url).includes("artist=Fen") ? "42000" : "900";

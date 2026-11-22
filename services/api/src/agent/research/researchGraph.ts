@@ -129,8 +129,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
   const mb = {
-    searchArtists: (query: string) => researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).searchArtists(query)),
-    lookupArtist: (id: string) => researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).lookupArtist(id)),
+    findArtistsByName: (names: string[], options?: { includeAliases?: boolean }) =>
+      researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).findArtistsByName(names, options)),
   };
 
   // At the research cutoff every remaining stage is skipped and the graph ranks what it has.

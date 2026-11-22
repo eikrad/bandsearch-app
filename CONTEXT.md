@@ -12,7 +12,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Extracted candidate** — a band name pulled from Brave search snippets by the `extract` node. Not yet verified against MusicBrainz.
 
-- **Verified candidate** — an extracted candidate confirmed by MusicBrainz `lookupArtist` and enriched with `mbid`, genres, tags, and URL relations.
+- **Verified candidate** — an extracted candidate that MusicBrainz lists under the same name or alias (case, accents, punctuation and a leading "The" aside), enriched with its `mbid`, tags and life span. An artist whose name merely resembles the candidate does not verify it. Names are searched in batches, not one by one.
 
 - **Reflection subgraph** — a nested LangGraph subgraph that asks the reflector whether the verified candidates meet `RESEARCH_TARGET_VERIFIED_CANDIDATES`, then runs up to `maxRounds` additional search-extract-verify cycles while the reflector asks for more and at least 25 s of research time remain.
 
@@ -54,7 +54,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Setup** — golden runs that differ only by chance: same research model, code, replay mode, grading targets and metrics version. Repeats of a setup (`--repeat N`) are averaged per query before two setups are compared.
 
-- **Replay** — eval-only recording of Brave, MusicBrainz and Last.fm answers (`EVAL_REPLAY_DIR`), so setups compared on the golden set see the same search data. LLM calls are never replayed.
+- **Replay** — eval-only recording of Brave, MusicBrainz and Last.fm answers (`EVAL_REPLAY_DIR`), so setups compared on the golden set see the same search data. LLM calls are never replayed, and a batched MusicBrainz search replays only when a run extracts the same names again.
 
 - **Noise floor** — the top-8 overlap between golden runs of an identical setup (same model, pipeline version, commit, grading targets). An overlap with the baseline close to it means a change moved the answers no more than chance does. Overlap is a **stability** signal, not a quality one: varied answers to the same query are wanted (product decision 2026-10-05, so re-asking can surface new bands).
 

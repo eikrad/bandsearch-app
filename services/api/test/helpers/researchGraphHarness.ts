@@ -78,8 +78,7 @@ export type FetchLog = { url: string }[];
  */
 export function fakeFetch(handlers: {
   brave?: (url: string) => unknown;
-  musicbrainzSearch?: (url: string) => unknown;
-  musicbrainzLookup?: (url: string) => unknown;
+  musicbrainz?: (url: string) => unknown;
   lastFm?: (url: string) => unknown;
 }): { fetchImpl: typeof fetch; log: FetchLog } {
   const log: FetchLog = [];
@@ -98,11 +97,7 @@ export function fakeFetch(handlers: {
       return json(handlers.brave?.(url) ?? { web: { results: [] } });
     }
     if (url.includes("musicbrainz.org")) {
-      // `/artist?query=` is the search; `/artist/<mbid>` is the lookup.
-      if (url.includes("query=")) {
-        return json(handlers.musicbrainzSearch?.(url) ?? { artists: [] });
-      }
-      return json(handlers.musicbrainzLookup?.(url) ?? { id: "", name: "", tags: [], genres: [], relations: [] });
+      return json(handlers.musicbrainz?.(url) ?? { artists: [] });
     }
     if (url.includes("audioscrobbler.com")) {
       return json(handlers.lastFm?.(url) ?? {});
@@ -119,22 +114,9 @@ export function braveResults(hits: Array<{ title: string; url: string; descripti
   return { web: { results: hits } };
 }
 
-/** MusicBrainz search hit list. */
+/** MusicBrainz answer to a search for several artist names. */
 export function musicbrainzArtists(artists: Array<{ id: string; name: string; score?: number }>) {
   return { artists: artists.map((a) => ({ score: 100, ...a })) };
-}
-
-/** MusicBrainz artist lookup record. */
-export function musicbrainzArtist(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "mbid-1",
-    name: "Fen",
-    tags: [{ name: "blackgaze", count: 3 }],
-    genres: [{ name: "post-black metal" }],
-    relations: [],
-    "life-span": { begin: "2006", ended: false },
-    ...overrides,
-  };
 }
 
 /** The extractor's output shape. */

@@ -32,18 +32,15 @@ function verified(name: string, isVerified = true): VerifiedCandidate {
 }
 
 const mbClient: MusicBrainzVerifyClient = {
-  async searchArtists(q) {
-    return [{ id: `mbid-${q.toLowerCase()}`, name: q, score: 100 }];
-  },
-  async lookupArtist(mbid) {
-    return {
-      id: mbid,
-      name: mbid.replace("mbid-", ""),
+  async findArtistsByName(names) {
+    return names.map((name) => ({
+      id: `mbid-${name.toLowerCase()}`,
+      name,
+      score: 100,
+      aliases: [],
       tags: [],
-      genres: [],
-      urls: [],
       lifeSpan: { ended: false },
-    };
+    }));
   },
 };
 

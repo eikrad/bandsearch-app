@@ -1,4 +1,6 @@
 import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
+import type { MusicBrainzArtistRecord } from "../../integrations/musicbrainz.js";
+import { findArtistNamed } from "./artistNames.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -10,8 +12,6 @@ export type VerifiedCandidate = {
   verified: boolean;
   canonicalName?: string;
   mbTags?: string[];
-  mbGenres?: string[];
-  mbUrls?: string[];
   lifeSpan?: { begin?: string; end?: string; ended: boolean };
   listenerCount?: number | null;
 };
@@ -43,15 +43,7 @@ export function filterCandidatesByObscurity(
 }
 
 export type MusicBrainzVerifyClient = {
-  searchArtists: (q: string) => Promise<Array<{ id?: string; name: string; score?: number }>>;
-  lookupArtist: (mbid: string) => Promise<{
-    id: string;
-    name: string;
-    tags: string[];
-    genres: string[];
-    urls: Array<{ type: string; url: string }>;
-    lifeSpan: { begin?: string; end?: string; ended: boolean };
-  }>;
+  findArtistsByName: (names: string[], options?: { includeAliases?: boolean }) => Promise<MusicBrainzArtistRecord[]>;
 };
 
 export function mergeVerifiedCandidates(candidates: VerifiedCandidate[]): VerifiedCandidate[] {
@@ -84,75 +76,55 @@ export function normalizeAnchorSet(anchorArtists: string[]): Set<string> {
   return s;
 }
 
-function pickSearchHit(
-  hits: Array<{ id?: string; name: string; score?: number }>,
-  minSearchScore: number,
-): { id?: string; name: string; score?: number } | null {
-  if (!Array.isArray(hits) || hits.length === 0) return null;
-  const acceptable = hits.find((h) => h.score === undefined || h.score >= minSearchScore);
-  return acceptable ?? hits[0];
-}
+/** Names per MusicBrainz request; more would push matches off its 100-artist result page. */
+const VERIFY_BATCH_SIZE = 25;
 
 /**
- * Resolve each extracted name against MusicBrainz search + artist lookup.
+ * Confirms extracted names against MusicBrainz in batches: one request for all
+ * names, then one more for those it missed, aliases included. MusicBrainz
+ * allows one request a second, so looking up each name on its own took two
+ * thirds of a search.
  */
 export async function verifyCandidatesWithMusicBrainz(
   mb: MusicBrainzVerifyClient,
   candidates: ExtractedCandidate[],
   anchorArtists: string[],
-  options: { minSearchScore?: number; shouldContinue?: () => boolean } = {},
+  options: { shouldContinue?: () => boolean } = {},
 ): Promise<VerifiedCandidate[]> {
   const anchors = normalizeAnchorSet(anchorArtists);
-  const minSearchScore = typeof options.minSearchScore === "number" ? options.minSearchScore : 35;
+  const wanted = candidates.filter((c) => {
+    const key = String(c.name || "").trim().toLowerCase();
+    return key !== "" && !anchors.has(key);
+  });
+  const found = new Map<string, MusicBrainzArtistRecord>();
 
-  const out: VerifiedCandidate[] = [];
-
-  for (const c of candidates) {
-    if (options.shouldContinue?.() === false) break;
-    const nameKey = String(c.name || "").trim().toLowerCase();
-    if (!nameKey || anchors.has(nameKey)) continue;
-
-    let hits: Array<{ id?: string; name: string; score?: number }>;
-    try {
-      hits = await mb.searchArtists(c.name.trim());
-    } catch {
-      out.push({
-        ...c,
-        verified: false,
-      });
-      continue;
-    }
-
-    const hit = pickSearchHit(hits, minSearchScore);
-    if (!hit?.id) {
-      out.push({
-        ...c,
-        verified: false,
-      });
-      continue;
-    }
-
-    if (options.shouldContinue?.() === false) break;
-    try {
-      const details = await mb.lookupArtist(hit.id);
-      out.push({
-        ...c,
-        mbid: hit.id,
-        verified: true,
-        canonicalName: details.name,
-        mbTags: details.tags,
-        mbGenres: details.genres,
-        mbUrls: details.urls.map((u) => u.url),
-        lifeSpan: details.lifeSpan,
-      });
-    } catch {
-      out.push({
-        ...c,
-        mbid: hit.id,
-        verified: false,
-      });
+  for (const includeAliases of [false, true]) {
+    const missing = [...new Set(wanted.map((c) => c.name.trim()))].filter((name) => !found.has(name));
+    for (let i = 0; i < missing.length; i += VERIFY_BATCH_SIZE) {
+      if (options.shouldContinue?.() === false) break;
+      const names = missing.slice(i, i + VERIFY_BATCH_SIZE);
+      try {
+        const artists = await mb.findArtistsByName(names, { includeAliases });
+        for (const name of names) {
+          const artist = findArtistNamed(name, artists);
+          if (artist) found.set(name, artist);
+        }
+      } catch {
+        // These names stay unverified; the ones already found are kept.
+      }
     }
   }
 
-  return out;
+  return wanted.map((c) => {
+    const artist = found.get(c.name.trim());
+    if (!artist) return { ...c, verified: false };
+    return {
+      ...c,
+      mbid: artist.id,
+      verified: true,
+      canonicalName: artist.name,
+      mbTags: artist.tags,
+      lifeSpan: artist.lifeSpan,
+    };
+  });
 }
