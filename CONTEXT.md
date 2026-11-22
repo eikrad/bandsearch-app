@@ -10,7 +10,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Search plan** — the structured output of the `plan` node: a list of targeted Brave search queries derived from the user's taste (FFO/Bandcamp-style signals, anchor artists, style descriptors).
 
-- **Extracted candidate** — a band name pulled from Brave search snippets by the `extract` node. Not yet verified against MusicBrainz.
+- **Extracted candidate** — a band name pulled from Brave search snippets by the `extract` node, with the URLs and words of the hits that name it. Not yet verified against MusicBrainz.
 
 - **Verified candidate** — an extracted candidate that MusicBrainz lists under the same name or alias (case, accents, punctuation and a leading "The" aside), enriched with its `mbid`, tags and life span. An artist whose name merely resembles the candidate does not verify it. Names are searched in batches, not one by one.
 

@@ -72,7 +72,7 @@ async function runSubgraph({
   const { client } = fakeModelClient({
     reflect,
     extract: () => extractedCandidates([
-      { name: "Downfall of Gaia", evidenceUrls: ["https://blog.example/more"] },
+      { name: "Downfall of Gaia" },
     ]),
   });
 
@@ -205,7 +205,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
   const { client } = fakeModelClient({
     reflect: () => ({ sufficient: false, gaps: ["thin"], extraQueries: ["extra query"] }),
     extract: () => extractedCandidates([
-      { name: "Downfall of Gaia", evidenceUrls: ["https://blog.example/more"] },
+      { name: "Downfall of Gaia" },
     ]),
   });
 

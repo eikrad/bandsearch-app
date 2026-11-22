@@ -35,12 +35,19 @@ export function wrapPreferenceContext(pref: string): string {
   return c ? wrapBlock("USER_PREFERENCES", escapeEnvelopeChars(c)) : "";
 }
 
-export function wrapSearchHitBlock(hit: SearchHit): string {
+/** One search hit for a prompt; a number lets the model refer to the hit instead of copying from it. */
+export function wrapSearchHitBlock(hit: SearchHit, number?: number): string {
   const sourceQuery = capAndTrim(escapeEnvelopeChars(hit.sourceQuery), SEARCH_HIT_FIELD_MAX);
   const title = capAndTrim(escapeEnvelopeChars(hit.title), SEARCH_HIT_FIELD_MAX);
   const url = capAndTrim(hit.url.split(/[\r\n]/)[0], SEARCH_HIT_URL_MAX);
   const description = capAndTrim(escapeEnvelopeChars(hit.description), SEARCH_HIT_FIELD_MAX);
-  const inner = [`query: ${sourceQuery}`, `title: ${title}`, `url: ${url}`, `description: ${description}`].join("\n");
+  const inner = [
+    ...(number === undefined ? [] : [`number: ${number}`]),
+    `query: ${sourceQuery}`,
+    `title: ${title}`,
+    `url: ${url}`,
+    `description: ${description}`,
+  ].join("\n");
   return wrapBlock("SEARCH_RESULT", inner);
 }
 

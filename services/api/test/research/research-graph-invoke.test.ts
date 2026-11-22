@@ -37,8 +37,8 @@ const twoBraveHits = braveResults([
 function happyPath(overrides: Parameters<typeof fakeModelClient>[0] = {}) {
   const { client, calls } = fakeModelClient({
     extract: () => extractedCandidates([
-      { name: "Fen", evidenceUrls: ["https://blog.example/ffo-alcest"] },
-      { name: "Ghost Bath", evidenceUrls: ["https://blog.example/blackgaze"] },
+      { name: "Fen", hits: [1] },
+      { name: "Ghost Bath", hits: [2] },
     ]),
     rank: () => rankedRecommendations([
       { artist: "Fen", why: "Post-black, see https://blog.example/ffo-alcest" },
@@ -134,7 +134,7 @@ test("invokeResearchGraph passes the user query through to the planner", async (
 test("invokeResearchGraph drops candidates MusicBrainz cannot confirm", async () => {
   const { client } = fakeModelClient({
     extract: () => extractedCandidates([
-      { name: "Not A Real Band", evidenceUrls: ["https://blog.example/ffo-alcest"] },
+      { name: "Not A Real Band", hits: [1] },
     ]),
     rank: () => rankedRecommendations([]),
   });
@@ -156,9 +156,9 @@ test("invokeResearchGraph drops candidates MusicBrainz cannot confirm", async ()
 
 test("invokeResearchGraph drops extracted candidates that carry no evidence", async () => {
   const { client } = fakeModelClient({
-    // No evidenceUrls and no evidenceSnippets: the extractor discards these
-    // before verification, so an unsupported name never reaches MusicBrainz.
-    extract: () => extractedCandidates([{ name: "Unsupported Name" }]),
+    // In none of the hits: the extractor discards these before verification,
+    // so an unsupported name never reaches MusicBrainz.
+    extract: () => extractedCandidates([{ name: "Unsupported Name", hits: [] }]),
     rank: () => rankedRecommendations([]),
   });
   const { fetchImpl, log } = fakeFetch({ brave: () => twoBraveHits });
@@ -350,8 +350,8 @@ test("a failing extraction in the reflection round keeps the candidates already 
       extractCalls += 1;
       if (extractCalls > 1) throw new Error("candidate extractor timeout");
       return extractedCandidates([
-        { name: "Fen", evidenceUrls: ["https://blog.example/ffo-alcest"] },
-        { name: "Ghost Bath", evidenceUrls: ["https://blog.example/blackgaze"] },
+        { name: "Fen", hits: [1] },
+        { name: "Ghost Bath", hits: [2] },
       ]);
     },
   });
