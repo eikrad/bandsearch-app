@@ -41,6 +41,10 @@ remains a US-incorporated company).
 - Every cold open of the Android app after a period of inactivity will hang
   for up to a minute before the first response. This is a deliberate,
   known-bad first-open experience, not a bug to file.
+- Since 2026-11-22 (#336) the app softens it without a cost: it wakes a hosted
+  API when the user comes back and keeps it awake while the app is in use
+  (`apps/desktop/src/keepApiAwake.ts`). The first open after a long pause still
+  waits; only a paid plan removes that, which stays the owner's decision.
 - Phase 9.5 ("verify Render + Turso end-to-end") already targets Render, so
   this decision needs no infrastructure change — it confirms the existing
   default rather than picking a new one.

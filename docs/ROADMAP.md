@@ -124,7 +124,10 @@ place and is now under Deferred; #180's premise changed (see item 3).
        −0.036 *, constraints −0.26 *); the country and the Last.fm candidates of
        step 7 won it back, so do not ship 2–4 without 7. The pass rate rewards
        bands that carry tags, which Last.fm's neighbours do more often
-     - [ ] Step 8: the Render service stays awake
+     - [x] Step 8: the app wakes a hosted API when the user comes back and keeps
+       it awake while in use, at no cost (ADR 0003 keeps the free plan) ✓ Done
+     - [ ] Owner decision: Render Starter ($7/month) removes the remaining cold
+       start on the first open after a pause; it would supersede ADR 0003
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
 5. **#238 — desktop defaults to the Render deployment**, local sidecar as an
