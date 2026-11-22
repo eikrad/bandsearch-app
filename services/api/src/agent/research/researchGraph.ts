@@ -4,14 +4,16 @@ import * as z from "zod";
 import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
-import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
+import { createLastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { fitObscurityTarget, type ObscurityTargetFit } from "../../obscurityTargets.js";
+import { createLastFmEnrichment } from "./lastFmEnrichment.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
+import type { ResearchCache } from "./researchCache.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -45,6 +47,8 @@ export type ResearchGraphDeps = {
    * Reported back as the run's `model`, the provenance of the ranker's prose.
    */
   model?: string;
+  /** Artist facts shared by the searches of this process; without it every search asks again. */
+  cache?: ResearchCache;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
   onLog?: (
@@ -143,6 +147,16 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).findArtistsByName(names, options)),
   };
 
+  const lastFmKey = deps.lastFmApiKey;
+  const lastFm = lastFmKey
+    ? createLastFmEnrichment({
+        clientFor: (signal) => createLastFmClient({ apiKey: lastFmKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl, signal }),
+        budget: researchScope,
+        cache: deps.cache,
+        log,
+      })
+    : null;
+
   // At the research cutoff every remaining stage is skipped and the graph ranks what it has.
   const untilCutoff = <Next extends string>(next: Next): [() => Next | "rank", Array<Next | "rank">] =>
     [() => (researchScope.remaining() > 0 ? next : "rank"), [next, "rank"]];
@@ -174,6 +188,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     modelClient: deps.modelClient,
     chatModel: deps.chatModel,
     model: deps.model,
+    artistCache: deps.cache?.artists,
+    onExtracted: (candidates) => lastFm?.prefetchListeners(candidates.map((c) => c.name)),
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
@@ -197,6 +213,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         anchorCount: plan.anchorArtists.length,
         queryCount: plan.queries.length,
       });
+      lastFm?.prefetchSimilar(plan.anchorArtists);
       return { searchPlan: plan };
     }).catch((error: unknown) => {
       // Broad searches can still succeed when planning fails within its cap.
@@ -222,6 +239,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
       const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });
+      lastFm?.prefetchListeners(candidates.map((c) => c.name));
       return { extractedCandidates: candidates };
     }).catch((error: unknown) => {
       if (researchScope.remaining() > 0) throw error;
@@ -229,7 +247,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }))
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, { shouldContinue: () => researchScope.remaining() > 0 });
+      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, {
+        shouldContinue: () => researchScope.remaining() > 0,
+        cache: deps.cache?.artists,
+      });
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
         phase: "initial",
@@ -240,67 +261,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     })
     .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("enrich_lastfm", async (state) => {
-      const apiKey = deps.lastFmApiKey;
-      if (!apiKey || researchScope.remaining() <= 0) return {};
-      return researchScope.run(5000, async (signal) => {
-        const lastFm: LastFmClient = createLastFmClient({ apiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl, signal });
-        const anchors = state.searchPlan?.anchorArtists ?? [];
-        if (!state.verifiedCandidates?.length) return {};
-
-        // Fetch similar-artist signals and listener counts in parallel.
-        const [similarResults, listenerResults] = await Promise.all([
-          anchors.length
-            ? Promise.all(anchors.map((a) => lastFm.getSimilarArtists(a)))
-            : Promise.resolve([]),
-          Promise.allSettled(
-            state.verifiedCandidates.map((c) =>
-              lastFm.getListenerCount(c.canonicalName || c.name),
-            ),
-          ),
-        ]);
-
-        const similarMap = new Map<string, { anchor: string; match: number }>();
-        for (let i = 0; i < anchors.length; i++) {
-          for (const s of similarResults[i] ?? []) {
-            const key = s.name.toLowerCase();
-            const existing = similarMap.get(key);
-            if (!existing || s.match > existing.match) {
-              similarMap.set(key, { anchor: anchors[i], match: s.match });
-            }
-          }
-        }
-
-        let matchCount = 0;
-        const enriched = state.verifiedCandidates.map((c, idx) => {
-          const key = (c.canonicalName || c.name).trim().toLowerCase();
-          const hit = similarMap.get(key);
-          const listenerCount =
-            listenerResults[idx].status === "fulfilled" ? listenerResults[idx].value : null;
-
-          let next: VerifiedCandidate = { ...c, listenerCount };
-          if (hit) {
-            matchCount++;
-            const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
-            next = {
-              ...next,
-              evidenceUrls: [...next.evidenceUrls, similarUrl],
-              evidenceSnippets: [...next.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
-            };
-          }
-          return next;
-        });
-
-        log("info", "research_lastfm_enrichment", {
-          anchorCount: anchors.length,
-          candidateCount: state.verifiedCandidates.length,
-          matchCount,
-          listenersFetched: listenerResults.filter((r) => r.status === "fulfilled" && r.value != null).length,
-        });
-        return { verifiedCandidates: enriched };
-      }).catch((error: unknown) => {
-        log("warn", "research_lastfm_skipped", { reason: errorMessage(error) });
-        return {};
-      });
+      if (!lastFm) return {};
+      return { verifiedCandidates: await lastFm.enrich(state.verifiedCandidates ?? [], state.searchPlan?.anchorArtists ?? []) };
     })
     .addNode("rank", async (state) => budget.run(RANKING_RESERVE_MS, async (signal) => {
       const ranker = await createRecommendationRanker({

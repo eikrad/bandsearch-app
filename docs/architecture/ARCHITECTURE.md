@@ -156,7 +156,7 @@ flowchart TD
 | `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
 | `verify` | MusicBrainz | Searches all candidate names in one batched request (25 names each), then once more for those missed, aliases included; adds `mbid`, tags and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
 | `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
-| `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
+| `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
@@ -181,6 +181,12 @@ flowchart TD
 | `extract_r` | LLM | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
 | `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges via `mergeVerifiedCandidates` — preserves all prior-round results |
 
+### Artist cache (`researchCache.ts`)
+
+MusicBrainz matches, Last.fm listener counts and similar artists are remembered
+in memory for a day, per process and by artist name. Failed lookups are not
+remembered. The cache holds public artist data only.
+
 ### Budget management (`researchBudget.ts`)
 
 `ResearchBudget` owns the complete graph deadline (`RESEARCH_TIMEOUT_MS`, default
@@ -190,7 +196,7 @@ cancellation. The graph closes every scope on success or failure.
 
 A child research scope ends up to 12 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
 small configured budget for final ranking. Main-graph conditional edges bypass
-remaining research stages and enter `rank` at that cutoff. Verification keeps
+remaining research stages and enter `rank` at that cutoff. Last.fm lookups still under way are cancelled there. Verification keeps
 completed candidates and stops between batches; optional reflection and
 Last.fm enrichment cannot consume the reserve. Model calls and HTTP requests
 receive abort signals; retries and Brave/MusicBrainz rate-limit waits stop when

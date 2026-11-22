@@ -1,6 +1,7 @@
 import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
 import type { MusicBrainzArtistRecord } from "../../integrations/musicbrainz.js";
 import { findArtistNamed } from "./artistNames.js";
+import { artistKey, type ResearchCache } from "./researchCache.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -89,25 +90,34 @@ export async function verifyCandidatesWithMusicBrainz(
   mb: MusicBrainzVerifyClient,
   candidates: ExtractedCandidate[],
   anchorArtists: string[],
-  options: { shouldContinue?: () => boolean } = {},
+  options: { shouldContinue?: () => boolean; cache?: ResearchCache["artists"] } = {},
 ): Promise<VerifiedCandidate[]> {
   const anchors = normalizeAnchorSet(anchorArtists);
   const wanted = candidates.filter((c) => {
     const key = String(c.name || "").trim().toLowerCase();
     return key !== "" && !anchors.has(key);
   });
+  const names = [...new Set(wanted.map((c) => c.name.trim()))];
   const found = new Map<string, MusicBrainzArtistRecord>();
+  const unknown = new Set<string>();
+  for (const name of names) {
+    const known = options.cache?.get(artistKey(name));
+    if (known) found.set(name, known);
+    else if (known === null) unknown.add(name);
+  }
 
   for (const includeAliases of [false, true]) {
-    const missing = [...new Set(wanted.map((c) => c.name.trim()))].filter((name) => !found.has(name));
+    const missing = names.filter((name) => !found.has(name) && !unknown.has(name));
     for (let i = 0; i < missing.length; i += VERIFY_BATCH_SIZE) {
       if (options.shouldContinue?.() === false) break;
-      const names = missing.slice(i, i + VERIFY_BATCH_SIZE);
+      const batch = missing.slice(i, i + VERIFY_BATCH_SIZE);
       try {
-        const artists = await mb.findArtistsByName(names, { includeAliases });
-        for (const name of names) {
+        const artists = await mb.findArtistsByName(batch, { includeAliases });
+        for (const name of batch) {
           const artist = findArtistNamed(name, artists);
           if (artist) found.set(name, artist);
+          // Only the second search, aliases included, shows that MusicBrainz lists no such artist.
+          if (artist || includeAliases) options.cache?.set(artistKey(name), artist);
         }
       } catch {
         // These names stay unverified; the ones already found are kept.

@@ -97,7 +97,11 @@ place and is now under Deferred; #180's premise changed (see item 3).
      - [x] Step 3: searching stops once the 24 hits the extractor reads are
        found (usually 3 searches, not 6); one Brave rate gate per process, so
        search rounds and concurrent users no longer collide (429) ✓ Done
-     - [ ] Step 4: Last.fm in parallel, partial results kept, artist cache
+     - [x] Step 4: Last.fm is asked as soon as a name is known and runs alongside
+       verification; a slow answer no longer discards every listener count (which
+       silently turned the obscurity filter off); artist facts are remembered
+       for a day per process ✓ Done. Measured live with steps 1–4: 105.6 s →
+       14.3 s for the same query
      - [ ] Step 5: follow-ups answered from the chat's own candidates
      - [ ] Step 6: progress and answer streamed
      - [ ] Step 7: Last.fm as a fast candidate source
