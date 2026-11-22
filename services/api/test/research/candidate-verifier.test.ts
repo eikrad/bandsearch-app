@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { verifyCandidatesWithMusicBrainz, mergeVerifiedCandidates, filterCandidatesByObscurity } from "../../src/agent/research/candidateVerifier.js";
 import type { MusicBrainzVerifyClient, VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
+import { createResearchCache } from "../../src/agent/research/researchCache.js";
 import type { ExtractedCandidate } from "../../src/agent/research/candidateExtractor.js";
 import type { MusicBrainzArtistRecord } from "../../src/integrations/musicbrainz.js";
 
@@ -140,6 +141,29 @@ test("mergeVerifiedCandidates prefers verified:true entry on collision (same mbi
 });
 
 // ─── filterCandidatesByObscurity (#325: floor, ceiling, near misses) ─────────
+
+test("an artist verified before is not searched again, and neither is one MusicBrainz does not know", async () => {
+  const cache = createResearchCache().artists;
+  const first = fakeMusicBrainz([record({ name: "Fen" })], []);
+  await verifyCandidatesWithMusicBrainz(first.mb, [extracted("Fen"), extracted("Unknown Act")], [], { cache });
+
+  const second = fakeMusicBrainz([record({ name: "Capra" })]);
+  const out = await verifyCandidatesWithMusicBrainz(
+    second.mb, [extracted("FEN"), extracted("Unknown Act"), extracted("Capra")], [], { cache },
+  );
+  assert.deepEqual(second.asked, [{ names: ["Capra"], includeAliases: false }]);
+  assert.deepEqual(out.map((c) => c.verified), [true, false, true]);
+});
+
+test("a failed search is not remembered as an unknown artist", async () => {
+  const cache = createResearchCache().artists;
+  const down = fakeMusicBrainz(new Error("down"), new Error("down"));
+  await verifyCandidatesWithMusicBrainz(down.mb, [extracted("Fen")], [], { cache });
+
+  const up = fakeMusicBrainz([record({ name: "Fen" })]);
+  const out = await verifyCandidatesWithMusicBrainz(up.mb, [extracted("Fen")], [], { cache });
+  assert.equal(out[0]!.verified, true);
+});
 
 function makeCandidate(name: string, listenerCount: number | null): VerifiedCandidate {
   return { name, listenerCount, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] };

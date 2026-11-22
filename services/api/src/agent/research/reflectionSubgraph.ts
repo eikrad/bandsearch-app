@@ -6,6 +6,7 @@ import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBra
 import { createRecommendationReflector } from "./recommendationReflector.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
+import type { ResearchCache } from "./researchCache.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -29,6 +30,9 @@ export type ReflectionSubgraphDeps = {
   chatModel?: ChatModelFactory;
   /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
   model?: string;
+  artistCache?: ResearchCache["artists"];
+  /** Told the names a round found, before they are verified. */
+  onExtracted?: (candidates: ExtractedCandidate[]) => void;
 };
 
 export const REFLECTION_SCHEMA = new StateSchema({
@@ -115,6 +119,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         });
         const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
         const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
+        deps.onExtracted?.(fresh);
         return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
       }).catch((error: unknown) => {
         log("warn", "research_reflection_extract_failed", { reason: errorMessage(error) });
@@ -130,7 +135,10 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       }
       const toVerify = state.extractedCandidates.filter((c) => !seen.has(c.name.toLowerCase()));
       const fresh = toVerify.length > 0
-        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, { shouldContinue: () => deps.budget.remaining() > 0 })
+        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, {
+            shouldContinue: () => deps.budget.remaining() > 0,
+            cache: deps.artistCache,
+          })
         : [];
       const merged = mergeVerifiedCandidates([...state.verifiedCandidates, ...fresh]);
       const round = (state.roundsCompleted ?? 0) + 1;

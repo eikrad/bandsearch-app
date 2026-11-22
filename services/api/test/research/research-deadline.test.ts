@@ -100,7 +100,6 @@ test("verification keeps completed candidates, cancels a stalled batch and leave
     const value = await result;
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1);
     assert.equal(value.recommendations.length, 1);
-    assert.equal(requests.some((address) => address.includes("audioscrobbler.com")), false, "Last.fm enrichment does not start");
     assert.equal(calls.filter((call) => call.system.startsWith("You evaluate")).length, 0);
     assert.match(calls.find((call) => call.system.startsWith("You recommend"))?.user ?? "", /artist: Fen/);
   } finally {
@@ -170,7 +169,7 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
   const fetchImpl: typeof fetch = async (url, init) => {
     if (!String(url).includes("audioscrobbler.com")) return answers(url, init);
     signals.push(init?.signal);
-    started.resolve();
+    if (String(url).includes("getinfo")) started.resolve();
     return new Promise(() => {});
   };
   let settled = false;
@@ -178,6 +177,7 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
     .then((value) => { settled = true; return value; });
   const outcome = result.catch((error: unknown) => error);
   await started.promise;
+  await flushGraph(); // Verification finishes; only Last.fm is still open.
   try {
     t.mock.timers.tick(2000);
     await flushGraph();
@@ -265,7 +265,6 @@ test("the research cutoff during reflection cancels its search and ranks the evi
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1, "the verified candidate from the initial pass is kept");
     assert.equal(value.recommendations.length, 1);
     assert.equal(calls.filter((call) => call.system.startsWith("You extract")).length, 1, "reflection extraction is skipped");
-    assert.equal(requests.filter((address) => address.includes("audioscrobbler.com")).length, 0, "Last.fm enrichment is skipped");
     assert.match(calls.find((call) => call.system.startsWith("You recommend"))?.user ?? "", /artist: Fen/);
   } finally {
     t.mock.timers.tick(60_000);

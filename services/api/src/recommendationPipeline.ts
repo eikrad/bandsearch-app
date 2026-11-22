@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
+import { createResearchCache } from "./agent/research/researchCache.js";
 import { createResearchRecommendationService } from "./agent/research/researchService.js";
 import type { RecommendationError } from "./recommendations.js";
 import {
@@ -99,6 +100,9 @@ export function createRecommendationPipeline({
     writeStructuredLog(level, { component: "recommendation_pipeline", message, ...details });
   }
 
+  // Outlives a failed start and every search, so later searches find known artists.
+  const cache = createResearchCache();
+
   async function initialize() {
     try {
       const apiKey = String(cfg.llm?.geminiApiKey ?? cfg.geminiApiKey ?? "").trim();
@@ -120,6 +124,7 @@ export function createRecommendationPipeline({
           lastFmApiKey: String(cfg.lastFmApiKey ?? "").trim(),
           musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
           musicBrainzRetries: cfg.musicBrainzRetries,
+          cache,
           fetchImpl: lookups.fetchImpl,
           musicBrainzMinIntervalMs: lookups.musicBrainzMinIntervalMs,
           braveMinIntervalMs: lookups.braveMinIntervalMs,
