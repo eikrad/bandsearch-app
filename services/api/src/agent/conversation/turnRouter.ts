@@ -22,7 +22,7 @@ const oneLine = (text: string) => escapeEnvelopeChars(text.replace(/\s+/g, " ").
 
 function describe(candidate: VerifiedCandidate): string {
   const facts = [
-    (candidate.mbTags ?? []).slice(0, MAX_TAGS).join(", "),
+    (candidate.mbTags?.length ? candidate.mbTags : candidate.listenerTags ?? []).slice(0, MAX_TAGS).join(", "),
     candidate.listenerCount != null ? `${candidate.listenerCount} listeners` : "",
   ].filter(Boolean);
   return oneLine(facts.length > 0 ? `${bandName(candidate)} (${facts.join("; ")})` : bandName(candidate));

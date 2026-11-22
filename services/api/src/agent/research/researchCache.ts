@@ -1,4 +1,4 @@
-import type { SimilarArtist } from "../../eval/lastFmClient.js";
+import type { LastFmArtistInfo, SimilarArtist } from "../../eval/lastFmClient.js";
 import type { MusicBrainzArtistRecord } from "../../integrations/musicbrainz.js";
 import { createTtlCache, type TtlCache } from "../../integrations/ttlCache.js";
 
@@ -10,7 +10,7 @@ import { createTtlCache, type TtlCache } from "../../integrations/ttlCache.js";
 export type ResearchCache = {
   /** The MusicBrainz artist a name refers to; null when MusicBrainz knows none. */
   artists: TtlCache<MusicBrainzArtistRecord | null>;
-  listeners: TtlCache<number>;
+  artistInfo: TtlCache<LastFmArtistInfo>;
   similarArtists: TtlCache<SimilarArtist[]>;
 };
 
@@ -19,7 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function createResearchCache(): ResearchCache {
   return {
     artists: createTtlCache({ ttlMs: DAY_MS, maxEntries: 5000 }),
-    listeners: createTtlCache({ ttlMs: DAY_MS, maxEntries: 5000 }),
+    artistInfo: createTtlCache({ ttlMs: DAY_MS, maxEntries: 5000 }),
     similarArtists: createTtlCache({ ttlMs: DAY_MS, maxEntries: 500 }),
   };
 }

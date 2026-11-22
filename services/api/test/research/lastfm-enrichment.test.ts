@@ -100,12 +100,21 @@ function candidate(name: string, canonicalName = name): VerifiedCandidate {
   return { name, canonicalName, verified: true, evidenceUrls: ["https://blog.example"], evidenceSnippets: [], sourceQueries: [] };
 }
 
-function fakeLastFm(answers: { listeners?: (name: string) => Promise<number | null>; similar?: SimilarArtist[] }) {
+function fakeLastFm(answers: {
+  listeners?: (name: string) => Promise<number | null>;
+  similar?: SimilarArtist[];
+  tags?: string[];
+  biography?: string;
+}) {
   const asked: string[] = [];
   const client: LastFmClient = {
-    async getListenerCount(name) {
+    async getArtistInfo(name) {
       asked.push(name);
-      return answers.listeners ? answers.listeners(name) : 1000;
+      const listeners = await (answers.listeners ? answers.listeners(name) : 1000);
+      return listeners === null ? null : { listeners, url: `https://www.last.fm/music/${name}`, tags: answers.tags ?? [], biography: answers.biography ?? "" };
+    },
+    async getListenerCount() {
+      throw new Error("the research asks for everything at once");
     },
     async getSimilarArtists(anchor) {
       asked.push(`similar:${anchor}`);
@@ -135,7 +144,7 @@ test("lookups started early are not repeated when the candidates are ready", asy
   const { client, asked } = fakeLastFm({ similar: [{ name: "fen", match: 0.9 }] });
   const { lastFm } = enrichmentWith(client);
   lastFm.prefetchSimilar(["Alcest"]);
-  lastFm.prefetchListeners(["Fen"]);
+  lastFm.prefetchInfo(["Fen"]);
 
   const [fen] = await lastFm.enrich([candidate("Fen")], ["Alcest"]);
 
@@ -227,4 +236,25 @@ test("a candidate found through Last.fm carries its similarity once", async () =
   const [fen] = await lastFm.enrich([{ ...found!, verified: true }], ["Alcest"]);
   assert.equal(fen!.evidenceUrls.length, 1);
   assert.equal(fen!.evidenceSnippets.length, 1);
+});
+
+test("a band's biography is evidence, with its page, before any similarity", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Fen", match: 0.5 }], biography: "Fen are a post-black metal band from the English Fens.", tags: ["post-black metal"] });
+  const [fen] = await enrichmentWith(client).lastFm.enrich([candidate("Fen")], ["Alcest"]);
+  assert.deepEqual(fen!.evidenceSnippets, [
+    "On last.fm: Fen are a post-black metal band from the English Fens.",
+    "Similar to Alcest on last.fm (match: 0.50)",
+  ]);
+  assert.deepEqual(fen!.evidenceUrls, ["https://blog.example", "https://www.last.fm/music/Fen", "https://www.last.fm/music/Alcest/+similar"]);
+  assert.deepEqual(fen!.listenerTags, ["post-black metal"]);
+});
+
+test("a long biography is cut at a word; a page without one is no evidence", async () => {
+  const long = fakeLastFm({ biography: "word ".repeat(200).trim() });
+  const [cut] = await enrichmentWith(long.client).lastFm.enrich([candidate("Fen")], []);
+  assert.ok(cut!.evidenceSnippets[0]!.length < 290);
+  assert.match(cut!.evidenceSnippets[0]!, /word…$/);
+
+  const [bare] = await enrichmentWith(fakeLastFm({}).client).lastFm.enrich([candidate("Fen")], []);
+  assert.deepEqual(bare!.evidenceUrls, ["https://blog.example"]);
 });

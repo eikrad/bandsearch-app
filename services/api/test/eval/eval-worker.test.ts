@@ -10,6 +10,7 @@ type JudgeEventCall = { eventId: string; bands: JudgeInput[] };
 function makeLastFmClient(getListenerCount: LastFmClient["getListenerCount"]): LastFmClient {
   return {
     getListenerCount,
+    getArtistInfo: async () => null,
     getSimilarArtists: async () => [],
     getTopTags: async () => [],
   };

@@ -124,3 +124,47 @@ test("getTopTags returns null when Last.fm fails, which is not the same as no ta
   assert.equal(await failing.getTopTags("Fen"), null);
   assert.deepEqual(await unknown.getTopTags("Fen"), [], "an unknown artist has no tags");
 });
+
+test("getArtistInfo reads listeners, page, tags and the biography as plain text", async () => {
+  const client = createLastFmClient({
+    apiKey: "key",
+    fetchImpl: fetchReturning({ artist: {
+      url: "https://www.last.fm/music/Fen",
+      stats: { listeners: "42000" },
+      tags: { tag: [{ name: "post-black metal" }, { name: "" }] },
+      bio: { summary: 'Fen are an English band, formed in 2006 &amp; still active.\n <a href="https://www.last.fm/music/Fen">Read more on Last.fm</a>' },
+    } }),
+  });
+  assert.deepEqual(await client.getArtistInfo("Fen"), {
+    listeners: 42000,
+    url: "https://www.last.fm/music/Fen",
+    tags: ["post-black metal"],
+    biography: "Fen are an English band, formed in 2006 & still active.",
+  });
+});
+
+test("getArtistInfo copes with an artist Last.fm knows little about", async () => {
+  const client = createLastFmClient({
+    apiKey: "key",
+    fetchImpl: fetchReturning({ artist: { stats: { listeners: "12" }, tags: "", bio: { summary: ' <a href="https://www.last.fm/music/X">Read more on Last.fm</a>' } } }),
+  });
+  assert.deepEqual(await client.getArtistInfo("X"), { listeners: 12, url: null, tags: [], biography: "" });
+});
+
+test("a biography shared by several artists of one name is none: whom it is about cannot be told", async () => {
+  const biographyOf = async (summary: string) => (await createLastFmClient({
+    apiKey: "key", fetchImpl: fetchReturning({ artist: { bio: { summary } } }),
+  }).getArtistInfo("X"))!.biography;
+  for (const shared of [
+    "There are many different bands/acts/artists called Coma or COMA. 1. Coma was a Polish band.",
+    "There are two artists by the name of Kevin Shields. 1. Kevin Shields (born 1963) is Irish.",
+    "There are at least three bands featuring the same name: 1. A technical death metal band",
+    "There is more than one known artist who once went under the name Pilgrim: 1. Pilgrim is a Doom metal band",
+    "1) A band from Sweden 2) A rapper from Texas",
+  ]) assert.equal(await biographyOf(shared), "", shared);
+  for (const own of [
+    "Mourning Beloveth is an Irish death/doom metal band from Athy, Kildare. It was formed in 1992 by Darren Moore.",
+    "Riverside was a Polish progressive rock band from Warsaw, formed in 2001.",
+    "A trio whose three albums appeared between 2001 and 2010.",
+  ]) assert.equal(await biographyOf(own), own);
+});

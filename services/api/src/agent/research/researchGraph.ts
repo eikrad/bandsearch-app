@@ -202,7 +202,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     model: deps.model,
     artistCache: deps.cache?.artists,
     onSearchAgain: () => deps.onProgress?.({ stage: "searchingAgain" }),
-    onExtracted: (candidates) => lastFm?.prefetchListeners(candidates.map((c) => c.name)),
+    onExtracted: (candidates) => lastFm?.prefetchInfo(candidates.map((c) => c.name)),
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
@@ -257,7 +257,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       ]);
       const candidates = mergeExtractedCandidates([...fromWeb, ...fromLastFm]);
       log("info", "research_candidates_extracted", { count: candidates.length, fromWeb: fromWeb.length, fromLastFm: fromLastFm.length });
-      lastFm?.prefetchListeners(candidates.map((c) => c.name));
+      lastFm?.prefetchInfo(candidates.map((c) => c.name));
       deps.onProgress?.({ stage: "checking", found: candidates.length });
       return { extractedCandidates: candidates };
     }).catch((error: unknown) => {
