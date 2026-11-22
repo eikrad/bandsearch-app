@@ -45,12 +45,11 @@ function normalizeRankPayload(parsed: unknown): { assistantReply: string; recomm
 }
 
 /**
- * True if `why` cites at least one evidence or MB URL (substring or same host).
+ * True if `why` cites at least one evidence URL (substring or same host).
  */
-export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[], mbUrls: string[] = []): boolean {
-  const all = [...evidenceUrls, ...mbUrls].filter(Boolean);
+export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[]): boolean {
   const w = why.toLowerCase();
-  for (const u of all) {
+  for (const u of evidenceUrls) {
     if (!u) continue;
     if (w.includes(String(u).toLowerCase())) return true;
     try {
@@ -92,12 +91,13 @@ export function attachEvidenceCitationsToRecommendations(
     if (!artist || !why) continue;
 
     const cand = findCandidateForArtist(artist, candidates);
-    const evidenceUrls = cand?.evidenceUrls ?? [];
-    const mbUrls = cand?.mbUrls ?? [];
+    // A candidate found in a snippet without a URL is still attributable to its MusicBrainz record.
+    const recordUrl = cand?.mbid ? `https://musicbrainz.org/artist/${cand.mbid}` : undefined;
+    const evidenceUrls = cand?.evidenceUrls.length ? cand.evidenceUrls : recordUrl ? [recordUrl] : [];
 
     let nextWhy = why;
-    if (!whyContainsEvidenceCitation(nextWhy, evidenceUrls, mbUrls)) {
-      const fallback = evidenceUrls[0] ?? mbUrls[0];
+    if (!whyContainsEvidenceCitation(nextWhy, evidenceUrls)) {
+      const fallback = evidenceUrls[0];
       if (!fallback) continue;
       nextWhy = `${why} (see ${fallback})`;
     }
@@ -132,7 +132,6 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[], obscuri
       `snippets: ${c.evidenceSnippets.join(" / ")}`,
     ];
     if (c.mbTags?.length) bits.push(`mb_tags: ${c.mbTags.join(", ")}`);
-    if (c.mbGenres?.length) bits.push(`mb_genres: ${c.mbGenres.join(", ")}`);
     if (c.lifeSpan?.begin) bits.push(`active_from: ${c.lifeSpan.begin}, ended: ${c.lifeSpan.ended}`);
     if (c.listenerCount != null) bits.push(`lastfm_listeners: ${c.listenerCount.toLocaleString("en-US")}`);
     if (fits) bits.push(`target_range_fit: ${fits[i]!.fit}`);

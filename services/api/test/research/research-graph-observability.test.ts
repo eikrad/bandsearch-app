@@ -15,8 +15,7 @@ const BASE_DEPS = {
 };
 
 const STUB_MB = {
-  async searchArtists() { return []; },
-  async lookupArtist() { throw new Error("unexpected lookup"); },
+  async findArtistsByName() { return []; },
 };
 
 const STUB_RUN_QUERIES = async () => ({ hits: [], calls: 0 });

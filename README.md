@@ -9,7 +9,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 ## Features
 
 - **Niche artist discovery** — an LLM plans targeted Brave searches (FFO/Bandcamp-style) to find obscure artists that match your taste
-- **MusicBrainz verified** — every suggestion is checked against real artist records (mbid, genres, tags, URL relations)
+- **MusicBrainz verified** — every suggestion is checked against real artist records (mbid, name, tags, life span)
 - **Preference memory** — save bands without a rating, rate them when ready, and add categories or notes. Actions on earlier recommendation cards keep the selected artist's identity; later recommendations preserve your annotations. Future recommendations adapt to your saved preferences.
 - **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
 - **Native desktop app** — Tauri shell for Linux, macOS, and Windows; API keys stored in the OS config directory

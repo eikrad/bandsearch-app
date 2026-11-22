@@ -60,11 +60,11 @@ test("the research deadline aborts a stalled ranker and settles the run within t
   }
 });
 
-test("verification keeps completed candidates, cancels a stalled lookup and leaves time for ranking", async (t) => {
+test("verification keeps completed candidates, cancels a stalled batch and leaves time for ranking", async (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
   const stalled = deferred();
   const requests: string[] = [];
-  let lookupSignal: AbortSignal | null | undefined;
+  let batchSignal: AbortSignal | null | undefined;
   const { client, calls } = fakeModelClient({
     extract: () => ({ candidates: ["Fen", "Ghost Bath", "Third Band"].map((name) => ({
       name, evidenceUrls: ["https://blog.example/discovery"], evidenceSnippets: [], sourceQueries: [],
@@ -77,15 +77,13 @@ test("verification keeps completed candidates, cancels a stalled lookup and leav
     if (address.includes("api.search.brave.com")) {
       return Response.json({ web: { results: [{ title: "Discoveries", url: "https://blog.example/discovery", description: "Fen and more" }] } });
     }
-    if (address.includes("query=")) {
-      return Response.json({ artists: [{ id: address.includes("Fen") ? "fen" : "ghost", name: "Fen", score: 100 }] });
-    }
-    if (address.includes("/artist/ghost")) {
-      lookupSignal = init?.signal;
+    if (address.includes("alias")) {
+      // The second batch: the names the first one missed.
+      batchSignal = init?.signal;
       stalled.resolve();
       return new Promise(() => {});
     }
-    if (address.includes("/artist/fen")) return Response.json({ id: "fen", name: "Fen" });
+    if (address.includes("musicbrainz.org")) return Response.json({ artists: [{ id: "fen", name: "Fen", score: 100 }] });
     throw new Error(`Unexpected request: ${address}`);
   };
   let settled = false;
@@ -98,11 +96,10 @@ test("verification keeps completed candidates, cancels a stalled lookup and leav
     t.mock.timers.tick(48_000);
     await flushGraph();
     assert.equal(settled, true, "research stops at 48 seconds, preserving the 12-second ranking reserve");
-    assert.equal(lookupSignal?.aborted, true);
+    assert.equal(batchSignal?.aborted, true);
     const value = await result;
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1);
     assert.equal(value.recommendations.length, 1);
-    assert.equal(requests.some((address) => address.includes("Third")), false, "the third candidate is never looked up");
     assert.equal(requests.some((address) => address.includes("audioscrobbler.com")), false, "Last.fm enrichment does not start");
     assert.equal(calls.filter((call) => call.system.startsWith("You evaluate")).length, 0);
     assert.match(calls.find((call) => call.system.startsWith("You recommend"))?.user ?? "", /artist: Fen/);
@@ -168,8 +165,7 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
   });
   const { fetchImpl: answers } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
-    musicbrainzSearch: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
-    musicbrainzLookup: () => ({ id: "fen", name: "Fen" }),
+    musicbrainz: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
   });
   const fetchImpl: typeof fetch = async (url, init) => {
     if (!String(url).includes("audioscrobbler.com")) return answers(url, init);
@@ -241,8 +237,7 @@ test("the research cutoff during reflection cancels its search and ranks the evi
   });
   const { fetchImpl: answers } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
-    musicbrainzSearch: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
-    musicbrainzLookup: () => ({ id: "fen", name: "Fen" }),
+    musicbrainz: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
   });
   const fetchImpl: typeof fetch = async (url, init) => {
     const address = String(url);
@@ -278,7 +273,7 @@ test("the research cutoff during reflection cancels its search and ranks the evi
   }
 });
 
-test("a verification lookup cancelled in the MusicBrainz queue never reaches the transport", async (t) => {
+test("a verification batch cancelled in the MusicBrainz queue never reaches the transport", async (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
   const searched = deferred();
   const { client } = fakeModelClient({
@@ -286,7 +281,7 @@ test("a verification lookup cancelled in the MusicBrainz queue never reaches the
   });
   const { fetchImpl: answers } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
-    musicbrainzSearch: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
+    musicbrainz: () => ({ artists: [] }),
   });
   let musicBrainzCalls = 0;
   const fetchImpl: typeof fetch = async (url, init) => {
@@ -306,11 +301,11 @@ test("a verification lookup cancelled in the MusicBrainz queue never reaches the
     t.mock.timers.tick(600);
     await flushGraph();
     assert.equal(settled, true, "the 1100 ms MusicBrainz wait cannot consume the ranking reserve");
-    assert.equal(musicBrainzCalls, 1, "only the search was sent; the lookup was queued");
+    assert.equal(musicBrainzCalls, 1, "only the first batch was sent; the second was queued");
     await result;
     t.mock.timers.tick(5000);
     await flushGraph();
-    assert.equal(musicBrainzCalls, 1, "a queued lookup must not start after the run completes");
+    assert.equal(musicBrainzCalls, 1, "a queued batch must not start after the run completes");
   } finally {
     t.mock.timers.tick(20_000);
     await outcome;
@@ -374,8 +369,7 @@ test("the Gemini adapter assembles a streamed answer before the graph returns re
   });
   const { fetchImpl } = fakeFetch({
     brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
-    musicbrainzSearch: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
-    musicbrainzLookup: () => ({ id: "fen", name: "Fen" }),
+    musicbrainz: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
   });
   const result = await invokeResearchGraph(graphDeps({
     chatModel: (settings) => rankerVia(modelFactory(settings), client),

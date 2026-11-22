@@ -32,7 +32,6 @@ test("attachEvidenceCitationsToRecommendations appends see url when why lacks ci
         sourceQueries: ["q"],
         verified: true,
         mbid: "mbid-1",
-        mbUrls: [],
       },
     ],
   );
@@ -89,8 +88,8 @@ test("buildRankUserPartsForTest omits obscurity constraint when no target", () =
 });
 
 test("formatEvidenceForPrompt deduplicates same mbid — artist block appears once", () => {
-  const a = { name: "Capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://a.example"], evidenceSnippets: ["s1"], sourceQueries: ["q1"], mbTags: ["hardcore"], mbGenres: [] };
-  const b = { name: "capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://b.example"], evidenceSnippets: ["s2"], sourceQueries: ["q2"], mbTags: ["hardcore"], mbGenres: [] };
+  const a = { name: "Capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://a.example"], evidenceSnippets: ["s1"], sourceQueries: ["q1"], mbTags: ["hardcore"] };
+  const b = { name: "capra", mbid: "mbid-capra", verified: true, evidenceUrls: ["https://b.example"], evidenceSnippets: ["s2"], sourceQueries: ["q2"], mbTags: ["hardcore"] };
   const output = formatEvidenceForPrompt([a, b]);
   const matches = output.match(/artist:/g) ?? [];
   assert.equal(matches.length, 1);
@@ -113,4 +112,12 @@ test("formatEvidenceForPrompt preserves all distinct artists", () => {
   const output = formatEvidenceForPrompt(input);
   const matches = output.match(/artist:/g) ?? [];
   assert.equal(matches.length, 3);
+});
+
+test("a verified candidate without a source URL is attributed to its MusicBrainz record", () => {
+  const recs = attachEvidenceCitationsToRecommendations(
+    [{ artist: "Capra", why: "Great riffs", sourceSignals: [] }],
+    [{ name: "Capra", mbid: "mbid-capra", verified: true, evidenceUrls: [], evidenceSnippets: ["great"], sourceQueries: [] }],
+  ) as Array<{ why: string }>;
+  assert.equal(recs[0]!.why, "Great riffs (see https://musicbrainz.org/artist/mbid-capra)");
 });
