@@ -121,3 +121,12 @@ test("a verified candidate without a source URL is attributed to its MusicBrainz
   ) as Array<{ why: string }>;
   assert.equal(recs[0]!.why, "Great riffs (see https://musicbrainz.org/artist/mbid-capra)");
 });
+
+test("the ranker sees a band's country, so a request for one can be met", () => {
+  const evidence = formatEvidenceForPrompt([
+    { name: "Anoice", country: "JP", verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] },
+    { name: "Unknown", country: null, verified: true, evidenceUrls: [], evidenceSnippets: [], sourceQueries: [] },
+  ]);
+  assert.match(evidence, /artist: Anoice[\s\S]*country: JP/);
+  assert.equal(evidence.match(/country:/g)?.length, 1);
+});

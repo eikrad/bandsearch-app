@@ -74,6 +74,7 @@ test("findArtistsByName asks for many artists in one request and maps tags, alia
             tags: [{ name: "blackgaze", count: 3 }],
             aliases: [{ name: "Fen (UK)" }],
             "life-span": { begin: "2006", ended: null },
+            country: "GB",
           },
           { id: "sunn", name: "Sunn O)))", score: 90 },
         ],
@@ -88,8 +89,8 @@ test("findArtistsByName asks for many artists in one request and maps tags, alia
   assert.equal(urls[0]!.searchParams.get("query"), 'artist:"Fen" OR artist:"Sunn O)))" OR artist:"The \\"Quoted\\" Band"');
   assert.equal(urls[0]!.searchParams.get("limit"), "100");
   assert.deepEqual(artists, [
-    { id: "fen", name: "Fen", score: 100, aliases: ["Fen (UK)"], tags: ["blackgaze"], lifeSpan: { begin: "2006", end: undefined, ended: false } },
-    { id: "sunn", name: "Sunn O)))", score: 90, aliases: [], tags: [], lifeSpan: { begin: undefined, end: undefined, ended: false } },
+    { id: "fen", name: "Fen", score: 100, aliases: ["Fen (UK)"], tags: ["blackgaze"], lifeSpan: { begin: "2006", end: undefined, ended: false }, country: "GB" },
+    { id: "sunn", name: "Sunn O)))", score: 90, aliases: [], tags: [], lifeSpan: { begin: undefined, end: undefined, ended: false }, country: null },
   ]);
 });
 

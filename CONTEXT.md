@@ -16,7 +16,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Extracted candidate** — a band name pulled from Brave search snippets by the `extract` node, with the URLs and words of the hits that name it. Not yet verified against MusicBrainz.
 
-- **Verified candidate** — an extracted candidate that MusicBrainz lists under the same name or alias (case, accents, punctuation and a leading "The" aside), enriched with its `mbid`, tags and life span. An artist whose name merely resembles the candidate does not verify it. Names are searched in batches, not one by one.
+- **Verified candidate** — an extracted candidate that MusicBrainz lists under the same name or alias (case, accents, punctuation and a leading "The" aside), enriched with its `mbid`, tags, country and life span. An artist whose name merely resembles the candidate does not verify it. Names are searched in batches, not one by one.
 
 - **Reflection subgraph** — a nested LangGraph subgraph that asks the reflector whether the verified candidates meet `RESEARCH_TARGET_VERIFIED_CANDIDATES`, then runs up to `maxRounds` additional search-extract-verify cycles while the reflector asks for more and at least 25 s of research time remain.
 

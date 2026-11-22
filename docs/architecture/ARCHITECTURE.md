@@ -175,7 +175,7 @@ flowchart TD
     START(["START"]) --> plan["plan\nLLM — builds Brave queries\nfrom user taste"]
     plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
     brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
-    extract --> verify["verify\nMusicBrainz — one batched search;\nadds mbid, tags, life span"]
+    extract --> verify["verify\nMusicBrainz — one batched search;\nadds mbid, tags, country, life span"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(assesses whether more search is needed)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
     enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
@@ -192,7 +192,7 @@ flowchart TD
 | `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, stopping once it has the 24 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
 | `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
-| `verify` | MusicBrainz | Searches all candidate names in one batched request (25 names each), then once more for those missed, aliases included; adds `mbid`, tags and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
+| `verify` | MusicBrainz | Searches all candidate names in one batched request (25 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
 | `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
@@ -258,7 +258,7 @@ empty discovery result.
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | Only with `LLM_PROVIDER=gemini`, the rollback until Gemini is removed (#237) |
 | **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (default since 2026-10-05); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
-| **MusicBrainz** | `verify`, `verify_r` | Artist verification (mbid, tags, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
+| **MusicBrainz** | `verify`, `verify_r` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 

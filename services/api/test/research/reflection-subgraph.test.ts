@@ -40,6 +40,7 @@ const mbClient: MusicBrainzVerifyClient = {
       aliases: [],
       tags: [],
       lifeSpan: { ended: false },
+      country: null,
     }));
   },
 };

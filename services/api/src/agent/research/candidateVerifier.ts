@@ -14,6 +14,8 @@ export type VerifiedCandidate = {
   canonicalName?: string;
   mbTags?: string[];
   lifeSpan?: { begin?: string; end?: string; ended: boolean };
+  /** ISO 3166-1 code of the artist's country, when MusicBrainz records one. */
+  country?: string | null;
   listenerCount?: number | null;
 };
 
@@ -135,6 +137,7 @@ export async function verifyCandidatesWithMusicBrainz(
       canonicalName: artist.name,
       mbTags: artist.tags,
       lifeSpan: artist.lifeSpan,
+      country: artist.country,
     };
   });
 }
