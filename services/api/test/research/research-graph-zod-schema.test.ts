@@ -181,6 +181,7 @@ test("all reflection subgraph channels still present in parent after StateSchema
     maxRounds: 2,
     maxReflectionSearches: 2,
     targetVerifiedCount: 8,
+    hitsPerSearch: 12,
     totalSearchBudget: 5,
   });
 

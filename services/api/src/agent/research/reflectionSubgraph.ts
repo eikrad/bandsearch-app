@@ -22,6 +22,7 @@ export type ReflectionSubgraphDeps = {
   maxRounds: number;
   maxReflectionSearches: number;
   targetVerifiedCount: number;
+  hitsPerSearch: number;
   totalSearchBudget: number;
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
   /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
@@ -95,7 +96,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       const { hits: newHits, calls } = await deps.runQueries(
         state.nextExtraQueries ?? [],
         budgetLeft,
-        8,
+        deps.hitsPerSearch,
       );
       log("info", "research_brave_call", {
         phase: "reflection",

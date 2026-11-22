@@ -190,9 +190,9 @@ flowchart TD
 | Node | Model / Service | Description |
 |------|----------------|-------------|
 | `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
-| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, stopping once it has the 24 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
+| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, 12 hits each, stopping once it has the 36 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
 | `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists. With Last.fm, the twelve bands closest to the anchors (similar-artist lists, asked for since `plan`) join as candidates |
-| `verify` | MusicBrainz | Searches all candidate names in one batched request (40 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
+| `verify` | MusicBrainz | Searches all candidate names in one batched request (50 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
 | `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
