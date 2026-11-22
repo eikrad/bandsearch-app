@@ -181,3 +181,50 @@ test("facts known from an earlier search are not asked for again; failures are",
   assert.deepEqual(second.asked, ["Missing"]);
   assert.equal(out[0]!.listenerCount, 42_000);
 });
+
+test("bands similar to several anchors come first, with the closest anchor as evidence", async () => {
+  const similarTo: Record<string, SimilarArtist[]> = {
+    Alcest: [{ name: "Fen", match: 0.5 }, { name: "Slowdive", match: 0.8 }, { name: "Olhava", match: 0.6 }],
+    Slowdive: [{ name: "fen", match: 0.4 }, { name: "Alcest", match: 0.9 }],
+  };
+  const { client } = fakeLastFm({});
+  client.getSimilarArtists = async (anchor) => similarTo[anchor] ?? [];
+  const { lastFm } = enrichmentWith(client);
+
+  const candidates = await lastFm.similarCandidates(["Alcest", "Slowdive"]);
+
+  assert.deepEqual(candidates, [
+    {
+      name: "Fen",
+      evidenceUrls: ["https://www.last.fm/music/Alcest/+similar"],
+      evidenceSnippets: ["Similar to Alcest on last.fm (match: 0.50)"],
+      sourceQueries: ["last.fm similar to Alcest"],
+    },
+    {
+      name: "Olhava",
+      evidenceUrls: ["https://www.last.fm/music/Alcest/+similar"],
+      evidenceSnippets: ["Similar to Alcest on last.fm (match: 0.60)"],
+      sourceQueries: ["last.fm similar to Alcest"],
+    },
+  ], "anchors themselves are not candidates");
+});
+
+test("similar artists that do not answer in time cost nothing but themselves", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const { client } = fakeLastFm({});
+  client.getSimilarArtists = (anchor) => (anchor === "Slow" ? new Promise(() => {}) : Promise.resolve([{ name: "Fen", match: 0.5 }]));
+  const { lastFm } = enrichmentWith(client);
+  const result = lastFm.similarCandidates(["Slow", "Alcest"]);
+  for (let i = 0; i < 10; i++) await setImmediate();
+  t.mock.timers.tick(1000);
+  assert.deepEqual((await result).map((c) => c.name), ["Fen"]);
+});
+
+test("a candidate found through Last.fm carries its similarity once", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Fen", match: 0.5 }] });
+  const { lastFm } = enrichmentWith(client);
+  const [found] = await lastFm.similarCandidates(["Alcest"]);
+  const [fen] = await lastFm.enrich([{ ...found!, verified: true }], ["Alcest"]);
+  assert.equal(fen!.evidenceUrls.length, 1);
+  assert.equal(fen!.evidenceSnippets.length, 1);
+});

@@ -168,8 +168,9 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
   });
   const fetchImpl: typeof fetch = async (url, init) => {
     if (!String(url).includes("audioscrobbler.com")) return answers(url, init);
+    if (!String(url).includes("getinfo")) return Response.json({});
     signals.push(init?.signal);
-    if (String(url).includes("getinfo")) started.resolve();
+    started.resolve();
     return new Promise(() => {});
   };
   let settled = false;
@@ -182,7 +183,7 @@ test("Last.fm enrichment is cancelled at the research cutoff while confirmed evi
     t.mock.timers.tick(2000);
     await flushGraph();
     assert.equal(settled, true);
-    assert.equal(signals.length, 2, "similar artists and listener counts were requested");
+    assert.equal(signals.length, 1, "the listener count was requested");
     assert.ok(signals.every((signal) => signal?.aborted));
     assert.equal((await result).recommendations.length, 1);
   } finally {

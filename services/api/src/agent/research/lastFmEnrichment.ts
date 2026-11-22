@@ -1,11 +1,17 @@
 import type { LastFmClient, SimilarArtist } from "../../eval/lastFmClient.js";
 import { errorMessage } from "../modelUtils.js";
+import type { ExtractedCandidate } from "./candidateExtractor.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";
 import { artistKey, type ResearchCache } from "./researchCache.js";
 import type { ResearchBudget } from "./researchBudget.js";
 
+/** Bands taken from the similar-artist lists; the web search names about 25. */
+const MAX_SIMILAR_CANDIDATES = 12;
+
 /** How long a finished research round waits for Last.fm answers still under way. */
 const LASTFM_WAIT_MS = 5000;
+/** Similar artists were asked for seconds before, while the web was searched. */
+const SIMILAR_WAIT_MS = 1000;
 
 type Lookup<T> = { promise: Promise<unknown>; value: T | undefined };
 
@@ -14,6 +20,11 @@ export type LastFmEnrichment = {
   prefetchSimilar(anchorArtists: string[]): void;
   /** Starts asking for the bands' listener counts, without waiting. */
   prefetchListeners(names: string[]): void;
+  /**
+   * Bands Last.fm's listeners file next to the anchors, closest first: a
+   * candidate source beside the web search. Waits briefly for answers under way.
+   */
+  similarCandidates(anchorArtists: string[]): Promise<ExtractedCandidate[]>;
   /** The candidates with listener counts and similar-artist evidence, as far as Last.fm answered in time. */
   enrich(candidates: VerifiedCandidate[], anchorArtists: string[]): Promise<VerifiedCandidate[]>;
 };
@@ -66,6 +77,17 @@ export function createLastFmEnrichment({
       return artists;
     }, cache?.similarArtists.get(artistKey(anchor)));
 
+  const similarUrl = (anchor: string) => `https://www.last.fm/music/${encodeURIComponent(anchor)}/+similar`;
+  const similarSnippet = (anchor: string, match: number) => `Similar to ${anchor} on last.fm (match: ${match.toFixed(2)})`;
+
+  /** Waits for the lookups, at most `ms`; what has not been answered then is left out. */
+  async function settle(pending: Array<Lookup<unknown>>, ms: number) {
+    if (budget.remaining() <= 0) return;
+    await budget.run(ms, () => Promise.all(pending.map((l) => l.promise))).catch((error: unknown) => {
+      log("warn", "research_lastfm_incomplete", { reason: errorMessage(error) });
+    });
+  }
+
   return {
     prefetchSimilar(anchorArtists) {
       for (const anchor of anchorArtists) similarTo(anchor);
@@ -75,6 +97,34 @@ export function createLastFmEnrichment({
       for (const name of names) listenersOf(name);
     },
 
+    async similarCandidates(anchorArtists) {
+      const anchors = anchorArtists.map((anchor) => ({ anchor, lookup: similarTo(anchor) }));
+      await settle(anchors.map((a) => a.lookup), SIMILAR_WAIT_MS);
+      const isAnchor = new Set(anchorArtists.map(artistKey));
+      const found = new Map<string, { name: string; total: number; best: { anchor: string; match: number } }>();
+      for (const { anchor, lookup } of anchors) {
+        for (const { name, match } of lookup.value ?? []) {
+          const key = artistKey(name);
+          if (isAnchor.has(key)) continue;
+          const known = found.get(key);
+          if (!known) found.set(key, { name, total: match, best: { anchor, match } });
+          else {
+            known.total += match;
+            if (match > known.best.match) known.best = { anchor, match };
+          }
+        }
+      }
+      return [...found.values()]
+        .sort((a, b) => b.total - a.total)
+        .slice(0, MAX_SIMILAR_CANDIDATES)
+        .map(({ name, best }) => ({
+          name,
+          evidenceUrls: [similarUrl(best.anchor)],
+          evidenceSnippets: [similarSnippet(best.anchor, best.match)],
+          sourceQueries: [`last.fm similar to ${best.anchor}`],
+        }));
+    },
+
     async enrich(candidates, anchorArtists) {
       if (candidates.length === 0) return candidates;
       const anchors = anchorArtists.map((anchor) => ({ anchor, lookup: similarTo(anchor) }));
@@ -82,11 +132,7 @@ export function createLastFmEnrichment({
       const counts = candidates.map((c) => [...new Set([c.canonicalName || c.name, c.name])].map(listenersOf));
       const pending = [...anchors.map((a) => a.lookup), ...counts.flat()];
 
-      if (budget.remaining() > 0) {
-        await budget.run(LASTFM_WAIT_MS, () => Promise.all(pending.map((l) => l.promise))).catch((error: unknown) => {
-          log("warn", "research_lastfm_incomplete", { reason: errorMessage(error) });
-        });
-      }
+      await settle(pending, LASTFM_WAIT_MS);
 
       const similarMap = new Map<string, { anchor: string; match: number }>();
       for (const { anchor, lookup } of anchors) {
@@ -106,8 +152,8 @@ export function createLastFmEnrichment({
         return {
           ...c,
           listenerCount,
-          evidenceUrls: [...c.evidenceUrls, `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`],
-          evidenceSnippets: [...c.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
+          evidenceUrls: [...new Set([...c.evidenceUrls, similarUrl(hit.anchor)])],
+          evidenceSnippets: [...new Set([...c.evidenceSnippets, similarSnippet(hit.anchor, hit.match)])],
         };
       });
 

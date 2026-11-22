@@ -80,7 +80,7 @@ export function normalizeAnchorSet(anchorArtists: string[]): Set<string> {
 }
 
 /** Names per MusicBrainz request; more would push matches off its 100-artist result page. */
-const VERIFY_BATCH_SIZE = 25;
+const VERIFY_BATCH_SIZE = 40;
 
 /**
  * Confirms extracted names against MusicBrainz in batches: one request for all
