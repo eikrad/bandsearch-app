@@ -36,7 +36,9 @@ A chat message does not always need a search: "more" or "heavier" is answered fr
 ```mermaid
 flowchart TD
     START(["START"]) --> plan["plan\nWebSearchPlanner · LLM"]
-    plan --> brave_initial["brave_initial\nBrave Search API"]
+    plan --> lastfm_first["lastfm_first\nLast.fm similar artists (optional)"]
+    lastfm_first -- "enough of the requested size" --> rank
+    lastfm_first -- "too few" --> brave_initial["brave_initial\nBrave Search API"]
     brave_initial --> extract["extract\nCandidateExtractor · LLM"]
     extract --> verify["verify\nMusicBrainz"]
     verify --> reflect_if_needed

@@ -12,6 +12,8 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Research graph** — the LangGraph state machine in `agent/research/researchGraph.ts` that orchestrates: web search planning, Brave search execution, candidate extraction, MusicBrainz verification, optional reflection, and final ranking.
 
+- **Last.fm round** — the first candidate source of a search: the bands Last.fm's listeners file next to the anchor artists. With enough verified bands of the requested size the search is answered from them; otherwise the web is searched too. Not used for Truly Obscure.
+
 - **Search plan** — the structured output of the `plan` node: a list of targeted Brave search queries derived from the user's taste (FFO/Bandcamp-style signals, anchor artists, style descriptors).
 
 - **Extracted candidate** — a band name pulled from Brave search snippets by the `extract` node, with the URLs and words of the hits that name it. Not yet verified against MusicBrainz.

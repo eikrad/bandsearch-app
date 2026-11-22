@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { whyContainsEvidenceCitation, attachEvidenceCitationsToRecommendations, formatEvidenceForPrompt, createRecommendationRanker, buildRankUserPartsForTest } from "../../src/agent/research/recommendationRanker.js";
+import type { VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
 import { assertRecord } from "../helpers/typeAssertions.js";
 
 test("whyContainsEvidenceCitation matches full url or host", () => {
@@ -129,4 +130,16 @@ test("the ranker sees a band's country, so a request for one can be met", () => 
   ]);
   assert.match(evidence, /artist: Anoice[\s\S]*country: JP/);
   assert.equal(evidence.match(/country:/g)?.length, 1);
+});
+
+test("a pick says where it was found, whatever the model claims", () => {
+  const candidate = (name: string, sourceQueries: string[]): VerifiedCandidate =>
+    ({ name, verified: true, evidenceUrls: ["https://a.example"], evidenceSnippets: [], sourceQueries });
+  const recs = attachEvidenceCitationsToRecommendations(
+    ["Similar", "Web", "Both"].map((artist) => ({ artist, why: "Good", sourceSignals: ["agent_reasoning", "web_search", "lastfm_similarity"] })),
+    [candidate("Similar", ["last.fm similar to Alcest"]), candidate("Web", ["ffo alcest"]), candidate("Both", ["last.fm similar to Alcest", "ffo alcest"])],
+  ) as Array<{ sourceSignals: string[] }>;
+  assert.deepEqual(recs.map((r) => r.sourceSignals.filter((s) => s === "web_search" || s === "lastfm_similarity")), [
+    ["lastfm_similarity"], ["web_search"], ["web_search"],
+  ]);
 });

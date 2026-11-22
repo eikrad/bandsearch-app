@@ -8,13 +8,20 @@ import { wordsAround } from "./textSnippets.js";
 
 const BIOGRAPHY_MAX_CHARS = 260;
 
-/** Bands taken from the similar-artist lists; the web search names about 25. */
-const MAX_SIMILAR_CANDIDATES = 12;
+/** Bands taken from the similar-artist lists. */
+const MAX_SIMILAR_CANDIDATES = 40;
+/** Marks where a candidate was found, beside the web searches' queries. */
+const SIMILAR_SOURCE = "last.fm similar to ";
+
+/** Whether a web search named the candidate, not only Last.fm's similar-artist lists. */
+export function foundOnTheWeb(candidate: Pick<ExtractedCandidate, "sourceQueries">): boolean {
+  return candidate.sourceQueries.some((query) => !query.startsWith(SIMILAR_SOURCE));
+}
 
 /** How long a finished research round waits for Last.fm answers still under way. */
 const LASTFM_WAIT_MS = 5000;
-/** Similar artists were asked for seconds before, while the web was searched. */
-const SIMILAR_WAIT_MS = 1000;
+/** Similar artists usually answer within a second. */
+const SIMILAR_WAIT_MS = 2500;
 
 type Lookup<T> = { promise: Promise<unknown>; value: T | undefined };
 
@@ -25,7 +32,7 @@ export type LastFmEnrichment = {
   prefetchInfo(names: string[]): void;
   /**
    * Bands Last.fm's listeners file next to the anchors, closest first: a
-   * candidate source beside the web search. Waits briefly for answers under way.
+   * candidate source of its own. Waits briefly for answers under way.
    */
   similarCandidates(anchorArtists: string[]): Promise<ExtractedCandidate[]>;
   /** The candidates with what Last.fm knows about them, as far as it answered in time. */
@@ -124,7 +131,7 @@ export function createLastFmEnrichment({
           name,
           evidenceUrls: [similarUrl(best.anchor)],
           evidenceSnippets: [similarSnippet(best.anchor, best.match)],
-          sourceQueries: [`last.fm similar to ${best.anchor}`],
+          sourceQueries: [`${SIMILAR_SOURCE}${best.anchor}`],
         }));
     },
 

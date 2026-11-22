@@ -253,17 +253,81 @@ test("invokeResearchGraph enriches candidates with Last.fm listener counts", asy
   );
 });
 
-test("bands Last.fm lists as similar are candidates next to those of the web search", async () => {
-  const { client, calls } = happyPath();
-  const { fetchImpl } = fakeFetch({
-    brave: () => twoBraveHits,
-    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-olhava", name: "Olhava" }]),
-    lastFm: (url) => (url.includes("artist.getSimilar") ? { similarartists: { artist: [{ name: "Olhava", match: "0.7" }] } } : {}),
+/** Last.fm naming `count` bands near Alcest, each with these listeners. */
+function lastFmNaming(count: number, listeners: number) {
+  const names = Array.from({ length: count }, (_, i) => `Band ${String.fromCharCode(65 + i)}`);
+  return {
+    names,
+    lastFm: (url: string) => {
+      if (url.includes("artist.getSimilar")) return { similarartists: { artist: names.map((name) => ({ name, match: "0.7" })) } };
+      return { artist: { url: "https://www.last.fm/music/x", stats: { listeners: String(listeners) }, bio: { summary: "A band." } } };
+    },
+  };
+}
+
+async function runWithLastFm(count: number, listeners: number, overrides: Partial<Parameters<typeof invokeResearchGraph>[1]> = {}) {
+  const { names, lastFm } = lastFmNaming(count, listeners);
+  const { client, calls } = fakeModelClient({
+    extract: () => extractedCandidates([{ name: "Fen" }, { name: "Band A" }]),
+    rank: () => rankedRecommendations([{ artist: "Band A", why: "See https://www.last.fm/music/x" }]),
   });
-  const result = await invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm" }), input);
-  assert.equal(result.pipelineDiagnostics.extractedCandidateCount, 3);
-  const evidence = calls.find((c) => nodeOf(c.system) === "rank")!.user;
-  assert.match(evidence, /artist: Olhava\nverified_in_musicbrainz: true\nevidence_urls: https:\/\/www\.last\.fm\/music\/Alcest/);
+  const { fetchImpl, log } = fakeFetch({
+    brave: () => twoBraveHits,
+    musicbrainz: () => musicbrainzArtists([...names, "Fen"].map((name) => ({ id: `mbid-${name}`, name }))),
+    lastFm,
+  });
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm" }),
+    { ...input, obscurityTarget: "underground", ...overrides },
+  );
+  return {
+    result,
+    searches: log.filter((c) => c.url.includes("api.search.brave.com")).length,
+    nodes: calls.map((c) => nodeOf(c.system)),
+    evidence: calls.find((c) => nodeOf(c.system) === "rank")!.user,
+  };
+}
+
+test("with enough bands of the requested size from Last.fm, the web is not searched", async () => {
+  const { result, searches, nodes, evidence } = await runWithLastFm(8, 20_000);
+  assert.equal(searches, 0);
+  assert.deepEqual(nodes, ["plan", "rank"]);
+  assert.match(evidence, /artist: Band H/);
+  assert.match(evidence, /On last\.fm: A band\./);
+  assert.equal(result.pipelineDiagnostics.verifiedCount, 8);
+  assert.equal(result.pipelineDiagnostics.searchBudgetUsed, 0);
+  const [pick] = result.recommendations as Array<{ sourceSignals: string[] }>;
+  assert.ok(pick!.sourceSignals.includes("lastfm_similarity"));
+  assert.equal(pick!.sourceSignals.includes("web_search"), false, "no web search found it");
+});
+
+test("with too few bands of the requested size, the web is searched and both sources are ranked", async () => {
+  const { result, searches, evidence } = await runWithLastFm(3, 20_000);
+  assert.ok(searches > 0);
+  assert.match(evidence, /artist: Fen/, "from the web");
+  assert.match(evidence, /artist: Band C/, "from Last.fm");
+  assert.equal(evidence.match(/artist: Band A\n/g)?.length, 1, "named by both, one candidate");
+  assert.match(evidence, /artist: Band A\n.*\nevidence_urls: [^\n]*blog\.example[^\n]*last\.fm|artist: Band A\n.*\nevidence_urls: [^\n]*last\.fm[^\n]*blog\.example/);
+  const [pick] = result.recommendations as Array<{ sourceSignals: string[] }>;
+  assert.ok(pick!.sourceSignals.includes("web_search"));
+});
+
+test("bands far from the requested size are not enough, and do not join the web search's", async () => {
+  const { searches, evidence } = await runWithLastFm(20, 3_000_000);
+  assert.ok(searches > 0);
+  assert.doesNotMatch(evidence, /artist: Band B/);
+});
+
+test("for Truly Obscure the web is searched at once", async () => {
+  const { searches, nodes } = await runWithLastFm(20, 900, { obscurityTarget: "obscure" });
+  assert.ok(searches > 0);
+  assert.deepEqual(nodes.slice(0, 2), ["plan", "extract"]);
+});
+
+test("bands the user has seen do not count as enough", async () => {
+  const seen = new Set(["band a", "band b", "band c"]);
+  const { searches } = await runWithLastFm(9, 20_000, { excludeNames: seen });
+  assert.ok(searches > 0);
 });
 
 // ------------------------------------------------------------- logging

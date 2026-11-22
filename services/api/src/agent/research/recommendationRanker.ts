@@ -7,6 +7,7 @@ import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGu
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.js";
 
+import { foundOnTheWeb } from "./lastFmEnrichment.js";
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -102,8 +103,10 @@ export function attachEvidenceCitationsToRecommendations(
       nextWhy = `${why} (see ${fallback})`;
     }
 
-    const signals = Array.isArray(row.sourceSignals) ? [...(row.sourceSignals as string[])] : [];
-    if (!signals.includes("web_search")) signals.push("web_search");
+    const modelSignals = Array.isArray(row.sourceSignals) ? [...(row.sourceSignals as string[])] : [];
+    // Where a band was found is known here; what the model claims about it is not evidence.
+    const found = cand && !foundOnTheWeb(cand) ? "lastfm_similarity" : "web_search";
+    const signals = [...modelSignals.filter((s) => s !== "web_search" && s !== "lastfm_similarity"), found];
     if (cand?.verified && !signals.includes("musicbrainz_verification")) {
       signals.push("musicbrainz_verification");
     }
@@ -147,7 +150,7 @@ const RANK_SYSTEM = [
   'Shape: {"reply":"<string>","recommendations":[{"artist":"<string>","why":"<string>","sourceSignals":["<string>",...]}]}.',
   "The reply must be 2–4 sentences: acknowledge the user's taste, tie picks to their query, ask one follow-up.",
   "Recommendations: at most 3 items. Each why MUST quote or include at least one full URL from evidence_urls for that artist (Bandcamp, blog, etc.).",
-  "sourceSignals must include agent_reasoning, web_search, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
+  "sourceSignals must include agent_reasoning, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
 ].join(" ");
 

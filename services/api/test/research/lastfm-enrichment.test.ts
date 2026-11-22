@@ -225,7 +225,7 @@ test("similar artists that do not answer in time cost nothing but themselves", a
   const { lastFm } = enrichmentWith(client);
   const result = lastFm.similarCandidates(["Slow", "Alcest"]);
   for (let i = 0; i < 10; i++) await setImmediate();
-  t.mock.timers.tick(1000);
+  t.mock.timers.tick(2500);
   assert.deepEqual((await result).map((c) => c.name), ["Fen"]);
 });
 

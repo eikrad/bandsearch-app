@@ -173,7 +173,9 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 ```mermaid
 flowchart TD
     START(["START"]) --> plan["plan\nLLM — builds Brave queries\nfrom user taste"]
-    plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
+    plan --> lastfm_first["lastfm_first\nLast.fm similar artists\n+ MusicBrainz"]
+    lastfm_first -->|"enough of the requested size"| rank
+    lastfm_first -->|"too few"| brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
     brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
     extract --> verify["verify\nMusicBrainz — one batched search;\nadds mbid, tags, country, life span"]
     verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(assesses whether more search is needed)"]
@@ -190,8 +192,9 @@ flowchart TD
 | Node | Model / Service | Description |
 |------|----------------|-------------|
 | `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
+| `lastfm_first` | Last.fm (optional), MusicBrainz | Takes the 40 bands closest to the anchors from Last.fm's similar-artist lists, verifies and enriches them. With 8 verified ones inside the target's range (12 without a target) the run goes straight to `rank` without a web search (`lastFmFirst.ts`); otherwise up to 12 in range join the web search's candidates. Skipped for Truly Obscure, which those lists hardly know |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, 12 hits each, stopping once it has the 36 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
-| `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists. With Last.fm, the twelve bands closest to the anchors (similar-artist lists, asked for since `plan`) join as candidates |
+| `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
 | `verify` | MusicBrainz | Searches all candidate names in one batched request (50 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
 | `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists), listener counts, listener tags and the start of the biography (evidence with the artist's page as source) to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |

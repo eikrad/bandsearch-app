@@ -7,13 +7,14 @@ import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
 import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { filterCandidatesByObscurity, mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { fitObscurityTarget, type ObscurityTargetFit } from "../../obscurityTargets.js";
 import { createLastFmEnrichment } from "./lastFmEnrichment.js";
+import { asksLastFmFirst, enoughFromLastFm } from "./lastFmFirst.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
-import type { ResearchCache } from "./researchCache.js";
+import { artistKey, type ResearchCache } from "./researchCache.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -81,6 +82,8 @@ export const RESEARCH_SCHEMA = new StateSchema({
   obscurityTarget: z.string().optional(),
   excludeNames: z.custom<ReadonlySet<string> | undefined>(),
   searchPlan: z.custom<SearchPlan | undefined>(),
+  /** Last.fm alone found enough bands of the requested size: no web search. */
+  enoughFromLastFm: z.boolean(),
   braveHits: z.custom<SearchHitInput[]>(),
   newHits: z.custom<SearchHitInput[]>(),
   searchCallsUsed: z.number(),
@@ -97,6 +100,9 @@ export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 
 /** A Brave request costs the same, in time and quota, however many hits it returns. */
 export const HITS_PER_SEARCH = 12;
+
+/** Bands of a Last.fm round that was not enough, beside the web search's own. */
+const MAX_KEPT_FROM_LASTFM = 12;
 
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
@@ -234,6 +240,35 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       log("warn", "research_plan_fallback", { reason: errorMessage(error) });
       return { searchPlan: fallbackSearchPlan(state.userQuery, state.obscurityTarget) };
     }))
+    .addNode("lastfm_first", async (state) => {
+      const anchors = state.searchPlan?.anchorArtists ?? [];
+      if (!lastFm || anchors.length === 0 || !asksLastFmFirst(state.obscurityTarget)) return {};
+      const found = await lastFm.similarCandidates(anchors);
+      if (found.length === 0 || researchScope.remaining() <= 0) return {};
+      lastFm.prefetchInfo(found.map((c) => c.name));
+      deps.onProgress?.({ stage: "checking", found: found.length });
+      const verified = await verifyCandidatesWithMusicBrainz(mb, found, anchors, {
+        shouldContinue: () => researchScope.remaining() > 0,
+        cache: deps.cache?.artists,
+      });
+      const candidates = await lastFm.enrich(verified, anchors);
+      const enough = enoughFromLastFm(withoutNames(candidates, state.excludeNames), state.obscurityTarget);
+      log("info", "research_lastfm_first", {
+        found: found.length,
+        verified: candidates.filter((c) => c.verified).length,
+        fit: countTargetFit(candidates, state.obscurityTarget),
+        enough,
+      });
+      // Not enough: the bands of the right size still join those of the web search.
+      const kept = enough ? candidates : inRangeOnly(candidates, state.obscurityTarget).slice(0, MAX_KEPT_FROM_LASTFM);
+      const names = new Set(kept.map((c) => c.name));
+      if (!enough) deps.onProgress?.({ stage: "searching", anchorArtists: anchors });
+      return {
+        enoughFromLastFm: enough,
+        verifiedCandidates: kept,
+        extractedCandidates: found.filter((c) => names.has(c.name)),
+      };
+    })
     .addNode("brave_initial", async (state) => {
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];
       const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, HITS_PER_SEARCH);
@@ -251,12 +286,13 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
-      const [fromWeb, fromLastFm] = await Promise.all([
-        extract({ hits: hitsForExtract, anchorArtists: anchors }),
-        lastFm?.similarCandidates(anchors) ?? [],
-      ]);
-      const candidates = mergeExtractedCandidates([...fromWeb, ...fromLastFm]);
-      log("info", "research_candidates_extracted", { count: candidates.length, fromWeb: fromWeb.length, fromLastFm: fromLastFm.length });
+      const fromWeb = await extract({ hits: hitsForExtract, anchorArtists: anchors });
+      const candidates = mergeExtractedCandidates([...fromWeb, ...state.extractedCandidates]);
+      log("info", "research_candidates_extracted", {
+        count: candidates.length,
+        fromWeb: fromWeb.length,
+        fromLastFm: state.extractedCandidates.length,
+      });
       lastFm?.prefetchInfo(candidates.map((c) => c.name));
       deps.onProgress?.({ stage: "checking", found: candidates.length });
       return { extractedCandidates: candidates };
@@ -266,10 +302,19 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }))
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors, {
-        shouldContinue: () => researchScope.remaining() > 0,
-        cache: deps.cache?.artists,
+      // Bands of the Last.fm round are verified already; what the web adds about them is merged in.
+      const known = new Map(state.verifiedCandidates.map((c) => [artistKey(c.name), c]));
+      const fresh = await verifyCandidatesWithMusicBrainz(
+        mb,
+        state.extractedCandidates.filter((c) => !known.has(artistKey(c.name))),
+        anchors,
+        { shouldContinue: () => researchScope.remaining() > 0, cache: deps.cache?.artists },
+      );
+      const again = state.extractedCandidates.flatMap((c) => {
+        const earlier = known.get(artistKey(c.name));
+        return earlier ? [{ ...earlier, ...c, name: earlier.name }] : [];
       });
+      const verified = mergeVerifiedCandidates([...again, ...fresh]);
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
         phase: "initial",
@@ -318,7 +363,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       return { recommendations, assistantReply };
     }))
     .addEdge(START, "plan")
-    .addConditionalEdges("plan", ...untilCutoff("brave_initial"))
+    .addConditionalEdges("plan", ...untilCutoff("lastfm_first"))
+    .addConditionalEdges(
+      "lastfm_first",
+      (state) => (state.enoughFromLastFm || researchScope.remaining() <= 0 ? "rank" : "brave_initial"),
+      ["brave_initial", "rank"],
+    )
     .addConditionalEdges("brave_initial", ...untilCutoff("extract"))
     .addConditionalEdges("extract", ...untilCutoff("verify"))
     .addConditionalEdges("verify", ...untilCutoff("reflect_if_needed"))
@@ -333,6 +383,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
 function withoutNames(candidates: VerifiedCandidate[], names: ReadonlySet<string> | undefined): VerifiedCandidate[] {
   if (!names?.size) return candidates;
   return candidates.filter((c) => ![c.name, c.canonicalName ?? c.name].some((n) => names.has(n.trim().toLowerCase())));
+}
+
+/** The candidates of the requested size; all of them when there is no size to tell by. */
+function inRangeOnly(candidates: VerifiedCandidate[], target: string | undefined): VerifiedCandidate[] {
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), target);
+  return fits ? candidates.filter((_, i) => fits[i]!.fit === "inRange") : candidates;
 }
 
 /** Candidates per fit against the requested target's range, by the filter's own rule; null when there is nothing to fit. */
@@ -381,6 +437,7 @@ export async function invokeResearchGraph(
       mode: input.mode,
       obscurityTarget: input.obscurityTarget,
       excludeNames: input.excludeNames,
+      enoughFromLastFm: false,
       braveHits: [],
       newHits: [],
       searchCallsUsed: 0,
