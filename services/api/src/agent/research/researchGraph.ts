@@ -6,7 +6,7 @@ import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
-import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
+import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
 import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
 import { fitObscurityTarget, type ObscurityTargetFit } from "../../obscurityTargets.js";
 import { createLastFmEnrichment } from "./lastFmEnrichment.js";
@@ -247,8 +247,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
-      const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
-      log("info", "research_candidates_extracted", { count: candidates.length });
+      const [fromWeb, fromLastFm] = await Promise.all([
+        extract({ hits: hitsForExtract, anchorArtists: anchors }),
+        lastFm?.similarCandidates(anchors) ?? [],
+      ]);
+      const candidates = mergeExtractedCandidates([...fromWeb, ...fromLastFm]);
+      log("info", "research_candidates_extracted", { count: candidates.length, fromWeb: fromWeb.length, fromLastFm: fromLastFm.length });
       lastFm?.prefetchListeners(candidates.map((c) => c.name));
       deps.onProgress?.({ stage: "checking", found: candidates.length });
       return { extractedCandidates: candidates };

@@ -253,6 +253,19 @@ test("invokeResearchGraph enriches candidates with Last.fm listener counts", asy
   );
 });
 
+test("bands Last.fm lists as similar are candidates next to those of the web search", async () => {
+  const { client, calls } = happyPath();
+  const { fetchImpl } = fakeFetch({
+    brave: () => twoBraveHits,
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-olhava", name: "Olhava" }]),
+    lastFm: (url) => (url.includes("artist.getSimilar") ? { similarartists: { artist: [{ name: "Olhava", match: "0.7" }] } } : {}),
+  });
+  const result = await invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm" }), input);
+  assert.equal(result.pipelineDiagnostics.extractedCandidateCount, 3);
+  const evidence = calls.find((c) => nodeOf(c.system) === "rank")!.user;
+  assert.match(evidence, /artist: Olhava\nverified_in_musicbrainz: true\nevidence_urls: https:\/\/www\.last\.fm\/music\/Alcest/);
+});
+
 // ------------------------------------------------------------- logging
 
 test("invokeResearchGraph emits a log event per node", async () => {
