@@ -11,11 +11,13 @@ test("without a replay directory the research graph uses the network as usual", 
   assert.equal(lookups.replay, false);
   assert.equal(lookups.fetchImpl, undefined);
   assert.equal(lookups.musicBrainzMinIntervalMs, undefined, "the MusicBrainz client keeps its own 1 req/s gate");
+  assert.equal(lookups.braveMinIntervalMs, undefined, "and so does the Brave client");
 });
 
-test("with a replay directory, lookups are recorded and MusicBrainz is only throttled on real calls", () => {
+test("with a replay directory, lookups are recorded and MusicBrainz and Brave are only throttled on real calls", () => {
   const lookups = externalLookupsFor({ evalReplayDir: mkdtempSync(join(tmpdir(), "replay-")) });
   assert.equal(lookups.replay, true);
   assert.equal(typeof lookups.fetchImpl, "function");
   assert.equal(lookups.musicBrainzMinIntervalMs, 0, "the replaying fetch spaces real MusicBrainz calls instead");
+  assert.equal(lookups.braveMinIntervalMs, 0, "and real Brave calls");
 });

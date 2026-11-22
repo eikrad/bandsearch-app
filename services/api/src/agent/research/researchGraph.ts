@@ -25,12 +25,14 @@ export type ResearchGraphDeps = {
   totalSearchBudget: number;
   targetVerifiedCount: number;
   researchTimeoutMs: number;
-  /** Cap on search hits fed into the candidate extractor; limits output size and latency. */
+  /** Search hits the candidate extractor reads per round; searching stops once they are found. */
   maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   /** Spacing of MusicBrainz calls; 0 when the transport already spaces real calls (replay). */
   musicBrainzMinIntervalMs?: number;
+  /** Spacing of Brave calls; 0 when the transport already spaces real calls (replay). */
+  braveMinIntervalMs?: number;
   /**
    * Chat model for every Gemini-backed node. Defaults to Gemini built from
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
@@ -84,7 +86,14 @@ export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
 async function runBraveQueries(
-  config: { apiKey: string; dedupCache: BraveDedupCache; budget: ResearchBudget; fetchImpl?: typeof fetch },
+  config: {
+    apiKey: string;
+    dedupCache: BraveDedupCache;
+    budget: ResearchBudget;
+    enoughHits: number;
+    minIntervalMs?: number;
+    fetchImpl?: typeof fetch;
+  },
   queries: string[],
   budgetLeft: number,
   perQueryCount: number,
@@ -95,11 +104,12 @@ async function runBraveQueries(
     retries: 1,
     dedupCache: config.dedupCache,
     fetchImpl: config.fetchImpl,
+    minIntervalMs: config.minIntervalMs,
   });
   const hits: SearchHitInput[] = [];
   let calls = 0;
   for (const q of queries) {
-    if (calls >= budgetLeft || config.budget.remaining() <= 0) break;
+    if (calls >= budgetLeft || hits.length >= config.enoughHits || config.budget.remaining() <= 0) break;
     let res;
     calls += 1;
     try {
@@ -137,9 +147,19 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   const untilCutoff = <Next extends string>(next: Next): [() => Next | "rank", Array<Next | "rank">] =>
     [() => (researchScope.remaining() > 0 ? next : "rank"), [next, "rank"]];
 
+  // More hits would not reach the extractor: it caps them, so its candidate
+  // list stays manageable within the timeout. Searching for them only takes time.
+  const maxExtractHits = deps.maxExtractHits ?? 24;
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
-    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget: researchScope, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
+    runBraveQueries({
+      apiKey: deps.braveApiKey,
+      dedupCache: braveDedup,
+      budget: researchScope,
+      enoughHits: maxExtractHits,
+      minIntervalMs: deps.braveMinIntervalMs,
+      fetchImpl: deps.fetchImpl,
+    }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
     geminiApiKey: deps.geminiApiKey,
@@ -199,8 +219,6 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      // Cap hits so the model emits a manageable candidate list within the timeout.
-      const maxExtractHits = deps.maxExtractHits ?? 24;
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
       const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
       log("info", "research_candidates_extracted", { count: candidates.length });

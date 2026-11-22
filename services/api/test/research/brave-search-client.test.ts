@@ -2,12 +2,14 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { createBraveSearchClient as createClient } from "../../src/integrations/braveSearch.js";
+import { createRateGate } from "../../src/integrations/rateGate.js";
 
 type BraveClientOptions = Parameters<typeof createClient>[0];
 type FetchCall = { url: string; headers: Headers };
 
+/** A client without spacing, on a gate of its own, unless a test says otherwise. */
 function createBraveSearchClient(options: BraveClientOptions) {
-  return createClient(options);
+  return createClient({ minIntervalMs: 0, gate: createRateGate(), ...options });
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -115,30 +117,20 @@ test("search throws when response not ok (non-429)", async () => {
   await assert.rejects(() => client.search("x"), /brave search failed with status 500/);
 });
 
-test("search retries on 429 then succeeds", async () => {
-  let attempt = 0;
+test("search retries on 429 in its own slot of the rate gate, then succeeds", async () => {
+  const startedAt: number[] = [];
   const fetchImpl = async () => {
-    attempt += 1;
-    if (attempt === 1) {
-      return jsonResponse({ error: "rate limited" }, 429);
-    }
+    startedAt.push(Date.now());
+    if (startedAt.length === 1) return jsonResponse({ error: "rate limited" }, 429);
     return jsonResponse({ web: { results: [{ title: "ok", url: "https://ok", description: "" }] } });
   };
 
-  const sleeps: number[] = [];
-  const client = createBraveSearchClient({
-    fetchImpl,
-    apiKey: "k",
-    retries: 0,
-    minRequestSpacingMs: 0,
-    rateLimitRetryMs: 1100,
-    sleepImpl: async (ms) => { sleeps.push(ms); },
-  });
+  const client = createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0, minIntervalMs: 40 });
 
   const out = await client.search("q");
   assert.equal(out.results.length, 1);
-  assert.equal(attempt, 2);
-  assert.ok(sleeps.includes(1100), "should wait the rate-limit interval before retrying");
+  assert.equal(startedAt.length, 2);
+  assert.ok(startedAt[1]! - startedAt[0]! >= 35, `retry gap too small: ${startedAt[1]! - startedAt[0]!}ms`);
 });
 
 test("search returns empty results when 429 persists after retries", async () => {
@@ -148,15 +140,7 @@ test("search returns empty results when 429 persists after retries", async () =>
     return jsonResponse({ error: "rate limited" }, 429);
   };
 
-  const client = createBraveSearchClient({
-    fetchImpl,
-    apiKey: "k",
-    retries: 0,
-    minRequestSpacingMs: 0,
-    rateLimitRetryMs: 1,
-    rateLimitMaxRetries: 2,
-    sleepImpl: async () => {},
-  });
+  const client = createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0 });
 
   const out = await client.search("q");
   assert.deepEqual(out.results, []);
@@ -164,27 +148,20 @@ test("search returns empty results when 429 persists after retries", async () =>
   assert.equal(attempt, 3, "initial attempt plus 2 retries");
 });
 
-test("search throttles sequential requests to the minimum spacing", async () => {
-  const fetchImpl = async () => jsonResponse({ web: { results: [] } });
+test("clients of one process share the rate limit: two rounds, or two users, do not collide", async () => {
+  const startedAt: number[] = [];
+  const fetchImpl = async () => {
+    startedAt.push(Date.now());
+    return jsonResponse({ web: { results: [] } });
+  };
+  const gate = createRateGate();
+  const clients = ["a", "b", "c"].map(() => createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0, minIntervalMs: 40, gate }));
 
-  const sleeps: number[] = [];
-  let fakeNow = 1_000_000;
-  const client = createBraveSearchClient({
-    fetchImpl,
-    apiKey: "k",
-    retries: 0,
-    minRequestSpacingMs: 1100,
-    sleepImpl: async (ms) => { sleeps.push(ms); fakeNow += ms; },
-    nowImpl: () => fakeNow,
-  });
+  await Promise.all(clients.map((client, i) => client.search(`query ${i}`)));
 
-  await client.search("first");
-  await client.search("second");
-
-  assert.ok(
-    sleeps.some((ms) => ms >= 1000),
-    `second back-to-back request should be delayed ~1100ms, got sleeps=${JSON.stringify(sleeps)}`,
-  );
+  assert.equal(startedAt.length, 3);
+  assert.ok(startedAt[1]! - startedAt[0]! >= 35);
+  assert.ok(startedAt[2]! - startedAt[1]! >= 35);
 });
 
 async function flushMicrotasks() {
@@ -203,8 +180,7 @@ test("cancellation interrupts the wait after a 429 and sends no retry", async (t
     fetchImpl,
     apiKey: "k",
     retries: 0,
-    minRequestSpacingMs: 0,
-    rateLimitRetryMs: 60_000,
+    minIntervalMs: 60_000,
   });
 
   let settled = false;
@@ -233,7 +209,7 @@ test("cancellation interrupts the spacing wait before the next request", async (
     requests += 1;
     return jsonResponse({ web: { results: [] } });
   };
-  const client = createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0, minRequestSpacingMs: 60_000 });
+  const client = createBraveSearchClient({ fetchImpl, apiKey: "k", retries: 0, minIntervalMs: 60_000 });
 
   await client.search("first");
   let settled = false;
