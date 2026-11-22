@@ -1,4 +1,5 @@
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "./index.js";
+import { keepApiAwake } from "./keepApiAwake.js";
 import { createHashRouter } from "./createHashRouter.js";
 import { createSavedArtistsShell } from "./createSavedArtistsShell.js";
 import { createDesktopSettingsController } from "./desktopSettings.js";
@@ -251,6 +252,7 @@ export async function startDesktopBrowserApp({
   });
   await reactApp.mount();
   subscribeViewportChanges(reactApp, () => void reactApp.mount());
+  keepApiAwake({ apiBaseUrl: resolvedBaseUrl, fetchImpl: resolvedFetch, document: w?.document });
 
   // The UI can paint now; flushes an update that was reported during bootstrap.
   updateNotifications.attach((viewProps) => reactApp.showUpdateBanner(viewProps));

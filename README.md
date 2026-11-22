@@ -331,7 +331,7 @@ Recommended production setup is `PREFERENCE_STORE=turso`, so the API stays state
 2. Configure the secrets Render does not store in `render.yaml` — via the Render dashboard, not GitHub: `SCW_SECRET_KEY` (a key of its own, not the one for local evals), `BRAVE_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `JWT_SECRET`. `render.yaml` sets `AUTH_MODE=enforced`, so run the migration (step 1) before deploying and then create your first invite (see [Authentication](#authentication)). These are prompted for once when the Blueprint is first created and are not synced from `render.yaml` on later updates.
 3. In the desktop app's Settings screen, point the API endpoint at the deployed URL instead of the local sidecar (leave it unset to keep using localhost).
 
-**Free-tier limitations:** Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds, and it carries no SLA or uptime guarantee. For an always-on deployment, upgrade the service to the Starter plan ($7/month) in the Render dashboard.
+**Free-tier limitations:** Render's free tier spins down after 15 minutes of inactivity, so the first request after a cold start can take 30-60 seconds, and it carries no SLA or uptime guarantee. The desktop app softens this: it wakes a hosted API when the user comes back and keeps it awake while the app is in use. For an always-on deployment, upgrade the service to the Starter plan ($7/month) in the Render dashboard.
 
 ---
 
