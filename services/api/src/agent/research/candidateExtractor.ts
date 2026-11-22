@@ -6,7 +6,8 @@ import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
-export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 12000;
+/** The extractor answers with numbers, so reading more hits costs it little time. */
+export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 18000;
 
 export type SearchHitInput = {
   sourceQuery: string;
@@ -22,7 +23,7 @@ export type ExtractedCandidate = {
   sourceQueries: string[];
 };
 
-export const CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES = 25;
+export const CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES = 32;
 
 export function buildExtractorSystemPrompt(maxCandidates: number): string {
   return [

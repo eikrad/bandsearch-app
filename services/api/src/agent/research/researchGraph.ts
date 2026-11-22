@@ -95,6 +95,9 @@ export const RESEARCH_SCHEMA = new StateSchema({
 
 export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 
+/** A Brave request costs the same, in time and quota, however many hits it returns. */
+export const HITS_PER_SEARCH = 12;
+
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
 async function runBraveQueries(
@@ -171,7 +174,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
 
   // More hits would not reach the extractor: it caps them, so its candidate
   // list stays manageable within the timeout. Searching for them only takes time.
-  const maxExtractHits = deps.maxExtractHits ?? 24;
+  const maxExtractHits = deps.maxExtractHits ?? 36;
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
     runBraveQueries({
@@ -191,6 +194,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     maxRounds: 2,
     maxReflectionSearches: deps.maxReflectionSearches,
     targetVerifiedCount: deps.targetVerifiedCount,
+    hitsPerSearch: HITS_PER_SEARCH,
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
     modelClient: deps.modelClient,
@@ -232,7 +236,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }))
     .addNode("brave_initial", async (state) => {
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];
-      const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, 8);
+      const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, HITS_PER_SEARCH);
       log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
       return { braveHits: hits, searchCallsUsed: calls };
     })

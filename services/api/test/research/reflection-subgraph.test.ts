@@ -89,6 +89,7 @@ async function runSubgraph({
     maxRounds,
     maxReflectionSearches: 2,
     targetVerifiedCount: 4,
+    hitsPerSearch: 12,
     totalSearchBudget: 10,
     onLog: (level, event) => logs.push({ level, event }),
   });
@@ -222,6 +223,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
     maxRounds: 5,
     maxReflectionSearches: 2,
     targetVerifiedCount: 4,
+    hitsPerSearch: 12,
     totalSearchBudget: 10,
     onLog: (level, event) => logs.push({ level, event }),
   });

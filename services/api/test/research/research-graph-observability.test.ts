@@ -61,6 +61,7 @@ test("all reflection subgraph channels are present in the parent graph", async (
     maxRounds: 2,
     maxReflectionSearches: 2,
     targetVerifiedCount: 8,
+    hitsPerSearch: 12,
     totalSearchBudget: 5,
   });
 
