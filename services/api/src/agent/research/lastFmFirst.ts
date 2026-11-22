@@ -8,12 +8,33 @@ export const ENOUGH_IN_RANGE = 8;
 export const ENOUGH_VERIFIED = 12;
 
 /**
- * Whether to ask Last.fm before the web at all. The smallest acts are too small
- * for its similar-artist lists: of 40 bands, 0–7 had at most 5,000 listeners
+ * Words for what makes two bands different that listeners call similar: who
+ * sings and how, what about, on which instrument, on which label. A request for
+ * one of these is for the web, which writes about it. English, German and
+ * Danish. "Instrumental" is not among them: it is a genre tag.
+ *
+ * A list, not the model's judgement: asked to name such demands, the planner
+ * missed "female vocals" or reported every adjective (three prompts, 2026-11-22).
+ */
+const DEMANDS = new RegExp(
+  "(?<!\\p{L})(" + [
+    "vocals?", "vocalists?", "singers?", "singing", "sung", "screams?", "screamed", "growls?", "growled", "lyrics?", "choirs?", "label",
+    "gesang", "sängerin(nen)?", "sänger", "gesungen", "stimmen?", "songtexte?", "texten?",
+    "vokal", "sangerinder?", "sanger", "sunget", "sangtekster", "tekster",
+    "violins?", "cellos?", "violas?", "saxophones?", "trumpets?", "flutes?", "accordions?", "hurdy.gurdy", "banjos?", "harps?",
+    "geigen?", "saxophon", "trompeten?", "flöten?", "saxofon", "trompet", "fløjte",
+  ].join("|") + ")(?!\\p{L})",
+  "iu",
+);
+
+/**
+ * Whether to ask Last.fm before the web at all. Its similar-artist lists show
+ * what bands share, not a demand like "with female vocals"; and the smallest
+ * acts are too small for them: of 40 bands, 0–7 had at most 5,000 listeners
  * (golden set, 2026-11-22; Underground 8–31, Cult Following 31–38).
  */
-export function asksLastFmFirst(obscurityTarget: string | undefined): boolean {
-  return validateObscurityTarget(obscurityTarget) !== "obscure";
+export function asksLastFmFirst(query: string, obscurityTarget: string | undefined): boolean {
+  return validateObscurityTarget(obscurityTarget) !== "obscure" && !DEMANDS.test(query);
 }
 
 /**

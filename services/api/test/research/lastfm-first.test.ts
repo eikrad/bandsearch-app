@@ -28,6 +28,20 @@ test("without a target, verified bands are enough", () => {
 });
 
 test("Last.fm is not asked first for the smallest acts, which its lists hardly know", () => {
-  assert.equal(asksLastFmFirst("obscure"), false);
-  for (const target of ["cult", "underground", undefined]) assert.equal(asksLastFmFirst(target), true);
+  assert.equal(asksLastFmFirst("blackgaze", "obscure"), false);
+  for (const target of ["cult", "underground", undefined]) assert.equal(asksLastFmFirst("blackgaze", target), true);
+});
+
+test("a demand that similarity cannot show goes to the web: vocals, lyrics, instruments, labels", () => {
+  for (const query of [
+    "melancholic synthwave with female vocals", "Dreamy blackgaze, clean VOCALS.", "folk metal sung in Finnish", "doom with a violin or cello",
+    "bands on the label Prophecy Productions", "post-punk with German lyrics", "synthpop mit Sängerin", "doom metal med kvindelig vokal",
+  ]) assert.equal(asksLastFmFirst(query, "cult"), false, query);
+});
+
+test("genre, mood, country, era and members are no such demands", () => {
+  for (const query of [
+    "instrumental post-rock bands from Japan", "pagan folk metal with authentic traditional instruments", "bands like Slowdive but more electronic",
+    "dreamy shoegaze bands that only formed after 2015", "other bands that members of Alcest play in", "harsh and harping noise rock", "labelled as doom",
+  ]) assert.equal(asksLastFmFirst(query, "cult"), true, query);
 });
