@@ -111,7 +111,19 @@ place and is now under Deferred; #180's premise changed (see item 3).
        Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups
      - [x] Step 7: Last.fm first. Its similar-artist lists answer Cult Following
        and Underground searches, with biographies as evidence; the web is
-       searched when they hold too few bands of the requested size ✓ Done
+       searched when they hold too few bands of the requested size, for Truly
+       Obscure, and for demands similarity cannot show (vocals, lyrics) ✓ Done
+     - **Measured 2026-11-22** (golden set, replay, 3 runs each, paired 95%
+       intervals against the baseline `7a6b594`): steps 1–7 pass rate 0.69 →
+       0.85 *, judge relevance +0.070 *, discovery +0.029 *, judge quality
+       +0.026 * (* excludes zero); constraints 0.74 → 0.94, obscurity fit
+       −0.008, evidence +0.011 (not distinguishable from zero). Median latency
+       33.1 s → 8.9 s replayed; live, the four queries of #336 98.7 s → 10.8 s on
+       average (5–6 s from Last.fm, 16 s when the web is searched). Brave requests about 2
+       per query instead of 6–10. Steps 1–4 alone cost quality (obscurity fit
+       −0.036 *, constraints −0.26 *); the country and the Last.fm candidates of
+       step 7 won it back, so do not ship 2–4 without 7. The pass rate rewards
+       bands that carry tags, which Last.fm's neighbours do more often
      - [ ] Step 8: the Render service stays awake
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
