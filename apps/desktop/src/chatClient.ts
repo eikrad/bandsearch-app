@@ -7,9 +7,11 @@ import type {
   RecommendationResponse,
   SavedBand,
 } from "./domain.js";
+import { readAnswerEvents } from "./answerEvents.js";
 import {
   MESSAGE_CONTENT_MAX_LEN,
   MESSAGES_MAX_COUNT,
+  type AnswerEvent,
   type RecommendationFeedbackSubmission,
 } from "../../../shared/schemas/src/contracts.js";
 
@@ -102,6 +104,8 @@ export type RecommendationRequest = {
   /** The conversation this message continues, so the API can answer from what it already found. */
   conversationId?: string;
   signal?: AbortSignal;
+  /** Follows the answer while it is made; without it the answer comes whole. */
+  onEvent?: (event: AnswerEvent) => void;
 };
 
 function recommendationBody({
@@ -112,7 +116,7 @@ function recommendationBody({
   selectedArtistIds = [],
   obscurityTarget,
   conversationId,
-}: Omit<RecommendationRequest, "signal">): Record<string, unknown> {
+}: Omit<RecommendationRequest, "signal" | "onEvent">): Record<string, unknown> {
   const body: Record<string, unknown> = { query, mode };
   if (priorityContext) body.priorityContext = priorityContext;
   if (messages.length > 0) {
@@ -137,15 +141,25 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
   }
 
   return {
-    async fetchRecommendations({ signal, ...request }: RecommendationRequest) {
-      const body = recommendationBody(request);
+    async fetchRecommendations({ signal, onEvent, ...request }: RecommendationRequest) {
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
-        headers: jsonHeaders(),
-        body: JSON.stringify(body),
+        headers: { ...jsonHeaders(), ...(onEvent ? { accept: "text/event-stream" } : {}) },
+        body: JSON.stringify(recommendationBody(request)),
         signal,
       });
       await ensureOk(response);
+      // The API answers in plain JSON when it is done before there is anything to follow.
+      if (onEvent && response.body && response.headers.get("content-type")?.includes("text/event-stream")) {
+        for await (const event of readAnswerEvents(response.body)) {
+          if (event.type === "done") return event.response as RecommendationResponse;
+          if (event.type === "error") {
+            throw new BandsearchHttpError(event.error.message, { status: event.status, code: event.error.code });
+          }
+          onEvent(event);
+        }
+        throw new BandsearchHttpError("the answer broke off", { code: "recommendation_unavailable" });
+      }
       return response.json() as Promise<RecommendationResponse>;
     },
 

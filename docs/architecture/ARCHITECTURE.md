@@ -98,7 +98,7 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered), `POST /recommendations/:eventId/feedback` (same auth and limit) |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; streams its answer to clients that accept `text/event-stream`; every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered), `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
@@ -131,6 +131,18 @@ Deleting an account clears them. After a restart a follow-up simply searches.
 A request without a `conversationId` (golden runs) always searches.
 
 An `answer` carries no `meta.eventId`: it is no batch to rate or score.
+
+### Streamed answers
+
+With `Accept: text/event-stream`, `POST /recommendations` sends `AnswerEvent`s
+(shared contracts): `progress` per stage, `reply` with the text so far, then
+`done` with the same response the JSON endpoint returns, or `error`. Only `done`
+is final; a reply shown before it may still be discarded. A request that fails
+or finishes before its first event gets plain JSON with its status. The ranker
+still answers in JSON; its reply is the first field and is read out of the
+unfinished text (`replySoFar`), so prompts and eval are the same either way.
+
+A client that closes the request cancels the work behind it, streaming or not.
 
 ---
 

@@ -20,7 +20,7 @@ const SYSTEM = [
 export async function writeAnswer(
   model: ChatModelClient,
   input: { query: string; messages: ChatMessage[]; shown: VerifiedCandidate[][] },
-  { signal, timeoutMs }: { signal?: AbortSignal; timeoutMs: number },
+  { signal, timeoutMs, onReply }: { signal?: AbortSignal; timeoutMs: number; onReply?: (text: string) => void },
 ): Promise<string> {
   const bands = escapeEnvelopeChars(formatEvidenceForPrompt(input.shown.flat())).slice(0, EVIDENCE_MAX_CHARS);
   // The cards on screen, in their order: what "the second one" means.
@@ -31,7 +31,15 @@ export async function writeAnswer(
     { role: "user", content: [wrapBlock("BANDS", bands), wrapBlock("LATEST_PICKS", latest), wrapUserContent(input.query)].filter(Boolean).join("\n\n") },
   ];
 
-  const response = await invokeModel(model, prompt, { signal, timeoutMs, timeoutMessage: "answer timeout" });
+  const response = await invokeModel(model, prompt, {
+    signal,
+    timeoutMs,
+    timeoutMessage: "answer timeout",
+    onText: onReply && ((soFar) => {
+      const text = withoutThinking(soFar);
+      if (text) onReply(text);
+    }),
+  });
   const text = withoutThinking(typeof response.content === "string" ? response.content : "");
   if (!text) throw new Error("the model gave no answer");
   return text;

@@ -1,7 +1,7 @@
 import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
 import { createResearchCache } from "./agent/research/researchCache.js";
 import { conversationKey, createConversationMemory } from "./agent/conversation/conversationMemory.js";
-import { createConversationService } from "./agent/conversation/conversationService.js";
+import { createConversationService, type TurnListener } from "./agent/conversation/conversationService.js";
 import type { RecommendationError } from "./recommendations.js";
 import {
   createRecommendationError,
@@ -189,7 +189,7 @@ export function createRecommendationPipeline({
     getReadinessSnapshot,
     /** Drops what conversations of a deleted account left in memory. */
     forgetUser: (userId: string) => memory.forgetUser(userId),
-    async recommend(request: Record<string, unknown> = {}) {
+    async recommend(request: Record<string, unknown> = {}, listener: TurnListener = {}) {
       if (!activeService) {
         throw activeError
           || createRecommendationError("recommendation_unavailable", "recommendation pipeline unavailable");
@@ -213,7 +213,7 @@ export function createRecommendationPipeline({
           typeof request.userId === "string" ? request.userId : undefined,
           typeof request.conversationId === "string" ? request.conversationId : undefined,
         ),
-      });
+      }, listener);
 
       return {
         recommendations,

@@ -1,4 +1,4 @@
-import { formatRatingForPrompt, type RecommendationFeedbackSubmission } from "../../../shared/schemas/src/contracts.js";
+import { formatRatingForPrompt, type AnswerProgress, type RecommendationFeedbackSubmission } from "../../../shared/schemas/src/contracts.js";
 import type { SavedBand } from "./domain.js";
 import type { ChatMessage } from "./chatClient.js";
 import {
@@ -13,7 +13,12 @@ type DesktopAppState = {
   savedBands: SavedBand[];
   selectedArtistIds: string[];
   currentSessionId: string | null;
+  /** The answer being made; null when there is none. */
+  pending: PendingAnswer | null;
 };
+
+/** What is known of an answer before it is complete. */
+export type PendingAnswer = { progress: AnswerProgress | null; reply: string };
 
 function buildPriorityContext(savedBands: SavedBand[], selectedArtistIds: string[]): string {
   if (!selectedArtistIds.length) return "";
@@ -47,7 +52,14 @@ export function bootstrapDesktopApp({
     savedBands: [],
     selectedArtistIds: [],
     currentSessionId: null,
+    pending: null,
   };
+  const listeners = new Set<() => void>();
+  function setPending(pending: PendingAnswer | null) {
+    state = { ...state, pending };
+    for (const listener of listeners) listener();
+  }
+
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
   // Names the conversation to the API from its first message on, before any
@@ -87,6 +99,11 @@ export function bootstrapDesktopApp({
   return {
     ...savedBandActions,
     getState() { return state; },
+    /** Calls `listener` when an answer makes progress. Returns an unsubscribe. */
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
     setPendingStyleRef(ids: string[]) {
       pendingSelectedArtistIds = Array.isArray(ids) ? [...ids] : [];
     },
@@ -144,7 +161,7 @@ export function bootstrapDesktopApp({
         }
         return [];
       });
-      state = { ...state, messages: [...earlier, { role: "user", content: query }] };
+      state = { ...state, messages: [...earlier, { role: "user", content: query }], pending: { progress: null, reply: "" } };
       const controller = new AbortController();
       currentAbortController = controller;
       conversationId ??= newConversationId();
@@ -172,6 +189,11 @@ export function bootstrapDesktopApp({
           obscurityTarget,
           conversationId: asked,
           signal: controller.signal,
+          onEvent: (event) => {
+            // Each stage starts its own reply: one that led nowhere must not stay on screen.
+            if (event.type === "progress") setPending({ progress: event.progress, reply: "" });
+            if (event.type === "reply") setPending({ progress: state.pending?.progress ?? null, reply: event.text });
+          },
         });
         state = applyAssistantMessage(state, result);
         const { content } = state.messages[state.messages.length - 1]!;
@@ -186,6 +208,7 @@ export function bootstrapDesktopApp({
         }
         throw error;
       } finally {
+        state = { ...state, pending: null };
         currentAbortController = null;
       }
     },

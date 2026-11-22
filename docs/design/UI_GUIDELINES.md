@@ -241,6 +241,19 @@ is not rendered at all, and the view is unchanged.
 
 ### Chat and request states
 - Show a clear loading state in the assistant flow while fetching recommendations.
+- **Progress line** (next to the spinner) says what is happening, in these words:
+  "Sending your message…" until the API answers, then "Thinking…", "Looking for
+  bands near A, B and C…" (at most three reference artists; "Searching the web…"
+  without any), "Found N bands, checking them…", "Too few good matches yet,
+  searching once more…", "Choosing the best matches…". The "server may be waking
+  up" hint appears after 8 s only while nothing was heard from the API.
+- **The reply is shown while it is written**, as an ordinary assistant message;
+  its cards appear together when the answer is complete. A reply that a later
+  stage discards, or that fails, disappears.
+- The submit button reads "Answering…" meanwhile: not every message is a search.
+- The thread follows the newest message while the user is within 120 px of its
+  end; scrolled further up, it stays where they are reading. Their own message
+  always comes into view.
 - Show inline recoverable errors with retry.
 - Keep state feedback local to the interaction context (not global alerts by default).
 

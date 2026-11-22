@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { invokeModel, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../src/agent/modelUtils.js";
+import { invokeModel, parseModelJsonResponse, replySoFar, withTimeout, type ChatModelClient } from "../src/agent/modelUtils.js";
 
 // ── parseModelJsonResponse ─────────────────────────────────────────────────
 
@@ -85,4 +85,77 @@ test("parseModelJsonResponse ignores reasoning whose opening <think> tag is miss
   // A known Scaleway bug can drop the opening tag; the answer follows the last </think>.
   const raw = 'weighing {"draft": true} first</think>{"final": 2}';
   assert.deepEqual(parseModelJsonResponse(raw), { final: 2 });
+});
+
+// ─── answers shown while they are written (#336) ─────────────────────────────
+
+/** A client that streams these pieces, and answers them whole when not asked to stream. */
+function streamingClient(pieces: string[]): ChatModelClient {
+  return {
+    async invoke() {
+      return { content: pieces.join("") };
+    },
+    async stream() {
+      return (async function* () {
+        for (const content of pieces) yield { content };
+      })();
+    },
+  };
+}
+
+const call = { timeoutMs: 1000, timeoutMessage: "model timeout" };
+
+test("invokeModel tells the answer so far while it arrives and returns all of it", async () => {
+  const seen: string[] = [];
+  const result = await invokeModel(streamingClient(["Try ", "", "Fen."]), [], { ...call, onText: (t) => seen.push(t) });
+  assert.deepEqual(seen, ["Try ", "Try Fen."]);
+  assert.equal(result.content, "Try Fen.");
+});
+
+test("invokeModel without a listener, or with a client that cannot stream, asks for the answer whole", async () => {
+  const seen: string[] = [];
+  assert.equal((await invokeModel(streamingClient(["Try ", "Fen."]), [], call)).content, "Try Fen.");
+  const { invoke } = streamingClient(["Try ", "Fen."]);
+  assert.equal((await invokeModel({ invoke }, [], { ...call, onText: (t) => seen.push(t) })).content, "Try Fen.");
+  assert.deepEqual(seen, []);
+});
+
+test("a stream that stalls times out, is cancelled and says nothing more", async () => {
+  const seen: string[] = [];
+  let signal: AbortSignal | undefined;
+  let release!: () => void;
+  const client: ChatModelClient = {
+    invoke: async () => ({ content: "" }),
+    stream: async (_prompt, options) => {
+      signal = options?.signal;
+      return (async function* () {
+        yield { content: "Try " };
+        await new Promise<void>((resolve) => { release = resolve; });
+        yield { content: "Fen." };
+      })();
+    },
+  };
+  await assert.rejects(invokeModel(client, [], { timeoutMs: 20, timeoutMessage: "model timeout", onText: (t) => seen.push(t) }), /model timeout/);
+  assert.equal(signal?.aborted, true);
+  release();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(seen, ["Try "]);
+});
+
+test("replySoFar reads a growing reply out of unfinished JSON, never garbled and never shrinking", () => {
+  const reply = 'Say "hi" to \\ Møl — 明日の叙景\nand more';
+  const full = JSON.stringify({ reply, recommendations: [{ artist: "Fen", why: "a \"reply\": \"no\"" }] });
+  let previous = "";
+  for (let end = 0; end <= full.length; end++) {
+    const now = replySoFar(full.slice(0, end));
+    assert.ok(now.startsWith(previous), `after ${end} characters: ${now}`);
+    previous = now;
+  }
+  assert.equal(previous, reply);
+});
+
+test("replySoFar waits for an escape to be complete and for the reply to start", () => {
+  assert.equal(replySoFar('```json\n{"rep'), "");
+  assert.equal(replySoFar('{"reply":"M\\u00'), "M");
+  assert.equal(replySoFar('{"reply":"M\\u00f8l\\'), "Møl");
 });

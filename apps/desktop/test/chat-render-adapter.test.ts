@@ -44,6 +44,8 @@ function makeChat(overrides: Partial<TestChat> = {}): TestChat {
     retryLastSearch: async () => undefined,
     getMode: () => mode,
     isLoading: () => false,
+    getProgress: () => null,
+    subscribe: () => () => {},
     isShowFeedbackBar: () => false,
     dismissFeedbackBar: () => {},
     submitFeedback: async () => {},
@@ -153,4 +155,16 @@ test("render adapter onObscurityTargetChange updates viewProps", () => {
   adapter.onObscurityTargetChange("obscure");
   const props = adapter.getViewProps();
   assert.equal(props.obscurityTarget, "obscure");
+});
+
+test("the in-flight line says what the API is doing, and whether it was heard from at all", () => {
+  const adapter = createChatRenderAdapter({
+    chat: makeChat({ isLoading: () => true, getProgress: () => ({ stage: "checking", found: 25 }) }),
+  });
+  assert.equal(adapter.getViewProps().progressLabel, "Found 25 bands, checking them…");
+  assert.equal(adapter.getViewProps().awaitingApi, false);
+
+  const waiting = createChatRenderAdapter({ chat: makeChat({ isLoading: () => true }) }).getViewProps();
+  assert.equal(waiting.awaitingApi, true);
+  assert.equal(createChatRenderAdapter({ chat: makeChat() }).getViewProps().awaitingApi, false, "nothing is in flight");
 });

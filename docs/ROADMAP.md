@@ -106,7 +106,9 @@ place and is now under Deferred; #180's premise changed (see item 3).
        (conversation turns: search, pick, answer); shown bands are not repeated;
        saving the chat no longer delays an answer ✓ Done. Measured live: pick
        2.2 s, answer 1.0 s; routing 132 of 132 labelled messages right
-     - [ ] Step 6: progress and answer streamed
+     - [x] Step 6: progress and reply streamed (server-sent events, JSON for other
+       clients), and a client that stops waiting cancels the search ✓ Done.
+       Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups
      - [ ] Step 7: Last.fm as a fast candidate source
      - [ ] Step 8: the Render service stays awake
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render

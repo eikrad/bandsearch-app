@@ -546,6 +546,133 @@ test("the conversation id reaches the pipeline but not the eval telemetry", asyn
   assert.doesNotMatch(JSON.stringify(processed), /chat-1/);
 });
 
+/** Posts a question asking for a stream and returns what came back. */
+async function askForStream(app: ReturnType<typeof createApp>, payload: unknown) {
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/recommendations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "text/event-stream" },
+      body: JSON.stringify(payload),
+    });
+    const text = await response.text();
+    const events = text.split("\n\n").filter((b) => b.startsWith("data: ")).map((b) => JSON.parse(b.slice(6)) as Record<string, unknown>);
+    return { status: response.status, type: response.headers.get("content-type") ?? "", text, events };
+  } finally {
+    server.close();
+  }
+}
+
+test("a client that asks for a stream follows the answer and gets the whole response at the end", async () => {
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (_req, listener) => {
+        listener?.onProgress?.({ stage: "searching", anchorArtists: ["Alcest"] });
+        listener?.onReply?.("Try");
+        listener?.onReply?.("Try Fe");
+        await new Promise((r) => setTimeout(r, 60));
+        listener?.onReply?.("Try Fen.");
+        return { recommendations: [{ artist: "Fen" }], assistantReply: "Try Fen.", meta: { turn: "search" } };
+      },
+    },
+  });
+
+  const { type, events } = await askForStream(app, { query: "blackgaze" });
+
+  assert.match(type, /^text\/event-stream/);
+  assert.deepEqual(events.slice(0, 3), [
+    { type: "progress", progress: { stage: "searching", anchorArtists: ["Alcest"] } },
+    { type: "reply", text: "Try" },
+    { type: "reply", text: "Try Fen." },
+  ]);
+  const done = events.at(-1)!;
+  assert.equal(done.type, "done");
+  const response = done.response as { recommendations: unknown[]; assistantReply: string; meta: Record<string, unknown> };
+  assert.equal(response.assistantReply, "Try Fen.");
+  assert.equal(response.recommendations.length, 1);
+  assert.equal(typeof response.meta.eventId, "string");
+  assert.equal(response.meta.aiGenerated, true);
+});
+
+test("a failure after the stream opened arrives as its last event", async () => {
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (_req, listener) => {
+        listener?.onProgress?.({ stage: "thinking" });
+        throw new Error("secret upstream detail");
+      },
+    },
+    logger: { warn: () => {}, error: () => {} },
+  });
+  const { events, text } = await askForStream(app, { query: "blackgaze" });
+  assert.deepEqual(events.at(-1), {
+    type: "error", status: 502, error: { code: "recommendation_unavailable", message: "recommendation service unavailable" },
+  });
+  assert.doesNotMatch(text, /secret/);
+});
+
+test("a failure or an answer before the first event is plain JSON with its status, stream or not", async () => {
+  const failing = createApp({
+    recommendationPipeline: { recommend: async () => { throw Object.assign(new Error("x"), { code: "recommendation_initializing" }); } },
+    logger: { warn: () => {}, error: () => {} },
+  });
+  const failed = await askForStream(failing, { query: "blackgaze" });
+  assert.equal(failed.status, 503);
+  assert.match(failed.type, /json/);
+  assert.equal((await askForStream(failing, { query: "" })).status, 400);
+
+  const quick = createApp({ recommendationPipeline: { recommend: async () => ({ recommendations: [], meta: {} }) } });
+  assert.match((await askForStream(quick, { query: "blackgaze" })).type, /json/);
+});
+
+test("without asking for a stream the answer is one JSON response, whatever the pipeline reports", async () => {
+  let listened: unknown;
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: async (_req, listener) => {
+        listened = listener?.onReply;
+        listener?.onProgress?.({ stage: "thinking" });
+        return { recommendations: [], assistantReply: "hi", meta: {} };
+      },
+    },
+  });
+  const result = await makeRequest(app, "/recommendations", { query: "blackgaze" });
+  assert.equal(result.data.assistantReply, "hi");
+  assert.equal(listened, undefined, "nothing is written for nobody");
+});
+
+test("a client that stops waiting cancels the search", async () => {
+  let cancelled!: () => void;
+  const wasCancelled = new Promise<void>((resolve) => { cancelled = resolve; });
+  const controller = new AbortController();
+  const app = createApp({
+    recommendationPipeline: {
+      recommend: (_req, listener) => new Promise((_resolve, reject) => {
+        listener?.signal?.addEventListener("abort", () => { cancelled(); reject(listener.signal!.reason as Error); });
+        controller.abort();
+      }),
+    },
+  });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    await assert.rejects(fetch(`http://127.0.0.1:${address.port}/recommendations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "blackgaze" }),
+      signal: controller.signal,
+    }));
+    await wasCancelled;
+  } finally {
+    server.close();
+  }
+});
+
 test("a recommendation response carries provenance for its generated text", async () => {
   const app = createApp({
     recommendationPipeline: {
