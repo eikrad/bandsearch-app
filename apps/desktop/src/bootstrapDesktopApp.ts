@@ -23,6 +23,11 @@ function buildPriorityContext(savedBands: SavedBand[], selectedArtistIds: string
   return `Priority style references: ${names}`;
 }
 
+function newConversationId(): string {
+  // randomUUID exists only in secure contexts; this id needs to be unlikely to repeat, not secret.
+  return globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export type BootstrapDesktopAppOptions = {
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -45,6 +50,12 @@ export function bootstrapDesktopApp({
   };
   let pendingSelectedArtistIds: string[] = [];
   let currentAbortController: AbortController | null = null;
+  // Names the conversation to the API from its first message on, before any
+  // session is saved. A resumed one keeps its session's id.
+  let conversationId: string | null = null;
+  // Saving runs behind the conversation, one message after the other, and never
+  // delays an answer.
+  let saving: Promise<unknown> = Promise.resolve();
   // The question saved to a session that has no saved answer yet, so a retry
   // does not record it a second time. Keyed by session: a new chat must save it.
   let persistedQuestion: { sessionId: string; query: string } | null = null;
@@ -82,6 +93,7 @@ export function bootstrapDesktopApp({
     async startSession(title = "Untitled") {
       const result = await chatClient.createSession(title);
       state = { ...state, currentSessionId: result.session.id };
+      conversationId = result.session.id;
       return result.session;
     },
     async listSessions() {
@@ -97,6 +109,7 @@ export function bootstrapDesktopApp({
     async resumeSession(sessionId: string): Promise<boolean> {
       const existing = await chatClient.getSession(sessionId).catch(() => null);
       if (!existing) return false;
+      conversationId = existing.session.id;
       state = {
         ...state,
         currentSessionId: existing.session.id,
@@ -134,32 +147,38 @@ export function bootstrapDesktopApp({
       state = { ...state, messages: [...earlier, { role: "user", content: query }] };
       const controller = new AbortController();
       currentAbortController = controller;
+      conversationId ??= newConversationId();
+      const asked = conversationId;
+      // Persistence is best-effort: a failed write must not break the chat, so
+      // errors are swallowed rather than surfaced to the caller.
+      const save = (task: (sessionId: string) => Promise<unknown>) => {
+        saving = saving.then(async () => {
+          const sessionId = await ensureSession(controller.signal);
+          if (sessionId) await task(sessionId);
+        }).catch(() => {});
+      };
+      save(async (sessionId) => {
+        if (persistedQuestion?.sessionId === sessionId && persistedQuestion.query === query) return;
+        await chatClient.appendSessionMessage(sessionId, { role: "user", content: query }, controller.signal);
+        persistedQuestion = { sessionId, query };
+      });
       try {
-        const sessionId = await ensureSession(controller.signal);
-        // A cancel that landed while ensureSession was in flight leaves the
-        // signal permanently aborted; starting another fetch on it here would
-        // wait on an "abort" event that already fired and will not fire
-        // again, so bail out the same way a mid-flight cancel would.
-        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-        // Persistence is best-effort: a failed write here must not break the
-        // chat, so errors are swallowed rather than surfaced to the caller.
-        const alreadySaved = persistedQuestion?.sessionId === sessionId && persistedQuestion.query === query;
-        if (sessionId && !alreadySaved) {
-          await chatClient
-            .appendSessionMessage(sessionId, { role: "user", content: query }, controller.signal)
-            .then(() => { persistedQuestion = { sessionId, query }; }, () => {});
-        }
-        const result = await chatClient.fetchRecommendations(
-          query, mode, priorityContext, conversationHistory, effectiveIds, obscurityTarget, controller.signal,
-        );
+        const result = await chatClient.fetchRecommendations({
+          query,
+          mode,
+          priorityContext,
+          messages: conversationHistory,
+          selectedArtistIds: effectiveIds,
+          obscurityTarget,
+          conversationId: asked,
+          signal: controller.signal,
+        });
         state = applyAssistantMessage(state, result);
-        if (sessionId) {
-          const assistantMessage = state.messages[state.messages.length - 1];
-          await chatClient
-            .appendSessionMessage(sessionId, { role: "assistant", content: assistantMessage.content }, controller.signal)
-            .catch(() => {});
+        const { content } = state.messages[state.messages.length - 1]!;
+        save(async (sessionId) => {
+          await chatClient.appendSessionMessage(sessionId, { role: "assistant", content }, controller.signal);
           persistedQuestion = null;
-        }
+        });
         return result;
       } catch (error) {
         if ((error as Error).name === "AbortError") {

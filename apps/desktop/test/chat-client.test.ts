@@ -34,7 +34,7 @@ test("chat client sends recommendation request and returns response payload", as
     },
   });
 
-  const result = await client.fetchRecommendations("I like atmospheric post-black", "fresh");
+  const result = await client.fetchRecommendations({ query: "I like atmospheric post-black", mode: "fresh" });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:3001/recommendations");
@@ -270,7 +270,7 @@ test("chat client sends selectedArtistIds when provided", async () => {
     },
   });
 
-  await client.fetchRecommendations("q", "preference-aware", "", [], ["pref-a", "pref-b"]);
+  await client.fetchRecommendations({ query: "q", mode: "preference-aware", selectedArtistIds: ["pref-a", "pref-b"] });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(
     Array.isArray(body.selectedArtistIds) &&
@@ -292,7 +292,7 @@ test("chat client sends priorityContext in recommendations when provided", async
     },
   });
 
-  await client.fetchRecommendations("I like Alcest", "fresh", "Priority references: Fen");
+  await client.fetchRecommendations({ query: "I like Alcest", priorityContext: "Priority references: Fen" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.equal(typeof body.priorityContext, "string");
 
@@ -313,7 +313,7 @@ test("chat client sends conversation messages in recommendations request", async
     { role: "user", content: "I like Alcest" },
     { role: "assistant", content: "Recommended Fen" },
   ];
-  await client.fetchRecommendations("More like that", "fresh", "", history);
+  await client.fetchRecommendations({ query: "More like that", messages: history });
   const body = parseJsonObject(String(calls[0].init?.body));
 
   assert.ok(Array.isArray(body.messages), "messages in request body");
@@ -335,7 +335,7 @@ test("chat client includes obscurityTarget in recommendations request body when 
     },
   });
 
-  await client.fetchRecommendations("dark ambient", "fresh", "", [], [], "underground");
+  await client.fetchRecommendations({ query: "dark ambient", obscurityTarget: "underground" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.equal(typeof body.obscurityTarget, "string");
   assert.equal(body.obscurityTarget, "underground");
@@ -351,9 +351,29 @@ test("chat client omits obscurityTarget from request body when not provided", as
     },
   });
 
-  await client.fetchRecommendations("dark ambient");
+  await client.fetchRecommendations({ query: "dark ambient" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
+});
+
+test("a long conversation sends the newest messages the API accepts", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const client = createChatClient({
+    apiBaseUrl: "http://localhost:3001",
+    fetchImpl: async (_url, init) => {
+      bodies.push(parseJsonObject(String(init?.body)));
+      return jsonResponse({ recommendations: [] });
+    },
+  });
+  const messages = Array.from({ length: 60 }, (_, i) => ({ role: "user", content: i === 59 ? "x".repeat(9000) : `message ${i}` }));
+
+  await client.fetchRecommendations({ query: "more", messages, conversationId: "chat-1" });
+
+  const sent = bodies[0]!.messages as Array<{ content: string }>;
+  assert.equal(sent.length, 50);
+  assert.equal(sent[0]!.content, "message 10");
+  assert.equal(sent.at(-1)!.content.length, 4000);
+  assert.equal(bodies[0]!.conversationId, "chat-1");
 });
 
 test("chat client fetches saved bands from GET /preferences", async () => {
@@ -401,7 +421,7 @@ test("fetchRecommendations forwards AbortSignal to fetch", async () => {
   });
 
   const controller = new AbortController();
-  await client.fetchRecommendations("post-metal", "fresh", "", [], [], undefined, controller.signal);
+  await client.fetchRecommendations({ query: "post-metal", signal: controller.signal });
   assert.equal(capturedSignal, controller.signal, "signal is forwarded to fetch");
 });
 

@@ -3,7 +3,7 @@ import { createGeminiChatClient } from "../../llm/geminiChat.js";
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
-import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
+import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 
@@ -149,6 +149,8 @@ const RANK_SYSTEM = [
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
 ].join(" ");
 
+const RANK_HISTORY_MAX_CHARS = 7000;
+
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 const RANK_OBSCURITY_FLAVOUR: Record<ObscurityTarget, string> = {
@@ -236,16 +238,8 @@ export async function createRecommendationRanker({
   return async function rank(input) {
     const prompt: Array<{ role: string; content: string }> = [
       { role: "system", content: RANK_SYSTEM },
+      ...recentTurns(input.messages, RANK_HISTORY_MAX_CHARS),
     ];
-
-    let historyChars = 0;
-    for (const msg of input.messages) {
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      const content = capAndTrim(escapeEnvelopeChars(String(msg.content ?? "")), 4000);
-      if (!content || historyChars + content.length > 7000) break;
-      prompt.push({ role: msg.role, content });
-      historyChars += content.length;
-    }
 
     const parts = buildRankUserPartsForTest({
       query: input.query,

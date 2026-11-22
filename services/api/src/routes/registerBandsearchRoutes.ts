@@ -63,6 +63,7 @@ export type BandsearchRouteContext = {
       assistantReply?: string;
       meta?: unknown;
     }>;
+    forgetUser?: (userId: string) => void;
   };
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: {
@@ -204,6 +205,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         }
         return sendError(res, 401, "auth_error", result.error ?? "invalid credentials");
       }
+      resolvedRecommendationPipeline?.forgetUser?.(req.userId);
       return res.status(200).json({ ok: true, erased: result.erased });
     });
 
@@ -328,13 +330,14 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         messages: validation.messages,
         userId: req.userId,
         obscurityTarget: validation.obscurityTarget,
+        conversationId: validation.conversationId,
       });
 
-      // Every batch gets an id: feedback refers to it, and eval (when enabled)
-      // records the batch under the same id.
-      const eventId = randomUUID();
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
-      if (evalWorker) {
+      // Every batch gets an id: feedback refers to it, and eval (when enabled)
+      // records the batch under the same id. An answer in words is no batch.
+      const eventId = publicMeta.turn === "answer" ? undefined : randomUUID();
+      if (evalWorker && eventId) {
         void evalWorker.processEvent({
           eventId,
           query: validation.query,
@@ -365,7 +368,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       return res.status(200).json({
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: { ...publicMeta, ...provenance, eventId },
+        meta: { ...publicMeta, ...provenance, ...(eventId ? { eventId } : {}) },
       });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";

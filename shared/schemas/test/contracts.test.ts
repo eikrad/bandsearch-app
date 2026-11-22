@@ -159,6 +159,16 @@ test("validateRecommendationHttpBody silently truncates priorityContext over PRI
 
 // ─── Phase 8.3: obscurityTarget ────────────────────────────────────────────
 
+test("a conversation id is passed through; an unusable one is dropped, not an error", () => {
+  const idOf = (conversationId: unknown) => {
+    const v = validateRecommendationHttpBody({ query: "dark ambient", conversationId });
+    assert.ok(v.ok);
+    return v.conversationId;
+  };
+  assert.equal(idOf(" chat-1 "), "chat-1");
+  for (const unusable of ["", "  ", 5, null, {}, "x".repeat(101)]) assert.equal(idOf(unusable), undefined);
+});
+
 test("validateRecommendationHttpBody accepts valid obscurityTarget values", () => {
   for (const target of ["cult", "underground", "obscure"]) {
     const v = validateRecommendationHttpBody({ query: "dark ambient", obscurityTarget: target });

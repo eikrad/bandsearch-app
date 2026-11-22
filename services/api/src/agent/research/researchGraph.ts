@@ -64,6 +64,8 @@ export type ResearchGraphInput = {
   messages: ChatMessage[];
   mode: RecommendationMode;
   obscurityTarget?: string;
+  /** Bands the user has already been shown, in lower case: never ranked again. */
+  excludeNames?: ReadonlySet<string>;
 };
 
 export const RESEARCH_SCHEMA = new StateSchema({
@@ -72,6 +74,7 @@ export const RESEARCH_SCHEMA = new StateSchema({
   messages: z.custom<ChatMessage[]>(),
   mode: z.custom<RecommendationMode>(),
   obscurityTarget: z.string().optional(),
+  excludeNames: z.custom<ReadonlySet<string> | undefined>(),
   searchPlan: z.custom<SearchPlan | undefined>(),
   braveHits: z.custom<SearchHitInput[]>(),
   newHits: z.custom<SearchHitInput[]>(),
@@ -273,13 +276,14 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         chatModel: deps.chatModel,
         model: deps.model,
       });
-      const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
+      const fresh = withoutNames(state.verifiedCandidates, state.excludeNames);
+      const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
       log("info", "research_obscurity_filter", {
         obscurityTarget: state.obscurityTarget ?? "none",
-        before: state.verifiedCandidates.length,
+        before: fresh.length,
         after: filteredCandidates.length,
         // Shows whether in-range bands were found and filtered or ranked away, or never found (#325).
-        fitBefore: countTargetFit(state.verifiedCandidates, state.obscurityTarget),
+        fitBefore: countTargetFit(fresh, state.obscurityTarget),
         fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
       });
       const { recommendations, assistantReply } = await ranker({
@@ -305,6 +309,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addEdge("rank", END);
 
   return graph.compile();
+}
+
+/** The candidates not known under any of the names (lower case). */
+function withoutNames(candidates: VerifiedCandidate[], names: ReadonlySet<string> | undefined): VerifiedCandidate[] {
+  if (!names?.size) return candidates;
+  return candidates.filter((c) => ![c.name, c.canonicalName ?? c.name].some((n) => names.has(n.trim().toLowerCase())));
 }
 
 /** Candidates per fit against the requested target's range, by the filter's own rule; null when there is nothing to fit. */
@@ -333,6 +343,8 @@ export async function invokeResearchGraph(
 ): Promise<{
   recommendations: unknown[];
   assistantReply: string;
+  /** Every candidate found, with its evidence: what a follow-up can pick from. */
+  candidates: VerifiedCandidate[];
   pipelineDiagnostics: PipelineDiagnostics;
   /** The model that wrote the ranker's prose — the run's provenance. */
   model: string;
@@ -346,6 +358,7 @@ export async function invokeResearchGraph(
       messages: input.messages,
       mode: input.mode,
       obscurityTarget: input.obscurityTarget,
+      excludeNames: input.excludeNames,
       braveHits: [],
       newHits: [],
       searchCallsUsed: 0,
@@ -371,6 +384,7 @@ export async function invokeResearchGraph(
     return {
       recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
       assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
+      candidates: Array.isArray(result.verifiedCandidates) ? result.verifiedCandidates : [],
       pipelineDiagnostics,
       // Every node runs on deps.model today. Should they ever diverge, this must
       // name the ranker's model: the ranker writes the user-visible `why` prose.

@@ -7,7 +7,11 @@ import type {
   RecommendationResponse,
   SavedBand,
 } from "./domain.js";
-import type { RecommendationFeedbackSubmission } from "../../../shared/schemas/src/contracts.js";
+import {
+  MESSAGE_CONTENT_MAX_LEN,
+  MESSAGES_MAX_COUNT,
+  type RecommendationFeedbackSubmission,
+} from "../../../shared/schemas/src/contracts.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -87,6 +91,41 @@ export type ChatClientOptions = {
   getToken?: (() => string | null) | null;
 };
 
+export type RecommendationRequest = {
+  query: string;
+  mode?: string;
+  priorityContext?: string;
+  /** Earlier messages of the conversation, oldest first; the newest that the API accepts are sent. */
+  messages?: Array<{ role: string; content: string }>;
+  selectedArtistIds?: string[];
+  obscurityTarget?: string;
+  /** The conversation this message continues, so the API can answer from what it already found. */
+  conversationId?: string;
+  signal?: AbortSignal;
+};
+
+function recommendationBody({
+  query,
+  mode = "fresh",
+  priorityContext,
+  messages = [],
+  selectedArtistIds = [],
+  obscurityTarget,
+  conversationId,
+}: Omit<RecommendationRequest, "signal">): Record<string, unknown> {
+  const body: Record<string, unknown> = { query, mode };
+  if (priorityContext) body.priorityContext = priorityContext;
+  if (messages.length > 0) {
+    body.messages = messages
+      .slice(-MESSAGES_MAX_COUNT)
+      .map((m) => ({ ...m, content: m.content.slice(0, MESSAGE_CONTENT_MAX_LEN) }));
+  }
+  if (selectedArtistIds.length > 0) body.selectedArtistIds = selectedArtistIds;
+  if (obscurityTarget) body.obscurityTarget = obscurityTarget;
+  if (conversationId) body.conversationId = conversationId;
+  return body;
+}
+
 export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = null }: ChatClientOptions) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
@@ -98,22 +137,8 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
   }
 
   return {
-    async fetchRecommendations(
-      query: string,
-      mode = "fresh",
-      priorityContext = "",
-      messages: unknown[] = [],
-      selectedArtistIds: string[] = [],
-      obscurityTarget?: string,
-      signal?: AbortSignal,
-    ) {
-      const body: Record<string, unknown> = { query, mode };
-      if (priorityContext) body.priorityContext = priorityContext;
-      if (messages.length > 0) body.messages = messages;
-      if (Array.isArray(selectedArtistIds) && selectedArtistIds.length > 0) {
-        body.selectedArtistIds = selectedArtistIds.filter((id) => typeof id === "string");
-      }
-      if (obscurityTarget) body.obscurityTarget = obscurityTarget;
+    async fetchRecommendations({ signal, ...request }: RecommendationRequest) {
+      const body = recommendationBody(request);
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
         headers: jsonHeaders(),

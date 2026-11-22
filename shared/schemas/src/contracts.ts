@@ -2,6 +2,7 @@ export const QUERY_MAX_LENGTH = 2000;
 export const MESSAGE_CONTENT_MAX_LEN = 4000;
 export const MESSAGES_MAX_COUNT = 50;
 export const PRIORITY_CONTEXT_MAX_LEN = 2000;
+export const CONVERSATION_ID_MAX_LEN = 100;
 
 export type RecommendationMode = "fresh" | "preference-aware";
 
@@ -46,6 +47,18 @@ export type RecommendationFeedbackSubmission = {
   bandNames: string[];
 };
 
+/**
+ * How a message was answered: by a new search, by picking from the bands the
+ * conversation already found, or in words alone (no bands asked for).
+ */
+export type TurnKind = "search" | "pick" | "answer";
+
+/**
+ * How long the API remembers the bands a conversation found, in memory only.
+ * The privacy policy states it, so both read it from here.
+ */
+export const CONVERSATION_MEMORY_HOURS = 2;
+
 export type ChatTurnRole = "user" | "assistant";
 
 export type ChatMessage = { role: ChatTurnRole; content: string };
@@ -69,6 +82,8 @@ export type ValidatedRecommendationHttpBody =
       readonly priorityContext: string;
       readonly truncated: string[];
       readonly obscurityTarget: ObscurityTarget | undefined;
+      /** Which conversation the message continues; undefined for a one-off question. */
+      readonly conversationId: string | undefined;
     };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -208,7 +223,13 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     priorityContext,
     truncated,
     obscurityTarget: validateObscurityTarget(b.obscurityTarget),
+    conversationId: validateConversationId(b.conversationId),
   };
+}
+
+function validateConversationId(value: unknown): string | undefined {
+  const id = typeof value === "string" ? value.trim() : "";
+  return id && id.length <= CONVERSATION_ID_MAX_LEN ? id : undefined;
 }
 
 /**

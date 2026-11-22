@@ -51,6 +51,21 @@ export function wrapSearchHitBlock(hit: SearchHit, number?: number): string {
   return wrapBlock("SEARCH_RESULT", inner);
 }
 
+/** The newest user and assistant messages that fit, oldest first, safe to send as chat turns. */
+export function recentTurns(messages: HistoryMessage[], maxTotalChars: number): HistoryMessage[] {
+  const turns: HistoryMessage[] = [];
+  let total = 0;
+  for (const m of [...messages].reverse()) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    const content = capAndTrim(escapeEnvelopeChars(String(m.content ?? "")), HISTORY_CONTENT_CAP);
+    if (!content) continue;
+    if (total + content.length > maxTotalChars) break;
+    turns.unshift({ role: m.role, content });
+    total += content.length;
+  }
+  return turns;
+}
+
 export function formatHistoryBlock(messages: HistoryMessage[], maxTotalChars: number): string {
   if (!Array.isArray(messages) || messages.length === 0) return "";
   const lines: string[] = [];

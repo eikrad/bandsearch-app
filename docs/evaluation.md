@@ -44,3 +44,14 @@ another deployment, `BANDSEARCH_API_TOKEN` authenticates against one with more
 than one account. The live-traffic dashboard at `GET /eval/dashboard` (404 unless
 `EVAL_DASHBOARD_ENABLED=true`; `EVAL_DASHBOARD_PASSWORD` adds Basic Auth) is a
 different thing: it shows scores from real requests, not test runs.
+
+## How follow-ups are routed
+
+`npm run routing -w services/eval -- --repeat 3` asks the production turn router
+(search, pick or answer, see
+[conversation turns](architecture/ARCHITECTURE.md#conversation-turns)) about the
+labelled messages in `services/eval/turn-routing-set.json`. The prompt was tuned
+on the first conversation; the second is held out, so add new failures to the
+first and keep the second for checking. A needless search only costs time; a
+wrong pick or answer gives the user the wrong thing, so they are counted apart.
+2026-11-22, `deepseek-v4-flash-0731`: 72 of 72 and 60 of 60 right, median 0.3 s.

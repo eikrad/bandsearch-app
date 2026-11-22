@@ -98,13 +98,39 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response carries `meta.eventId`), `POST /recommendations/:eventId/feedback` (same auth and limit) |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered), `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
 | Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
 | Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [README § Privacy & transparency](../../README.md#privacy--transparency) |
 | Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
+
+---
+
+## Conversation turns
+
+Not every message needs a search. `agent/conversation/conversationService.ts`
+decides how a message is answered (`TurnKind`, reported as `meta.turn`):
+
+| Turn | When | What runs | Typical time |
+|---|---|---|---|
+| `search` | first message, new taste or reference artists, hard facts, changed obscurity target, too few unseen bands | the whole research graph below | 10–13 s |
+| `pick` | the user wants more or different bands and the latest search still holds at least three unseen ones | the ranker, over the unseen bands after the obscurity filter | 2 s |
+| `answer` | a question about shown bands or music, thanks, small talk | one model call, grounded in the shown bands' evidence | 1 s |
+
+`turnRouter.ts` asks the research model (about 0.3 s) with the latest picks in
+order and the unseen bands with their tags. Anything doubtful, a failed router
+or a pick without result becomes a search. Bands already shown in the
+conversation are never shown again, by a pick or by a new search.
+
+`conversationMemory.ts` keeps the found bands per user and conversation
+(`conversationId` in the request, chosen by the client) in memory for two hours;
+never the user's words, never in a database, and not linked to eval telemetry.
+Deleting an account clears them. After a restart a follow-up simply searches.
+A request without a `conversationId` (golden runs) always searches.
+
+An `answer` carries no `meta.eventId`: it is no batch to rate or score.
 
 ---
 

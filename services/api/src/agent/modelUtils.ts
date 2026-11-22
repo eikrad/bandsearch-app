@@ -12,17 +12,23 @@ export type ChatModelClient = {
 };
 
 /**
+ * A model's answer without its thinking. Reasoning models (qwen3, deepseek, glm
+ * on Scaleway) may put that in a <think> block first; braces in there are not
+ * the answer. A known Scaleway bug can drop the opening tag, so the answer is
+ * whatever follows the last closing tag.
+ */
+export function withoutThinking(raw: string): string {
+  const closing = raw.toLowerCase().lastIndexOf("</think>");
+  return (closing === -1 ? raw : raw.slice(closing + "</think>".length))
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+}
+
+/**
  * Extract one balanced JSON object or array from text that may include model preamble or trailing prose.
  */
 export function parseModelJsonResponse(raw: string): unknown {
-  // Reasoning models (qwen3, deepseek, glm on Scaleway) may put their thinking
-  // in a <think> block before the answer; braces in there are not the answer.
-  // A known Scaleway bug can drop the opening tag, so the answer is whatever
-  // follows the last closing tag.
-  const closing = raw.toLowerCase().lastIndexOf("</think>");
-  const text = (closing === -1 ? raw : raw.slice(closing + "</think>".length))
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .trim()
+  const text = withoutThinking(raw)
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();

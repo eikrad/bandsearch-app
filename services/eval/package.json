@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "calibrate": "tsx run-calibration.ts",
     "golden": "tsx run-golden.ts",
+    "routing": "tsx run-routing.ts",
     "dashboard": "tsx dashboard.ts",
     "test": "tsx --test"
   },

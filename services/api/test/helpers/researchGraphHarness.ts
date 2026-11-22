@@ -24,7 +24,10 @@ export function fakeModelClient(
     plan?: () => unknown;
     extract?: (call: ModelCall) => unknown;
     reflect?: (call: ModelCall) => unknown;
-    rank?: () => unknown;
+    rank?: (call: ModelCall) => unknown;
+    route?: (call: ModelCall) => unknown;
+    /** An answer in words, not JSON. */
+    answer?: (call: ModelCall) => string;
   } = {},
 ): { client: ChatModelClient; calls: ModelCall[] } {
   const calls: ModelCall[] = [];
@@ -56,12 +59,18 @@ export function fakeModelClient(
           return responders.extract?.(call) ?? { candidates: [] };
         }
         if (system.startsWith("You recommend niche bands")) {
-          return responders.rank?.() ?? { reply: "", recommendations: [] };
+          return responders.rank?.(call) ?? { reply: "", recommendations: [] };
+        }
+        if (system.startsWith("You decide how a music discovery chat")) {
+          return responders.route?.(call) ?? { action: "search" };
+        }
+        if (system.startsWith("You are the conversational side")) {
+          return responders.answer?.(call) ?? "Glad you like them.";
         }
         throw new Error(`unrouted model call in research graph test: ${system.slice(0, 60)}`);
       })();
 
-      return { content: JSON.stringify(body) };
+      return { content: typeof body === "string" ? body : JSON.stringify(body) };
     },
   };
 
