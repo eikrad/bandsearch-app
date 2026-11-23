@@ -262,6 +262,18 @@ export async function startDesktopBrowserApp({
   session.subscribe(() => void reactApp.mount());
   // Views read their text while they render, so a new language is a new render (#329).
   onLanguageChange(() => void reactApp.mount());
+
+  // A search the system stopped the app in the middle of (ADR 0006): picked up
+  // at launch, whenever the app is shown again, and when the user enters the
+  // chat (after Connecting or Login). Only on the chat, where its answer shows.
+  const resumeSearch = () => {
+    if (router.getRoute() === "home") void reactApp.resumeSearch?.();
+  };
+  router.onRouteChange(resumeSearch);
+  w?.document?.addEventListener("visibilitychange", () => {
+    if (w.document.visibilityState === "visible") resumeSearch();
+  });
+  resumeSearch();
   // Something is on screen now, so the remaining retries are visible rather than
   // spent behind a blank window.
   await session.connectIfWaiting();

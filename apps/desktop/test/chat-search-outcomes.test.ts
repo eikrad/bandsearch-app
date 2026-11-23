@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
 import { bootstrapDesktopReactShell } from "../src/index.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 
 /**
  * What the user sees after Search, Retry and Stop, driven through the real app,
@@ -44,7 +45,7 @@ function chatWithFakeServer(replies: RecommendationReply[]) {
     return jsonResponse({});
   }) as unknown as typeof fetch;
 
-  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl });
+  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl: withSearchJobs(fetchImpl) });
   const shell = bootstrapDesktopReactShell({ app });
   return { app, shell, requestBodies, persisted };
 }

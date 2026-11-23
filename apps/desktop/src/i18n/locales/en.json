@@ -196,7 +196,10 @@
     "invalidRequest": "That request could not be processed. Try rephrasing your message.",
     "tooManyRequests": "Too many requests. Wait a moment and try again.",
     "unreachableStarting": "Could not reach the Bandsearch API. If the app just started, wait until the API is ready, then try again.",
-    "unreachable": "Could not reach the Bandsearch API. Check that the API server is running."
+    "unreachable": "Could not reach the Bandsearch API. Check that the API server is running.",
+    "searchLost": "This search was lost: the server restarted or kept it too long. Retry to ask again.",
+    "searchCancelled": "This search was stopped, perhaps by a newer search on another device. Retry to ask again.",
+    "searchDisconnected": "The connection to the server dropped. Your search keeps running there; Bandsearch picks it up when you come back to the app."
   },
   "privacy": {
     "lastUpdated": "Last updated {{date}}"

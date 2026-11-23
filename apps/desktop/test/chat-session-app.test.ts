@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/index.js";
 import type { RecommendationItem } from "../src/domain.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -27,7 +28,7 @@ function createStubFetch({
   notFoundSessionId?: string;
   onRequest?: (url: string, method: string) => void;
 } = {}): typeof fetch {
-  return async (url, init) => {
+  return withSearchJobs(async (url, init) => {
     const requestUrl = String(url);
     const method = init?.method || "GET";
     onRequest?.(requestUrl, method);
@@ -54,7 +55,7 @@ function createStubFetch({
       return jsonResponse({ recommendations, meta: { modeUsed: "fresh", usedPreferenceContext: false } });
     }
     return jsonResponse({});
-  };
+  });
 }
 
 /** Saving runs behind the conversation; waits until it got this far. */
@@ -185,7 +186,7 @@ test("every message of a conversation names it to the API; a new session is a ne
   const stub = createStubFetch({ sessionId: "sess-9" });
   const app = bootstrapDesktopApp({
     fetchImpl: async (url, init) => {
-      if (String(url).endsWith("/recommendations")) ids.push(parseJsonObject(String(init?.body)).conversationId);
+      if (String(url).endsWith("/recommendations/jobs")) ids.push(parseJsonObject(String(init?.body)).conversationId);
       return stub(url, init);
     },
   });
@@ -205,7 +206,7 @@ test("a resumed conversation keeps its id", async () => {
   const stub = createStubFetch({ sessionId: "sess-1" });
   const app = bootstrapDesktopApp({
     fetchImpl: async (url, init) => {
-      if (String(url).endsWith("/recommendations")) ids.push(parseJsonObject(String(init?.body)).conversationId);
+      if (String(url).endsWith("/recommendations/jobs")) ids.push(parseJsonObject(String(init?.body)).conversationId);
       return stub(url, init);
     },
   });

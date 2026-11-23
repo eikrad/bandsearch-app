@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 import type { SavedBand } from "../src/domain.js";
 
 /**
@@ -66,7 +67,7 @@ function appWithFakeServer(initialBands: SavedBand[] = [], firstSaveDelayMs = 0)
     return jsonResponse({});
   }) as unknown as typeof fetch;
 
-  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl });
+  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl: withSearchJobs(fetchImpl) });
 
   /** Runs a query so the given cards land in state.messages, as a real search would. */
   async function seedRecommendations(recommendations: typeof nextRecommendations) {

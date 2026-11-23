@@ -10,6 +10,7 @@ export type ChatScreenModel = Pick<
   | "getObscurityTarget"
   | "setObscurityTarget"
   | "isLoading"
+  | "isSearchFailed"
   | "getProgress"
   | "subscribe"
   | "isShowFeedbackBar"
@@ -18,6 +19,7 @@ export type ChatScreenModel = Pick<
   | "submitQuery"
   | "retryLastSearch"
   | "cancelSearch"
+  | "resumeSearch"
   | "submitFeedback"
 >;
 
@@ -104,6 +106,8 @@ function buildViewProps(chat: ChatScreenModel, viewport: "mobile" | "desktop") {
     modeValue: chat.getMode(),
     modeOptions: MODE_OPTIONS,
     isLoading: loading,
+    /** The last search ended in an error: Retry stays in view, not only on hover. */
+    searchFailed: chat.isSearchFailed(),
     progressLabel: progressLabel(chat.getProgress()),
     /** Nothing heard from the API yet: it may still be waking up. */
     awaitingApi: loading && chat.getProgress() === null,
@@ -149,6 +153,10 @@ export function createChatRenderAdapter({
     },
     onCancelSearch() {
       chat.cancelSearch();
+      return viewProps();
+    },
+    async onResumeSearch() {
+      await chat.resumeSearch();
       return viewProps();
     },
     async onFeedback(feedbackType: string) {

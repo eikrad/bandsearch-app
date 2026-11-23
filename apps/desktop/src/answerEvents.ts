@@ -1,7 +1,22 @@
 import type { AnswerEvent, AnswerProgress } from "../../../shared/schemas/src/contracts.js";
 
+/** One server-sent event: its id (to resume after) when it has one. */
+export type ReadAnswerEvent = { id: number | null; event: AnswerEvent };
+
+function parseBlock(block: string): ReadAnswerEvent | null {
+  let id: number | null = null;
+  let data: string | null = null;
+  for (const line of block.split("\n")) {
+    if (line.startsWith("id: ")) id = Number(line.slice("id: ".length));
+    else if (line.startsWith("data: ")) data = line.slice("data: ".length);
+  }
+  // A comment (": keep-alive") carries nothing.
+  if (data === null) return null;
+  return { id: Number.isSafeInteger(id) ? id : null, event: JSON.parse(data) as AnswerEvent };
+}
+
 /** The server-sent events of a response body, as they arrive. */
-export async function* readAnswerEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<AnswerEvent> {
+export async function* readAnswerEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ReadAnswerEvent> {
   const reader = body.pipeThrough(new TextDecoderStream() as ReadableWritablePair<string, Uint8Array>).getReader();
   let unread = "";
   try {
@@ -10,9 +25,9 @@ export async function* readAnswerEvents(body: ReadableStream<Uint8Array>): Async
       if (done) return;
       unread += value;
       for (let end = unread.indexOf("\n\n"); end !== -1; end = unread.indexOf("\n\n")) {
-        const block = unread.slice(0, end);
+        const parsed = parseBlock(unread.slice(0, end));
         unread = unread.slice(end + 2);
-        if (block.startsWith("data: ")) yield JSON.parse(block.slice("data: ".length)) as AnswerEvent;
+        if (parsed) yield parsed;
       }
     }
   } finally {

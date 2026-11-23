@@ -201,6 +201,25 @@ test("createDesktopReactMount exposes onStop handler that calls shell.cancelSear
   assert.equal(cancelled, true, "onStop calls shell.cancelSearch");
 });
 
+test("coming back to the app picks up a kept search and paints its outcome, even a failed one", async () => {
+  let resumed = 0;
+  let renders = 0;
+  const mountApi = createDesktopReactMount({
+    shell: {
+      getViewProps: () => ({ modeValue: "fresh", modeOptions: [], isLoading: false, queryDisabled: false, queryPlaceholder: "", cards: [], actionStatus: null }),
+      submitQuery: async () => {},
+      updateMode: async () => {},
+      resumeSearch: async () => { resumed += 1; throw new Error("query failed"); },
+    },
+    createRootImpl: () => fakeReactRoot(() => { renders += 1; }),
+    resolveContainer: () => fakeContainer({ id: "root" }),
+  });
+
+  await mountApi.resumeSearch();
+  assert.equal(resumed, 1);
+  assert.ok(renders >= 2, "painted while it runs and once it ended");
+});
+
 test("createDesktopReactMount exposes onRetry handler that calls shell.retryLastSearch", async () => {
   let retried = false;
   const mountApi = createDesktopReactMount({

@@ -91,6 +91,33 @@ export type ChatClientOptions = {
   apiBaseUrl: string;
   fetchImpl?: typeof fetch;
   getToken?: (() => string | null) | null;
+  /** Waits between attempts to re-attach to a search; tests pass one that does not wait. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Silence after which a followed search's connection is taken for dead. */
+  stallMs?: number;
+};
+
+/**
+ * Waits before each new attempt to re-attach to a search whose connection
+ * failed: about 15 s in all, long enough for a network to come back after the
+ * screen turns on, short enough that the user is told soon. An attempt that
+ * gets an event starts the count again.
+ */
+const REATTACH_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
+/** The API sends a keep-alive every 15 s; three missed ones mean the connection is gone. */
+const STALL_MS = 45_000;
+
+export type FollowSearchOptions = {
+  signal?: AbortSignal;
+  /** Progress and the reply while it is written; the answer is the result. */
+  onEvent?: (event: AnswerEvent) => void;
+};
+
+export type FollowedSearch = {
+  /** The answer, or the error the search ended with. */
+  result: Promise<RecommendationResponse>;
+  /** Drops the current connection, which may be dead without knowing it, and attaches again at once. */
+  reconnect(): void;
 };
 
 export type RecommendationRequest = {
@@ -104,8 +131,6 @@ export type RecommendationRequest = {
   /** The conversation this message continues, so the API can answer from what it already found. */
   conversationId?: string;
   signal?: AbortSignal;
-  /** Follows the answer while it is made; without it the answer comes whole. */
-  onEvent?: (event: AnswerEvent) => void;
 };
 
 function recommendationBody({
@@ -116,7 +141,7 @@ function recommendationBody({
   selectedArtistIds = [],
   obscurityTarget,
   conversationId,
-}: Omit<RecommendationRequest, "signal" | "onEvent">): Record<string, unknown> {
+}: Omit<RecommendationRequest, "signal">): Record<string, unknown> {
   const body: Record<string, unknown> = { query, mode };
   if (priorityContext) body.priorityContext = priorityContext;
   if (messages.length > 0) {
@@ -130,37 +155,160 @@ function recommendationBody({
   return body;
 }
 
-export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = null }: ChatClientOptions) {
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export function createChatClient({
+  apiBaseUrl,
+  fetchImpl = fetch,
+  getToken = null,
+  sleep = defaultSleep,
+  stallMs = STALL_MS,
+}: ChatClientOptions) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
-  function jsonHeaders(): Record<string, string> {
+  function authHeaders(): Record<string, string> {
     const token = typeof getToken === "function" ? getToken() : null;
-    const h: Record<string, string> = { "content-type": "application/json" };
-    if (token) h["authorization"] = `Bearer ${token}`;
-    return h;
+    return token ? { authorization: `Bearer ${token}` } : {};
+  }
+
+  function jsonHeaders(): Record<string, string> {
+    return { "content-type": "application/json", ...authHeaders() };
   }
 
   return {
-    async fetchRecommendations({ signal, onEvent, ...request }: RecommendationRequest) {
-      const response = await fetchImpl(`${baseUrl}/recommendations`, {
+    /** Starts a search as a job on the API (ADR 0006) and returns its id; the answer is followed separately. */
+    async startSearch({ signal, ...request }: RecommendationRequest): Promise<string> {
+      const response = await fetchImpl(`${baseUrl}/recommendations/jobs`, {
         method: "POST",
-        headers: { ...jsonHeaders(), ...(onEvent ? { accept: "text/event-stream" } : {}) },
+        headers: jsonHeaders(),
         body: JSON.stringify(recommendationBody(request)),
         signal,
       });
       await ensureOk(response);
-      // The API answers in plain JSON when it is done before there is anything to follow.
-      if (onEvent && response.body && response.headers.get("content-type")?.includes("text/event-stream")) {
-        for await (const event of readAnswerEvents(response.body)) {
-          if (event.type === "done") return event.response as RecommendationResponse;
-          if (event.type === "error") {
-            throw new BandsearchHttpError(event.error.message, { status: event.status, code: event.error.code });
-          }
-          onEvent(event);
-        }
-        throw new BandsearchHttpError("the answer broke off", { code: "recommendation_unavailable" });
+      const data: unknown = await response.json();
+      if (!isRecord(data) || typeof data.jobId !== "string" || !data.jobId) {
+        throw new BandsearchHttpError("the API did not start the search", { code: "recommendation_unavailable" });
       }
-      return response.json() as Promise<RecommendationResponse>;
+      return data.jobId;
+    },
+
+    /**
+     * Follows a search job to its answer. A connection that fails, ends early
+     * or goes quiet is not the search failing: it attaches again after the last
+     * event seen, a few times with growing waits, before it gives up with
+     * `search_disconnected` (the job may still be running). A job the API does
+     * not know (restarted, or kept past its hour) is `search_lost`; one stopped
+     * elsewhere, `search_cancelled`. Aborting `signal` ends it as an AbortError.
+     */
+    followSearch(jobId: string, { signal, onEvent }: FollowSearchOptions = {}): FollowedSearch {
+      let after = 0;
+      let failures = 0;
+      let attempt: AbortController | null = null;
+      let reconnectAsked = false;
+      let wake: (() => void) | null = null;
+
+      /** One connection: the answer, or "broken" when it is worth attaching again. */
+      async function attach(): Promise<RecommendationResponse | "broken"> {
+        const controller = new AbortController();
+        attempt = controller;
+        const forwardAbort = () => controller.abort(signal?.reason);
+        signal?.addEventListener("abort", forwardAbort, { once: true });
+        let stall: ReturnType<typeof setTimeout> | undefined;
+        const armStall = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => controller.abort(new Error("the connection went quiet")), stallMs);
+        };
+        try {
+          armStall();
+          let response: Response;
+          try {
+            response = await fetchImpl(`${baseUrl}/recommendations/jobs/${encodeURIComponent(jobId)}${after > 0 ? `?after=${after}` : ""}`, {
+              method: "GET",
+              headers: { ...authHeaders(), accept: "text/event-stream" },
+              signal: controller.signal,
+            });
+          } catch (error) {
+            if (signal?.aborted) throw error;
+            return "broken";
+          }
+          if (response.status === 404) {
+            throw new BandsearchHttpError("the server no longer knows this search", { status: 404, code: "search_lost" });
+          }
+          // A proxy or a restarting server: the job may be there again in a moment.
+          if (response.status >= 500 || response.status === 429) return "broken";
+          await ensureOk(response);
+          if (!response.body) return "broken";
+          const watched = response.body.pipeThrough(
+            new TransformStream<Uint8Array, Uint8Array>({ transform(chunk, out) { armStall(); out.enqueue(chunk); } }),
+            { signal: controller.signal },
+          );
+          try {
+            for await (const { id, event } of readAnswerEvents(watched)) {
+              if (id !== null) {
+                after = id;
+                failures = 0;
+              }
+              if (event.type === "done") return event.response as RecommendationResponse;
+              if (event.type === "error") {
+                throw new BandsearchHttpError(event.error.message, { status: event.status, code: event.error.code });
+              }
+              if (event.type === "cancelled") {
+                signal?.throwIfAborted();
+                throw new BandsearchHttpError("the search was stopped", { code: "search_cancelled" });
+              }
+              onEvent?.(event);
+            }
+          } catch (error) {
+            if (signal?.aborted || error instanceof BandsearchHttpError) throw error;
+          }
+          return "broken";
+        } finally {
+          clearTimeout(stall);
+          signal?.removeEventListener("abort", forwardAbort);
+          attempt = null;
+        }
+      }
+
+      const result = (async () => {
+        for (;;) {
+          signal?.throwIfAborted();
+          const outcome = await attach();
+          if (outcome !== "broken") return outcome;
+          signal?.throwIfAborted();
+          if (reconnectAsked) {
+            reconnectAsked = false;
+            failures = 0;
+            continue;
+          }
+          if (failures >= REATTACH_DELAYS_MS.length) {
+            throw new BandsearchHttpError("the connection to the search dropped", { code: "search_disconnected" });
+          }
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+            signal?.addEventListener("abort", () => resolve(), { once: true });
+            void sleep(REATTACH_DELAYS_MS[failures]!).then(resolve);
+          });
+          wake = null;
+          failures += 1;
+        }
+      })();
+
+      return {
+        result,
+        reconnect() {
+          reconnectAsked = true;
+          attempt?.abort(new Error("reconnecting"));
+          wake?.();
+        },
+      };
+    },
+
+    /** Asks the API to stop a search job. */
+    async stopSearch(jobId: string): Promise<void> {
+      await fetchImpl(`${baseUrl}/recommendations/jobs/${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
     },
 
     async sendFeedback(eventId: string, submission: RecommendationFeedbackSubmission) {

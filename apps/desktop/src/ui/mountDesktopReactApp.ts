@@ -30,6 +30,8 @@ export type MountShell = {
   ): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
+  /** Picks up a search kept from before the app was stopped (ADR 0006). */
+  resumeSearch?(): Promise<unknown>;
   updateObscurityTarget?(target: string | undefined): unknown;
   submitFeedback?(feedbackType: string): Promise<unknown>;
   dismissFeedback?(): void;
@@ -556,6 +558,20 @@ export function createDesktopReactMount({
   return {
     handlers,
     mount() {
+      return renderCurrent();
+    },
+    /**
+     * Back in the app: a kept search is picked up, its progress and answer (or
+     * its error, with Retry) painted like any search's.
+     */
+    async resumeSearch() {
+      try {
+        const pending = shell.resumeSearch?.();
+        await renderCurrent();
+        await pending;
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
       return renderCurrent();
     },
     showUpdateBanner(viewProps: UpdateBannerViewProps | null) {

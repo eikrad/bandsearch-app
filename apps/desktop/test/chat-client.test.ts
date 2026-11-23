@@ -20,27 +20,28 @@ function parseJsonObject(input: string): Record<string, unknown> {
   return parsed;
 }
 
-test("chat client sends recommendation request and returns response payload", async () => {
+test("a search is started as a job and its id returned", async () => {
   const calls: FetchCall[] = [];
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({
-          recommendations: [{ artist: "Fen", why: "Atmospheric overlap", sourceSignals: ["musicbrainz_search"] }],
-          assistantReply: "These lean atmospheric — want something heavier next?",
-          meta: { modeUsed: "fresh", usedPreferenceContext: false },
-        });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
-  const result = await client.fetchRecommendations({ query: "I like atmospheric post-black", mode: "fresh" });
+  const jobId = await client.startSearch({ query: "I like atmospheric post-black", mode: "fresh" });
 
+  assert.equal(jobId, "job-1");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3001/recommendations");
-  assert.equal(result.recommendations?.[0].artist, "Fen");
-  assert.equal(result.assistantReply?.includes("heavier"), true);
-  assert.equal(result.meta?.modeUsed, "fresh");
+  assert.equal(calls[0].url, "http://localhost:3001/recommendations/jobs");
+  assert.equal(calls[0].init?.method, "POST");
+  assert.equal(parseJsonObject(String(calls[0].init?.body)).query, "I like atmospheric post-black");
+});
+
+test("an API that does not hand back a job id has not started the search", async () => {
+  const client = createChatClient({ apiBaseUrl: "http://localhost:3001", fetchImpl: async () => jsonResponse({ recommendations: [] }) });
+  await assert.rejects(client.startSearch({ query: "q" }), /did not start/);
 });
 
 test("chat state appends assistant message from recommendation response", () => {
@@ -266,11 +267,11 @@ test("chat client sends selectedArtistIds when provided", async () => {
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({ recommendations: [], meta: { modeUsed: "preference-aware", usedPreferenceContext: true } });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
-  await client.fetchRecommendations({ query: "q", mode: "preference-aware", selectedArtistIds: ["pref-a", "pref-b"] });
+  await client.startSearch({ query: "q", mode: "preference-aware", selectedArtistIds: ["pref-a", "pref-b"] });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(
     Array.isArray(body.selectedArtistIds) &&
@@ -285,14 +286,11 @@ test("chat client sends priorityContext in recommendations when provided", async
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({
-          recommendations: [],
-          meta: { modeUsed: "fresh", usedPreferenceContext: true },
-        });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
-  await client.fetchRecommendations({ query: "I like Alcest", priorityContext: "Priority references: Fen" });
+  await client.startSearch({ query: "I like Alcest", priorityContext: "Priority references: Fen" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.equal(typeof body.priorityContext, "string");
 
@@ -305,7 +303,7 @@ test("chat client sends conversation messages in recommendations request", async
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh", usedPreferenceContext: false } });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
@@ -313,7 +311,7 @@ test("chat client sends conversation messages in recommendations request", async
     { role: "user", content: "I like Alcest" },
     { role: "assistant", content: "Recommended Fen" },
   ];
-  await client.fetchRecommendations({ query: "More like that", messages: history });
+  await client.startSearch({ query: "More like that", messages: history });
   const body = parseJsonObject(String(calls[0].init?.body));
 
   assert.ok(Array.isArray(body.messages), "messages in request body");
@@ -328,14 +326,11 @@ test("chat client includes obscurityTarget in recommendations request body when 
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({
-          recommendations: [],
-          meta: { modeUsed: "fresh", usedPreferenceContext: false, eventId: "evt-123" },
-        });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
-  await client.fetchRecommendations({ query: "dark ambient", obscurityTarget: "underground" });
+  await client.startSearch({ query: "dark ambient", obscurityTarget: "underground" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.equal(typeof body.obscurityTarget, "string");
   assert.equal(body.obscurityTarget, "underground");
@@ -347,11 +342,11 @@ test("chat client omits obscurityTarget from request body when not provided", as
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({ recommendations: [], meta: { modeUsed: "fresh" } });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
-  await client.fetchRecommendations({ query: "dark ambient" });
+  await client.startSearch({ query: "dark ambient" });
   const body = parseJsonObject(String(calls[0].init?.body));
   assert.ok(!("obscurityTarget" in body), "obscurityTarget should not be in body when omitted");
 });
@@ -362,12 +357,12 @@ test("a long conversation sends the newest messages the API accepts", async () =
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (_url, init) => {
       bodies.push(parseJsonObject(String(init?.body)));
-      return jsonResponse({ recommendations: [] });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
   const messages = Array.from({ length: 60 }, (_, i) => ({ role: "user", content: i === 59 ? "x".repeat(9000) : `message ${i}` }));
 
-  await client.fetchRecommendations({ query: "more", messages, conversationId: "chat-1" });
+  await client.startSearch({ query: "more", messages, conversationId: "chat-1" });
 
   const sent = bodies[0]!.messages as Array<{ content: string }>;
   assert.equal(sent.length, 50);
@@ -410,18 +405,18 @@ test("chat client deletes a preference via DELETE /preferences/:id", async () =>
   assert.equal(calls[0].method, "DELETE");
 });
 
-test("fetchRecommendations forwards AbortSignal to fetch", async () => {
+test("starting a search forwards its AbortSignal to fetch", async () => {
   let capturedSignal: AbortSignal | null | undefined;
   const client = createChatClient({
     apiBaseUrl: "http://localhost:3001",
     fetchImpl: async (url, init) => {
       capturedSignal = init?.signal;
-      return jsonResponse({ recommendations: [], meta: {} });
+      return jsonResponse({ jobId: "job-1" }, { status: 202 });
     },
   });
 
   const controller = new AbortController();
-  await client.fetchRecommendations({ query: "post-metal", signal: controller.signal });
+  await client.startSearch({ query: "post-metal", signal: controller.signal });
   assert.equal(capturedSignal, controller.signal, "signal is forwarded to fetch");
 });
 

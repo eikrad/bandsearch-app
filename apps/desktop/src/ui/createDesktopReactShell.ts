@@ -16,6 +16,7 @@ interface CreateDesktopReactShellOptions {
     onObscurityTargetChange?: (target: string | undefined) => unknown;
     onRetrySearch?: () => unknown;
     onCancelSearch?: () => unknown;
+    onResumeSearch?: () => unknown;
     onFeedback?: (feedbackType: string) => unknown;
     onFeedbackDismiss?: () => unknown;
     setViewport?: (viewport: string) => void;
@@ -94,6 +95,10 @@ export function createDesktopReactShell({
     },
     cancelSearch() {
       renderAdapter.onCancelSearch?.();
+    },
+    /** Back in the app: picks up a search kept from before, failing like any search. */
+    async resumeSearch() {
+      return runSearch(() => renderAdapter.onResumeSearch?.());
     },
     async submitFeedback(feedbackType: string) {
       try {

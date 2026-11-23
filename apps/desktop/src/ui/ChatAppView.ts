@@ -690,10 +690,12 @@ function EmptyState({ modeValue, textSecondary, textTertiary }: { modeValue: str
   );
 }
 
-function UserMessageBubble({ msg, isLastUser, isSearching, theme, onRetry }: {
+function UserMessageBubble({ msg, isLastUser, isSearching, searchFailed, theme, onRetry }: {
   msg: MessageViewProps;
   isLastUser: boolean;
   isSearching: boolean;
+  /** The question's search failed: Retry stays in view, since a phone has no hover. */
+  searchFailed: boolean;
   theme: ReturnType<typeof getTheme>;
   onRetry?: () => void;
 }) {
@@ -730,7 +732,7 @@ function UserMessageBubble({ msg, isLastUser, isSearching, theme, onRetry }: {
             type: "button",
             onClick: onRetry,
             style: {
-              opacity: hovered ? 1 : 0,
+              opacity: hovered || searchFailed ? 1 : 0,
               transition: "opacity 0.15s",
               background: "transparent",
               border: `1px solid ${theme.border}`,
@@ -747,13 +749,14 @@ function UserMessageBubble({ msg, isLastUser, isSearching, theme, onRetry }: {
   );
 }
 
-function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread", isSearching = false }: {
+function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread", isSearching = false, searchFailed = false }: {
   messages: MessageViewProps[] | null | undefined;
   theme: ReturnType<typeof getTheme>;
   isMobile: boolean;
   handlers: ChatHandlers;
   assistantCardsMode?: string;
   isSearching?: boolean;
+  searchFailed?: boolean;
 }) {
   if (!messages?.length) return null;
   const railLatest = assistantCardsMode === "rail-latest";
@@ -772,6 +775,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
           msg,
           isLastUser: idx === lastUserIdx,
           isSearching,
+          searchFailed,
           theme,
           onRetry: handlers.onRetry,
         });
@@ -1018,6 +1022,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
                 handlers,
                 assistantCardsMode: "rail-latest",
                 isSearching: searchInFlight,
+                searchFailed: viewProps.searchFailed,
               }),
               !viewProps.messages && viewProps.cards.length > 0
                 ? React.createElement(
@@ -1064,6 +1069,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
               handlers,
               assistantCardsMode: "thread",
               isSearching: searchInFlight,
+              searchFailed: viewProps.searchFailed,
             }),
             viewProps.messages
               ? null

@@ -17,7 +17,7 @@ type RecommendationApiResponse = {
  * timeout value makes that deterministic, and every run spends search quota, so
  * it does not belong in the suite people run before committing.
  */
-/** The response of a streamed answer (its last event), or of a plain JSON one. */
+/** The answer of a followed search job: its last event, `done`. */
 function finalResponse(body: string): RecommendationApiResponse {
   const last = body.split("\n\n").filter((block) => block.startsWith("data: ")).at(-1);
   if (!last) return JSON.parse(body) as RecommendationApiResponse;
@@ -55,7 +55,7 @@ test.describe("Bandsearch UI", () => {
   test("recommendations come from the LLM, not deterministic fallback @live", async ({ page }) => {
     const apiResponses: RecommendationApiResponse[] = [];
 
-    await page.route("**/recommendations", async (route) => {
+    await page.route("**/recommendations/jobs/*", async (route) => {
       const response = await route.fetch();
       apiResponses.push(finalResponse(await response.text()));
       await route.fulfill({ response });

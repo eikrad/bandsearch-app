@@ -646,5 +646,17 @@
   "privacy.lastUpdated": {
     "status": "draft",
     "source": "9ab48a634d76"
+  },
+  "errors.searchLost": {
+    "status": "draft",
+    "source": "d3fff6c6ff96"
+  },
+  "errors.searchCancelled": {
+    "status": "draft",
+    "source": "70d98ff1087e"
+  },
+  "errors.searchDisconnected": {
+    "status": "draft",
+    "source": "00e928a98e25"
   }
 }

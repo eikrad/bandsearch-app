@@ -17,6 +17,14 @@ export function formatRecommendationQueryError(error: unknown): string {
         return t("errors.searchUnavailable");
       case "recommendation_unavailable":
         return t("errors.modelUnavailable");
+      // A search runs as a job on the server (ADR 0006); these are its ends
+      // that are not an answer.
+      case "search_lost":
+        return t("errors.searchLost");
+      case "search_cancelled":
+        return t("errors.searchCancelled");
+      case "search_disconnected":
+        return t("errors.searchDisconnected");
       case "validation_error":
         return typeof error.message === "string" && error.message.trim()
           ? error.message
