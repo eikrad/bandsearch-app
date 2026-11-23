@@ -1,5 +1,4 @@
 import i18next from "i18next";
-import { initReactI18next, useTranslation } from "react-i18next";
 
 import en from "./locales/en.json";
 import de from "./locales/de.json";
@@ -50,7 +49,8 @@ export function chooseInitialLanguage({ stored, system }: { stored: string | nul
 /** localStorage, or nothing where it is blocked (private mode, tests): the choice then lasts one run. */
 function browserStorage(): LanguageStorage | null {
   try {
-    return typeof globalThis.localStorage === "undefined" ? null : globalThis.localStorage;
+    // Through `window`: Node has an experimental global localStorage that warns when touched.
+    return (globalThis as { window?: { localStorage?: LanguageStorage } }).window?.localStorage ?? null;
   } catch {
     return null;
   }
@@ -76,7 +76,7 @@ function markDocument(language: Language): void {
 
 const initial = chooseInitialLanguage({ stored: readStored(browserStorage()), system: systemLanguages() });
 
-void i18next.use(initReactI18next).init({
+void i18next.init({
   resources,
   lng: initial,
   fallbackLng: "en",
@@ -105,10 +105,16 @@ export async function setLanguage(language: Language, storage: LanguageStorage |
   }
 }
 
-/** Text outside React (error and status messages): read at call time, in the current language. */
+/**
+ * The text for a key, in the current language. Views call it while they
+ * render, so they stay pure functions of their props; the app renders again
+ * when the language changes (`onLanguageChange`).
+ */
 export const t = i18next.t.bind(i18next);
 
-/** Text inside a view; the view re-renders when the language changes. */
-export function useT(): typeof t {
-  return useTranslation().t;
+/** Tells `listener` after every language change; returns the unsubscribe. */
+export function onLanguageChange(listener: (language: Language) => void): () => void {
+  const handler = () => listener(currentLanguage());
+  i18next.on("languageChanged", handler);
+  return () => i18next.off("languageChanged", handler);
 }

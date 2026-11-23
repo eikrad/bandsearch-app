@@ -1,5 +1,6 @@
 import type { UpdateBannerHandlers } from "./viewTypes.js";
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   bg: "#16233b",
@@ -49,7 +50,7 @@ export function UpdateBanner({
         fontSize: "13px",
       },
     },
-    React.createElement("span", null, `Bandsearch ${version} is available.`),
+    React.createElement("span", null, t("update.available", { version })),
     canAutoInstall &&
       React.createElement(
         "button",
@@ -68,7 +69,7 @@ export function UpdateBanner({
             cursor: "pointer",
           },
         },
-        "Install",
+        t("update.install"),
       ),
     React.createElement(
       "button",
@@ -85,7 +86,7 @@ export function UpdateBanner({
           padding: 0,
         },
       },
-      "Later",
+      t("update.later"),
     ),
   );
 }

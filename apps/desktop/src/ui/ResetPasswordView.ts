@@ -1,4 +1,5 @@
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -61,7 +62,7 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
       const result = await handlers.onResetPassword?.(email.trim(), recoveryCode.trim(), newPassword);
       if (result?.newRecoveryCode) setNewRecoveryCode(result.newRecoveryCode);
     } catch (err: unknown) {
-      setLocalError(err instanceof Error ? err.message : "reset failed");
+      setLocalError(err instanceof Error ? err.message : t("reset.failed"));
     } finally {
       setLoading(false);
     }
@@ -71,12 +72,12 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
     return React.createElement(
       "main",
       { style: { backgroundColor: palette.pageBg, color: palette.textPrimary, minHeight: "100vh", padding: "32px 24px", maxWidth: "480px", margin: "0 auto" } },
-      React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "12px" } }, "Password reset"),
-      React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, "Your password was updated. Save your new recovery code — it replaces the old one."),
+      React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "12px" } }, t("reset.doneTitle")),
+      React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, t("reset.doneBody")),
       React.createElement(
         "div",
         { style: { backgroundColor: palette.successBg, border: `1px solid ${palette.successBorder}`, borderRadius: "8px", padding: "16px", marginBottom: "24px" } },
-        React.createElement("p", { style: { fontSize: "11px", color: palette.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" } }, "New recovery code"),
+        React.createElement("p", { style: { fontSize: "11px", color: palette.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" } }, t("reset.newRecoveryCode")),
         React.createElement(
           "code",
           { style: { display: "block", backgroundColor: palette.successCodeBg, color: palette.successText, padding: "10px 12px", borderRadius: "6px", fontSize: "13px", letterSpacing: "0.05em", wordBreak: "break-all" } },
@@ -90,7 +91,7 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
           onClick: () => handlers.onDone?.(),
           style: { backgroundColor: palette.accent, color: "#0a0d14", border: "none", borderRadius: "8px", padding: "11px 18px", fontWeight: "600", fontSize: "14px", cursor: "pointer" },
         },
-        "I've saved it — sign in",
+        t("reset.doneContinue"),
       ),
     );
   }
@@ -98,8 +99,8 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
   return React.createElement(
     "main",
     { style: { backgroundColor: palette.pageBg, color: palette.textPrimary, minHeight: "100vh", padding: "32px 24px", maxWidth: "480px", margin: "0 auto" } },
-    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "8px" } }, "Reset password"),
-    React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, "Enter your email, the recovery code you received when creating your account, and a new password."),
+    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "8px" } }, t("reset.title")),
+    React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, t("reset.intro")),
     error && React.createElement("p", { style: { color: palette.errorText, fontSize: "13px", marginBottom: "16px" } }, error),
     React.createElement(
       "form",
@@ -107,7 +108,7 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
       React.createElement(
         "label",
         { style: labelStyle },
-        "Email",
+        t("auth.email"),
         React.createElement("input", {
           type: "email",
           value: email,
@@ -120,7 +121,7 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
       React.createElement(
         "label",
         { style: labelStyle },
-        "Recovery code",
+        t("auth.recoveryCode"),
         React.createElement("input", {
           type: "text",
           value: recoveryCode,
@@ -133,7 +134,7 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
       React.createElement(
         "label",
         { style: labelStyle },
-        "New password",
+        t("reset.newPassword"),
         React.createElement("input", {
           type: "password",
           value: newPassword,
@@ -150,13 +151,13 @@ export function ResetPasswordView({ viewProps, handlers }: { viewProps: ResetPas
           disabled: loading,
           style: { backgroundColor: palette.accent, color: "#0a0d14", border: "none", borderRadius: "8px", padding: "11px 18px", fontWeight: "600", fontSize: "14px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 },
         },
-        loading ? "Resetting…" : "Reset password",
+        loading ? t("reset.submitting") : t("reset.submit"),
       ),
     ),
     React.createElement(
       "button",
       { type: "button", onClick: () => handlers.onNavigateLogin?.(), style: { background: "none", border: "none", color: palette.textSecondary, fontSize: "13px", cursor: "pointer", padding: 0, marginTop: "16px" } },
-      "Back to sign in",
+      t("reset.toLogin"),
     ),
   );
 }

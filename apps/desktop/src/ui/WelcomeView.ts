@@ -1,5 +1,6 @@
 import type { WelcomeHandlers } from "./viewTypes.js";
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -36,12 +37,12 @@ export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: str
       React.createElement(
         "h1",
         { style: { fontSize: "22px", fontWeight: "700", letterSpacing: "-0.02em", marginBottom: "10px" } },
-        "Welcome to Bandsearch",
+        t("welcome.title"),
       ),
       React.createElement(
         "p",
         { style: { fontSize: "14px", color: palette.textSecondary, lineHeight: 1.55, margin: 0 } },
-        "Bandsearch finds niche music with AI language models hosted by Scaleway in France. Add a Scaleway API key once on this device, then you can start chatting. You can change it anytime in Settings.",
+        t("welcome.body"),
       ),
     ),
     React.createElement(
@@ -71,7 +72,7 @@ export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: str
             cursor: "pointer",
           },
         },
-        "Add API key",
+        t("welcome.addKey"),
       ),
       React.createElement(
         "button",
@@ -90,7 +91,7 @@ export function WelcomeView({ viewProps, handlers }: { viewProps?: { title?: str
             cursor: "pointer",
           },
         },
-        "Skip for now",
+        t("welcome.skip"),
       ),
     ),
   );

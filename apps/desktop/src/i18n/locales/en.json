@@ -1,5 +1,76 @@
 {
   "common": {
     "cancel": "Cancel"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "recoveryCode": "Recovery code"
+  },
+  "login": {
+    "title": "Sign in",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "failed": "login failed",
+    "toRegister": "Create an account →",
+    "toReset": "Forgot password? Use recovery code"
+  },
+  "register": {
+    "failed": "registration failed",
+    "createdTitle": "Account created",
+    "createdBody": "Save your recovery code somewhere safe. It's the only way to reset your password — it won't be shown again.",
+    "createdContinue": "I've saved it — continue",
+    "submitting": "Creating account…",
+    "submit": "Create account",
+    "title": "Create account",
+    "inviteCode": "Invite code",
+    "inviteHelp": "Enter the code from your invitation. It only works for the email address you were invited with.",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "How you want to be addressed",
+    "toLogin": "Already have an account? Sign in"
+  },
+  "reset": {
+    "failed": "reset failed",
+    "doneTitle": "Password reset",
+    "doneBody": "Your password was updated. Save your new recovery code — it replaces the old one.",
+    "newRecoveryCode": "New recovery code",
+    "doneContinue": "I've saved it — sign in",
+    "submitting": "Resetting…",
+    "submit": "Reset password",
+    "title": "Reset password",
+    "intro": "Enter your email, the recovery code you received when creating your account, and a new password.",
+    "newPassword": "New password",
+    "toLogin": "Back to sign in"
+  },
+  "welcome": {
+    "title": "Welcome to Bandsearch",
+    "body": "Bandsearch finds niche music with AI language models hosted by Scaleway in France. Add a Scaleway API key once on this device, then you can start chatting. You can change it anytime in Settings.",
+    "addKey": "Add API key",
+    "skip": "Skip for now"
+  },
+  "connecting": {
+    "waitingTitle": "Starting the server",
+    "longWaitTitle": "Still starting…",
+    "failedTitle": "Could not reach the server",
+    "waitingBody": "This can take a moment if the server has been idle.",
+    "longWaitBody": "A server that has been idle can take up to a minute to wake up.",
+    "failedBody": "The server did not respond. Check your connection, or the API endpoint in Settings.",
+    "retry": "Try again"
+  },
+  "update": {
+    "available": "Bandsearch {{version}} is available.",
+    "install": "Install",
+    "later": "Later"
+  },
+  "obscurity": {
+    "cult": "Cult Following",
+    "underground": "Underground",
+    "obscure": "Truly Obscure"
+  },
+  "feedback": {
+    "question": "How were these picks?",
+    "good": "Spot on",
+    "tooMainstream": "Too mainstream",
+    "wrongDirection": "Wrong direction"
   }
 }
