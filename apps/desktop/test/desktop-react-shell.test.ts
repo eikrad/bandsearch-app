@@ -9,6 +9,7 @@ import { createDesktopReactShell } from "../src/ui/createDesktopReactShell.js";
 import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
 import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 import type { ReactElement } from "react";
+import type { Route } from "../src/createHashRouter.js";
 
 test("desktop react shell renders HTML with recommendation card and actions", async () => {
   const appState: { messages: ChatStateMessage[] } = { messages: [] };
@@ -185,7 +186,7 @@ test("desktop react shell renderHtml includes all three obscurity picker buttons
 // "Saved Fen." stayed on screen until the next click. Driven through the real
 // mount: what matters is what was painted, not what the shell holds.
 function statusRepaintHarness() {
-  let route = "home";
+  let route: Route = "home";
   const routeListeners: Array<() => void> = [];
   let fireTimer: () => void = () => {};
   const shell = createDesktopReactShell({

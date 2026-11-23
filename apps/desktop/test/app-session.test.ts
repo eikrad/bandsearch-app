@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createAppSession, type AppSessionDeps } from "../src/appSession.js";
 import type { AuthStatus } from "../src/authApiClient.js";
+import type { Route } from "../src/createHashRouter.js";
 
 type Status = AuthStatus;
 
@@ -18,7 +19,7 @@ const DOWN: Status = { reachable: false, reason: "http_502" };
 function harness({
   statuses = [ACCOUNTS_ON()],
   token = null as string | null,
-  route = "home",
+  route = "home" as Route,
   auth = {} as Partial<AppSessionDeps["auth"]>,
 } = {}) {
   let currentRoute = route;

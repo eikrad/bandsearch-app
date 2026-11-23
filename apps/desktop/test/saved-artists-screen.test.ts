@@ -10,6 +10,7 @@ import type { SavedArtistsHandlers, SavedArtistsViewProps } from "../src/ui/view
 import type { StatusMessageOptions } from "../src/statusMessage.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "../src/domain.js";
 import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
+import type { Route } from "../src/createHashRouter.js";
 
 // These tests pair the real shell with the real view. Every other saved-artists
 // test feeds the view a hand-written prop object, which is how the shell's
@@ -194,14 +195,14 @@ test("landing directly on the saved route loads the artists", async () => {
 });
 
 test("arriving via the Saved button loads the artists", async () => {
-  let route = "home";
+  let route: Route = "home";
   const listeners: Array<() => void> = [];
   const shell = createSavedArtistsShell({ app: fakeShellApp({ listSavedBands: async () => [CODEINE] }) });
   const mount = createDesktopReactMount({
     shell: { getViewProps: () => ({}), updateMode: async () => {}, submitQuery: async () => {} },
     router: {
       getRoute: () => route,
-      navigate: (r: string) => { route = r; listeners.forEach((fn) => fn()); },
+      navigate: (r: Route) => { route = r; listeners.forEach((fn) => fn()); },
       onRouteChange: (fn: () => void) => { listeners.push(fn); },
     },
     savedArtistsShell: shell,

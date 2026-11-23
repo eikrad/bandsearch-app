@@ -7,7 +7,7 @@ import {
   type DesktopReactMountOptions,
 } from "../src/ui/mountDesktopReactApp.js";
 import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
-import { createHashRouter } from "../src/createHashRouter.js";
+import { createHashRouter, type Route } from "../src/createHashRouter.js";
 
 type MountShell = DesktopReactMountOptions["shell"];
 type MountRouter = NonNullable<DesktopReactMountOptions["router"]>;
@@ -46,12 +46,12 @@ function makeShell(overrides: Partial<MountShell> = {}): MountShell {
   };
 }
 
-function makeRouter(initialRoute = "home"): MountRouter {
+function makeRouter(initialRoute: Route = "home"): MountRouter {
   let route = initialRoute;
-  const callbacks: Array<(route: string) => void> = [];
+  const callbacks: Array<(route: Route) => void> = [];
   return {
     getRoute: () => route,
-    navigate: (r: string) => {
+    navigate: (r: Route) => {
       route = r;
       callbacks.forEach((fn) => fn(r));
     },

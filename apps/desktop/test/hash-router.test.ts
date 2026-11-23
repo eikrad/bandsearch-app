@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHashRouter } from "../src/createHashRouter.js";
+import { createHashRouter, ROUTES, type Route } from "../src/createHashRouter.js";
 
 function createTestRouter(initialHash = "") {
   let currentHash = initialHash;
@@ -164,4 +164,28 @@ test("a hash change from outside, such as the back button, is still reported", (
   setHashFromOutside("#/");
 
   assert.deepEqual(changes, ["saved", "home"]);
+});
+
+test("every route the app knows can be navigated to and read back as itself", () => {
+  const routes = Object.keys(ROUTES) as Route[];
+  assert.ok(routes.length > 0);
+  for (const route of routes) {
+    const { router } = createTestRouter("");
+    router.navigate(route);
+    assert.equal(router.getRoute(), route, `navigate("${route}") read back as "${router.getRoute()}"`);
+  }
+});
+
+test("every route opens from its own URL hash", () => {
+  for (const [route, hash] of Object.entries(ROUTES)) {
+    const { router } = createTestRouter(hash);
+    assert.equal(router.getRoute(), route);
+  }
+});
+
+test("navigating to a route the app does not know fails loudly instead of going home", () => {
+  const { router } = createTestRouter("#/saved");
+  // @ts-expect-error a misspelt route is a type error; typecheck fails if it is not
+  assert.throws(() => router.navigate("conecting"), /unknown route "conecting"/);
+  assert.equal(router.getRoute(), "saved");
 });
