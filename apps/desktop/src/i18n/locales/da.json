@@ -1,1 +1,204 @@
-{}
+{
+  "common": {
+    "cancel": "Annuller",
+    "loading": "Indlæser…",
+    "back": "Tilbage"
+  },
+  "auth": {
+    "email": "E-mail",
+    "password": "Adgangskode",
+    "recoveryCode": "Gendannelseskode"
+  },
+  "login": {
+    "title": "Log ind",
+    "submit": "Log ind",
+    "submitting": "Logger ind…",
+    "failed": "login mislykkedes",
+    "toRegister": "Opret konto →",
+    "toReset": "Glemt adgangskode? Brug gendannelseskode"
+  },
+  "register": {
+    "failed": "registrering mislykkedes",
+    "createdTitle": "Konto oprettet",
+    "createdBody": "Gem din gendannelseskode et sikkert sted. Det er den eneste måde at nulstille din adgangskode på – den vises ikke igen.",
+    "createdContinue": "Jeg har gemt den – fortsæt",
+    "submitting": "Opretter konto…",
+    "submit": "Opret konto",
+    "title": "Opret konto",
+    "inviteCode": "Invitationskode",
+    "inviteHelp": "Indtast koden fra din invitation. Den virker kun for den e-mail-adresse, du blev inviteret med.",
+    "displayName": "Visningsnavn",
+    "displayNamePlaceholder": "Hvordan du vil blive tiltalt",
+    "toLogin": "Har du allerede en konto? Log ind"
+  },
+  "reset": {
+    "failed": "nulstilling mislykkedes",
+    "doneTitle": "Adgangskode nulstillet",
+    "doneBody": "Din adgangskode er opdateret. Gem din nye gendannelseskode – den erstatter den gamle.",
+    "newRecoveryCode": "Ny gendannelseskode",
+    "doneContinue": "Jeg har gemt den – log ind",
+    "submitting": "Nulstiller…",
+    "submit": "Nulstil adgangskode",
+    "title": "Nulstil adgangskode",
+    "intro": "Indtast din e-mail, den gendannelseskode, du modtog ved oprettelsen af kontoen, og en ny adgangskode.",
+    "newPassword": "Ny adgangskode",
+    "toLogin": "Tilbage til login"
+  },
+  "welcome": {
+    "title": "Velkommen til Bandsearch",
+    "body": "Bandsearch finder nichemusik med AI-sprogmodeller, som hostes af Scaleway i Frankrig. Tilføj en Scaleway API-nøgle én gang på denne enhed, så kan du begynde at chatte. Du kan ændre den når som helst under Indstillinger.",
+    "addKey": "Tilføj API-nøgle",
+    "skip": "Spring over for nu"
+  },
+  "connecting": {
+    "waitingTitle": "Starter serveren",
+    "longWaitTitle": "Starter stadig…",
+    "failedTitle": "Kunne ikke oprette forbindelse til serveren",
+    "waitingBody": "Dette kan tage et øjeblik, hvis serveren har været inaktiv.",
+    "longWaitBody": "En inaktiv server kan tage op til et minut at starte op.",
+    "failedBody": "Serveren svarede ikke. Tjek din forbindelse eller API-endepunktet under Indstillinger.",
+    "retry": "Prøv igen"
+  },
+  "update": {
+    "available": "Bandsearch {{version}} er tilgængelig.",
+    "install": "Installer",
+    "later": "Senere"
+  },
+  "obscurity": {
+    "cult": "Kultstatus",
+    "underground": "Underground",
+    "obscure": "Helt ukendt"
+  },
+  "feedback": {
+    "question": "Hvordan var disse valg?",
+    "good": "Præcis",
+    "tooMainstream": "For mainstream",
+    "wrongDirection": "Forkert retning"
+  },
+  "settings": {
+    "title": "Indstillinger",
+    "back": "← Anbefalinger",
+    "subtitle": "Dine nøgler gemmes lokalt på denne enhed og sendes til Bandsearch API-processen.",
+    "missingKeys_one": "{{names}} API-nøgle er endnu ikke konfigureret. Tilføj den nedenfor, så anbefalinger kan køre.",
+    "missingKeys_other": "{{names}} API-nøgler er endnu ikke konfigureret. Tilføj dem nedenfor, så anbefalinger kan køre.",
+    "fromEnv": "✓ Til stede — indlæst fra .env",
+    "override": "Overskriv",
+    "saveKey": "Gem nøgle",
+    "keyReplace": "Indtast en ny nøgle for at erstatte den gemte nøgle",
+    "scalewayKey": "Scaleway API-nøgle",
+    "scalewayKeyPlaceholder": "Indsæt din Scaleway API-nøgle",
+    "braveKey": "Brave Search API-nøgle",
+    "braveKeyPlaceholder": "Indsæt din Brave Search API-nøgle",
+    "turso": {
+      "title": "Turso synkronisering på tværs af enheder",
+      "intro": "Tilføj en Turso database-URL for at synkronisere dine gemte kunstnere på tværs af enheder. Dine lokale data overføres ikke automatisk – ekporter dem først, og importer dem derefter, når du skifter.",
+      "connected": "Forbundet til Turso. Dine lokale SQLite-data er stadig på denne enhed – du kan skifte tilbage når som helst.",
+      "url": "Database-URL",
+      "urlReplace": "Indtast en ny URL for at erstatte den gemte URL",
+      "token": "Godkendelses-token",
+      "tokenReplace": "Indtast et nyt token for at erstatte det gemte token",
+      "tokenPlaceholder": "Indsæt dit Turso godkendelses-token",
+      "save": "Gem og forbind",
+      "clear": "Skift tilbage til lokal SQLite"
+    },
+    "endpoint": {
+      "title": "API-endepunkt",
+      "remote": "Forbundet til en ekstern API på {{url}}. Den indbyggede lokale app startes ikke, når en ekstern endpoint er sat.",
+      "local": "Bruger den indbyggede lokale app. Indtast en ekstern URL for at forbinde til en hostet Bandsearch-API i stedet.",
+      "url": "Ekstern API-URL",
+      "urlReplace": "Indtast en ny URL for at erstatte den gemte endpoint",
+      "save": "Gem endpoint",
+      "reset": "Nulstil til lokal",
+      "keysInactive": "En ekstern endpoint er aktiv – nøglerne nedenfor konfigurerer den indbyggede lokale app og gælder kun, hvis du nulstiller til lokal."
+    },
+    "privacy": {
+      "title": "Privatsfære og data",
+      "intro": "Læs, hvad Bandsearch indsamler, og hvorfor, eller hent en kopi af alt, det har gemt om dig.",
+      "policy": "Privatsfærepolitik",
+      "export": "Eksportér mine data",
+      "deleteWarning": "Sletning af din konto sletter dine gemte kunstnere, grupper og chatforløb. Dette kan ikke fortrydes.",
+      "deleteConfirm": "Bekræft din adgangskode for at slette denne konto permanent",
+      "deletePermanently": "Slet permanent",
+      "delete": "Slet konto"
+    },
+    "status": {
+      "keyEmpty": "Indtast en ugyldig API-nøgle.",
+      "keySaved": "Gemt. API-processen blev genstartet med din nøgle.",
+      "keyFailed": "Kunne ikke gemme nøglen.",
+      "keyStoredInBrowser": "Gemt i browserlager (kun udvikling). Brug en .env-fil eller desktopappen til produktion.",
+      "braveKeyEmpty": "Indtast en ugyldig Brave API-nøgle.",
+      "braveKeySaved": "Gemt. API-processen blev genstartet med din Brave-nøgle.",
+      "tursoUrlEmpty": "Indtast en ugyldig database-URL.",
+      "tursoConnectionFailed": "Forbindelsen mislykkedes.",
+      "tursoSaved": "Gemt. Synkroniserer via Turso fra næste genstart.",
+      "tursoFailed": "Kunne ikke gemme konfigurationen.",
+      "tursoStoredInBrowser": "Gemt i browserlager (kun udvikling).",
+      "endpointInvalid": "Indtast en gyldig http(s)-URL, eller lad feltet stå tomt for at bruge den indbyggede lokale app.",
+      "endpointSaved": "Gemt. Appen bruger den eksterne API fra næste genstart.",
+      "endpointReset": "Nulstillet. Appen bruger den indbyggede lokale API fra næste genstart.",
+      "endpointFailed": "Kunne ikke gemme endpoint.",
+      "tursoCleared": "Skiftet til lokal SQLite.",
+      "tursoClearFailed": "Kunne ikke rydde konfigurationen."
+    },
+    "language": {
+      "title": "Sprog",
+      "chatNote": "Chatsvar følger det sprog, du skriver på."
+    }
+  },
+  "savedArtists": {
+    "title": "Gemte kunstnere",
+    "subtitle": "Dine stilreferencer",
+    "useAsStyleRef": "Brug som stilreference",
+    "remove": "Fjern {{name}}",
+    "deleteGroup": "Slet gruppe {{name}}",
+    "add": "Tilføj",
+    "addArtist": "Tilføj kunstner",
+    "searchPlaceholder": "Søg MusicBrainz…",
+    "search": "Søg",
+    "searching": "Søger…",
+    "selected_one": "{{count}} valgt",
+    "selected_other": "{{count}} valgt",
+    "emptyGroup": "Ingen kunstnere i denne gruppe",
+    "groupByGenre": "Gruppér efter genre",
+    "newGroupPlaceholder": "Nyt gruppenavn…",
+    "createGroup": "Opret",
+    "export": "Eksportér",
+    "import": "Importer",
+    "empty": "Ingen gemte kunstnere endnu. Gem kunstnere fra anbefalingskort.",
+    "addedViaSearch": "Tilføjet via søgning.",
+    "status": {
+      "imported_one": "Importeret {{count}} kunstner.",
+      "imported_other": "Importeret {{count}} kunstnere.",
+      "importedSkipped_one": "Importeret {{count}} kunstner, {{skipped}} allerede gemt.",
+      "importedSkipped_other": "Importeret {{count}} kunstnere, {{skipped}} allerede gemt.",
+      "importedFailed_one": "Importeret {{count}} kunstner; {{failed}} kunne ikke importeres.",
+      "importedFailed_other": "Importeret {{count}} kunstnere; {{failed}} kunne ikke importeres.",
+      "notAnExport": "Den fil er ikke en Bandsearch-eksport.",
+      "loadFailed": "Kunne ikke indlæse dine gemte kunstnere.",
+      "searchFailed": "Søgning efter kunstner mislykkedes.",
+      "addFailed": "Kunne ikke tilføje {{name}}.",
+      "added": "Tilføjet {{name}}.",
+      "removeFailed": "Kunne ikke fjerne {{name}}.",
+      "removed": "Fjernet {{name}}.",
+      "exportFailed": "Eksport mislykkedes.",
+      "importFailed": "Import mislykkedes.",
+      "createGroupFailed": "Kunne ikke oprette gruppen {{name}}.",
+      "deleteGroupFailed": "Kunne ikke slette gruppen.",
+      "autoGroupFailed": "Kunne ikke gruppere efter genre."
+    }
+  },
+  "errors": {
+    "rateLimited": "For mange anbefalingsforespørgsler på kort tid. Vent et minut og prøv igen.",
+    "starting": "Anbefalinger startes stadig op. Vent nogle sekunder og prøv igen.",
+    "musicBrainzUnavailable": "Musiksøgning (MusicBrainz) er midlertidigt utilgængelig. Tjek din netværksforbindelse og prøv igen.",
+    "searchUnavailable": "Websøgning (Brave) er midlertidigt utilgængelig. Tjek din netværksforbindelse og prøv igen om et øjeblik.",
+    "modelUnavailable": "AI-modellen kunne ikke returnere anbefalinger. Åbn Indstillinger og bekræft din Scaleway API-nøgle. Hvis den er korrekt, kan modellen være optaget eller utilgængelig – prøv igen om et øjeblik.",
+    "invalidRequest": "Den forespørgsel kunne ikke behandles. Prøv at omformulere din besked.",
+    "tooManyRequests": "For mange forespørgsler. Vent et øjeblik og prøv igen.",
+    "unreachableStarting": "Kunne ikke nå Bandsearch API. Hvis appen lige er startet, vent indtil API er klar, og prøv igen.",
+    "unreachable": "Kunne ikke oprette forbindelse til Bandsearch API. Kontrollér, at API-serveren kører."
+  },
+  "privacy": {
+    "lastUpdated": "Sidst opdateret {{date}}"
+  }
+}

@@ -360,6 +360,34 @@ npm run test:e2e  # Playwright end-to-end smoke tests (spins up the API and a st
 
 Lint, typecheck and tests run automatically before every commit via a pre-commit hook (installed by `npm install`). CI runs on both `ubuntu-latest` and `windows-latest` via a GitHub Actions matrix.
 
+### Translations (English, German, Danish)
+
+The app's text lives in `apps/desktop/src/i18n/locales/`. English (`en.json`) is
+the source; German and Danish are drafted by a model and reviewed by a person.
+
+```bash
+npm run i18n:translate          # draft new, changed and missing strings (de, da) via Scaleway; or: -- de
+npm run i18n:review -- da       # walk the drafts one by one: accept, edit, reject; the glossary comes first
+npm run i18n:check              # what CI checks: missing keys, placeholders, plural forms, glossary words
+```
+
+- **New or changed text:** add it to `en.json` (a key the views use must exist
+  there, or the typecheck fails), then run `i18n:translate`. CI fails until every
+  language has the key.
+- **Glossary** (`apps/desktop/src/i18n/glossary.json`): fixed words for key terms
+  and names that stay as they are, plus the tone per language (German "du").
+  Translations must use them; the check enforces it.
+- **Review state** (`apps/desktop/src/i18n/review/`): `draft` or `reviewed` per
+  string, with the English it was made from. A reviewed string is never redrafted
+  unless its English changes. Drafts are shown in the app; the privacy policy is
+  binding in all three languages and will show English until reviewed (#329).
+- `I18N_MODEL` picks the model (default `mistral-medium-3.5-128b`); the key comes
+  from `SCW_SECRET_KEY` or the repository's `.env`.
+- **Another language:** add it to `SUPPORTED_LANGUAGES` and `LANGUAGE_NAMES`
+  (`apps/desktop/src/i18n/i18n.ts`) and `TARGET_LANGUAGES`
+  (`apps/desktop/scripts/i18n/catalog.ts`), give every glossary term a rendering
+  and a style line, then run `i18n:translate` and `i18n:review`.
+
 ### Golden runs and the eval dashboard
 
 The golden set (`services/eval/golden-set.json`) is the regression check for recommendation quality. With the API running:

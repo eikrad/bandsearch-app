@@ -1,4 +1,5 @@
 import test from "node:test";
+import i18next from "i18next";
 import assert from "node:assert/strict";
 
 import {
@@ -53,9 +54,11 @@ test("choosing a language switches the text and is remembered for the next start
 });
 
 test("a key with no text in the chosen language falls back to English", async () => {
+  // A key only English has, as when a new string has not been translated yet.
+  i18next.addResource("en", "translation", "testOnly.newText", "Only in English so far");
   try {
     await setLanguage("da", memoryStorage());
-    assert.equal(t("common.cancel"), "Cancel");
+    assert.equal(t("testOnly.newText" as never), "Only in English so far");
   } finally {
     await setLanguage("en", memoryStorage());
   }

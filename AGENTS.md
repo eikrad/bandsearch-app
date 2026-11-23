@@ -56,6 +56,15 @@ and the research logs all import it, so none of them restates it.
   unnoticed until the user saw it: every level drifted toward Truly Obscure
   (#325). Example of the one home: `services/api/src/obscurityTargets.ts`.
 
+### UI text
+
+Every text the app shows comes from `apps/desktop/src/i18n/locales/en.json`
+(views call `t("key")`); never write user-facing text into a view. After adding
+or changing English text, run `npm run i18n:translate` so German and Danish get
+drafts, or `npm test` fails. Drafts need a person (`npm run i18n:review`);
+do not mark strings `reviewed` yourself. Chat replies are not UI text: they
+follow `services/api/src/replyLanguage.ts`.
+
 ### TypeScript
 
 Application, test, and JS-toolchain config code is TypeScript only (`strict` + `noImplicitAny`). Do not add new `.js` / `.mjs` sources.
