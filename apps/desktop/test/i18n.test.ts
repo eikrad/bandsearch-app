@@ -9,6 +9,9 @@ import {
   setLanguage,
   currentLanguage,
   t,
+  formatList,
+  formatDate,
+  formatNumber,
 } from "../src/i18n/i18n.js";
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -61,4 +64,19 @@ test("a key with no text in the chosen language falls back to English", async ()
 test("a key the English catalog does not have is a type error", () => {
   // @ts-expect-error a missing key must fail the typecheck (#329)
   t("common.thisKeyDoesNotExist");
+});
+
+test("lists, dates and numbers follow the chosen language", async () => {
+  try {
+    await setLanguage("de", memoryStorage());
+    assert.equal(formatList(["Scaleway", "Brave Search"]), "Scaleway und Brave Search");
+    assert.equal(formatDate("2026-11-18"), "18. November 2026");
+    assert.equal(formatNumber(12500), "12.500");
+    await setLanguage("en", memoryStorage());
+    assert.equal(formatList(["Scaleway", "Brave Search"]), "Scaleway and Brave Search");
+    assert.equal(formatDate("2026-11-18"), "November 18, 2026");
+    assert.equal(formatNumber(12500), "12,500");
+  } finally {
+    await setLanguage("en", memoryStorage());
+  }
 });

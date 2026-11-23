@@ -1,3 +1,4 @@
+import { t } from "./i18n/i18n.js";
 import { FIRST_RUN_ONBOARDING_STORAGE_KEY } from "./firstRunOnboarding.js";
 
 export const API_ENDPOINT_STORAGE_KEY = "bandsearch_api_endpoint_url";
@@ -158,7 +159,7 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
   async function saveLlmApiKey(apiKey: string) {
     const trimmed = String(apiKey || "").trim();
     if (!trimmed) {
-      llmStatus = { type: "error", text: "Enter a non-empty API key." };
+      llmStatus = { type: "error", text: t("settings.status.keyEmpty") };
       return;
     }
 
@@ -167,11 +168,11 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
         await invokeTauri("save_llm_api_key", { apiKey: trimmed });
         llmStatus = {
           type: "success",
-          text: "Saved. The API process was restarted with your key.",
+          text: t("settings.status.keySaved"),
         };
       } catch (e) {
         const err = e as { message?: string };
-        llmStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+        llmStatus = { type: "error", text: String(err?.message || e || t("settings.status.keyFailed")) };
       }
       return;
     }
@@ -181,18 +182,18 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
       globalThis.localStorage?.setItem(FIRST_RUN_ONBOARDING_STORAGE_KEY, "1");
       llmStatus = {
         type: "success",
-        text: "Stored in browser storage (development only). Use a .env file or the desktop app for production.",
+        text: t("settings.status.keyStoredInBrowser"),
       };
     } catch (e) {
       const err = e as { message?: string };
-      llmStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+      llmStatus = { type: "error", text: String(err?.message || e || t("settings.status.keyFailed")) };
     }
   }
 
   async function saveBraveApiKey(apiKey: string) {
     const trimmed = String(apiKey || "").trim();
     if (!trimmed) {
-      braveStatus = { type: "error", text: "Enter a non-empty Brave API key." };
+      braveStatus = { type: "error", text: t("settings.status.braveKeyEmpty") };
       return;
     }
 
@@ -201,11 +202,11 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
         await invokeTauri("save_brave_api_key", { apiKey: trimmed });
         braveStatus = {
           type: "success",
-          text: "Saved. The API process was restarted with your Brave key.",
+          text: t("settings.status.braveKeySaved"),
         };
       } catch (e) {
         const err = e as { message?: string };
-        braveStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+        braveStatus = { type: "error", text: String(err?.message || e || t("settings.status.keyFailed")) };
       }
       return;
     }
@@ -214,11 +215,11 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
       globalThis.localStorage?.setItem("bandsearch_brave_api_key", trimmed);
       braveStatus = {
         type: "success",
-        text: "Stored in browser storage (development only). Use a .env file or the desktop app for production.",
+        text: t("settings.status.keyStoredInBrowser"),
       };
     } catch (e) {
       const err = e as { message?: string };
-      braveStatus = { type: "error", text: String(err?.message || e || "Could not save key.") };
+      braveStatus = { type: "error", text: String(err?.message || e || t("settings.status.keyFailed")) };
     }
   }
 
@@ -226,26 +227,26 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
     const url = String(databaseUrl || "").trim();
     const token = String(authToken || "").trim();
     if (!url) {
-      tursoStatus = { type: "error", text: "Enter a non-empty database URL." };
+      tursoStatus = { type: "error", text: t("settings.status.tursoUrlEmpty") };
       return;
     }
 
     const probe = probeTursoConnection ?? defaultProbeTursoConnection;
     const probeResult = await probe(url, token);
     if (!probeResult.ok) {
-      tursoStatus = { type: "error", text: probeResult.error || "Connection failed." };
+      tursoStatus = { type: "error", text: probeResult.error || t("settings.status.tursoConnectionFailed") };
       return;
     }
 
     if (typeof invokeTauri === "function") {
       try {
         await invokeTauri("save_turso_config", { databaseUrl: url, authToken: token });
-        tursoStatus = { type: "success", text: "Saved. Syncing via Turso from next restart." };
+        tursoStatus = { type: "success", text: t("settings.status.tursoSaved") };
       } catch (e) {
         const err = e as { message?: string };
         tursoStatus = {
           type: "error",
-          text: String(err?.message || e || "Could not save config."),
+          text: String(err?.message || e || t("settings.status.tursoFailed")),
         };
       }
       return;
@@ -254,12 +255,12 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
     try {
       globalThis.localStorage?.setItem("bandsearch_turso_database_url", url);
       globalThis.localStorage?.setItem("bandsearch_turso_auth_token", token);
-      tursoStatus = { type: "success", text: "Stored in browser storage (development only)." };
+      tursoStatus = { type: "success", text: t("settings.status.tursoStoredInBrowser") };
     } catch (e) {
       const err = e as { message?: string };
       tursoStatus = {
         type: "error",
-        text: String(err?.message || e || "Could not save config."),
+        text: String(err?.message || e || t("settings.status.tursoFailed")),
       };
     }
   }
@@ -270,14 +271,14 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
     if (trimmed && !isHttpUrl(trimmed)) {
       apiEndpointStatus = {
         type: "error",
-        text: "Enter a valid http(s) URL, or leave blank to use the built-in local app.",
+        text: t("settings.status.endpointInvalid"),
       };
       return;
     }
 
     const successText = trimmed
-      ? "Saved. The app will use the remote API from the next restart."
-      : "Reset. The app will use the built-in local API from the next restart.";
+      ? t("settings.status.endpointSaved")
+      : t("settings.status.endpointReset");
 
     if (typeof invokeTauri === "function") {
       try {
@@ -285,7 +286,7 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
         apiEndpointStatus = { type: "success", text: successText };
       } catch (e) {
         const err = e as { message?: string };
-        apiEndpointStatus = { type: "error", text: String(err?.message || e || "Could not save endpoint.") };
+        apiEndpointStatus = { type: "error", text: String(err?.message || e || t("settings.status.endpointFailed")) };
       }
       return;
     }
@@ -297,7 +298,7 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
       apiEndpointStatus = { type: "success", text: successText };
     } catch (e) {
       const err = e as { message?: string };
-      apiEndpointStatus = { type: "error", text: String(err?.message || e || "Could not save endpoint.") };
+      apiEndpointStatus = { type: "error", text: String(err?.message || e || t("settings.status.endpointFailed")) };
     }
   }
 
@@ -305,10 +306,10 @@ export function createDesktopSettingsController(options: DesktopSettingsControll
     if (typeof invokeTauri === "function") {
       try {
         await invokeTauri("clear_turso_config");
-        tursoStatus = { type: "success", text: "Switched to local SQLite." };
+        tursoStatus = { type: "success", text: t("settings.status.tursoCleared") };
       } catch (e) {
         const err = e as { message?: string };
-        tursoStatus = { type: "error", text: String(err?.message || e || "Could not clear config.") };
+        tursoStatus = { type: "error", text: String(err?.message || e || t("settings.status.tursoClearFailed")) };
       }
     }
   }

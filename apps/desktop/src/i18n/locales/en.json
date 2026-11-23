@@ -1,6 +1,8 @@
 {
   "common": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "back": "Back"
   },
   "auth": {
     "email": "Email",
@@ -72,5 +74,127 @@
     "good": "Spot on",
     "tooMainstream": "Too mainstream",
     "wrongDirection": "Wrong direction"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "← Recommendations",
+    "subtitle": "Your keys are stored locally on this device and passed to the Bandsearch API process.",
+    "missingKeys_one": "{{names}} API key is not configured yet. Add it below so recommendations can run.",
+    "missingKeys_other": "{{names}} API keys are not configured yet. Add them below so recommendations can run.",
+    "fromEnv": "✓ Present — loaded from .env",
+    "override": "Override",
+    "saveKey": "Save key",
+    "keyReplace": "Enter a new key to replace the saved key",
+    "scalewayKey": "Scaleway API key",
+    "scalewayKeyPlaceholder": "Paste your Scaleway API key",
+    "braveKey": "Brave Search API key",
+    "braveKeyPlaceholder": "Paste your Brave Search API key",
+    "turso": {
+      "title": "Turso cross-device sync",
+      "intro": "Add a Turso database URL to sync your saved artists across devices. Your local data won’t transfer automatically — export it first, then import after switching.",
+      "connected": "Connected to Turso. Your local SQLite data is still on this device — switch back any time.",
+      "url": "Database URL",
+      "urlReplace": "Enter a new URL to replace the saved URL",
+      "token": "Auth token",
+      "tokenReplace": "Enter a new token to replace the saved token",
+      "tokenPlaceholder": "Paste your Turso auth token",
+      "save": "Save and connect",
+      "clear": "Switch back to local SQLite"
+    },
+    "endpoint": {
+      "title": "API endpoint",
+      "remote": "Connected to a remote API at {{url}}. The built-in local app is not started while a remote endpoint is set.",
+      "local": "Using the built-in local app. Enter a remote URL to connect to a hosted Bandsearch API instead.",
+      "url": "Remote API URL",
+      "urlReplace": "Enter a new URL to replace the saved endpoint",
+      "save": "Save endpoint",
+      "reset": "Reset to local",
+      "keysInactive": "A remote endpoint is active — the keys below configure the built-in local app and apply only if you reset to local."
+    },
+    "privacy": {
+      "title": "Privacy & data",
+      "intro": "Read what Bandsearch collects and why, or download a copy of everything it holds about you.",
+      "policy": "Privacy policy",
+      "export": "Export my data",
+      "deleteWarning": "Deleting your account erases your saved artists, groups and chat history. This cannot be undone.",
+      "deleteConfirm": "Confirm your password to delete this account permanently",
+      "deletePermanently": "Permanently delete",
+      "delete": "Delete account"
+    },
+    "status": {
+      "keyEmpty": "Enter a non-empty API key.",
+      "keySaved": "Saved. The API process was restarted with your key.",
+      "keyFailed": "Could not save key.",
+      "keyStoredInBrowser": "Stored in browser storage (development only). Use a .env file or the desktop app for production.",
+      "braveKeyEmpty": "Enter a non-empty Brave API key.",
+      "braveKeySaved": "Saved. The API process was restarted with your Brave key.",
+      "tursoUrlEmpty": "Enter a non-empty database URL.",
+      "tursoConnectionFailed": "Connection failed.",
+      "tursoSaved": "Saved. Syncing via Turso from next restart.",
+      "tursoFailed": "Could not save config.",
+      "tursoStoredInBrowser": "Stored in browser storage (development only).",
+      "endpointInvalid": "Enter a valid http(s) URL, or leave blank to use the built-in local app.",
+      "endpointSaved": "Saved. The app will use the remote API from the next restart.",
+      "endpointReset": "Reset. The app will use the built-in local API from the next restart.",
+      "endpointFailed": "Could not save endpoint.",
+      "tursoCleared": "Switched to local SQLite.",
+      "tursoClearFailed": "Could not clear config."
+    }
+  },
+  "savedArtists": {
+    "title": "Saved Artists",
+    "subtitle": "Your style references",
+    "useAsStyleRef": "Use as style reference",
+    "remove": "Remove {{name}}",
+    "deleteGroup": "Delete group {{name}}",
+    "add": "Add",
+    "addArtist": "Add artist",
+    "searchPlaceholder": "Search MusicBrainz…",
+    "search": "Search",
+    "searching": "Searching…",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "emptyGroup": "No artists in this group",
+    "groupByGenre": "Group by genre",
+    "newGroupPlaceholder": "New group name…",
+    "createGroup": "Create",
+    "export": "Export",
+    "import": "Import",
+    "empty": "No saved artists yet. Save artists from recommendation cards.",
+    "addedViaSearch": "Added via search.",
+    "status": {
+      "imported_one": "Imported {{count}} artist.",
+      "imported_other": "Imported {{count}} artists.",
+      "importedSkipped_one": "Imported {{count}} artist, {{skipped}} already saved.",
+      "importedSkipped_other": "Imported {{count}} artists, {{skipped}} already saved.",
+      "importedFailed_one": "Imported {{count}} artist; {{failed}} could not be imported.",
+      "importedFailed_other": "Imported {{count}} artists; {{failed}} could not be imported.",
+      "notAnExport": "That file isn't a Bandsearch export.",
+      "loadFailed": "Could not load your saved artists.",
+      "searchFailed": "Artist search failed.",
+      "addFailed": "Could not add {{name}}.",
+      "added": "Added {{name}}.",
+      "removeFailed": "Could not remove {{name}}.",
+      "removed": "Removed {{name}}.",
+      "exportFailed": "Export failed.",
+      "importFailed": "Import failed.",
+      "createGroupFailed": "Could not create the group {{name}}.",
+      "deleteGroupFailed": "Could not delete the group.",
+      "autoGroupFailed": "Could not group by genre."
+    }
+  },
+  "errors": {
+    "rateLimited": "Too many recommendation requests in a short window. Wait about a minute, then try again.",
+    "starting": "Recommendations are still starting up. Wait a few seconds and try again.",
+    "musicBrainzUnavailable": "Music lookup (MusicBrainz) is temporarily unavailable. Check your network connection and try again.",
+    "searchUnavailable": "Web search (Brave) is temporarily unavailable. Check your network connection and try again in a moment.",
+    "modelUnavailable": "The AI model could not return recommendations. Open Settings and confirm your Scaleway API key; if it is correct, the model may be busy or unreachable — try again in a moment.",
+    "invalidRequest": "That request could not be processed. Try rephrasing your message.",
+    "tooManyRequests": "Too many requests. Wait a moment and try again.",
+    "unreachableStarting": "Could not reach the Bandsearch API. If the app just started, wait until the API is ready, then try again.",
+    "unreachable": "Could not reach the Bandsearch API. Check that the API server is running."
+  },
+  "privacy": {
+    "lastUpdated": "Last updated {{date}}"
   }
 }

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { formatList, t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -36,7 +37,7 @@ function EnvPresentState(label: string, onOverride: () => void) {
         role: "status",
         style: { fontSize: "13px", color: palette.accent, marginBottom: "12px" },
       },
-      `✓ Present — loaded from .env`,
+      t("settings.fromEnv"),
     ),
     React.createElement(
       "button",
@@ -55,7 +56,7 @@ function EnvPresentState(label: string, onOverride: () => void) {
           cursor: "pointer",
         },
       },
-      `Override`,
+      t("settings.override"),
     ),
   ];
 }
@@ -139,7 +140,7 @@ function ApiKeyCard({ id, label, placeholder, onSave, statusMessage, fromEnv }: 
               cursor: "pointer",
             },
           },
-          "Save key",
+          t("settings.saveKey"),
         ),
   );
 }
@@ -184,7 +185,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
     React.createElement(
       "p",
       { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
-      "Turso cross-device sync",
+      t("settings.turso.title"),
     ),
     showPresent ? EnvPresentState("Turso", () => setShowOverride(true)) : null,
     showPresent
@@ -193,12 +194,12 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
         ? React.createElement(
             "p",
             { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
-            "Add a Turso database URL to sync your saved artists across devices. Your local data won’t transfer automatically — export it first, then import after switching.",
+            t("settings.turso.intro"),
           )
         : React.createElement(
             "p",
             { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
-            "Connected to Turso. Your local SQLite data is still on this device — switch back any time.",
+            t("settings.turso.connected"),
           ),
     showPresent
       ? null
@@ -208,7 +209,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
             htmlFor: "turso-database-url",
             style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
           },
-          "Database URL",
+          t("settings.turso.url"),
         ),
     showPresent
       ? null
@@ -219,7 +220,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
           autoComplete: "off",
           value: draftUrl,
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftUrl(e.target.value),
-          placeholder: hasTursoConfig ? "Enter a new URL to replace the saved URL" : "libsql://your-db.turso.io",
+          placeholder: hasTursoConfig ? t("settings.turso.urlReplace") : "libsql://your-db.turso.io",
           style: inputStyle,
         }),
     showPresent
@@ -230,7 +231,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
             htmlFor: "turso-auth-token",
             style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
           },
-          "Auth token",
+          t("settings.turso.token"),
         ),
     showPresent
       ? null
@@ -241,7 +242,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
           autoComplete: "off",
           value: draftToken,
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraftToken(e.target.value),
-          placeholder: hasTursoConfig ? "Enter a new token to replace the saved token" : "Paste your Turso auth token",
+          placeholder: hasTursoConfig ? t("settings.turso.tokenReplace") : t("settings.turso.tokenPlaceholder"),
           style: inputStyle,
         }),
     statusMessage
@@ -276,7 +277,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
               cursor: "pointer",
             },
           },
-          "Save and connect",
+          t("settings.turso.save"),
         ),
     !showPresent && hasTursoConfig
       ? React.createElement(
@@ -296,7 +297,7 @@ function TursoConfigCard({ hasTursoConfig, statusMessage, onSave, onClear, fromE
               marginTop: "8px",
             },
           },
-          "Switch back to local SQLite",
+          t("settings.turso.clear"),
         )
       : null,
   );
@@ -312,7 +313,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
   const isRemote = Boolean(apiEndpointUrl);
   // Like TursoConfigCard, the input starts empty: the current endpoint is shown in
   // the description, the field is only for entering a new value. This keeps the two
-  // cards consistent and avoids a stale value lingering after "Reset to local".
+  // cards consistent and avoids a stale value lingering after t("settings.endpoint.reset").
   const [draft, setDraft] = React.useState("");
 
   return React.createElement(
@@ -329,14 +330,14 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
     React.createElement(
       "p",
       { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
-      "API endpoint",
+      t("settings.endpoint.title"),
     ),
     React.createElement(
       "p",
       { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
       isRemote
-        ? `Connected to a remote API at ${apiEndpointUrl}. The built-in local app is not started while a remote endpoint is set.`
-        : "Using the built-in local app. Enter a remote URL to connect to a hosted Bandsearch API instead.",
+        ? t("settings.endpoint.remote", { url: apiEndpointUrl })
+        : t("settings.endpoint.local"),
     ),
     React.createElement(
       "label",
@@ -344,7 +345,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
         htmlFor: "api-endpoint-url",
         style: { display: "block", fontSize: "12px", color: palette.textSecondary, marginBottom: "6px" },
       },
-      "Remote API URL",
+      t("settings.endpoint.url"),
     ),
     React.createElement("input", {
       id: "api-endpoint-url",
@@ -353,7 +354,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
       autoComplete: "off",
       value: draft,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
-      placeholder: isRemote ? "Enter a new URL to replace the saved endpoint" : "https://bandsearch-api.onrender.com",
+      placeholder: isRemote ? t("settings.endpoint.urlReplace") : "https://bandsearch-api.onrender.com",
       style: {
         width: "100%",
         boxSizing: "border-box",
@@ -396,7 +397,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
           cursor: "pointer",
         },
       },
-      "Save endpoint",
+      t("settings.endpoint.save"),
     ),
     isRemote
       ? React.createElement(
@@ -416,7 +417,7 @@ function ApiEndpointCard({ apiEndpointUrl, statusMessage, onSave }: ApiEndpointC
               marginTop: "8px",
             },
           },
-          "Reset to local",
+          t("settings.endpoint.reset"),
         )
       : null,
   );
@@ -462,7 +463,7 @@ function PrivacyCard({
         React.createElement(
           "p",
           { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "10px" } },
-          "Deleting your account erases your saved artists, groups and chat history. This cannot be undone.",
+          t("settings.privacy.deleteWarning"),
         ),
         confirming
           ? React.createElement(
@@ -481,7 +482,7 @@ function PrivacyCard({
               React.createElement(
                 "label",
                 { style: { fontSize: "12px", color: palette.textSecondary }, htmlFor: "delete-account-password" },
-                "Confirm your password to delete this account permanently",
+                t("settings.privacy.deleteConfirm"),
               ),
               React.createElement("input", {
                 id: "delete-account-password",
@@ -519,7 +520,7 @@ function PrivacyCard({
                       fontWeight: 600,
                     },
                   },
-                  "Permanently delete",
+                  t("settings.privacy.deletePermanently"),
                 ),
                 React.createElement(
                   "button",
@@ -535,7 +536,7 @@ function PrivacyCard({
                       fontSize: "12px",
                     },
                   },
-                  "Cancel",
+                  t("common.cancel"),
                 ),
               ),
             )
@@ -554,7 +555,7 @@ function PrivacyCard({
                   fontSize: "12px",
                 },
               },
-              "Delete account",
+              t("settings.privacy.delete"),
             ),
       );
 
@@ -572,12 +573,12 @@ function PrivacyCard({
     React.createElement(
       "p",
       { style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "4px" } },
-      "Privacy & data",
+      t("settings.privacy.title"),
     ),
     React.createElement(
       "p",
       { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "12px" } },
-      "Read what Bandsearch collects and why, or download a copy of everything it holds about you.",
+      t("settings.privacy.intro"),
     ),
     React.createElement(
       "div",
@@ -597,11 +598,11 @@ function PrivacyCard({
             fontSize: "12px",
           },
         },
-        "Privacy policy",
+        t("settings.privacy.policy"),
       ),
       // Omitted rather than rendered inert when nothing can serve it — the
       // locked rule in UI_GUIDELINES.md: "No control may render without an
-      // action behind it." A dead "Export my data" is worse than none, because
+      // action behind it." A dead t("settings.privacy.export") is worse than none, because
       // the privacy policy points users at it.
       !onExportAccountData ? null : React.createElement(
         "button",
@@ -619,7 +620,7 @@ function PrivacyCard({
             fontSize: "12px",
           },
         },
-        "Export my data",
+        t("settings.privacy.export"),
       ),
     ),
     statusMessage
@@ -673,7 +674,7 @@ interface SettingsViewProps {
 export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
   const subtitle =
     viewProps.headerSubtitle ||
-    "Your keys are stored locally on this device and passed to the Bandsearch API process.";
+    t("settings.subtitle");
 
   const missingKeys: string[] = [];
   if (viewProps.hasStoredKey === false && !viewProps.llmKeyFromEnv) missingKeys.push("Scaleway");
@@ -696,7 +697,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
               lineHeight: 1.45,
             },
           },
-          `${missingKeys.join(" and ")} API ${missingKeys.length === 1 ? "key is" : "keys are"} not configured yet. Add ${missingKeys.length === 1 ? "it" : "them"} below so recommendations can run.`,
+          t("settings.missingKeys", { count: missingKeys.length, names: formatList(missingKeys) }),
         )
       : null;
 
@@ -713,7 +714,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
             lineHeight: 1.45,
           },
         },
-        "A remote endpoint is active — the keys below configure the built-in local app and apply only if you reset to local.",
+        t("settings.endpoint.keysInactive"),
       )
     : null;
 
@@ -749,7 +750,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
           React.createElement(
             "h1",
             { style: { fontSize: "20px", fontWeight: "700", letterSpacing: "-0.02em", marginBottom: "4px" } },
-            viewProps.headerTitle || "Settings",
+            viewProps.headerTitle || t("settings.title"),
           ),
           React.createElement("p", { style: { fontSize: "13px", color: palette.textSecondary } }, subtitle),
         ),
@@ -769,7 +770,7 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
               flexShrink: 0,
             },
           },
-          "← Recommendations",
+          t("settings.back"),
         ),
       ),
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${palette.border}`, margin: "0" } }),
@@ -790,16 +791,16 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
     }),
     React.createElement(ApiKeyCard, {
       id: "llm-api-key",
-      label: "Scaleway API key",
-      placeholder: viewProps.hasStoredKey ? "Enter a new key to replace the saved key" : "Paste your Scaleway API key",
+      label: t("settings.scalewayKey"),
+      placeholder: viewProps.hasStoredKey ? t("settings.keyReplace") : t("settings.scalewayKeyPlaceholder"),
       onSave: (key) => handlers.onSaveApiKey?.(key),
       statusMessage: viewProps.llmStatusMessage ?? null,
       fromEnv: viewProps.llmKeyFromEnv,
     }),
     React.createElement(ApiKeyCard, {
       id: "brave-api-key",
-      label: "Brave Search API key",
-      placeholder: viewProps.hasBraveKey ? "Enter a new key to replace the saved key" : "Paste your Brave Search API key",
+      label: t("settings.braveKey"),
+      placeholder: viewProps.hasBraveKey ? t("settings.keyReplace") : t("settings.braveKeyPlaceholder"),
       onSave: (key) => handlers.onSaveBraveApiKey?.(key),
       statusMessage: viewProps.braveStatusMessage ?? null,
       fromEnv: viewProps.braveKeyFromEnv,

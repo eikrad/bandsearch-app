@@ -1,6 +1,7 @@
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
 import type { SavedArtistItemProps, SavedArtistsHandlers, SavedArtistsViewProps } from "./viewTypes.js";
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 import { StatusBanner } from "./StatusBanner.js";
 
 const theme = {
@@ -80,7 +81,7 @@ function SavedArtistItem({ artist, handlers }: { artist: SavedArtistItemProps; h
           className: "tick-btn",
           style: itemStyles.tickBtn,
           onClick: () => handlers.onToggleSelection?.(artist.id),
-          title: "Use as style reference",
+          title: t("savedArtists.useAsStyleRef"),
         },
         artist.isSelected ? "✓" : "○",
       ),
@@ -90,6 +91,7 @@ function SavedArtistItem({ artist, handlers }: { artist: SavedArtistItemProps; h
           type: "button",
           style: itemStyles.deleteBtn,
           onClick: () => handlers.onDelete?.(artist.id),
+          "aria-label": t("savedArtists.remove", { name: artist.name }),
         },
         "×",
       ),
@@ -140,7 +142,7 @@ function SearchResultItem({ result, handlers }: { result: ArtistSearchResult; ha
         style: styles.addBtn,
         onClick: () => handlers.onAddArtist?.({ id: result.id, name: result.name }),
       },
-      "Add",
+      t("savedArtists.add"),
     ),
   );
 }
@@ -186,7 +188,7 @@ function SearchSection({ searchResults, isSearching, handlers }: { searchResults
   return React.createElement(
     "section",
     { style: styles.section },
-    React.createElement("p", { style: styles.sectionTitle }, "Add artist"),
+    React.createElement("p", { style: styles.sectionTitle }, t("savedArtists.addArtist")),
     React.createElement(
       "form",
       {
@@ -200,18 +202,18 @@ function SearchSection({ searchResults, isSearching, handlers }: { searchResults
       React.createElement("input", {
         type: "text",
         name: "artist-search",
-        placeholder: "Search MusicBrainz…",
+        placeholder: t("savedArtists.searchPlaceholder"),
         style: styles.input,
         autoComplete: "off",
       }),
       React.createElement(
         "button",
         { type: "submit", style: styles.searchBtn },
-        "Search",
+        t("savedArtists.search"),
       ),
     ),
     isSearching
-      ? React.createElement("p", { style: styles.hint }, "Searching…")
+      ? React.createElement("p", { style: styles.hint }, t("savedArtists.searching"))
       : searchResults.length > 0
         ? React.createElement(SearchResultsList, { results: searchResults, handlers })
         : null,
@@ -246,7 +248,7 @@ function SelectionBar({ selectedCount, handlers }: { selectedCount: number; hand
   return React.createElement(
     "div",
     { style: styles.bar },
-    React.createElement("span", { style: styles.label }, `${selectedCount} selected`),
+    React.createElement("span", { style: styles.label }, t("savedArtists.selected", { count: selectedCount })),
     React.createElement(
       "button",
       {
@@ -254,7 +256,7 @@ function SelectionBar({ selectedCount, handlers }: { selectedCount: number; hand
         style: styles.btn,
         onClick: () => handlers.onActivateStyleRef?.(),
       },
-      "Use as style reference",
+      t("savedArtists.useAsStyleRef"),
     ),
   );
 }
@@ -291,12 +293,12 @@ function GroupSection({ group, artists, handlers }: { group: ArtistGroup; artist
       React.createElement("p", { style: styles.title }, group.name),
       React.createElement(
         "button",
-        { type: "button", style: styles.deleteBtn, onClick: () => handlers.onDeleteGroup?.(group.id) },
+        { type: "button", style: styles.deleteBtn, onClick: () => handlers.onDeleteGroup?.(group.id), "aria-label": t("savedArtists.deleteGroup", { name: group.name }) },
         "×",
       ),
     ),
     memberArtists.length === 0
-      ? React.createElement("p", { style: styles.empty }, "No artists in this group")
+      ? React.createElement("p", { style: styles.empty }, t("savedArtists.emptyGroup"))
       : React.createElement(
           "ul",
           { style: styles.list },
@@ -352,7 +354,7 @@ function GroupsSection({ groups, artists, handlers }: { groups: ArtistGroup[]; a
       React.createElement(
         "button",
         { type: "button", style: styles.autoBtn, onClick: () => handlers.onAutoGroup?.() },
-        "Group by genre",
+        t("savedArtists.groupByGenre"),
       ),
       React.createElement(
         "form",
@@ -371,14 +373,14 @@ function GroupsSection({ groups, artists, handlers }: { groups: ArtistGroup[]; a
         React.createElement("input", {
           type: "text",
           name: "create-group",
-          placeholder: "New group name…",
+          placeholder: t("savedArtists.newGroupPlaceholder"),
           style: styles.createInput,
           autoComplete: "off",
         }),
         React.createElement(
           "button",
           { type: "submit", style: styles.createBtn },
-          "Create",
+          t("savedArtists.createGroup"),
         ),
       ),
     ),
@@ -453,14 +455,14 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArti
               style: styles.backBtn,
               onClick: () => handlers.onExport?.(),
             },
-            "Export",
+            t("savedArtists.export"),
           ),
           React.createElement(
             "label",
             {
               style: { ...styles.backBtn, cursor: "pointer", display: "inline-block" },
             },
-            "Import",
+            t("savedArtists.import"),
             React.createElement("input", {
               type: "file",
               accept: ".json,application/json",
@@ -480,7 +482,7 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArti
               style: styles.backBtn,
               onClick: () => handlers.onNavigate?.("chat"),
             },
-            "← Recommendations",
+            t("settings.back"),
           ),
         ),
       ),
@@ -494,9 +496,9 @@ export function SavedArtistsView({ viewProps, handlers }: { viewProps: SavedArti
       ? React.createElement(SelectionBar, { selectedCount, handlers })
       : null,
     isLoading
-      ? React.createElement("p", { style: styles.empty }, "Loading…")
+      ? React.createElement("p", { style: styles.empty }, t("common.loading"))
       : artists.length === 0
-        ? React.createElement("p", { style: styles.empty }, "No saved artists yet. Save artists from recommendation cards.")
+        ? React.createElement("p", { style: styles.empty }, t("savedArtists.empty"))
         : React.createElement(
             "ul",
             { style: { ...styles.list, listStyle: "none", padding: "0", margin: "0" } },

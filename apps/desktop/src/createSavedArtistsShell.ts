@@ -1,3 +1,4 @@
+import { t } from "./i18n/i18n.js";
 import type { SavedBandTarget } from "./savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "./domain.js";
 import type { SavedArtistsViewProps } from "./ui/viewTypes.js";
@@ -23,18 +24,18 @@ export type SavedArtistsShellCollaborator = {
   autoGroup(): Promise<unknown>;
 };
 
-const plural = (n: number) => `${n} artist${n === 1 ? "" : "s"}`;
-
 /** What an import did, in one line. Artists the API refused make it an error. */
 export function describeImport({ imported, skipped, failed }: ImportOutcome): StatusMessage {
   if (failed > 0) {
-    return { type: "error", message: `Imported ${plural(imported)}; ${failed} could not be imported.` };
+    return { type: "error", message: t("savedArtists.status.importedFailed", { count: imported, failed }) };
   }
-  const already = skipped > 0 ? `, ${skipped} already saved` : "";
-  return { type: "success", message: `Imported ${plural(imported)}${already}.` };
+  return skipped > 0
+    ? { type: "success", message: t("savedArtists.status.importedSkipped", { count: imported, skipped }) }
+    : { type: "success", message: t("savedArtists.status.imported", { count: imported }) };
 }
 
-const NOT_AN_EXPORT: StatusMessage = { type: "error", message: "That file isn't a Bandsearch export." };
+/** Built when shown, so it is in the language of that moment. */
+const notAnExport = (): StatusMessage => ({ type: "error", message: t("savedArtists.status.notAnExport") });
 
 export function createSavedArtistsShell({
   app,
@@ -71,7 +72,7 @@ export function createSavedArtistsShell({
       const appSelectedIds = app.getState().selectedArtistIds;
       state = { ...state, savedArtists: bands, groups, selectedIds: appSelectedIds };
     } catch {
-      status.show({ type: "error", message: "Could not load your saved artists." });
+      status.show({ type: "error", message: t("savedArtists.status.loadFailed") });
     } finally {
       state = { ...state, isLoading: false };
     }
@@ -83,7 +84,7 @@ export function createSavedArtistsShell({
     // view has no use for, and the view wants artists pre-marked as selected.
     getViewProps(): SavedArtistsViewProps {
       return {
-        header: { title: "Saved Artists", subtitle: "Your style references" },
+        header: { title: t("savedArtists.title"), subtitle: t("savedArtists.subtitle") },
         isLoading: state.isLoading,
         artists: state.savedArtists.map((band) => ({
           id: band.id,
@@ -133,7 +134,7 @@ export function createSavedArtistsShell({
         state = { ...state, searchResults: results, isSearching: false };
       } catch {
         state = { ...state, isSearching: false };
-        status.show({ type: "error", message: "Artist search failed." });
+        status.show({ type: "error", message: t("savedArtists.status.searchFailed") });
       }
     },
     async addArtist(mbArtist: ArtistSearchResult) {
@@ -141,13 +142,13 @@ export function createSavedArtistsShell({
         await app.saveBand({
           name: mbArtist.name,
           musicbrainzArtistId: mbArtist.id,
-          suggestedNote: mbArtist.disambiguation || "Added via search.",
+          suggestedNote: mbArtist.disambiguation || t("savedArtists.addedViaSearch"),
         });
       } catch {
-        status.show({ type: "error", message: `Could not add ${mbArtist.name}.` });
+        status.show({ type: "error", message: t("savedArtists.status.addFailed", { name: mbArtist.name }) });
         return;
       }
-      status.show({ type: "success", message: `Added ${mbArtist.name}.` });
+      status.show({ type: "success", message: t("savedArtists.status.added", { name: mbArtist.name }) });
       await reloadAll();
     },
     async deleteSavedArtist(id: string) {
@@ -155,10 +156,10 @@ export function createSavedArtistsShell({
       try {
         await app.deleteSavedBand(id);
       } catch {
-        status.show({ type: "error", message: `Could not remove ${name}.` });
+        status.show({ type: "error", message: t("savedArtists.status.removeFailed", { name }) });
         return;
       }
-      status.show({ type: "success", message: `Removed ${name}.` });
+      status.show({ type: "success", message: t("savedArtists.status.removed", { name }) });
       await reloadAll();
     },
     /** The saved artists to download, or undefined when there is nothing to save. */
@@ -166,7 +167,7 @@ export function createSavedArtistsShell({
       try {
         return await app.exportPreferences();
       } catch {
-        status.show({ type: "error", message: "Export failed." });
+        status.show({ type: "error", message: t("savedArtists.status.exportFailed") });
         return undefined;
       }
     },
@@ -176,17 +177,17 @@ export function createSavedArtistsShell({
       try {
         bands = JSON.parse(text);
       } catch {
-        status.show(NOT_AN_EXPORT);
+        status.show(notAnExport());
         return;
       }
       if (!Array.isArray(bands)) {
-        status.show(NOT_AN_EXPORT);
+        status.show(notAnExport());
         return;
       }
       try {
         status.show(describeImport(await app.importPreferences(bands)));
       } catch {
-        status.show({ type: "error", message: "Import failed." });
+        status.show({ type: "error", message: t("savedArtists.status.importFailed") });
         return;
       }
       await reloadAll();
@@ -195,7 +196,7 @@ export function createSavedArtistsShell({
       try {
         await app.createGroup(name);
       } catch {
-        status.show({ type: "error", message: `Could not create the group ${name}.` });
+        status.show({ type: "error", message: t("savedArtists.status.createGroupFailed", { name }) });
         return;
       }
       await reloadAll();
@@ -204,7 +205,7 @@ export function createSavedArtistsShell({
       try {
         await app.deleteGroup(id);
       } catch {
-        status.show({ type: "error", message: "Could not delete the group." });
+        status.show({ type: "error", message: t("savedArtists.status.deleteGroupFailed") });
         return;
       }
       await reloadAll();
@@ -213,7 +214,7 @@ export function createSavedArtistsShell({
       try {
         await app.autoGroup();
       } catch {
-        status.show({ type: "error", message: "Could not group by genre." });
+        status.show({ type: "error", message: t("savedArtists.status.autoGroupFailed") });
         return;
       }
       await reloadAll();

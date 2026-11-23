@@ -1,4 +1,5 @@
 import * as React from "react";
+import { formatDate, t } from "../i18n/i18n.js";
 import { PRIVACY_POLICY, LAST_UPDATED } from "./privacyPolicyText.js";
 
 // Same palette as SettingsView — this is a settings-adjacent screen and should
@@ -37,7 +38,7 @@ export function PrivacyPolicyView({ handlers }: { handlers: PrivacyPolicyHandler
       React.createElement(
         "h1",
         { style: { fontSize: "20px", fontWeight: 700, letterSpacing: "-0.02em" } },
-        "Privacy policy",
+        t("settings.privacy.policy"),
       ),
       React.createElement(
         "button",
@@ -54,13 +55,13 @@ export function PrivacyPolicyView({ handlers }: { handlers: PrivacyPolicyHandler
             fontSize: "12px",
           },
         },
-        "Back",
+        t("common.back"),
       ),
     ),
     React.createElement(
       "p",
       { style: { fontSize: "12px", color: palette.textTertiary, marginBottom: "24px" } },
-      `Last updated ${LAST_UPDATED}`,
+      t("privacy.lastUpdated", { date: formatDate(LAST_UPDATED) }),
     ),
     ...PRIVACY_POLICY.map((section) =>
       React.createElement(
