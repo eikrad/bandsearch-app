@@ -85,7 +85,7 @@ Everything beyond this README lives in [`docs/`](docs/README.md), which has an i
 
 ## Quick Start
 
-**Prerequisites:** Node.js 26.12.1+ (the version in `.nvmrc`)
+**Prerequisites:** Node.js 26.12.1+ (the version in `.nvmrc`) and npm. npm is the only package manager: `package-lock.json` is the one lockfile, and `devEngines` in `package.json` says so.
 
 ```bash
 git clone https://github.com/eikrad/bandsearch-app
