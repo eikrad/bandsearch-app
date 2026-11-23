@@ -1,5 +1,5 @@
 import * as React from "react";
-import { formatList, t } from "../i18n/i18n.js";
+import { currentLanguage, formatList, LANGUAGE_NAMES, setLanguage, SUPPORTED_LANGUAGES, t, type Language } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -15,6 +15,8 @@ const palette = {
   inputBg: "#0b0e18",
   warnBg: "#2a1810",
   warnBorder: "#5c3d28",
+  accentDim: "#1c2d42",
+  inactiveText: "#6b7a90",
 };
 
 type StatusMessage = { type: "success" | "error"; text: string } | null;
@@ -436,6 +438,60 @@ interface PrivacyCardProps {
  * (Art. 15/20). Deliberately a plain link and a plain button — the house style
  * for this app is disclosure, not consent gates.
  */
+/**
+ * The app's language (UI_GUIDELINES "Language"). Each language is named in
+ * itself and never translated, so a user who cannot read the current one
+ * still finds theirs. Takes effect at once; the app renders again.
+ */
+function LanguageCard({ onLanguageChange }: { onLanguageChange: (language: Language) => void }) {
+  const current = currentLanguage();
+  return React.createElement(
+    "section",
+    {
+      className: "language-card",
+      style: { marginTop: "12px", padding: "16px", borderRadius: "10px", border: `1px solid ${palette.border}`, backgroundColor: palette.cardBg },
+    },
+    React.createElement(
+      "p",
+      { id: "settings-language-title", style: { fontSize: "12px", fontWeight: "600", color: palette.textSecondary, marginBottom: "10px" } },
+      t("settings.language.title"),
+    ),
+    React.createElement(
+      "div",
+      { role: "group", "aria-labelledby": "settings-language-title", style: { display: "flex", flexWrap: "wrap", gap: "4px" } },
+      SUPPORTED_LANGUAGES.map((language) =>
+        React.createElement(
+          "button",
+          {
+            key: language,
+            type: "button",
+            lang: language,
+            "aria-pressed": language === current,
+            onClick: () => { if (language !== current) onLanguageChange(language); },
+            style: {
+              minHeight: "44px",
+              padding: "0 16px",
+              borderRadius: "6px",
+              border: "none",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: language === current ? "default" : "pointer",
+              backgroundColor: language === current ? palette.accentDim : "transparent",
+              color: language === current ? palette.accent : palette.inactiveText,
+            },
+          },
+          LANGUAGE_NAMES[language],
+        ),
+      ),
+    ),
+    React.createElement(
+      "p",
+      { style: { fontSize: "12px", color: palette.textTertiary, marginTop: "10px", lineHeight: 1.45 } },
+      t("settings.language.chatNote"),
+    ),
+  );
+}
+
 function PrivacyCard({
   onNavigatePrivacy,
   onExportAccountData,
@@ -668,6 +724,8 @@ interface SettingsViewProps {
     onNavigatePrivacy?: () => void;
     onExportAccountData?: () => void;
     onDeleteAccount?: (password: string) => void;
+    /** Defaults to switching the app's language; tests pass their own. */
+    onLanguageChange?: (language: Language) => void;
   };
 }
 
@@ -776,6 +834,9 @@ export function SettingsView({ viewProps, handlers }: SettingsViewProps) {
       React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${palette.border}`, margin: "0" } }),
     ),
     banner,
+    React.createElement(LanguageCard, {
+      onLanguageChange: handlers.onLanguageChange ?? ((language: Language) => void setLanguage(language)),
+    }),
     React.createElement(ApiEndpointCard, {
       apiEndpointUrl: viewProps.apiEndpointUrl ?? "",
       statusMessage: viewProps.apiEndpointStatusMessage ?? null,

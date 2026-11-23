@@ -237,6 +237,42 @@ is not rendered at all, and the view is unchanged.
   Login, not Register — a visitor without an invite has nothing to do on the
   register form, and Login still links to it for those who do.
 
+## Language (locked)
+
+The app's screens speak English, German or Danish (#329). Copy quoted
+elsewhere in this spec is the English source; every screen renders the same
+keys from `apps/desktop/src/i18n/locales/` in the chosen language, and a key
+missing in German or Danish falls back to English.
+
+- **First start:** the system's language when Bandsearch speaks it, English
+  otherwise. No prompt.
+- **Where to change it:** a "Language" card in Settings, the first card under
+  the header (above API endpoint). Unlike keys and endpoints, every user may
+  want it.
+- **Control:** three buttons in a row, each language named in itself —
+  "English", "Deutsch", "Dansk" — and never translated, so a user who cannot
+  read the current language still finds theirs. The look of the Obscurity
+  Target Picker (transparent / `#6b7a90` inactive, `accentDim` bg and
+  `accent` text active, `border-radius: 6px`, no border), but at least
+  **44px tall**. The active one carries `aria-pressed="true"`; clicking it
+  again does nothing (a language cannot be "off").
+- **Helper text** under the buttons, 12px, `textTertiary`: "Chat replies
+  follow the language you write in." Chat replies follow the language of each
+  message, not this setting (owner decision, `CONTEXT.md` "Reply language").
+- **Effect:** immediate; the whole app renders again, no restart. Remembered
+  on this device (`localStorage`).
+- **Machine-translated drafts** are shown until someone reviews them, **except
+  legal text**: the privacy policy is binding in all three languages, so it
+  shows English until its translation in the chosen language is reviewed.
+- **Longer strings:** German and Danish run longer than English. Buttons and
+  headings wrap rather than truncate; text containers get no fixed widths.
+
+> **Not built yet (#329, after #349):** the chat screen and the privacy policy
+> text are still English in every language, and the "English until reviewed"
+> rule for the privacy policy is not implemented, because #349 rewrites those
+> files. Until then this section describes Welcome, Sign-in, Register, Reset
+> password, Connecting, Settings, Saved Artists and the update banner.
+
 ## Interaction and State Design
 
 ### Chat and request states
