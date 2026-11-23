@@ -51,8 +51,23 @@ export const REFLECTION_SCHEMA = new StateSchema({
   nextExtraQueries: z.array(z.string()),
 });
 
+/**
+ * The time a reflection round needs (search, extract, verify) before another
+ * one may start. Unmeasured estimate; whether it fits the research budget is
+ * #180.
+ */
+export const MIN_REFLECTION_CYCLE_MS = 25_000;
+
 export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
   const log = deps.onLog ?? (() => {});
+
+  /** Checked before each round, the first included; logs when it says no. */
+  function hasTimeForAnotherCycle(): boolean {
+    const remaining = deps.budget.remaining();
+    if (remaining >= MIN_REFLECTION_CYCLE_MS) return true;
+    log("warn", "research_reflection_skipped_budget", { remaining, threshold: MIN_REFLECTION_CYCLE_MS });
+    return false;
+  }
 
   return new StateGraph(REFLECTION_SCHEMA)
     .addNode("assess", async (state) => {
@@ -158,29 +173,13 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
     .addEdge(START, "assess")
     .addConditionalEdges("assess", (state) => {
       if ((state.nextExtraQueries?.length ?? 0) === 0) return END;
-      const MIN_REFLECTION_CYCLE_MS = 25_000;
-      if (deps.budget.remaining() < MIN_REFLECTION_CYCLE_MS) {
-        log("warn", "research_reflection_skipped_budget", {
-          remaining: deps.budget.remaining(),
-          threshold: MIN_REFLECTION_CYCLE_MS,
-        });
-        return END;
-      }
-      return "search";
+      return hasTimeForAnotherCycle() ? "search" : END;
     })
     .addEdge("search", "extract_r")
     .addEdge("extract_r", "verify_r")
     .addConditionalEdges("verify_r", (state) => {
       if ((state.roundsCompleted ?? 0) >= deps.maxRounds) return END;
-      const MIN_REFLECTION_CYCLE_MS = 25_000;
-      if (deps.budget.remaining() < MIN_REFLECTION_CYCLE_MS) {
-        log("warn", "research_reflection_skipped_budget", {
-          remaining: deps.budget.remaining(),
-          threshold: MIN_REFLECTION_CYCLE_MS,
-        });
-        return END;
-      }
-      return "assess";
+      return hasTimeForAnotherCycle() ? "assess" : END;
     })
     .compile();
 }
