@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget, type ObscurityTargetFit } from "../obscurityTargets.js";
-import { REPLY_LANGUAGE_JUDGE_RULE } from "../replyLanguage.js";
+import { REPLY_LANGUAGE_JUDGE_RULE, capEvidenceForReplyLanguage } from "../replyLanguage.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { errorMessage, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../agent/modelUtils.js";
 import type { LlmConfig } from "../config/models.js";
@@ -19,6 +19,9 @@ export type JudgeInput = {
 };
 
 export type JudgeScoreObject = {
+  query_language?: unknown;
+  why_language?: unknown;
+  why_in_query_language?: unknown;
   relevance?: unknown;
   obscurity_fit?: unknown;
   evidence_quality?: unknown;
@@ -53,6 +56,9 @@ Scoring dimensions (each 0.0–1.0):
 Return ONLY a JSON object with this exact structure — no prose, no markdown fences:
 {
   "Band Name": {
+    "query_language": "en",
+    "why_language": "en",
+    "why_in_query_language": true,
     "relevance": 0.0,
     "obscurity_fit": 0.0,
     "evidence_quality": 0.0,
@@ -135,7 +141,13 @@ export async function judgeBands(
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("judge answer is not a JSON object");
   }
-  return { scores: parsed as Record<string, JudgeScoreObject>, promptHash };
+  const scores = parsed as Record<string, JudgeScoreObject>;
+  for (const score of Object.values(scores)) {
+    if (score && typeof score === "object") {
+      score.evidence_quality = capEvidenceForReplyLanguage(score.evidence_quality, score.why_in_query_language);
+    }
+  }
+  return { scores, promptHash };
 }
 
 /**

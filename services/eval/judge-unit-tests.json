@@ -298,5 +298,20 @@
       "genericWhyFlag": false
     },
     "expectedDirection": { "evidenceQuality": "high" }
+  },
+  {
+    "id": "ut-21",
+    "description": "Danish query, Danish why that quotes an English review word for word → evidenceQuality should be high: a verbatim quote from a source does not count as another language (#329; the baseline of 2026-11-23 scored such whys 0.3). Other genre and band than ut-19 and ut-20, so a batch judge cannot copy their verdict",
+    "input": {
+      "bandName": "Grå Fjord",
+      "query": "langsom og tung doom metal med orgel",
+      "obscurityTarget": "underground",
+      "why": "Aarhusiansk trio med tunge riffs og Hammond-orgel; Doom Charts kalder debutalbummet 'Saltvand' \"a slow-burning hymn to grief\". Se https://doomcharts.com/graa-fjord-saltvand.",
+      "sourceSignals": ["https://doomcharts.com/graa-fjord-saltvand"],
+      "listeners": 9000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "high" }
   }
 ]
