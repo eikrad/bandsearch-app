@@ -67,16 +67,40 @@ export type AnswerProgress =
   | { stage: "choosing"; candidates: number };
 
 /**
- * `POST /recommendations` with `Accept: text/event-stream`: server-sent events
- * of these shapes, ending in `done` (the JSON response) or `error` (the JSON
- * error). `reply` carries the whole text so far; only `done` is final. A
- * request that fails or finishes before the first event gets plain JSON.
+ * What a search job reports, in order, ending in `done` (the JSON response),
+ * `error` (the JSON error) or `cancelled` (stopped, or replaced by a newer
+ * search of the same user). `reply` carries the whole text so far; only `done`
+ * is final. `GET /recommendations/jobs/:id` with `Accept: text/event-stream`
+ * sends them as server-sent events, each with its `id:` to resume after
+ * (`Last-Event-ID` or `?after=`). The older `POST /recommendations` with
+ * `Accept: text/event-stream` sends the same shapes without ids; a request
+ * there that fails or finishes before the first event gets plain JSON.
  */
 export type AnswerEvent =
   | { type: "progress"; progress: AnswerProgress }
   | { type: "reply"; text: string }
   | { type: "done"; response: unknown }
-  | { type: "error"; status: number; error: { code: string; message: string } };
+  | { type: "error"; status: number; error: { code: string; message: string } }
+  | { type: "cancelled" };
+
+/** How long the API keeps a finished search job for the app to collect, in memory only. */
+export const SEARCH_JOB_KEEP_MINUTES = 60;
+
+export type SearchJobStatus = "running" | "done" | "failed" | "cancelled";
+
+/**
+ * `GET /recommendations/jobs/:id` without asking for a stream: where the job
+ * stands, for a client that polls. `response` is set once it is done, `error`
+ * once it failed (with the HTTP status the failure would have had).
+ */
+export type SearchJobState = {
+  jobId: string;
+  status: SearchJobStatus;
+  progress: AnswerProgress | null;
+  reply: string;
+  response?: unknown;
+  error?: { status: number; code: string; message: string };
+};
 
 /**
  * How long the API remembers the bands a conversation found, in memory only.
