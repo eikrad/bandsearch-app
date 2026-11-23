@@ -17,8 +17,10 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-opener": "^2.7.0",
+    "i18next": "^27.2.5",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-i18next": "^18.0.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1",
