@@ -446,3 +446,40 @@ test("the invite code the user typed reaches the registration request", async ()
 
   assert.equal(registerCalls[0].body.inviteCode, "abcd-1234");
 });
+
+test("a search kept from before is picked up at launch and whenever the app is shown again", async () => {
+  const listeners: Record<string, Array<() => void>> = {};
+  const document = {
+    visibilityState: "visible",
+    addEventListener: (type: string, listener: () => void) => { (listeners[type] ??= []).push(listener); },
+  };
+  let resumed = 0;
+  const prevWindow = globalThis.window;
+  globalThis.window = fakeWindow({ document: document as unknown as Document, location: { hash: "" } as Location });
+  try {
+    await startDesktopBrowserApp({
+      invokeTauri: async (cmd) => cmd === "llm_config_status" ? { hasStoredKey: true, onboardingComplete: true } : {},
+      updateDismissalStorage: fakeUpdateStorage(),
+      fetchImpl: async () => jsonResponse({ enabled: false, userCount: 0 }),
+      deps: {
+        bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
+        bootstrapDesktopReactApp: () => fakeReactApp({
+          mount: async () => ({}),
+          showUpdateBanner: () => {},
+          resumeSearch: async () => { resumed += 1; return {}; },
+        }),
+      },
+    });
+    assert.equal(resumed, 1, "at launch, on the chat");
+
+    document.visibilityState = "hidden";
+    for (const listener of listeners.visibilitychange ?? []) listener();
+    assert.equal(resumed, 1, "not while hidden");
+
+    document.visibilityState = "visible";
+    for (const listener of listeners.visibilitychange ?? []) listener();
+    assert.equal(resumed, 2, "again once shown");
+  } finally {
+    globalThis.window = prevWindow;
+  }
+});

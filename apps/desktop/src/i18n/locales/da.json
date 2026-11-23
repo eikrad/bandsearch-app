@@ -196,7 +196,10 @@
     "invalidRequest": "Den forespørgsel kunne ikke behandles. Prøv at omformulere din besked.",
     "tooManyRequests": "For mange forespørgsler. Vent et øjeblik og prøv igen.",
     "unreachableStarting": "Kunne ikke nå Bandsearch API. Hvis appen lige er startet, vent indtil API er klar, og prøv igen.",
-    "unreachable": "Kunne ikke oprette forbindelse til Bandsearch API. Kontrollér, at API-serveren kører."
+    "unreachable": "Kunne ikke oprette forbindelse til Bandsearch API. Kontrollér, at API-serveren kører.",
+    "searchLost": "Denne søgning gik tabt: Serveren blev genstartet eller beholdt den for længe. Prøv igen for at spørge igen.",
+    "searchCancelled": "Denne søgning blev stoppet, måske af en nyere søgning på en anden enhed. Prøv igen for at spørge igen.",
+    "searchDisconnected": "Forbindelsen til serveren blev afbrudt. Din søgning kører videre dér; Bandsearch genoptager den, når du vender tilbage til appen."
   },
   "privacy": {
     "lastUpdated": "Sidst opdateret {{date}}"

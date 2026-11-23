@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/index.js";
 import type { ArtistSearchResult, RecommendationItem, SavedBand } from "../src/domain.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 
 function createStubFetch({
   savedBands = [],
@@ -13,7 +14,7 @@ function createStubFetch({
   artists?: ArtistSearchResult[];
   recommendations?: RecommendationItem[];
 } = {}): typeof fetch {
-  return async (input, init) => {
+  return withSearchJobs(async (input, init) => {
     const url = String(input);
     if (url.includes("/preferences") && (!init || init.method === "GET")) {
       return jsonResponse({ savedBands });
@@ -28,7 +29,7 @@ function createStubFetch({
         });
     }
     return jsonResponse({});
-  };
+  });
 }
 
 test("app.listSavedBands fetches and returns saved bands", async () => {
@@ -83,7 +84,7 @@ test("app.requestRecommendations sends priorityContext when artists are selected
     return jsonResponse({});
   };
 
-  const app = bootstrapDesktopApp({ fetchImpl });
+  const app = bootstrapDesktopApp({ fetchImpl: withSearchJobs(fetchImpl) });
 
   // Manually inject saved bands and select one
   app.getState().savedBands.push({ id: "pref-1", name: "Alcest", rating: 5 });

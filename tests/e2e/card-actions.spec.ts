@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { AUTH_TOKEN_STORAGE_KEY, E2E_API_BASE_URL } from "./constants.js";
+import { answerSearches } from "./searchJobs.js";
 
 test.setTimeout(30_000);
 
@@ -8,9 +9,9 @@ test("saving an earlier card uses that card's artist identity and rationale", as
   const firstId = randomUUID();
   const secondId = randomUUID();
   let turn = 0;
-  await page.route("**/recommendations", (route) => {
+  await answerSearches(page, () => {
     const current = turn++;
-    return route.fulfill({ json: {
+    return {
       recommendations: [{
         artist: "Odessa",
         musicbrainzArtistId: current === 0 ? firstId : secondId,
@@ -19,7 +20,7 @@ test("saving an earlier card uses that card's artist identity and rationale", as
       }],
       assistantReply: "Here is an artist to explore.",
       meta: { modeUsed: "fresh", usedPreferenceContext: false },
-    } });
+    };
   });
   await page.goto("/");
   await page.fill("input[name=query]", "atmospheric Odessa");
@@ -65,15 +66,13 @@ test("saving an earlier card uses that card's artist identity and rationale", as
 test("category-only edits preserve a suggested note until the user edits it", async ({ page }) => {
   const mbid = randomUUID();
   let turn = 0;
-  await page.route("**/recommendations", (route) => route.fulfill({
-    json: {
-      recommendations: [{
-        artist: "Fen", musicbrainzArtistId: mbid,
-        why: turn++ === 0 ? "Atmospheric guitar textures." : "Another recommendation of the same artist.",
-      }],
-      assistantReply: "Try this artist.",
-      meta: {},
-    },
+  await answerSearches(page, () => ({
+    recommendations: [{
+      artist: "Fen", musicbrainzArtistId: mbid,
+      why: turn++ === 0 ? "Atmospheric guitar textures." : "Another recommendation of the same artist.",
+    }],
+    assistantReply: "Try this artist.",
+    meta: {},
   }));
   await page.goto("/");
   await page.fill("input[name=query]", "atmospheric guitar music");
@@ -134,12 +133,12 @@ test("category-only edits preserve a suggested note until the user edits it", as
 test("a different same-named artist does not inherit an open annotation draft", async ({ page }) => {
   const ids = [randomUUID(), randomUUID()];
   let turn = 0;
-  await page.route("**/recommendations", (route) => {
+  await answerSearches(page, () => {
     const current = turn++;
-    return route.fulfill({ json: {
+    return {
       recommendations: [{ artist: "Odessa", musicbrainzArtistId: ids[current], why: `Artist ${current + 1} rationale.` }],
       assistantReply: "Here is another artist.", meta: {},
-    } });
+    };
   });
   await page.goto("/");
   await page.fill("input[name=query]", "first Odessa");
@@ -165,10 +164,10 @@ test("editing only a note before the collection loads preserves stored categorie
     data: { musicbrainzArtistId: mbid, name: "Codeine", rating: 5, categories: ["favourite"], note: "Original note." },
   });
   expect(seeded.ok()).toBeTruthy();
-  await page.route("**/recommendations", (route) => route.fulfill({ json: {
+  await answerSearches(page, () => ({
     recommendations: [{ artist: "Codeine", musicbrainzArtistId: mbid, why: "New rationale." }],
     assistantReply: "Try this artist.", meta: {},
-  } }));
+  }));
   await page.goto("/");
   await page.fill("input[name=query]", "slowcore");
   await page.click("button[type=submit]");

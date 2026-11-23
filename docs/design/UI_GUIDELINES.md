@@ -359,6 +359,20 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
   sent again as conversation history, and is saved to the chat session once.
 - A failed retry shows the same inline error as a failed search. Stopping a
   search or a retry is not an error and shows none (#304).
+- The retry action under the question appears on hover; after a failed search
+  it stays in view until the next search starts, since a phone has no hover.
+- **A search outlives the app** (ADR 0006, #345). Leaving the app, the screen
+  turning off or the system stopping the app does not end a search. Coming back
+  (launch, or the app shown again) picks it up: a finished search shows its
+  answer under its question, as if the user had waited; a running one shows its
+  progress line again. A dropped connection is not an error: the app attaches
+  again quietly and only reports one that does not come back within about 15 s
+  ("The connection to the server dropped. Your search keeps running there;
+  Bandsearch picks it up when you come back to the app."). A search the server
+  no longer knows shows "This search was lost: the server restarted or kept it
+  too long. Retry to ask again."; one stopped by a newer search on another
+  device, "This search was stopped, perhaps by a newer search on another
+  device. Retry to ask again." Both are ordinary inline errors with Retry.
 
 ### Feedback states
 - Use local confirmations for Save/Rate actions. A confirmation clears itself

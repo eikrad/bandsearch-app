@@ -44,6 +44,8 @@ function makeChat(overrides: Partial<TestChat> = {}): TestChat {
     retryLastSearch: async () => undefined,
     getMode: () => mode,
     isLoading: () => false,
+    isSearchFailed: () => false,
+    resumeSearch: async () => undefined,
     getProgress: () => null,
     subscribe: () => () => {},
     isShowFeedbackBar: () => false,
@@ -167,4 +169,9 @@ test("the in-flight line says what the API is doing, and whether it was heard fr
   const waiting = createChatRenderAdapter({ chat: makeChat({ isLoading: () => true }) }).getViewProps();
   assert.equal(waiting.awaitingApi, true);
   assert.equal(createChatRenderAdapter({ chat: makeChat() }).getViewProps().awaitingApi, false, "nothing is in flight");
+});
+
+test("a failed search keeps its Retry in view", () => {
+  assert.equal(createChatRenderAdapter({ chat: makeChat({ isSearchFailed: () => true }) }).getViewProps().searchFailed, true);
+  assert.equal(createChatRenderAdapter({ chat: makeChat() }).getViewProps().searchFailed, false);
 });

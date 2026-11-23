@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
 import { bootstrapDesktopReactApp } from "../src/index.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 import { fakeContainer, fakeReactRoot } from "./helpers/fakeDom.js";
 
 /**
@@ -42,7 +43,7 @@ function chatWithFakeServer({ feedbackStatus = 200 }: { feedbackStatus?: number 
     return jsonResponse({});
   }) as unknown as typeof fetch;
 
-  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl });
+  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl: withSearchJobs(fetchImpl) });
   const ui = bootstrapDesktopReactApp({
     app,
     createRootImpl: () => fakeReactRoot(),

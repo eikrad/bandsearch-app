@@ -196,7 +196,10 @@
     "invalidRequest": "Diese Anfrage konnte nicht verarbeitet werden. Versuche, deine Nachricht umzuformulieren.",
     "tooManyRequests": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
     "unreachableStarting": "Die Bandsearch-API konnte nicht erreicht werden. Falls die App gerade gestartet wurde, warte, bis die API bereit ist, und versuche es erneut.",
-    "unreachable": "Konnte die Bandsearch-API nicht erreichen. Prüfe, ob der API-Server läuft."
+    "unreachable": "Konnte die Bandsearch-API nicht erreichen. Prüfe, ob der API-Server läuft.",
+    "searchLost": "Diese Suche ist verloren gegangen: Der Server wurde neu gestartet oder hat sie zu lange aufbewahrt. Wiederhole sie, um erneut zu fragen.",
+    "searchCancelled": "Diese Suche wurde gestoppt, vielleicht durch eine neuere Suche auf einem anderen Gerät. Wiederhole sie, um erneut zu fragen.",
+    "searchDisconnected": "Die Verbindung zum Server ist abgebrochen. Deine Suche läuft dort weiter; Bandsearch nimmt sie wieder auf, wenn du zur App zurückkehrst."
   },
   "privacy": {
     "lastUpdated": "Zuletzt aktualisiert: {{date}}"

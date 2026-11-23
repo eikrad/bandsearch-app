@@ -464,6 +464,25 @@ test("ChatAppView renders retry button on last user message when not loading", (
   assert.equal(html.includes("retry"), true, "retry button rendered on last user message");
 });
 
+test("after a failed or lost search its Retry is in view, not only on hover (a phone has no hover)", () => {
+  const render = (searchFailed: boolean) => renderToStaticMarkup(
+    React.createElement(ChatAppView, {
+      viewProps: chatViewProps({
+        headerSubtitle: "",
+        modeOptions: FRESH_ONLY,
+        actionStatus: null,
+        searchFailed,
+        messages: [{ id: "u-0", role: "user", content: "post-metal" }],
+      }),
+      handlers: chatHandlers({ onStop: () => {}, onRetry: () => {} }),
+    }),
+  );
+  const retryButton = (html: string) => /<button[^>]*>retry<\/button>/.exec(html)?.[0] ?? "";
+
+  assert.match(retryButton(render(true)), /opacity:1/);
+  assert.match(retryButton(render(false)), /opacity:0/, "otherwise it appears on hover");
+});
+
 test("ChatAppView does not render retry button when loading", () => {
   const html = renderToStaticMarkup(
     React.createElement(ChatAppView, {

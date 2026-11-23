@@ -51,6 +51,12 @@ export type ChatAppCollaborator = {
   };
   subscribe?(listener: () => void): () => void;
   cancelSearch?(): void;
+  /** The search kept from before the app was stopped or lost its connection, if any (ADR 0006). */
+  getResumableSearch?(): { query: string; mode: string; obscurityTarget?: string } | null;
+  /** Follows the kept search to its answer. */
+  resumeSearch?(): Promise<{ meta?: RecommendationMeta; recommendations?: RecommendationItem[] }>;
+  /** Replaces the connection of the search being followed, which may have died while the app was away. */
+  reconnectSearch?(): void;
 };
 
 function toRenderableRecommendation(
@@ -96,15 +102,27 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
   // The batch the feedback bar judges, captured as it was asked: changing the
   // mode or target afterwards must not rewrite what the verdict was about.
   let lastBatch: { eventId: string; context: Omit<RecommendationFeedbackSubmission, "feedbackType"> } | null = null;
+  // The last search ended in an error: its Retry stays in view.
+  let searchFailed = false;
 
   async function runSubmitQuery(query: string) {
-    lastQuery = query;
-    feedbackDismissed = false;
-    loadingState = true;
     const askedMode = mode;
     const askedTarget = obscurityTarget;
+    return runSearch(query, askedMode, askedTarget, () => app.requestRecommendations(query, askedMode, askedTarget));
+  }
+
+  async function runSearch(
+    query: string,
+    askedMode: string,
+    askedTarget: string | undefined,
+    request: () => Promise<{ meta?: RecommendationMeta; recommendations?: RecommendationItem[] }>,
+  ) {
+    lastQuery = query;
+    feedbackDismissed = false;
+    searchFailed = false;
+    loadingState = true;
     try {
-      const response = await app.requestRecommendations(query, askedMode, askedTarget);
+      const response = await request();
       lastMeta = response.meta ?? lastMeta;
       lastBatch = response.meta?.eventId
         ? {
@@ -122,6 +140,7 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
       if ((error as Error).name === "AbortError") {
         return; // silent cancel — loadingState reset by finally
       }
+      searchFailed = true;
       throw error;
     } finally {
       loadingState = false;
@@ -143,6 +162,10 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
     },
     isLoading() {
       return loadingState;
+    },
+    /** The last search failed (or was lost): its Retry stays in view. */
+    isSearchFailed() {
+      return searchFailed;
     },
     /** What the assistant is doing while a message is answered. */
     getProgress(): AnswerProgress | null {
@@ -170,6 +193,21 @@ export function createChatAppModel({ app }: { app: ChatAppCollaborator }) {
     },
     cancelSearch() {
       app.cancelSearch?.();
+    },
+    /**
+     * Back in the app (launch, or the window shown again): a search being
+     * followed re-attaches at once; one kept from before is picked up and
+     * ends like any search, in its answer or an error with Retry.
+     */
+    async resumeSearch() {
+      if (loadingState) {
+        app.reconnectSearch?.();
+        return;
+      }
+      const kept = app.getResumableSearch?.();
+      if (!kept || !app.resumeSearch) return;
+      const resume = app.resumeSearch;
+      return runSearch(kept.query, kept.mode, kept.obscurityTarget, () => resume());
     },
     /** Closes the bar and sends the verdict; a refusal reaches the caller. */
     async submitFeedback(feedbackType: string) {

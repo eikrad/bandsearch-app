@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootstrapDesktopApp } from "../src/bootstrapDesktopApp.js";
 import { jsonResponse } from "./helpers/fakeResponse.js";
+import { withSearchJobs } from "./helpers/fakeSearchJobApi.js";
 
 /** Captures saved-band writes at the HTTP seam. */
 function appWithCapturedWrites() {
   const writes: Array<Record<string, unknown>> = [];
   const app = bootstrapDesktopApp({
     apiBaseUrl: "http://api.test",
-    fetchImpl: (async (url: string, init?: RequestInit) => {
+    fetchImpl: withSearchJobs((async (url: string, init?: RequestInit) => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
       if (init?.method === "GET" && String(url).endsWith("/preferences")) {
         return jsonResponse({ savedBands: [] });
@@ -18,7 +19,7 @@ function appWithCapturedWrites() {
         return jsonResponse({ savedBand: { id: "b1", name: body.name ?? "Codeine", rating: body.rating ?? null, categories: [], note: "" } });
       }
       return jsonResponse({ savedBand: { id: "b1", name: "x", rating: null, categories: [], note: "" } });
-    }) as unknown as typeof fetch,
+    }) as unknown as typeof fetch),
   });
   return { app, writes };
 }
@@ -60,7 +61,7 @@ test("an unrated style reference does not claim a rating in the prompt", async (
   const sent: Array<Record<string, unknown>> = [];
   const app = bootstrapDesktopApp({
     apiBaseUrl: "http://api.test",
-    fetchImpl: (async (url: string, init?: RequestInit) => {
+    fetchImpl: withSearchJobs((async (url: string, init?: RequestInit) => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
       if (String(url).endsWith("/recommendations")) {
         sent.push(body);
@@ -70,7 +71,7 @@ test("an unrated style reference does not claim a rating in the prompt", async (
         return jsonResponse({ savedBand: { id: "b1", name: body.name, rating: null, categories: [], note: "" } });
       }
       return jsonResponse({ savedBands: [] });
-    }) as unknown as typeof fetch,
+    }) as unknown as typeof fetch),
   });
 
   await app.saveBand({ name: "Codeine" });
