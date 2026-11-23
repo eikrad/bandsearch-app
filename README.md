@@ -226,7 +226,7 @@ Only the SHA-256 hash of a code is stored, so a lost code cannot be shown again:
 
 Bandsearch is a minimal-risk AI system under the EU AI Act, and the transparency
 duty in Art. 50 applies to it. Two disclosures ship in the UI: a permanent line
-in the chat composer stating that a language model hosted by Scaleway writes the recommendations, and a
+in the chat composer stating that a language model hosted in the EU (Scaleway, France) writes the recommendations, and a
 per-recommendation "AI-generated, not human-curated" caption. Recommendation
 cards also carry `data-ai-generated="true"`, and `/recommendations` returns
 `aiGenerated`, `generatedAt`, `pipelineVersion` and the generating `model` in
