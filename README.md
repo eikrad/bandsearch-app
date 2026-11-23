@@ -119,6 +119,10 @@ curl -X POST http://localhost:3001/recommendations/jobs \
 curl -N -H "accept: text/event-stream" http://localhost:3001/recommendations/jobs/<jobId>
 ```
 
+When all 200 job slots are running, a search from another user is refused with
+`503 search_capacity_exceeded`; retry later. Replacing your own running search
+stays possible.
+
 ---
 
 ## Desktop App (Tauri)

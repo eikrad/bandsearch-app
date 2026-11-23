@@ -9,7 +9,7 @@ import { sendError } from "../http/errors.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { PipelineDiagnostics } from "../eval/evalRepository.js";
-import type { SearchJobFailure, SearchJobs, SearchJobWork } from "../searchJobs/searchJobs.js";
+import { SearchJobCapacityError, type SearchJobFailure, type SearchJobs, type SearchJobWork } from "../searchJobs/searchJobs.js";
 import type { BandsearchRouteContext } from "./registerBandsearchRoutes.js";
 
 export type RecommendationRouteDeps = {
@@ -140,7 +140,13 @@ export function registerRecommendationRoutes(app: Express, deps: RecommendationR
         meta: { ...publicMeta, ...provenance, ...(eventId ? { eventId } : {}) },
       };
     };
-    return searchJobs.start(ownerOf(req), work);
+    try {
+      return searchJobs.start(ownerOf(req), work);
+    } catch (error) {
+      if (!(error instanceof SearchJobCapacityError)) throw error;
+      sendError(res, 503, "search_capacity_exceeded", error.message);
+      return null;
+    }
   }
 
   // A search as a job (ADR 0006): starting it answers at once with its id. The
@@ -165,7 +171,8 @@ export function registerRecommendationRoutes(app: Express, deps: RecommendationR
       return res.status(200).json(state);
     }
 
-    if (!searchJobs.get(id, owner)) return jobNotFound(res);
+    const job = searchJobs.get(id, owner);
+    if (!job) return jobNotFound(res);
     const stream = openAnswerStream(res);
     let ended = false;
     const unfollow = searchJobs.follow(id, owner, resumeAfter(req), ({ id: eventId, event }) => {
@@ -176,7 +183,12 @@ export function registerRecommendationRoutes(app: Express, deps: RecommendationR
       }
     });
     // A client that hangs up stops following, never the search.
-    if (ended) unfollow?.();
+    // The cursor may already include the terminal event, leaving nothing to
+    // replay. A finished job must still close its connection and keep-alive.
+    if (ended || job.status !== "running") {
+      stream.end();
+      unfollow?.();
+    }
     else res.on("close", () => unfollow?.());
   });
 

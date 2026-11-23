@@ -28,6 +28,10 @@ export type SearchJobSnapshot = {
   error?: SearchJobFailure;
 };
 
+export class SearchJobCapacityError extends Error {
+  constructor() { super("Search capacity is full. Please try again in a moment."); }
+}
+
 export type SearchJobs = {
   /** Runs `work` as a new job of `owner`, stopping that owner's running job. Returns the job id. */
   start(owner: string, work: SearchJobWork): string;
@@ -61,7 +65,7 @@ export type SearchJobsOptions = {
    * default, plus routing and the answer): a job still running then fails.
    */
   maxRunMs?: number;
-  /** Jobs kept at most; when full the oldest finished ones go. Running ones are bounded by one per user. */
+  /** Jobs kept at most; when full the oldest finished ones go. New owners are refused if all slots are running. */
   maxJobs?: number;
   /** Progress events kept per job; the reply is kept as its latest text only, and the end always. */
   maxEventsPerJob?: number;
@@ -118,14 +122,15 @@ export function createSearchJobs({
   }
 
   function makeRoom() {
-    if (jobs.size <= maxJobs) return;
+    if (jobs.size < maxJobs) return;
     const finished = [...jobs.values()]
       .filter((job) => job.finishedAt !== null)
       .sort((a, b) => a.finishedAt! - b.finishedAt!);
     for (const job of finished) {
-      if (jobs.size <= maxJobs) break;
+      if (jobs.size < maxJobs) break;
       jobs.delete(job.id);
     }
+    if (jobs.size >= maxJobs) throw new SearchJobCapacityError();
   }
 
   function owned(id: string, owner: string): Job | undefined {
@@ -187,6 +192,7 @@ export function createSearchJobs({
     start(owner, work) {
       evict();
       for (const job of jobs.values()) if (job.owner === owner) stop(job);
+      makeRoom();
 
       const job: Job = {
         id: newJobId(),
@@ -202,7 +208,6 @@ export function createSearchJobs({
         clearDeadline: () => {},
       };
       jobs.set(job.id, job);
-      makeRoom();
       job.clearDeadline = schedule(() => {
         const timeout = new Error("the search job ran past its deadline");
         fail(job, timeout);
@@ -261,5 +266,5 @@ export function createSearchJobs({
 
 /** `path` with any search job id cut to its first six characters, for logs. */
 export function redactSearchJobIds(path: string): string {
-  return path.replace(/(\/recommendations\/jobs\/)([A-Za-z0-9_-]{6})[^/]*/g, "$1$2…");
+  return path.replace(/(\/recommendations\/jobs\/)([^/]{0,6})[^/]*/gi, "$1$2…");
 }

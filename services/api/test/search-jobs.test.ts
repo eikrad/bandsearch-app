@@ -290,3 +290,19 @@ test("forgetting a user stops and drops their jobs", async () => {
   assert.equal(jobs.get(id, "ana"), undefined);
   assert.equal(jobs.get(kept, "bo")?.status, "running");
 });
+
+
+test("a full store refuses another owner before starting work but allows replacement", () => {
+  const { jobs } = jobsWithClock({ maxJobs: 1 });
+  const first = controllableWork();
+  const id = jobs.start("ana", first.work);
+  let started = false;
+  assert.throws(() => jobs.start("bo", async () => { started = true; }), /capacity/i);
+  assert.equal(started, false);
+  assert.equal(first.signal().aborted, false);
+  assert.equal(jobs.get(id, "ana")?.status, "running");
+  const replacement = jobs.start("ana", controllableWork().work);
+  assert.equal(first.signal().aborted, true);
+  assert.equal(jobs.get(id, "ana"), undefined);
+  assert.equal(jobs.get(replacement, "ana")?.status, "running");
+});
