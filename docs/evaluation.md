@@ -34,9 +34,15 @@ baseline's per query, with a 95% interval (paired bootstrap); only differences
 outside the noise are highlighted.
 
 The judge is checked the same way: `npm run calibrate -w services/eval` scores
-the 25 hand-labelled examples and 16 directional checks with the configured
+the 25 hand-labelled examples and 20 directional checks with the configured
 judge (`--judge <model>` compares candidates) and appends the agreement to
 `services/eval/history/judge-runs.jsonl`.
+
+The judge also applies the **reply language** rule: a why written in another
+language than the query scores low on evidence quality, and the golden set has
+German and Danish queries for it (#329, metrics version 4). Judge scores from
+before that change are not comparable with later ones; the dashboard marks the
+version change, and a new `baseline` has to be recorded.
 
 A run on uncommitted tracked files is refused unless `--allow-dirty` is given;
 `--no-history` skips recording. `BANDSEARCH_API_URL` points the runner at

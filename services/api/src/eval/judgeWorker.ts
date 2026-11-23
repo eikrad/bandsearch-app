@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { EvalRepository } from "./evalRepository.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget, type ObscurityTargetFit } from "../obscurityTargets.js";
+import { REPLY_LANGUAGE_JUDGE_RULE } from "../replyLanguage.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { errorMessage, parseModelJsonResponse, withTimeout, type ChatModelClient } from "../agent/modelUtils.js";
 import type { LlmConfig } from "../config/models.js";
@@ -46,7 +47,7 @@ const JUDGE_SYSTEM_PROMPT = `You are an expert music recommendation quality judg
 Scoring dimensions (each 0.0–1.0):
 - relevance: Does the band genuinely fit the requested genre/style/mood described in the query?
 - obscurity_fit: ${OBSCURITY_FIT_GUIDANCE}
-- evidence_quality: Is the why-text specific and grounded in cited sources, or generic boilerplate? Penalise generic_why_flag=true and uncited claims.
+- evidence_quality: Is the why-text specific and grounded in cited sources, or generic boilerplate? Penalise generic_why_flag=true and uncited claims. ${REPLY_LANGUAGE_JUDGE_RULE}
 - discovery_value: Would a curious music fan be genuinely surprised and pleased? Penalise extremely well-known mainstream bands for discovery-focused queries.
 
 Return ONLY a JSON object with this exact structure — no prose, no markdown fences:

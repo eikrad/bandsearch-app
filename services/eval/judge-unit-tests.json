@@ -268,5 +268,35 @@
       "genericWhyFlag": false
     },
     "expectedDirection": { "obscurityFit": "low" }
+  },
+  {
+    "id": "ut-19",
+    "description": "German query, well-sourced why written in English → evidenceQuality should be low: the reply follows the language of the user's message (#329)",
+    "input": {
+      "bandName": "Fen",
+      "query": "atmosphärischer Black Metal mit Shoegaze-Einflüssen",
+      "obscurityTarget": "underground",
+      "why": "English post-black metal trio whose 'Epoch' blends shoegaze textures with blast beats, praised at https://www.angrymetalguy.com/fen-epoch-review/.",
+      "sourceSignals": ["https://www.angrymetalguy.com/fen-epoch-review/"],
+      "listeners": 30000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "low" }
+  },
+  {
+    "id": "ut-20",
+    "description": "Danish query, well-sourced why written in Danish with English genre tags and titles → evidenceQuality should be high: names and tags do not count as another language (#329)",
+    "input": {
+      "bandName": "Fen",
+      "query": "atmosfærisk black metal med shoegaze-præg",
+      "obscurityTarget": "underground",
+      "why": "Engelsk post-black metal-trio, hvis album 'Epoch' blander shoegaze-teksturer med blast beats; anmeldt på https://www.angrymetalguy.com/fen-epoch-review/.",
+      "sourceSignals": ["https://www.angrymetalguy.com/fen-epoch-review/"],
+      "listeners": 30000,
+      "citationSupportRate": 1.0,
+      "genericWhyFlag": false
+    },
+    "expectedDirection": { "evidenceQuality": "high" }
   }
 ]

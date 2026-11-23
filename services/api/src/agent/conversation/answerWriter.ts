@@ -4,12 +4,14 @@ import { invokeModel, withoutThinking, type ChatModelClient } from "../modelUtil
 import type { VerifiedCandidate } from "../research/candidateVerifier.js";
 import { formatEvidenceForPrompt } from "../research/recommendationRanker.js";
 import { bandName } from "./conversationMemory.js";
+import { REPLY_LANGUAGE_RULE } from "../../replyLanguage.js";
 
 const HISTORY_MAX_CHARS = 7000;
 const EVIDENCE_MAX_CHARS = 6000;
 
 const SYSTEM = [
-  "You are the conversational side of a music discovery app. Answer the user's newest message in 1–4 sentences of plain text without Markdown, in the user's language.",
+  "You are the conversational side of a music discovery app. Answer the user's newest message in 1–4 sentences of plain text without Markdown.",
+  REPLY_LANGUAGE_RULE,
   "LATEST_PICKS lists the cards of the latest answer in order; \"the second one\" or \"the last one\" means those.",
   "Do not recommend new bands in this answer. When the user wants some, say you can look for them.",
   "About the bands already shown, state facts only from the BANDS block; say so when it does not answer the question. Name a source URL when you quote it.",
