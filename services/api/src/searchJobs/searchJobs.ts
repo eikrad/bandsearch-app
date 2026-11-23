@@ -258,3 +258,8 @@ export function createSearchJobs({
     evict,
   };
 }
+
+/** `path` with any search job id cut to its first six characters, for logs. */
+export function redactSearchJobIds(path: string): string {
+  return path.replace(/(\/recommendations\/jobs\/)([A-Za-z0-9_-]{6})[^/]*/g, "$1$2…");
+}

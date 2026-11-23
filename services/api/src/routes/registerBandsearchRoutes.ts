@@ -1,26 +1,23 @@
-import { randomUUID } from "node:crypto";
 import type { Express, RequestHandler } from "express";
 import { createClient as createLibsqlClient } from "@libsql/client";
 
-import { validateRecommendationRequest } from "../recommendations.js";
 import { buildSavedBandContext } from "../savedBandContext.js";
-import { BraveSearchError } from "../integrations/braveSearch.js";
 import type { TurnListener } from "../agent/conversation/conversationService.js";
-import { answerStreamFor } from "../http/answerStream.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
-import { writeStructuredLog } from "../http/structuredLog.js";
 import { registerEvalRoutes } from "../eval/evalRoutes.js";
 import { createNoOpEvalRepository } from "../eval/evalRepository.js";
 import type { RecommendationFeedback } from "../feedback/recommendationFeedback.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
-import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
+import type { EvalRepository } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
 import type { SavedBand } from "../preferences/preferenceRepository.js";
 import type { UserDataStore } from "../privacy/userDataStore.js";
 import type { InviteService } from "../auth/inviteService.js";
 import type { ChatSessionRepository } from "../sessions/chatSessionRepository.js";
 import type { Invite } from "../auth/inviteRepository.js";
+import { createSearchJobs, type SearchJobsOptions } from "../searchJobs/searchJobs.js";
+import { describeRecommendationFailure, registerRecommendationRoutes } from "./recommendationRoutes.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -32,6 +29,10 @@ type TursoClient = { execute: (sql: string) => Promise<unknown> };
 export type BandsearchRouteContext = {
   appVersion: string;
   recommendationsLimiter: RequestHandler;
+  /** Following and polling a search job; starting one counts against recommendationsLimiter. */
+  searchJobLimiter: RequestHandler;
+  /** Clock, timer and limits of the search job store; tests inject a clock. */
+  searchJobOptions?: Omit<SearchJobsOptions, "describeFailure">;
   /** Throttles the credential-taking /auth routes (not /auth/status). */
   authLimiter: RequestHandler;
   resolvedBandRepository: {
@@ -92,24 +93,12 @@ export type BandsearchRouteContext = {
   resolvedUserDataStore?: UserDataStore | null;
 };
 
-/** What the client is told about a failed recommendation. */
-function recommendationFailure(error: unknown, code: string): { status: number; code: string; message: string } {
-  if (code === "recommendation_initializing") {
-    return { status: 503, code, message: "recommendation pipeline is initializing" };
-  }
-  if (code === "recommendation_context_unavailable") {
-    return { status: 502, code, message: "recommendation context unavailable" };
-  }
-  if (error instanceof BraveSearchError) {
-    return { status: 502, code: "search_unavailable", message: error.message };
-  }
-  return { status: 502, code: "recommendation_unavailable", message: "recommendation service unavailable" };
-}
-
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
   const {
     appVersion,
     recommendationsLimiter,
+    searchJobLimiter,
+    searchJobOptions,
     authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
@@ -131,6 +120,9 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     resolvedInviteService,
     resolvedUserDataStore,
   } = ctx;
+
+  // Searches run as jobs that outlive the request that started them (ADR 0006).
+  const searchJobs = createSearchJobs({ ...searchJobOptions, describeFailure: describeRecommendationFailure(logger) });
 
   // A closed deployment only lets invited addresses register.
   const inviteRequired = authMode === "enforced";
@@ -222,6 +214,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         return sendError(res, 401, "auth_error", result.error ?? "invalid credentials");
       }
       resolvedRecommendationPipeline?.forgetUser?.(req.userId);
+      searchJobs.forgetOwner(req.userId);
       return res.status(200).json({ ok: true, erased: result.erased });
     });
 
@@ -323,105 +316,14 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     return res.status(200).json({ ok: true });
   });
 
-  app.post("/recommendations", recommendationsLimiter, async (req, res) => {
-    const validation = validateRecommendationRequest(req.body);
-    if (validation.ok === false) {
-      return sendError(res, 400, "validation_error", validation.error);
-    }
-
-    if (validation.truncated.length > 0) {
-      const logFn = logger?.warn ?? ((obj) => writeStructuredLog("warn", obj));
-      logFn({ component: "prompt_safety", event: "prompt_safety_truncate", fields: validation.truncated });
-    }
-
-    const stream = answerStreamFor(req, res);
-    // A user who stopped waiting must not use up searches.
-    const cancelled = new AbortController();
-    res.on("close", () => {
-      if (!res.writableEnded) cancelled.abort(new Error("the client closed the request"));
-    });
-
-    try {
-      if (!resolvedRecommendationPipeline) {
-        throw new Error("recommendation pipeline is not configured");
-      }
-      const pipelineResult = await resolvedRecommendationPipeline.recommend({
-        query: validation.query,
-        mode: validation.mode,
-        selectedArtistIds: validation.selectedArtistIds,
-        priorityContext: validation.priorityContext,
-        messages: validation.messages,
-        userId: req.userId,
-        obscurityTarget: validation.obscurityTarget,
-        conversationId: validation.conversationId,
-      }, {
-        signal: cancelled.signal,
-        ...(stream ? {
-          onProgress: (progress) => stream.send({ type: "progress", progress }),
-          onReply: (text) => stream.send({ type: "reply", text }),
-        } : {}),
-      });
-
-      const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
-      // Every batch gets an id: feedback refers to it, and eval (when enabled)
-      // records the batch under the same id. An answer in words is no batch.
-      const eventId = publicMeta.turn === "answer" ? undefined : randomUUID();
-      if (evalWorker && eventId) {
-        void evalWorker.processEvent({
-          eventId,
-          query: validation.query,
-          mode: validation.mode,
-          sessionId: typeof req.body?.sessionId === "string" ? req.body.sessionId : null,
-          userId: req.userId,
-          obscurityTarget: validation.obscurityTarget ?? null,
-          pipelineVersion: appVersion,
-          pipelineDiagnostics: (pipelineDiagnostics as PipelineDiagnostics | undefined) ?? {
-            braveHitCount: 0,
-            extractedCandidateCount: 0,
-            verifiedCount: 0,
-            reflectionTriggered: false,
-            searchBudgetUsed: 0,
-          },
-          recommendations: pipelineResult.recommendations,
-        });
-      }
-
-      // EU AI Act Art. 50(2): layered provenance for the generated prose. The
-      // model id arrives with the pipeline's public meta as `model`.
-      const provenance = {
-        aiGenerated: true,
-        generatedAt: new Date().toISOString(),
-        pipelineVersion: appVersion,
-      };
-
-      const response = {
-        recommendations: pipelineResult.recommendations,
-        assistantReply: pipelineResult.assistantReply ?? "",
-        meta: { ...publicMeta, ...provenance, ...(eventId ? { eventId } : {}) },
-      };
-      if (!stream?.isOpen()) return res.status(200).json(response);
-      stream.send({ type: "done", response });
-      return stream.end();
-    } catch (error) {
-      if (cancelled.signal.aborted) {
-        writeStructuredLog("info", { component: "recommendations", event: "recommendation_cancelled" });
-        return;
-      }
-      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
-      // The response only carries a generic code; without this line a failed
-      // request leaves no trace of why (seen as a silent 502 in #241).
-      const logError = logger?.error ?? ((obj) => writeStructuredLog("error", obj));
-      logError({
-        component: "recommendations",
-        event: "recommendation_failed",
-        code: code || null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      const failure = recommendationFailure(error, code);
-      if (!stream?.isOpen()) return sendError(res, failure.status, failure.code, failure.message);
-      stream.send({ type: "error", status: failure.status, error: { code: failure.code, message: failure.message } });
-      return stream.end();
-    }
+  registerRecommendationRoutes(app, {
+    appVersion,
+    recommendationsLimiter,
+    searchJobLimiter,
+    searchJobs,
+    pipeline: resolvedRecommendationPipeline,
+    evalWorker,
+    logger,
   });
 
   app.post("/preferences", async (req, res) => {
