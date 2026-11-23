@@ -2,7 +2,7 @@
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
-import { REPLY_LANGUAGE_RULE } from "../../replyLanguage.js";
+import { REPLY_LANGUAGE_FIELD, REPLY_LANGUAGE_RULE } from "../../replyLanguage.js";
 import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.js";
@@ -146,7 +146,7 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[], obscuri
 
 const RANK_SYSTEM = [
   'You recommend niche bands using ONLY the evidence block below. Respond with a single JSON object only — never a bare JSON array.',
-  'Shape: {"reply":"<string>","recommendations":[{"artist":"<string>","why":"<string>","sourceSignals":["<string>",...]}]}.',
+  `Shape: {"language":"<${REPLY_LANGUAGE_FIELD}>","reply":"<string>","recommendations":[{"artist":"<string>","why":"<string>","sourceSignals":["<string>",...]}]}.`,
   "The reply must be 2–4 sentences: acknowledge the user's taste, tie picks to their query, ask one follow-up.",
   "Recommendations: at most 3 items. Each why MUST quote or include at least one full URL from evidence_urls for that artist (Bandcamp, blog, etc.).",
   "sourceSignals must include agent_reasoning, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
