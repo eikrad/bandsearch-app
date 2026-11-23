@@ -139,6 +139,10 @@
       "endpointFailed": "Could not save endpoint.",
       "tursoCleared": "Switched to local SQLite.",
       "tursoClearFailed": "Could not clear config."
+    },
+    "language": {
+      "title": "Language",
+      "chatNote": "Chat replies follow the language you write in."
     }
   },
   "savedArtists": {

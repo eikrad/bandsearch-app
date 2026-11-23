@@ -76,6 +76,10 @@ test("the settings screen has no text of its own outside the catalog, in any of 
       // Examples of what to type, not language.
       "libsql://your-db.turso.io",
       "https://bandsearch-api.onrender.com",
+      // Each language is named in itself and never translated (UI_GUIDELINES "Language").
+      "English",
+      "Deutsch",
+      "Dansk",
     ]);
     assert.deepEqual(leftovers, [], JSON.stringify(viewProps));
   }

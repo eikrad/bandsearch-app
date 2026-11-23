@@ -143,8 +143,10 @@ place and is now under Deferred; #180's premise changed (see item 3).
 8. **Whenever there is room:**
    - #329 English, German and Danish. A: the chat answers in the language of
      the user's message, judge and golden set in lockstep ✓ Done (needs a new
-     eval baseline). B–D (UI catalog with an i18n library, language switch,
-     translation routine with glossary and review) after #349; the privacy
+     eval baseline). B and C (i18next, catalog, language switch in
+     Settings) ✓ Done for every screen but the chat and the privacy policy
+     text, which follow #349. D (translation routine with glossary and
+     review) next; the privacy
      policy is binding in all three languages, so its translations need human
      review before they ship
    - #251 judge as a quality gate — after #257's reflection work
