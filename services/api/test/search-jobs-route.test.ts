@@ -479,3 +479,61 @@ test("the compatibility route evaluates its finished batch exactly once", async 
     assert.equal(processed[0]!.eventId, result.data.meta.eventId);
   });
 });
+
+test("DELETE before consuming the start response is idempotent, including after completion", async () => {
+  const held = heldPipeline(false);
+  await withServer(createApp({ recommendationPipeline: held.pipeline }), async (base) => {
+    const api = client(base);
+    const starting = await fetch(`${base}/recommendations/jobs`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: "blackgaze" }),
+    });
+    const location = starting.headers.get("location");
+    assert.ok(location);
+    assert.equal((await api.send("DELETE", location)).status, 204);
+    assert.equal((await api.send("DELETE", location)).status, 204);
+    await starting.text();
+    held.answer("late answer");
+    await tick();
+    assert.equal((await api.send("GET", location)).data.status, "cancelled");
+    const next = await api.start();
+    held.answer("finished answer");
+    await tick();
+    assert.equal((await api.send("DELETE", `/recommendations/jobs/${next}`)).status, 204);
+    const state = await api.send("GET", `/recommendations/jobs/${next}`);
+    assert.equal(state.data.status, "done");
+    assertRecord(state.data.response);
+    assert.equal(state.data.response.assistantReply, "finished answer");
+  });
+});
+
+for (const failure of [
+  { cause: Object.assign(new Error("initializing"), { code: "recommendation_initializing" }), status: 503, code: "recommendation_initializing" },
+  { cause: Object.assign(new Error("context"), { code: "recommendation_context_unavailable" }), status: 502, code: "recommendation_context_unavailable" },
+  { cause: new Error("pipeline failure"), status: 502, code: "recommendation_unavailable" },
+  { cause: new DOMException("timed out", "TimeoutError"), status: 502, code: "recommendation_unavailable" },
+]) {
+  test(`legacy and job routes preserve staging error mapping for ${failure.cause.message}`, async () => {
+    await withServer(createApp({ recommendationPipeline: { recommend: async () => { throw failure.cause; } }, logger: quiet }), async (base) => {
+      const api = client(base);
+      const legacy = await api.send("POST", "/recommendations", { query: "blackgaze" });
+      assert.equal(legacy.status, failure.status);
+      assertRecord(legacy.data.error);
+      assert.equal(legacy.data.error.code, failure.code);
+      const id = await api.start();
+      const result = await api.follow(id);
+      assert.deepEqual(result.events.map((entry) => entry.event), [{ type: "error", status: failure.status, error: legacy.data.error }]);
+    });
+  });
+}
+
+test("legacy validation errors retain the staging status and public code", async () => {
+  await withServer(createApp({ recommendationPipeline: heldPipeline().pipeline }), async (base) => {
+    const api = client(base);
+    const old = await api.send("POST", "/recommendations", { query: "" });
+    const job = await api.send("POST", "/recommendations/jobs", { query: "" });
+    assert.equal(old.status, 400);
+    assertRecord(old.data.error);
+    assert.equal(old.data.error.code, "validation_error");
+    assert.deepEqual(job.data, old.data);
+  });
+});

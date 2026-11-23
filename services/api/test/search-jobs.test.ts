@@ -306,3 +306,60 @@ test("a full store refuses another owner before starting work but allows replace
   assert.equal(jobs.get(id, "ana"), undefined);
   assert.equal(jobs.get(replacement, "ana")?.status, "running");
 });
+
+for (const beforeSettlement of [true, false]) {
+  test(`replacement ${beforeSettlement ? 'before' : 'after'} completion settlement never gets the old answer`, async () => {
+    const { jobs } = jobsWithClock();
+    const first = controllableWork();
+    const id = jobs.start("ana", first.work);
+    const finishing = first.finish("old answer");
+    if (!beforeSettlement) await finishing;
+    const second = controllableWork();
+    const next = jobs.start("ana", second.work);
+    await finishing;
+    assert.equal(jobs.get(id, "ana")?.status, beforeSettlement ? "cancelled" : "done");
+    assert.equal(jobs.get(next, "ana")?.response, undefined);
+    await second.finish("new answer");
+    assert.equal(jobs.get(next, "ana")?.response, "new answer");
+  });
+
+  test(`following ${beforeSettlement ? 'before' : 'after'} completion settlement gets exactly one terminal event`, async () => {
+    const { jobs } = jobsWithClock();
+    const run = controllableWork();
+    const id = jobs.start("ana", run.work);
+    const finishing = run.finish("answer");
+    if (!beforeSettlement) await finishing;
+    const followed = collect(jobs, id, "ana");
+    await finishing;
+    assert.deepEqual(followed.types(), ["done"]);
+  });
+}
+
+for (const ending of ["done", "cancelled", "failed"] as const) {
+  test(`${ending} clears its deadline and later completion attempts cannot change it`, async () => {
+    let active = 0;
+    let expire = () => {};
+    const { jobs, advance } = jobsWithClock({
+      keepFinishedMs: 10,
+      schedule: (run) => { active++; expire = run; return () => { active--; }; },
+    });
+    const run = controllableWork();
+    const id = jobs.start("ana", run.work);
+    const followed = collect(jobs, id, "ana");
+    if (ending === "done") await run.finish("answer");
+    else if (ending === "cancelled") jobs.cancel(id, "ana");
+    else expire();
+    await run.finish("late answer");
+    await run.fail(new Error("late rejection"));
+    run.emit({ type: "reply", text: "late reply" });
+    assert.equal(active, 0);
+    assert.deepEqual(followed.types(), [ending === "failed" ? "error" : ending]);
+    assert.equal(jobs.get(id, "ana")?.status, ending);
+    assert.equal(jobs.cancel(id, "ana"), true);
+    assert.equal(jobs.get(id, "ana")?.status, ending);
+    advance(10);
+    assert.equal(jobs.get(id, "ana"), undefined);
+    assert.equal(jobs.follow(id, "ana", 0, () => {}), undefined);
+    assert.equal(jobs.cancel(id, "ana"), false);
+  });
+}
