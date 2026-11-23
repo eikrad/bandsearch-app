@@ -350,12 +350,57 @@ test("the request log never carries a whole job id", async () => {
       const api = client(base);
       const jobId = await api.start();
       await api.send("GET", `/recommendations/jobs/${jobId}`);
+      const encodedId = [...jobId].map((char) => `%${char.charCodeAt(0).toString(16)}`).join("");
+      await api.send("GET", `/recommendations/jobs/${encodedId}`);
+      assert.equal((await api.send("GET", `/RECOMMENDATIONS/JOBS/${jobId}`)).status, 200);
       await api.send("DELETE", `/recommendations/jobs/${jobId}`);
       await tick();
+      assert.ok(logged.every((line) => !line.includes(encodedId)), "encoded ids must also be redacted");
       assert.ok(logged.some((line) => line.includes("/recommendations/jobs/")), "the requests are logged");
       assert.ok(logged.every((line) => !line.includes(jobId)), "but not the id they name");
     });
   } finally {
     console.log = original;
   }
+});
+
+
+test("both start routes refuse a full store with a retryable public error", async () => {
+  const held = heldPipeline();
+  await withServer(createApp({ recommendationPipeline: held.pipeline, searchJobs: { maxJobs: 0 } }), async (base) => {
+    for (const path of ["/recommendations/jobs", "/recommendations"]) {
+      const response = await fetch(`${base}${path}`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "blackgaze" }), signal: AbortSignal.timeout(1000),
+      });
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { error: {
+        code: "search_capacity_exceeded", message: "Search capacity is full. Please try again in a moment.",
+      } });
+    }
+    assert.equal(held.calls.length, 0);
+  });
+});
+
+
+test("resuming at or beyond a finished job's final event closes the stream", async () => {
+  const held = heldPipeline();
+  await withServer(createApp({ recommendationPipeline: held.pipeline }), async (base) => {
+    const api = client(base);
+    const jobId = await api.start();
+    held.answer();
+    await tick();
+    const complete = await api.follow(jobId);
+    const lastId = complete.events.at(-1)!.id!;
+    for (const cursor of [lastId, lastId + 100]) {
+      for (const header of [false, true]) {
+        const response = await fetch(`${base}/recommendations/jobs/${jobId}${header ? "" : `?after=${cursor}`}`, {
+          headers: { accept: "text/event-stream", ...(header ? { "last-event-id": String(cursor) } : {}) },
+          signal: AbortSignal.timeout(1000),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(await response.text(), "");
+      }
+    }
+  });
 });

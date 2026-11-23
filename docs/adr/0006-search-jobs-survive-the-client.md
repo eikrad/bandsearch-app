@@ -33,7 +33,9 @@ started it. The owner approved the nine defaults recorded in #345.
 2. **Storage: memory.** No table. A finished job is kept for
    `SEARCH_JOB_KEEP_MINUTES` (60), then evicted. Memory is bounded: at most 200
    jobs (the oldest finished go first when full; running ones are bounded by
-   one per user), at most 100 progress events per job, and a reply is kept as
+   one per user; when all slots are running, another owner gets a retryable
+   `503 search_capacity_exceeded`, while replacing your own search remains
+   possible), at most 100 progress events per job, and a reply is kept as
    its latest text only (each reply carries the whole text so far).
 3. **Cancel is explicit.** Stop is `DELETE`. A client hanging up stops
    following, never the search. A job nobody collects still ends: the
