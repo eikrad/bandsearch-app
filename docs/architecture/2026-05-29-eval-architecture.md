@@ -193,7 +193,7 @@ CREATE TABLE eval_baselines (
 
 ## LLM-as-Judge
 
-**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (default `glm-5.2`, chosen by calibration on 2026-10-05, see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
+**Model (changed 2026-10-05, #237):** Scaleway Generative APIs, model `SCW_JUDGE_MODEL` (default `gemma-4-26b-a4b-it` since 2026-11-23, when Scaleway stopped serving `glm-5.2`, the judge calibration chose on 2026-10-05; see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md)), temperature 0, JSON mode, built from the judge role in `config/models.ts`. Active when `SCW_SECRET_KEY` is set; otherwise Layer 2 is silently skipped — it is never on the critical path. The judge must not be the research model (startup error) and should be from another family (startup warning) — MT-Bench self-enhancement. Before 2026-10-05 the judge called Mistral's own API with the moving alias `mistral-large-latest`.
 
 **Timing:** Fire-and-forget worker launched after the HTTP response is sent. Timeout 60 s (a judge may be a reasoning model), one retry inside the client, failures logged and never thrown. Eval data loss is acceptable; a missing judge score is not a system error.
 
@@ -480,7 +480,7 @@ services/eval/
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SCW_SECRET_KEY` | No | — | Enables LLM-as-judge (Layer 2) on Scaleway. Without it, only automatic scoring runs. (Was `ANTHROPIC_API_KEY` in this design, then `MISTRAL_API_KEY`; see ADR 0004.) |
-| `SCW_JUDGE_MODEL` | No | `glm-5.2` | Judge model, chosen by calibration (ADR 0004). |
+| `SCW_JUDGE_MODEL` | No | `gemma-4-26b-a4b-it` | Judge model, chosen by calibration (ADR 0004, update 2026-11-23). |
 | `EVAL_DASHBOARD_ENABLED` | No | `false` | Activates `/eval/dashboard` and eval API routes. |
 | `EVAL_DASHBOARD_PASSWORD` | No | — | HTTP Basic Auth password for dashboard. Username: `eval`. |
 

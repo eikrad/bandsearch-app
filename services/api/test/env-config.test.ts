@@ -165,7 +165,7 @@ test("an unknown LLM_PROVIDER is rejected, not silently replaced", () => {
 
 test("the judge runs on Scaleway whenever a Scaleway key is set", () => {
   const { llm } = validateRuntimeEnv({ ...REQUIRED, SCW_SECRET_KEY: "scw" });
-  assert.deepEqual(llm.judge, { provider: "scaleway", model: "glm-5.2", reasoningEffort: "none" });
+  assert.deepEqual(llm.judge, { provider: "scaleway", model: "gemma-4-26b-a4b-it", reasoningEffort: "none" });
 });
 
 test("SCW_JUDGE_MODEL chooses the judge model", () => {
