@@ -74,7 +74,7 @@ Everything beyond this README lives in [`docs/`](docs/README.md), which has an i
 | Layer | Technology |
 |-------|------------|
 | API server | Express.js + TypeScript (Node.js 26.12.1+) |
-| AI pipeline | LangGraph + Scaleway Generative APIs (DeepSeek V4 Flash by default; Gemini selectable) |
+| AI pipeline | LangGraph + Scaleway Generative APIs (DeepSeek V4 Flash by default) |
 | Web search | Brave Search API |
 | Artist verification | MusicBrainz |
 | Desktop shell | Tauri v2 (Rust) + React + TypeScript |
@@ -96,7 +96,7 @@ npm run dev                 # API starts on http://localhost:3001
 ```
 
 Preferences are saved automatically to `bandsearch.db` — no database setup needed.
-Both `SCW_SECRET_KEY` (Scaleway) and `BRAVE_API_KEY` are required to start the API (with `LLM_PROVIDER=gemini`, `GEMINI_API_KEY` instead of the Scaleway key).
+Both `SCW_SECRET_KEY` (Scaleway) and `BRAVE_API_KEY` are required to start the API.
 
 Test it:
 
@@ -159,7 +159,7 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchel
 
 ### API key storage
 
-Keys are written to the OS config directory as `bandsearch/config.json`. Use **Settings** in the app header to save your Scaleway and Brave keys. A Gemini key stored by an earlier version is removed, since it cannot run the default provider.
+Keys are written to the OS config directory as `bandsearch/config.json`. Use **Settings** in the app header to save your Scaleway and Brave keys. A Gemini key stored by an earlier version is removed, since the API no longer uses Gemini.
 
 | OS | Path |
 |----|------|
@@ -235,7 +235,7 @@ its `meta`.
 The privacy policy lives in `apps/desktop/src/ui/privacyPolicyText.ts` and is
 readable in-app at `#/privacy`, linked from **Settings → Privacy & data**. It
 names every processor that receives data (Scaleway, Brave Search, MusicBrainz,
-optional Last.fm, Turso, and Google only if an operator selects Gemini), the lawful basis for each kind of processing, the
+optional Last.fm and Turso), the lawful basis for each kind of processing, the
 retention periods, and how to exercise your rights.
 
 Two GDPR endpoints back the Settings controls:
@@ -294,8 +294,7 @@ Common optional variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLM_PROVIDER` | `scaleway` | Research provider; `gemini` is the rollback until Gemini is removed ([ADR 0004](docs/adr/0004-llm-models-per-role-on-scaleway.md)) |
-| `GEMINI_API_KEY` / `GEMINI_MODEL` | — / `gemini-2.5-flash` | Only with `LLM_PROVIDER=gemini` |
+| `LLM_PROVIDER` | `scaleway` | Research provider; `scaleway` is the only one ([ADR 0004](docs/adr/0004-llm-models-per-role-on-scaleway.md)) |
 | `SCW_MODEL` | `deepseek-v4-flash-0731` | Research model on Scaleway, chosen by the model comparison (ADR 0004) |
 | `SCW_JUDGE_MODEL` | `glm-5.2` | LLM-as-judge model; must differ from the research model; recorded as `model_id` on every score row |
 | `SCW_REASONING_EFFORT` / `SCW_JUDGE_REASONING_EFFORT` | `none` | Scaleway reasoning per role; `none` keeps calls fast (gemma: 101 s → 9 s for one extraction). `gpt-oss-120b` needs `low` or higher |

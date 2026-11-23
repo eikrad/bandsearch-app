@@ -12,7 +12,7 @@ Navigation guide for the `docs/` folder.
 | [adr/0001-prompt-injection-guardrails.md](adr/0001-prompt-injection-guardrails.md) | ADR: prompt injection defence — bracket-marker envelope and length caps |
 | [adr/0002-machine-written-notes-stay-out-of-the-prompt.md](adr/0002-machine-written-notes-stay-out-of-the-prompt.md) | ADR: only a user-edited note reaches the recommendation prompt, not the model's own pre-filled explanation |
 | [adr/0003-android-hosting-render-over-fly.md](adr/0003-android-hosting-render-over-fly.md) | ADR: Android's production API stays on Render Free, accepting the cold-start over Fly.io's cost |
-| [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort, Gemini rollback |
+| [adr/0004-llm-models-per-role-on-scaleway.md](adr/0004-llm-models-per-role-on-scaleway.md) | ADR: which Scaleway model runs each role (research, judge), reasoning effort; the Gemini rollback, removed in #303 |
 | [adr/0005-closed-beta-via-email-bound-invites.md](adr/0005-closed-beta-via-email-bound-invites.md) | ADR: closed beta via email-bound invites and an enforced auth mode (`AUTH_MODE=enforced`) |
 | [evaluation.md](evaluation.md) | Offline evaluation — golden runs, replay mode, constraints, run history and dashboard, judge calibration |
 | [adr/README.md](adr/README.md) | Index of all Architecture Decision Records |

@@ -15,7 +15,7 @@ provider answers to). They have very different costs.
 |---|---|---|---|
 | Compute | Frankfurt ✅ | 🇺🇸 Render Inc. | — |
 | Database | EU selectable | 🇺🇸 Turso | accounts, e-mail addresses, password hashes, saved preferences, chat history |
-| LLM | France 🇪🇺 | 🇫🇷 Scaleway (default since 2026-10-05; Google Gemini before, still selectable) | **query text + full conversation context** |
+| LLM | France 🇪🇺 | 🇫🇷 Scaleway (since 2026-10-05; Google Gemini before, removed in #303) | **query text + full conversation context** |
 | Web search | US | 🇺🇸 Brave | **search queries, retained 90 days** |
 | Judge (optional) | France 🇪🇺 | 🇫🇷 Scaleway (since 2026-10-05; Mistral before) | query text + recommendation prose |
 
@@ -50,8 +50,9 @@ the EU.
 `apps/desktop/src/ui/privacyPolicyText.ts` discloses the two third-country
 transfers that matter, and they are covered:
 
-- Google LLC is certified under the EU–US Data Privacy Framework, with Standard
-  Contractual Clauses as fallback.
+- Google LLC was certified under the EU–US Data Privacy Framework, with Standard
+  Contractual Clauses as fallback. That transfer ended when Gemini was removed
+  (#303); the policy no longer names Google.
 - Brave receives search queries and retains them up to 90 days for billing and
   troubleshooting.
 

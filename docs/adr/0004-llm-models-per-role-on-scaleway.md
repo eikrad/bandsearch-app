@@ -3,6 +3,9 @@
 **Status:** Accepted. Model choices measured on 2026-10-05 (#237 step 3); see
 "Measured model choices" below. The provisional choices of the first draft are
 kept underneath for the record.
+**Update (#303):** the Gemini rollback (`LLM_PROVIDER=gemini`) has been
+removed; Scaleway is the only provider. This ADR stays as the record of the
+choice. Rolling back to Gemini now means redeploying an earlier release.
 **Date:** 2026-10-05
 
 ## Context
@@ -110,7 +113,7 @@ baseline, judged on quality, latency, failure rate and cost.
 
 ## Consequences
 
-- Self-hosters need one LLM key (`SCW_SECRET_KEY`) once Gemini is gone.
+- Self-hosters need one LLM key (`SCW_SECRET_KEY`); Gemini is gone since #303.
 - `MISTRAL_API_KEY`, `MISTRAL_JUDGE_ENDPOINT`, `MISTRAL_JUDGE_MODEL` and
   `ANTHROPIC_API_KEY` are no longer read.
 - The privacy policy names Scaleway as the optional quality-scoring recipient.
