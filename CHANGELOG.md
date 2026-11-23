@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.4.6](https://github.com/eikrad/bandsearch-app/compare/v0.4.5...v0.4.6) (2026-11-23)
+
+
+### Features
+
+* answer follow-ups without a new search ([eb4404c](https://github.com/eikrad/bandsearch-app/commit/eb4404cf4527696d0516150c34809c22039d6954)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** answer from Last.fm first when it knows enough ([b1401f7](https://github.com/eikrad/bandsearch-app/commit/b1401f7aa65d304b416c09b182fa1ac0553e3539)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** define each obscurity target as a listener range ([47e173e](https://github.com/eikrad/bandsearch-app/commit/47e173e14491fbd75fc5426a002a3114fa615add)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** filter candidates to the obscurity target's range, floor included ([e94eb96](https://github.com/eikrad/bandsearch-app/commit/e94eb964bf4951c0bb33bfabffab0e021eea3349)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** keep near misses of the obscurity range for the ranker ([7a6b594](https://github.com/eikrad/bandsearch-app/commit/7a6b5947052f8746b846fcd814a503f64481e830)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** list recommendation feedback from the admin CLI ([8bfccef](https://github.com/eikrad/bandsearch-app/commit/8bfccef9a92d0898753d98a32d9a07fce095a288)), closes [#307](https://github.com/eikrad/bandsearch-app/issues/307) [#306](https://github.com/eikrad/bandsearch-app/issues/306)
+* **api:** log where candidates fall against the target range around the obscurity filter ([698ccb0](https://github.com/eikrad/bandsearch-app/commit/698ccb02f2f6b582f4ca4e63b7faf28204aec110)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** plan searches for the obscurity target's listener range ([f8ab192](https://github.com/eikrad/bandsearch-app/commit/f8ab192a918b8b3b5e04cd6316368139031da856)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** rank by the obscurity target's listener range ([575cac9](https://github.com/eikrad/bandsearch-app/commit/575cac9bf6e629cdaef3742c23bb98fdab9d6a9a)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **api:** search for the obscurity target's listener range, floor included ([7ad4268](https://github.com/eikrad/bandsearch-app/commit/7ad4268133a0eced7475f911d6109081d42d4337))
+* **api:** show the ranker each band's country ([f2fa0f8](https://github.com/eikrad/bandsearch-app/commit/f2fa0f822234d054c34ee9f5fae1a732be94694e)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336) [#257](https://github.com/eikrad/bandsearch-app/issues/257)
+* **api:** store recommendation feedback in the main database ([dd91c3e](https://github.com/eikrad/bandsearch-app/commit/dd91c3eca4acc7dc6f80daf5e0fa6a47d1ca5bdf)), closes [#307](https://github.com/eikrad/bandsearch-app/issues/307) [#306](https://github.com/eikrad/bandsearch-app/issues/306)
+* **api:** take candidates from Last.fm's similar artists too ([b51cc5f](https://github.com/eikrad/bandsearch-app/commit/b51cc5f8f229110c039d67c0c7cc5e7b325baaa9)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** use Last.fm biographies and tags as evidence ([3f3faee](https://github.com/eikrad/bandsearch-app/commit/3f3faeeffb83b77ea5bb8439ea357ba20b42b136)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336) [#257](https://github.com/eikrad/bandsearch-app/issues/257)
+* **desktop:** wake a hosted API before the user's message needs it ([61f4c0c](https://github.com/eikrad/bandsearch-app/commit/61f4c0c6f2cdd506eacd573e73554d61d6f657d3)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **eval:** judge obscurity fit in both directions ([861b786](https://github.com/eikrad/bandsearch-app/commit/861b78698b5ad83ca479d8546b0b695afe4b95f7)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **eval:** measure how many picks land in the requested listener range ([1e9ea69](https://github.com/eikrad/bandsearch-app/commit/1e9ea6971a058436c9c839363619ad88ddbf251c)), closes [#325](https://github.com/eikrad/bandsearch-app/issues/325)
+* **eval:** measure obscurity target misses in both directions ([143f4e9](https://github.com/eikrad/bandsearch-app/commit/143f4e9cdb30f7635a7b8c01692ac68a36630e34))
+* **privacy:** disclose recommendation feedback and record ADR 0006 ([9108034](https://github.com/eikrad/bandsearch-app/commit/9108034029d6feae66db18bf5537a29e75f185ac)), closes [#307](https://github.com/eikrad/bandsearch-app/issues/307) [#306](https://github.com/eikrad/bandsearch-app/issues/306)
+* stream progress and the reply while an answer is made ([8848881](https://github.com/eikrad/bandsearch-app/commit/884888112706e5f20ad93613496abf805616f3cc)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+
+
+### Bug Fixes
+
+* **api:** assemble account repositories on one storage backend ([6192e08](https://github.com/eikrad/bandsearch-app/commit/6192e08513715d4c019773d7108a4e3c2aad3b1b))
+* **api:** enforce research deadline through final ranking ([52ea848](https://github.com/eikrad/bandsearch-app/commit/52ea848e5a2c9514cd955c61c1b9abf95e466d64))
+* **api:** enforce the complete research deadline ([765273b](https://github.com/eikrad/bandsearch-app/commit/765273baee3c652a5e32a8400d70d5954fb10fcb))
+* **api:** include authenticated feedback in account data ([626cae2](https://github.com/eikrad/bandsearch-app/commit/626cae2659ade8715fe1a19e124caef41a315e89))
+* **api:** include authenticated recommendation feedback in account data ([ce71fb6](https://github.com/eikrad/bandsearch-app/commit/ce71fb67715f2dd0ef4d05db68bdbca87ce423ed))
+* **api:** keep account repositories on the selected storage backend ([7c3ab2c](https://github.com/eikrad/bandsearch-app/commit/7c3ab2c23fd05d12e8dcc1bef7423a4987588f7d))
+* **api:** search the web for what similarity cannot show ([31f873f](https://github.com/eikrad/bandsearch-app/commit/31f873f003ef8e98d5402c5ef54a482ec2c945b0)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **deps:** update tauri-plugin-updater to 2.14.1 and tauri to 2.12.7 ([463ad66](https://github.com/eikrad/bandsearch-app/commit/463ad665fc9d8a35382da34d3eccaa19d86527a8))
+* **desktop:** grant every app command a permission ([d4b8511](https://github.com/eikrad/bandsearch-app/commit/d4b8511f8eae1a2c4aecc36ce5a467d536a2a002))
+* **desktop:** grant every app command a permission ([8246914](https://github.com/eikrad/bandsearch-app/commit/8246914a82a38e598858b167557e16e705c76687)), closes [#330](https://github.com/eikrad/bandsearch-app/issues/330)
+* **desktop:** keep save and rating errors up for the error timeout ([fa0cef5](https://github.com/eikrad/bandsearch-app/commit/fa0cef56a2ce22b577566da465ffc77c436601e0)), closes [#311](https://github.com/eikrad/bandsearch-app/issues/311)
+* **desktop:** repaint the chat when a status message clears ([6720040](https://github.com/eikrad/bandsearch-app/commit/6720040b8dd3ba133d2236ed5ee458f86c8826a1)), closes [#311](https://github.com/eikrad/bandsearch-app/issues/311)
+* **desktop:** report every Saved Artists outcome in a status line ([4897a56](https://github.com/eikrad/bandsearch-app/commit/4897a5604df0b7b1146d548b25dfd9fa226c33ca)), closes [#313](https://github.com/eikrad/bandsearch-app/issues/313)
+* **desktop:** route every way into the app through one session ([eecf2eb](https://github.com/eikrad/bandsearch-app/commit/eecf2eb7ef877ab007dd1a8d08bb252d30a86df2)), closes [#313](https://github.com/eikrad/bandsearch-app/issues/313)
+* **desktop:** say the AI model is hosted in the EU, not only who hosts it ([9bf0490](https://github.com/eikrad/bandsearch-app/commit/9bf0490668ce78b8e28301738740a1ab4e2e2738))
+* **desktop:** send recommendation feedback with the batch it judges ([781827c](https://github.com/eikrad/bandsearch-app/commit/781827c4acd9e60511e3a746c9d8a9e23200f8fa)), closes [#307](https://github.com/eikrad/bandsearch-app/issues/307)
+* **desktop:** show a failed retry and stop repeating the question ([ff9f064](https://github.com/eikrad/bandsearch-app/commit/ff9f064cd0d97f0adadeed23f697594c7010dc5d))
+* **desktop:** show a failed retry and stop repeating the question ([6f90731](https://github.com/eikrad/bandsearch-app/commit/6f907314313b9323d96136ed2f486b1a26365834)), closes [#304](https://github.com/eikrad/bandsearch-app/issues/304)
+* **test:** clean storage fixtures after native processes exit ([3058075](https://github.com/eikrad/bandsearch-app/commit/305807579146641d0f977b277f2943f85ed99577))
+
+
+### Performance
+
+* **api:** ask Last.fm alongside verification and remember artists ([76cb2dd](https://github.com/eikrad/bandsearch-app/commit/76cb2dd29c12a4f5c7b19144357a1b460aa7633c)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** do not wait out a busy MusicBrainz for aliases ([aa13fff](https://github.com/eikrad/bandsearch-app/commit/aa13fff9403f47dcfb444cebcd1cb45c137a502a)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** plan only searched queries and extract hit numbers ([aac062e](https://github.com/eikrad/bandsearch-app/commit/aac062eac6afc17542892b0d79770d2fe1461980)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** read more hits per search ([5cf2705](https://github.com/eikrad/bandsearch-app/commit/5cf270594718f73e828bd97ea361293214625bb3)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** stop searching once the extractor has enough hits ([ec2f9ec](https://github.com/eikrad/bandsearch-app/commit/ec2f9ecd961e078f1dce3f31ed8604e71ce18fb0)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+* **api:** verify candidates in one batched MusicBrainz search ([9fcbbd7](https://github.com/eikrad/bandsearch-app/commit/9fcbbd78ef022a784c1bc2f01ec7e7db80691d0c)), closes [#336](https://github.com/eikrad/bandsearch-app/issues/336)
+
 ## [0.4.5](https://github.com/eikrad/bandsearch-app/compare/v0.4.4...v0.4.5) (2026-11-16)
 
 
