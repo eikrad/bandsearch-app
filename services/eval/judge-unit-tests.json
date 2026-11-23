@@ -286,14 +286,14 @@
   },
   {
     "id": "ut-20",
-    "description": "Danish query, well-sourced why written in Danish with English genre tags and titles → evidenceQuality should be high: names and tags do not count as another language (#329)",
+    "description": "Danish query, well-sourced why written in Danish with English genre tags and titles → evidenceQuality should be high: names and tags do not count as another language (#329). Deliberately unlike ut-19 (other genre, other band): in a batch, a judge copies its verdict onto a near-identical case",
     "input": {
-      "bandName": "Lantlôs",
-      "query": "atmosfærisk black metal med shoegaze-præg",
-      "obscurityTarget": "underground",
-      "why": "Tysk post-black metal-projekt, hvis album 'Melting Sun' bytter blast beats ud med drømmende shoegaze-flader; anmeldt på https://www.metal-archives.com/bands/Lantl%C3%B4s/.",
-      "sourceSignals": ["https://www.metal-archives.com/bands/Lantl%C3%B4s/"],
-      "listeners": 30000,
+      "bandName": "Søvnløs Sommer",
+      "query": "drømmende dream pop med kvindelig vokal og sommerlig klang",
+      "obscurityTarget": "obscure",
+      "why": "Københavnsk duo, hvis EP 'Varme Nætter' kombinerer reverb-tunge guitarer med hviskende vokal; fremhævet på https://soevnloessommer.bandcamp.com.",
+      "sourceSignals": ["https://soevnloessommer.bandcamp.com"],
+      "listeners": 1800,
       "citationSupportRate": 1.0,
       "genericWhyFlag": false
     },
