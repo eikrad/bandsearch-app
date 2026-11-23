@@ -12,31 +12,13 @@ const BAND = { musicbrainzArtistId: "mb-1", name: "Alcest", rating: 5, categorie
 const USER_A = "user-a";
 const USER_B = "user-b";
 
-function makeSchema(db: DatabaseType) {
+/** The repository creates its own tables, as it does at boot (#168). */
+function enableForeignKeys(db: DatabaseType) {
   db.pragma("foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS saved_bands (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'anonymous',
-      musicbrainz_artist_id TEXT NOT NULL, name TEXT NOT NULL,
-      rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
-      categories TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '',
-      note_edited INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS artist_groups (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'anonymous',
-      name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS artist_group_members (
-      group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
-      saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
-      added_at TEXT NOT NULL, PRIMARY KEY (group_id, saved_band_id)
-    );
-  `);
 }
 
 function memPrefRepo() { return createInMemoryPreferenceRepository(); }
-function sqlitePrefRepo() { const db = new Database(":memory:"); makeSchema(db); return createSqlitePreferenceRepository({ db }); }
+function sqlitePrefRepo() { const db = new Database(":memory:"); enableForeignKeys(db); return createSqlitePreferenceRepository({ db }); }
 function memSessionRepo() { return createInMemoryChatSessionRepository(); }
 function sqliteSessionRepo() { const db = new Database(":memory:"); return createSqliteChatSessionRepository({ db }); }
 
