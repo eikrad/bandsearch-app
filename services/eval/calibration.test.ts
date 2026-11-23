@@ -143,3 +143,15 @@ test("a calibration can use several votes and per-band calls, and records how it
   );
   assert.equal(record.summary.failedCalls, 0);
 });
+
+test("each judge fixture names its band once, because the judge answers per band name", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  for (const file of ["judge-unit-tests.json", "judge-calibration.json"]) {
+    const entries = JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8")) as Array<{ bandName?: string; input?: { bandName: string } }>;
+    const names = entries.map((e) => e.input?.bandName ?? e.bandName);
+    const repeated = names.filter((name, i) => names.indexOf(name) !== i);
+    // A repeated name makes one case take another's score in a batch call (#329: ut-19 and ut-20).
+    assert.deepEqual(repeated, [], file);
+  }
+});
