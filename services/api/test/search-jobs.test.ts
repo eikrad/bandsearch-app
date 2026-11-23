@@ -40,11 +40,18 @@ function jobsWithClock(options: Partial<Parameters<typeof createSearchJobs>[0]> 
     },
     ...options,
   });
+  const runDue = (by: number) => {
+    for (const timer of timers) if (!timer.cleared && timer.at <= by) { timer.cleared = true; timer.run(); }
+  };
   return {
     jobs,
     advance(ms: number) {
       time += ms;
-      for (const timer of timers) if (!timer.cleared && timer.at <= time) { timer.cleared = true; timer.run(); }
+      runDue(time);
+    },
+    /** Timers due within `ms` fire while the wall clock stays put, as after a clock adjustment. */
+    fireTimersWithin(ms: number) {
+      runDue(time + ms);
     },
   };
 }
@@ -238,6 +245,20 @@ test("a finished job is kept for an hour, then forgotten", async () => {
   assert.equal(jobs.follow(id, "ana", 0, () => {}), undefined);
 });
 
+test("a finished job is forgotten when its keep time runs out, though nobody asks for it", async () => {
+  // The privacy policy promises at most SEARCH_JOB_KEEP_MINUTES in memory. Only a
+  // timer keeps that promise on an idle server: no later request may be needed.
+  const { jobs, fireTimersWithin } = jobsWithClock();
+  const run = controllableWork();
+  const id = jobs.start("ana", run.work);
+  await run.finish({ recommendations: [] });
+
+  fireTimersWithin(59 * 60 * 1000);
+  assert.equal(jobs.get(id, "ana")?.status, "done");
+  fireTimersWithin(60 * 60 * 1000);
+  assert.equal(jobs.get(id, "ana"), undefined);
+});
+
 test("a job nobody collects still ends: past its deadline it is stopped and fails", async () => {
   const { jobs, advance } = jobsWithClock({ maxRunMs: 5 * 60 * 1000 });
   const run = controllableWork();
@@ -337,11 +358,19 @@ for (const beforeSettlement of [true, false]) {
 
 for (const ending of ["done", "cancelled", "failed"] as const) {
   test(`${ending} clears its deadline and later completion attempts cannot change it`, async () => {
-    let active = 0;
+    // Only the deadline must be gone; the keep timer of a finished job stays.
+    const maxRunMs = 5 * 60 * 1000;
+    let deadlineActive = 0;
     let expire = () => {};
     const { jobs, advance } = jobsWithClock({
       keepFinishedMs: 10,
-      schedule: (run) => { active++; expire = run; return () => { active--; }; },
+      maxRunMs,
+      schedule: (run, ms) => {
+        if (ms !== maxRunMs) return () => {};
+        deadlineActive++;
+        expire = run;
+        return () => { deadlineActive--; };
+      },
     });
     const run = controllableWork();
     const id = jobs.start("ana", run.work);
@@ -352,7 +381,7 @@ for (const ending of ["done", "cancelled", "failed"] as const) {
     await run.finish("late answer");
     await run.fail(new Error("late rejection"));
     run.emit({ type: "reply", text: "late reply" });
-    assert.equal(active, 0);
+    assert.equal(deadlineActive, 0);
     assert.deepEqual(followed.types(), [ending === "failed" ? "error" : ending]);
     assert.equal(jobs.get(id, "ana")?.status, ending);
     assert.equal(jobs.cancel(id, "ana"), true);
