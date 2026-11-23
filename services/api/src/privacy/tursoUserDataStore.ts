@@ -5,8 +5,8 @@ import {
   emptyExport,
   rowToExportedFeedback,
   rowToExportedUser,
-  rowToSavedBand,
 } from "./userDataStore.js";
+import { rowToSavedBand } from "../preferences/savedBandRow.js";
 
 /**
  * The Turso half of the user data store.

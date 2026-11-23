@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { TursoClient, TursoRow as Row } from "../turso/tursoClient.js";
 import { validateSavedBand as validateSavedBandInput } from "../../../../shared/schemas/src/contracts.js";
 import type { PreferenceRepository } from "./preferenceRepository.js";
+import { rowToSavedBand } from "./savedBandRow.js";
 
 const DEFAULT_USER = "anonymous";
 
@@ -14,22 +15,6 @@ type SavedBandInput = {
 };
 
 type BandUpdates = { rating?: number | null; categories?: string[]; note?: string };
-
-function mapRowToSavedBand(row: Row) {
-  return {
-    id: String(row.id),
-    musicbrainzArtistId: String(row.musicbrainz_artist_id),
-    name: String(row.name),
-    // Number(null) is 0, which is outside the 1-5 domain — an absent rating
-    // has to survive as absent rather than becoming a bogus zero.
-    rating: row.rating === null || row.rating === undefined ? null : Number(row.rating),
-    categories: JSON.parse(String(row.categories || "[]")) as string[],
-    note: String(row.note),
-    noteEdited: Boolean(Number(row.note_edited ?? 0)),
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
-  };
-}
 
 export function createTursoPreferenceRepository({ client }: { client: TursoClient }): PreferenceRepository {
   return {
@@ -63,7 +48,7 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
                 RETURNING *`,
           args: [name, bandInput.rating ?? null, categories, note, now, existingId],
         });
-        return { ok: true, savedBand: mapRowToSavedBand(updateResult.rows[0]) };
+        return { ok: true, savedBand: rowToSavedBand(updateResult.rows[0]) };
       }
 
       const id = randomUUID();
@@ -77,7 +62,7 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
         args: [id, userId, musicbrainzArtistId, name, bandInput.rating ?? null, categories, note, now, now],
       });
 
-      return { ok: true, savedBand: mapRowToSavedBand(result.rows[0]) };
+      return { ok: true, savedBand: rowToSavedBand(result.rows[0]) };
     },
 
     async listSavedBands(userId = DEFAULT_USER) {
@@ -85,7 +70,7 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
         sql: "SELECT * FROM saved_bands WHERE user_id = ? ORDER BY updated_at DESC",
         args: [userId],
       });
-      return result.rows.map(mapRowToSavedBand);
+      return result.rows.map(rowToSavedBand);
     },
 
     async updateSavedBand(id: string, updates: BandUpdates, userId = DEFAULT_USER) {
@@ -95,7 +80,7 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
       });
       if (selectResult.rows.length === 0) return { ok: false, status: 404, error: "saved band not found" };
 
-      const current = mapRowToSavedBand(selectResult.rows[0]);
+      const current = rowToSavedBand(selectResult.rows[0]);
       const next = {
         rating: updates.rating !== undefined ? updates.rating : current.rating,
         categories: updates.categories !== undefined ? updates.categories : current.categories,
@@ -122,7 +107,7 @@ export function createTursoPreferenceRepository({ client }: { client: TursoClien
         args: [next.rating, normalizedCategories, normalizedNote, noteEdited, updatedAt, id, userId],
       });
 
-      return { ok: true, savedBand: mapRowToSavedBand(updateResult.rows[0]) };
+      return { ok: true, savedBand: rowToSavedBand(updateResult.rows[0]) };
     },
 
     async deleteSavedBand(id: string, userId = DEFAULT_USER) {

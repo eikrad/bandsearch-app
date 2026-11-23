@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { createSqliteUserDataStore, USER_SCOPED_TABLES, rowToSavedBand } from "../src/privacy/userDataStore.js";
+import { createSqliteUserDataStore, USER_SCOPED_TABLES } from "../src/privacy/userDataStore.js";
+import { rowToSavedBand } from "../src/preferences/savedBandRow.js";
 
 const SCHEMA_PATH = path.join(__dirname, "..", "migrations", "002_full_schema.sql");
 
