@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 
 import { clearAuthToken, getAuthToken, setAuthToken } from "../src/authTokenStore.js";
 
+import { createAuthAwareFetch } from "../src/authAwareFetch.js";
+import { createPendingSearchStore } from "../src/pendingSearchStore.js";
+
 const STORAGE_KEY = "bandsearch_auth_token";
 
 /**
@@ -127,4 +130,37 @@ test("clearAuthToken does not throw when localStorage throws", () => {
   withLocalStorage(throwingStorage, () => {
     assert.doesNotThrow(() => clearAuthToken());
   });
+});
+
+test("clearing authentication forgets the previous account's pending search", () => {
+  const { impl } = memoryStorage();
+  withLocalStorage(impl, () => {
+    setAuthToken("account-a");
+    const pending = createPendingSearchStore();
+    pending.set({ jobId: "private-job", query: "private question", mode: "fresh" });
+    clearAuthToken();
+    setAuthToken("account-b");
+    assert.equal(pending.get(), null);
+  });
+});
+
+test("an invalid-token response clears the prior account's pending search", async () => {
+  const original = Reflect.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const { impl } = memoryStorage();
+  Object.defineProperty(globalThis, "localStorage", { value: impl, configurable: true });
+  try {
+    const pending = createPendingSearchStore();
+    setAuthToken("expired");
+    pending.set({ jobId: "private-job", query: "private question", mode: "fresh" });
+    const fetchWithAuth = createAuthAwareFetch(async () => Response.json({
+      error: { code: "unauthorized", message: "invalid token" },
+    }, { status: 401 }), clearAuthToken);
+    const response = await fetchWithAuth("http://api.test/preferences");
+    assert.equal(response.status, 401);
+    assert.equal(getAuthToken(), null);
+    assert.equal(pending.get(), null);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
 });
