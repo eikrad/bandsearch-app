@@ -31,7 +31,8 @@ started it. The owner approved the nine defaults recorded in #345.
    stands as JSON (`SearchJobState`), for a client that polls.
    `DELETE /recommendations/jobs/:id` stops it.
 2. **Storage: memory.** No table. A finished job is kept for
-   `SEARCH_JOB_KEEP_MINUTES` (60), then evicted. Memory is bounded: at most 200
+   `SEARCH_JOB_KEEP_MINUTES` (60), then deleted by a timer, so an idle
+   server keeps the privacy policy's promise too. Memory is bounded: at most 200
    jobs (the oldest finished go first when full; running ones are bounded by
    one per user; when all slots are running, another owner gets a retryable
    `503 search_capacity_exceeded`, while replacing your own search remains

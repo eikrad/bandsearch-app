@@ -167,6 +167,11 @@ export function createSearchJobs({
     job.clearDeadline();
     record(job, event);
     job.followers.clear();
+    // The keep time is a promise (privacy policy), so a timer keeps it on an
+    // idle server too. It holds only the id, never the answer; a job dropped
+    // earlier (full store, deleted account) is simply not there any more.
+    const { id } = job;
+    schedule(() => { jobs.delete(id); }, keepFinishedMs);
   }
 
   function succeed(job: Job, response: unknown) {
