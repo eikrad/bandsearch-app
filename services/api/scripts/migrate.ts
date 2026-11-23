@@ -1,10 +1,7 @@
 import "dotenv/config";
-import fs from "node:fs/promises";
-import path from "node:path";
 import Database from "better-sqlite3";
 import { createClient } from "@libsql/client";
-
-const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
+import { listMigrations } from "./migrationFiles.js";
 
 /**
  * Records which migrations have run, so each is applied exactly once.
@@ -15,11 +12,6 @@ const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
  * with the data.
  */
 const LEDGER_DDL = "CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, applied_at TEXT NOT NULL);";
-
-async function migrationFiles(): Promise<string[]> {
-  const files = await fs.readdir(MIGRATIONS_DIR);
-  return files.filter((f) => f.endsWith(".sql")).sort();
-}
 
 /** Applies the pending migrations through whichever backend the caller drives. */
 async function applyPending(backend: {
@@ -32,12 +24,11 @@ async function applyPending(backend: {
   const applied = await backend.appliedFilenames();
 
   let ran = 0;
-  for (const file of await migrationFiles()) {
-    if (applied.has(file)) continue;
-    const sql = await fs.readFile(path.join(MIGRATIONS_DIR, file), "utf8");
+  for (const { filename, sql } of listMigrations()) {
+    if (applied.has(filename)) continue;
     await backend.executeMultiple(sql);
-    await backend.recordApplied(file);
-    console.log(`Migration applied (${backend.label}): ${file}`);
+    await backend.recordApplied(filename);
+    console.log(`Migration applied (${backend.label}): ${filename}`);
     ran += 1;
   }
   if (ran === 0) console.log(`No pending migrations (${backend.label}).`);

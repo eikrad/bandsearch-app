@@ -5,35 +5,9 @@ import { createSqlitePreferenceRepository } from "../src/preferences/sqlitePrefe
 import { assertRecord } from "./helpers/typeAssertions.js";
 import { buildSavedBandContext } from "../src/savedBandContext.js";
 
+/** The repository creates its own tables, as it does at boot (#168). */
 function createTestDb() {
   const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE saved_bands (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'anonymous',
-      musicbrainz_artist_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
-      categories TEXT NOT NULL DEFAULT '[]',
-      note TEXT NOT NULL DEFAULT '',
-      note_edited INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE artist_groups (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL DEFAULT 'anonymous',
-      name TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE artist_group_members (
-      group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
-      saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
-      added_at TEXT NOT NULL,
-      PRIMARY KEY (group_id, saved_band_id)
-    );
-  `);
   db.pragma("foreign_keys = ON");
   return db;
 }

@@ -147,7 +147,7 @@ place and is now under Deferred; #180's premise changed (see item 3).
    - Phase 10 macOS update check: #145
    - #245 release re-runs that skip build and publish
    - 9.6 CI/CD deploy gate (no issue yet; optional)
-   - Tech debt: #133, #168, #171, #173, #174; ~~#172~~, ~~#205~~ ✓ Done
+   - Tech debt: #133, #171, #173; ~~#168~~, ~~#172~~, ~~#174~~, ~~#205~~ ✓ Done
    - Once there is real traffic: #239 (PPI), #240 (input drift)
 
 ~~#266 — closed beta (enforced auth mode, email-bound invites).~~ ✓ Done, see 9.7.

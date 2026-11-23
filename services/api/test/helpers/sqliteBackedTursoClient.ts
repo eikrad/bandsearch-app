@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 
 import type { TursoClient, TursoResult, TursoStatement, TursoValue } from "../../src/turso/tursoClient.js";
+import { applyMigrations } from "../../scripts/migrationFiles.js";
 
 /**
  * A libSQL-shaped client backed by an in-memory SQLite database.
@@ -15,37 +16,14 @@ import type { TursoClient, TursoResult, TursoStatement, TursoValue } from "../..
  * — and nothing more.
  */
 
-export const PREFERENCE_SCHEMA = `
-  CREATE TABLE saved_bands (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL DEFAULT 'anonymous',
-    musicbrainz_artist_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
-    categories TEXT NOT NULL DEFAULT '[]',
-    note TEXT NOT NULL DEFAULT '',
-    note_edited INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-  CREATE TABLE artist_groups (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL DEFAULT 'anonymous',
-    name TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-  CREATE TABLE artist_group_members (
-    group_id TEXT NOT NULL REFERENCES artist_groups(id) ON DELETE CASCADE,
-    saved_band_id TEXT NOT NULL REFERENCES saved_bands(id) ON DELETE CASCADE,
-    added_at TEXT NOT NULL,
-    PRIMARY KEY (group_id, saved_band_id)
-  );
-`;
-
-export function createPreferenceTestDb(): Database.Database {
+/**
+ * An in-memory database with Turso's schema, built from `migrations/` exactly
+ * as `npm run migrate:turso` builds it, so these tests cannot drift from the
+ * schema production runs (#168).
+ */
+export function createTursoTestDb(): Database.Database {
   const db = new Database(":memory:");
-  db.exec(PREFERENCE_SCHEMA);
+  applyMigrations(db);
   db.pragma("foreign_keys = ON");
   return db;
 }

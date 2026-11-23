@@ -4,6 +4,7 @@ import type { Client as LibSQLClient } from "@libsql/client";
 import { createTursoPreferenceRepository as createRepository } from "../src/preferences/tursoPreferenceRepository.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
 import { buildSavedBandContext } from "../src/savedBandContext.js";
+import { createTursoTestDb, createSqliteBackedTursoClient } from "./helpers/sqliteBackedTursoClient.js";
 
 type ExecutedStatement = { sql: string; args?: unknown[] };
 
@@ -199,4 +200,18 @@ test("turso repository returns empty string context when no bands saved", async 
 
   const context = await buildSavedBandContext(repo);
   assert.equal(context, "");
+});
+
+test("turso repository still lists a saved band whose stored categories are not valid JSON", async () => {
+  const db = createTursoTestDb();
+  db.prepare(
+    `INSERT INTO saved_bands (id, user_id, musicbrainz_artist_id, name, rating, categories, note, created_at, updated_at)
+     VALUES ('b-1', 'anonymous', 'mb-1', 'Alcest', NULL, 'not json', 'kept', '2026-01-01', '2026-01-01')`,
+  ).run();
+  const repo = createTursoPreferenceRepository({ client: createSqliteBackedTursoClient(db) });
+
+  const [band] = await repo.listSavedBands();
+  assert.equal(band.name, "Alcest");
+  assert.deepEqual(band.categories, []);
+  assert.equal(band.note, "kept");
 });
