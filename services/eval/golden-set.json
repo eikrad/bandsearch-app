@@ -153,5 +153,41 @@
       "formedUntil": 1994
     },
     "notes": "Constraint query (#253): two constraints at once — from Norway and formed in 1994 or earlier; the famous names are anti-bands for the obscure target."
+  },
+  {
+    "id": "de-krautrock-underground",
+    "query": "Motorik-Krautrock mit langen, hypnotischen Instrumentalstücken",
+    "obscurityTarget": "underground",
+    "nuggets": ["krautrock", "kosmische musik", "psychedelic rock"],
+    "minNuggetCoverage": 0.5,
+    "antiBands": ["Kraftwerk", "Can", "Neu!"],
+    "notes": "German query (#329): the reply and why texts must be German. Kraftwerk, Can and Neu! are too well known for underground."
+  },
+  {
+    "id": "de-coldwave-obscure",
+    "query": "kalter, minimalistischer Post-Punk mit Drumcomputer und deutschen Texten",
+    "obscurityTarget": "obscure",
+    "nuggets": ["post-punk", "cold wave", "minimal wave"],
+    "minNuggetCoverage": 0.5,
+    "antiBands": ["Joy Division", "Die Krupps", "DAF"],
+    "notes": "German query (#329). Joy Division and DAF are far above the obscure range."
+  },
+  {
+    "id": "da-nordic-folk-underground",
+    "query": "melankolsk nordisk folkemusik med kvindelig vokal og strygere",
+    "obscurityTarget": "underground",
+    "nuggets": ["folk", "nordic folk", "neofolk"],
+    "minNuggetCoverage": 0.5,
+    "antiBands": ["Wardruna", "Heilung", "Myrkur"],
+    "notes": "Danish query (#329): the reply and why texts must be Danish. Wardruna and Heilung are mainstream within the genre."
+  },
+  {
+    "id": "da-shoegaze-obscure",
+    "query": "støjende shoegaze med drømmende guitarflader",
+    "obscurityTarget": "obscure",
+    "nuggets": ["shoegaze", "dream pop", "noise pop"],
+    "minNuggetCoverage": 0.5,
+    "antiBands": ["My Bloody Valentine", "Slowdive", "Ride"],
+    "notes": "Danish query (#329). The genre's founders are far too well known for obscure."
   }
 ]

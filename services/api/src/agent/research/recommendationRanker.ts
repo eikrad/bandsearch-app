@@ -2,6 +2,7 @@
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
+import { REPLY_LANGUAGE_RULE } from "../../replyLanguage.js";
 import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.js";
@@ -150,6 +151,7 @@ const RANK_SYSTEM = [
   "Recommendations: at most 3 items. Each why MUST quote or include at least one full URL from evidence_urls for that artist (Bandcamp, blog, etc.).",
   "sourceSignals must include agent_reasoning, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
+  REPLY_LANGUAGE_RULE,
 ].join(" ");
 
 const RANK_HISTORY_MAX_CHARS = 7000;

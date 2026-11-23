@@ -203,10 +203,10 @@ test("a golden run records whether the API replayed recorded lookups", () => {
   );
 });
 
-test("a golden run keeps each query's tag sources and is scored under metrics version 2", () => {
+test("a golden run keeps each query's tag sources and is scored under the current metrics version (4: the judge counts the reply language, #329)", () => {
   const run = record([result({ id: "blackgaze", tagSources: { musicbrainz: 1, lastfm: 2, none: 0 } })]);
   assert.deepEqual(run.results[0]!.tagSources, { musicbrainz: 1, lastfm: 2, none: 0 });
-  assert.equal(run.config.metricsVersion, 3);
+  assert.equal(run.config.metricsVersion, 4);
 });
 
 test("a golden run records constraint rates and averages them over the queries that have them", () => {
@@ -219,7 +219,7 @@ test("a golden run records constraint rates and averages them over the queries t
   assert.equal(run.summary.constraintRateMean, 0.75);
   assert.equal(run.results[1]!.metrics?.constraintRateAt8, 0.5);
   assert.deepEqual(run.results[1]!.failedGates, ["constraint"]);
-  assert.equal(run.config.metricsVersion, 3);
+  assert.equal(run.config.metricsVersion, 4);
 });
 
 test("constraints are grading targets: changing one changes the content hash", () => {
