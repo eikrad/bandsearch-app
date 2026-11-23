@@ -1181,7 +1181,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
             lineHeight: 1.4,
           },
         },
-        "AI-generated recommendations — a language model hosted by Scaleway writes the picks and the explanations, verified against MusicBrainz. Not a human curator.",
+        "AI-generated recommendations — a language model hosted in the EU (Scaleway, France) writes the picks and the explanations, verified against MusicBrainz. Not a human curator.",
       ),
     ),
   );

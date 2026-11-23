@@ -502,6 +502,7 @@ test("a user is told they are talking to an AI before they type anything", () =>
     "empty state discloses that recommendations come from an AI",
   );
   assert.match(html, /Scaleway/, "the disclosure names the model provider");
+  assert.match(html, /hosted in the EU/i, "the disclosure says the model is hosted in Europe");
 });
 
 test("the AI disclosure stays visible while results are on screen", () => {
