@@ -61,10 +61,10 @@ function grantedPermissions(): string[] {
   return stringArray(capability.permissions, "capability permissions");
 }
 
-test("main.rs registers the app commands from the one list in app_commands.rs", () => {
-  const main = read("src/main.rs");
-  assert.match(main, /\.invoke_handler\(app_commands!\(generate_handler\)\)/);
-  assert.doesNotMatch(main, /generate_handler!\s*\[/, "no second, hand-written command list");
+test("lib.rs registers the app commands from the one list in app_commands.rs", () => {
+  const shell = read("src/lib.rs");
+  assert.match(shell, /\.invoke_handler\(app_commands!\(generate_handler\)\)/);
+  assert.doesNotMatch(shell, /generate_handler!\s*\[/, "no second, hand-written command list");
 });
 
 test("every app command has a permission and the main window is granted it", () => {
