@@ -37,7 +37,8 @@ place and is now under Deferred; #180's premise changed (see item 3).
    (`npm run invite:create`), because `render.yaml` now sets
    `AUTH_MODE=enforced` (#266). Then run the 9.5 checklist on Render. That
    verifies Render + Turso — never done, the old bottleneck — and Scaleway in
-   production in one pass. Rollback: `LLM_PROVIDER=gemini` on Render.
+   production in one pass. Rollback was `LLM_PROVIDER=gemini` on Render until
+   #303 removed Gemini; now it is redeploying an earlier release.
    Done so far, all on `staging`:
    - ✓ Golden-run history + dashboard, model id in provenance (#242, #209, #134)
    - ✓ Planner/reflection failures degrade instead of 502 (#247, #241)
@@ -128,8 +129,8 @@ place and is now under Deferred; #180's premise changed (see item 3).
        it awake while in use, at no cost (ADR 0003 keeps the free plan) ✓ Done
      - [ ] Owner decision: Render Starter ($7/month) removes the remaining cold
        start on the first open after a pause; it would supersede ADR 0003
-4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
-   for a few days. Small; can slot in between #257 changes.
+4. ~~**Remove Gemini (last step of #237)** once Scaleway has run stably on Render
+   for a few days.~~ ✓ Done (#303).
 5. **#238 — desktop defaults to the Render deployment**, local sidecar as an
    explicit choice. Needs 9.5 passed.
 6. **Privacy before real users:** #132 (telemetry opt-out, Art. 21), #135
@@ -147,7 +148,7 @@ place and is now under Deferred; #180's premise changed (see item 3).
    - Phase 10 macOS update check: #145
    - #245 release re-runs that skip build and publish
    - 9.6 CI/CD deploy gate (no issue yet; optional)
-   - Tech debt: #133, #171, #173; ~~#168~~, ~~#172~~, ~~#174~~, ~~#205~~ ✓ Done
+   - Tech debt: #133, #171; ~~#168~~, ~~#172~~, ~~#173~~, ~~#174~~, ~~#205~~ ✓ Done
    - Once there is real traffic: #239 (PPI), #240 (input drift)
 
 ~~#266 — closed beta (enforced auth mode, email-bound invites).~~ ✓ Done, see 9.7.
@@ -172,7 +173,7 @@ The constraints this order satisfies:
                                 └─→ #248 live judge scores (also needs #132)
 
 #257 search quality ─→ reflection (#180) ─→ #251 judge gate
-#237 stable on Render for a few days ─→ remove Gemini
+#237 stable on Render for a few days ─→ remove Gemini ✓ (#303)
 
 Independent, can start any time:
  · #145 · #146 · #142/#143 · #245 · tech debt
@@ -714,9 +715,9 @@ Brave/MusicBrainz rate-limit waits. Controlled-clock tests run the actual graph
 with stalled model and HTTP clients, covering the total deadline, partial
 verification, skipped research, a cutoff during reflection, Last.fm cancellation
 and the shared ranking retry cap. Brave client tests cover cancelled spacing and
-429 waits. A failed ranker surfaces as `502 recommendation_unavailable`. Real
-Scaleway/Gemini adapters with fake HTTP transports cover cancellation propagation and complete Gemini answers; Gemini uses streaming internally and
-has background SDK retries disabled. No live provider calls are needed.
+429 waits. A failed ranker surfaces as `502 recommendation_unavailable`. The real
+Scaleway adapter, run on a fake HTTP transport, covers cancellation propagation
+(the Gemini adapter and its tests went with #303). No live provider calls are needed.
 
 ---
 

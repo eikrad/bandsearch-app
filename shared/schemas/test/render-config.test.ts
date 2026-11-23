@@ -58,8 +58,6 @@ test("render.yaml runs the hosted API in enforced auth mode (closed beta)", () =
 test("render.yaml declares required secrets without hardcoding values", () => {
   for (const key of [
     "SCW_SECRET_KEY",
-    // Kept until Gemini is removed (#237): LLM_PROVIDER=gemini is the rollback.
-    "GEMINI_API_KEY",
     "BRAVE_API_KEY",
     "TURSO_DATABASE_URL",
     "TURSO_AUTH_TOKEN",

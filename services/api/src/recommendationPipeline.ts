@@ -8,7 +8,7 @@ import {
   resolveRecommendationFacadeInput,
 } from "./recommendations.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
-import { DEFAULT_RESEARCH_MODEL, type LlmConfig } from "./config/models.js";
+import type { LlmConfig } from "./config/models.js";
 import { createChatModelFactory } from "./llm/chatModel.js";
 import { BRAVE_MIN_INTERVAL_MS } from "./integrations/braveSearch.js";
 import { createReplayFetch } from "./integrations/replayFetch.js";
@@ -44,10 +44,8 @@ import type { SavedBandContextSource } from "./savedBandContext.js";
 export type RecommendationRuntimeConfig = {
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
-  geminiApiKey?: string;
-  researchModel?: string;
-  /** Provider and model per role; when set, the research nodes are built from it. */
-  llm?: LlmConfig;
+  /** Provider and model per role; the research nodes are built from it. */
+  llm: LlmConfig;
   /** Eval only: record and replay external lookups in this directory (#250). */
   evalReplayDir?: string;
   braveApiKey?: string;
@@ -69,11 +67,11 @@ export function createRecommendationPipeline({
   retryDelayMs = 5000,
   logger = console,
 }: {
-  runtimeConfig?: RecommendationRuntimeConfig;
+  runtimeConfig: RecommendationRuntimeConfig;
   preferenceRepository?: PreferenceRepositoryPipeline;
   retryDelayMs?: number;
   logger?: PipelineLogger;
-} = {}) {
+}) {
   if (!preferenceRepository || typeof preferenceRepository.listSavedBands !== "function") {
     throw createRecommendationError(
       "recommendation_configuration_error",
@@ -81,7 +79,7 @@ export function createRecommendationPipeline({
     );
   }
 
-  const cfg = runtimeConfig ?? {};
+  const cfg = runtimeConfig;
   const evalReplay = String(cfg.evalReplayDir ?? "").trim() !== "";
 
   let resolveFirstReady: (() => void) | undefined;
@@ -107,18 +105,16 @@ export function createRecommendationPipeline({
 
   async function initialize() {
     try {
-      const apiKey = String(cfg.llm?.geminiApiKey ?? cfg.geminiApiKey ?? "").trim();
       const braveKey = String(cfg.braveApiKey ?? "").trim();
-      const chatModel = cfg.llm ? createChatModelFactory(cfg.llm.research, cfg.llm) : undefined;
+      const chatModel = createChatModelFactory(cfg.llm.research, cfg.llm);
       const lookups = externalLookupsFor(cfg);
 
       activeService = createConversationService({
         memory,
-        model: cfg.llm?.research.model ?? cfg.researchModel ?? DEFAULT_RESEARCH_MODEL,
+        model: cfg.llm.research.model,
         graphDeps: {
-          geminiApiKey: apiKey,
           chatModel,
-          model: cfg.llm?.research.model ?? cfg.researchModel,
+          model: cfg.llm.research.model,
           braveApiKey: braveKey,
           maxInitialSearches: cfg.researchMaxInitialSearches ?? 6,
           maxReflectionSearches: cfg.researchMaxReflectionSearches ?? 4,
@@ -139,8 +135,8 @@ export function createRecommendationPipeline({
       });
       pipelineLog("info", "recommendation_pipeline_mode", {
         mode: "research",
-        provider: cfg.llm?.research.provider ?? "gemini",
-        model: cfg.llm?.research.model ?? cfg.researchModel,
+        provider: cfg.llm.research.provider,
+        model: cfg.llm.research.model,
         replay: lookups.replay,
       });
       activeError = null;

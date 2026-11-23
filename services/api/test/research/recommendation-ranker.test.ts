@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { whyContainsEvidenceCitation, attachEvidenceCitationsToRecommendations, formatEvidenceForPrompt, createRecommendationRanker, buildRankUserPartsForTest } from "../../src/agent/research/recommendationRanker.js";
+import { whyContainsEvidenceCitation, attachEvidenceCitationsToRecommendations, formatEvidenceForPrompt, buildRankUserPartsForTest } from "../../src/agent/research/recommendationRanker.js";
 import type { VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
 import { assertRecord } from "../helpers/typeAssertions.js";
 
@@ -44,9 +44,6 @@ test("attachEvidenceCitationsToRecommendations appends see url when why lacks ci
   assert.equal(recs[0].sourceSignals.includes("web_search"), true);
 });
 
-test("createRecommendationRanker is imported", async () => {
-  await assert.rejects(() => createRecommendationRanker({ apiKey: "  " }), /apiKey is required/);
-});
 
 // ─── #325: the ranker ranks by the same range the filter and eval use ─────────
 

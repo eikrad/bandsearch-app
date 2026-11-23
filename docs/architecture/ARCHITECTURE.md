@@ -241,10 +241,7 @@ remaining research stages and enter `rank` at that cutoff. Last.fm lookups still
 completed candidates and stops between batches; optional reflection and
 Last.fm enrichment cannot consume the reserve. Model calls and HTTP requests
 receive abort signals; retries and Brave/MusicBrainz rate-limit waits stop when
-cancelled. The Gemini adapter uses the pinned SDK's streaming transport while
-returning the assembled message to callers: its non-streaming path drops the
-signal. Gemini SDK retries are disabled because that retry loop can continue
-after cancellation; graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
+cancelled. Graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
 
 Ranking, including its evidence-repair retry, shares one 12 s cap and must finish
 before the total deadline. A failed or timed-out ranker fails the request with the route's generic
@@ -259,8 +256,7 @@ empty discovery result.
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | Only with `LLM_PROVIDER=gemini`, the rollback until Gemini is removed (#237) |
-| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (default since 2026-10-05); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
+| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (since 2026-10-05; the only provider since #303); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
 | **MusicBrainz** | `verify`, `verify_r` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |

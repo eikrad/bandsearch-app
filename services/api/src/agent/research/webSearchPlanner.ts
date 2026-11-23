@@ -1,4 +1,3 @@
-import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { validateObscurityTarget, type ChatMessage, type ObscurityTarget } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES } from "../../obscurityTargets.js";
@@ -6,8 +5,7 @@ import { DISCOVERY_DOMAINS } from "../../eval/searchSourceScorer.js";
 import { formatHistoryBlock, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
-import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
-import type { ChatModelFactory } from "../../llm/chatModel.js";
+import { nodeModel, type ChatModelFactory } from "../../llm/chatModel.js";
 
 export const WEB_SEARCH_PLAN_HISTORY_MAX_CHARS = 3500;
 export const WEB_SEARCH_QUERY_MAX_LENGTH = 400;
@@ -190,42 +188,24 @@ export function fallbackSearchPlan(userQuery: string, obscurityTarget?: string):
 }
 
 export type CreateWebSearchPlannerOptions = {
-  apiKey: string;
   timeoutMs?: number;
   signal?: AbortSignal;
-  model?: string;
   /** How many queries will be searched; planning more only costs time. */
   maxQueries?: number;
-  /**
-   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
-   * drive this factory's closure without a key or a network call.
-   */
+  /** A ready chat model; tests pass one to run the closure without a network call. */
   modelClient?: ChatModelClient;
   /** Builds this node's model from the configured provider (llm/chatModel.ts). */
   chatModel?: ChatModelFactory;
 };
 
 export async function createWebSearchPlanner({
-  apiKey,
   timeoutMs = 20000,
   signal,
-  model = DEFAULT_RESEARCH_MODEL,
   maxQueries = WEB_SEARCH_PLAN_DEFAULT_QUERIES,
   modelClient: injectedModelClient,
   chatModel,
 }: CreateWebSearchPlannerOptions): Promise<(input: WebSearchPlannerInput) => Promise<SearchPlan>> {
-  // An injected client stands in for Gemini entirely, so it needs no key.
-  const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !chatModel && !trimmedKey) {
-    throw new Error("apiKey is required for web search planner");
-  }
-
-  const temperature = 0.2;
-  const plannerModel: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
-    model,
-    apiKey: trimmedKey,
-    temperature,
-  });
+  const plannerModel = nodeModel("web search planner", { modelClient: injectedModelClient, chatModel }, { temperature: 0.2 });
 
   const plannerSystemPrompt = plannerRole(maxQueries);
 

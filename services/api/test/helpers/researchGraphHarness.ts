@@ -5,7 +5,7 @@ import type { ResearchGraphDeps } from "../../src/agent/research/researchGraph.j
  * Fakes for everything the research graph reaches out to.
  *
  * The graph builds its own Brave, MusicBrainz and Last.fm clients, but all
- * three already take a `fetchImpl`, and the Gemini-backed nodes now take a
+ * three already take a `fetchImpl`, and the model-backed nodes take a
  * `modelClient` — so the whole pipeline can be driven end to end without a key
  * or a network call.
  */
@@ -15,7 +15,7 @@ export type ModelCall = { system: string; user: string };
 /**
  * A chat model that answers by matching the system prompt.
  *
- * The four Gemini nodes are told apart by a distinctive phrase in their system
+ * The four model-backed nodes are told apart by a distinctive phrase in their system
  * prompt, which is more robust than counting calls: reflection re-enters the
  * extractor, so call order is not fixed.
  */
@@ -157,8 +157,8 @@ export function rankedRecommendations(
 /** Graph deps with everything faked and the budgets small enough to stay fast. */
 export function graphDeps(overrides: Partial<ResearchGraphDeps> = {}): ResearchGraphDeps {
   return {
-    geminiApiKey: "",
     braveApiKey: "test-brave-key",
+    model: "test-research-model",
     maxInitialSearches: 2,
     maxReflectionSearches: 2,
     totalSearchBudget: 6,

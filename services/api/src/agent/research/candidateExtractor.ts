@@ -1,11 +1,9 @@
-import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { capAndTrim, wrapSearchHitBlock } from "../promptGuards.js";
 import { plainText, wordsAround } from "./textSnippets.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
-import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
-import type { ChatModelFactory } from "../../llm/chatModel.js";
+import { nodeModel, type ChatModelFactory } from "../../llm/chatModel.js";
 
 /** The extractor answers with numbers, so reading more hits costs it little time. */
 export const CANDIDATE_EXTRACTOR_MAX_HITS_CHARS = 18000;
@@ -147,44 +145,26 @@ function formatHitsForPrompt(hits: SearchHitInput[]): { text: string; shown: Sea
 }
 
 export type CreateCandidateExtractorOptions = {
-  apiKey: string;
   timeoutMs?: number;
   signal?: AbortSignal;
-  model?: string;
   /** Upper bound on candidates the model should emit; smaller = faster generation. */
   maxCandidates?: number;
-  /**
-   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
-   * drive this factory's closure without a key or a network call.
-   */
+  /** A ready chat model; tests pass one to run the closure without a network call. */
   modelClient?: ChatModelClient;
   /** Builds this node's model from the configured provider (llm/chatModel.ts). */
   chatModel?: ChatModelFactory;
 };
 
 export async function createCandidateExtractor({
-  apiKey,
   timeoutMs = 12000,
   signal,
-  model = DEFAULT_RESEARCH_MODEL,
   maxCandidates = CANDIDATE_EXTRACTOR_DEFAULT_MAX_CANDIDATES,
   modelClient: injectedModelClient,
   chatModel,
 }: CreateCandidateExtractorOptions): Promise<
   (input: { hits: SearchHitInput[]; anchorArtists: string[] }) => Promise<ExtractedCandidate[]>
 > {
-  // An injected client stands in for Gemini entirely, so it needs no key.
-  const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !chatModel && !trimmedKey) {
-    throw new Error("apiKey is required for candidate extractor");
-  }
-
-  const temperature = 0.1;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
-    model,
-    apiKey: trimmedKey,
-    temperature,
-  });
+  const modelClient = nodeModel("candidate extractor", { modelClient: injectedModelClient, chatModel }, { temperature: 0.1 });
 
   const systemPrompt = buildExtractorSystemPrompt(maxCandidates);
 

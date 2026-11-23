@@ -78,7 +78,7 @@ const unattributable = {
 
 test("rank returns the model's recommendations and reply", async () => {
   const { client } = scriptedModel([withCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -91,7 +91,7 @@ test("rank accepts a bare array of recommendations", async () => {
   const { client } = scriptedModel([
     [{ artist: "Fen", why: `See ${EVIDENCE_URL}`, sourceSignals: [] }],
   ]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -100,7 +100,7 @@ test("rank accepts a bare array of recommendations", async () => {
 
 test("rank puts the evidence block in the prompt", async () => {
   const { client, prompts } = scriptedModel([withCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   await rank(rankInput);
 
@@ -112,7 +112,7 @@ test("rank puts the evidence block in the prompt", async () => {
 
 test("rank appends the evidence URL when the model omits it", async () => {
   const { client, prompts } = scriptedModel([withoutCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -131,7 +131,7 @@ test("rank drops a recommendation for an artist with no evidence", async () => {
       ],
     },
   ]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -141,7 +141,7 @@ test("rank drops a recommendation for an artist with no evidence", async () => {
 
 test("rank re-prompts when every recommendation was unattributable", async () => {
   const { client, prompts } = scriptedModel([unattributable, withCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -152,7 +152,7 @@ test("rank re-prompts when every recommendation was unattributable", async () =>
 
 test("rank returns nothing when the retry is also unattributable", async () => {
   const { client, prompts } = scriptedModel([unattributable, unattributable]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -163,7 +163,7 @@ test("rank returns nothing when the retry is also unattributable", async () => {
 
 test("rank does not retry when the first answer is already cited", async () => {
   const { client, prompts } = scriptedModel([withCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   await rank(rankInput);
 
@@ -172,7 +172,7 @@ test("rank does not retry when the first answer is already cited", async () => {
 
 test("rank tags attributed recommendations with their source signals", async () => {
   const { client } = scriptedModel([withCitation]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const [first] = await rank(rankInput).then((r) => r.recommendations);
   const row = first as { sourceSignals: string[]; musicbrainzArtistId?: string };
@@ -188,7 +188,7 @@ test("rank synthesises a reply when the model omits one", async () => {
   const { client } = scriptedModel([
     { recommendations: [{ artist: "Fen", why: `See ${EVIDENCE_URL}`, sourceSignals: [] }] },
   ]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -198,7 +198,7 @@ test("rank synthesises a reply when the model omits one", async () => {
 
 test("rank leaves the reply empty when there is nothing to recommend", async () => {
   const { client } = scriptedModel([{ recommendations: [] }, { recommendations: [] }]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   const result = await rank(rankInput);
 
@@ -212,7 +212,7 @@ test("rank prefers an alternative reply key from the model", async () => {
       recommendations: [{ artist: "Fen", why: `See ${EVIDENCE_URL}`, sourceSignals: [] }],
     },
   ]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   assert.equal((await rank(rankInput)).assistantReply, "Try these.");
 });
@@ -221,43 +221,36 @@ test("rank prefers an alternative reply key from the model", async () => {
 
 test("rank rejects a payload that is not a recommendation shape", async () => {
   const { client } = scriptedModel([{ nonsense: true }]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   await assert.rejects(() => rank(rankInput), /invalid recommendation output/);
 });
 
 test("rank rejects recommendations missing a required field", async () => {
   const { client } = scriptedModel([{ recommendations: [{ artist: "Fen" }] }]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   await assert.rejects(() => rank(rankInput), /invalid recommendation output/);
 });
 
 test("rank rejects a response that is not JSON at all", async () => {
   const { client } = scriptedModel(["I'm sorry, I can't help with that."]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   await assert.rejects(() => rank(rankInput), /invalid recommendation output/);
 });
 
 test("rank parses JSON wrapped in a markdown fence", async () => {
   const { client } = scriptedModel([`\`\`\`json\n${JSON.stringify(withCitation)}\n\`\`\``]);
-  const rank = await createRecommendationRanker({ apiKey: "", modelClient: client });
+  const rank = await createRecommendationRanker({ modelClient: client });
 
   assert.equal((await rank(rankInput)).recommendations.length, 1);
 });
 
 // ---------------------------------------------------------------- config
 
-test("createRecommendationRanker requires an API key when no model is injected", async () => {
-  await assert.rejects(
-    () => createRecommendationRanker({ apiKey: "  " }),
-    /apiKey is required for recommendation ranker/,
-  );
-});
-
-test("createRecommendationRanker accepts an injected model with no API key", async () => {
+test("createRecommendationRanker accepts an injected model", async () => {
   const { client } = scriptedModel([withCitation]);
 
-  assert.ok(typeof (await createRecommendationRanker({ apiKey: "", modelClient: client })) === "function");
+  assert.ok(typeof (await createRecommendationRanker({ modelClient: client })) === "function");
 });

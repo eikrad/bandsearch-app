@@ -1,11 +1,10 @@
 /**
  * The slice of a LangChain chat model the agent modules actually use.
  *
- * Every `create*` factory here builds a `ChatGoogleGenerativeAI` and then only
- * ever calls `invoke`. Naming that surface lets a caller pass its own client —
- * the same injection the HTTP clients already offer through `fetchImpl` — so
- * the closures these factories return can be exercised without a Gemini key or
- * a network call.
+ * Every research node only ever calls `invoke` on its model. Naming that
+ * surface lets a caller pass its own client — the same injection the HTTP
+ * clients already offer through `fetchImpl` — so the closures the node
+ * factories return can be exercised without a key or a network call.
  */
 export type ChatModelClient = {
   invoke(prompt: Array<{ role: string; content: string }>, options?: { signal?: AbortSignal }): Promise<{ content: unknown }>;

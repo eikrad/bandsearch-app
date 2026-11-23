@@ -11,7 +11,6 @@ import type { SearchPlan } from "./webSearchPlanner.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export type ReflectionSubgraphDeps = {
-  geminiApiKey: string;
   mb: MusicBrainzVerifyClient;
   runQueries: (
     queries: string[],
@@ -25,12 +24,10 @@ export type ReflectionSubgraphDeps = {
   hitsPerSearch: number;
   totalSearchBudget: number;
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
-  /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
+  /** A ready chat model for the assess and extract nodes; tests pass one. */
   modelClient?: ChatModelClient;
   /** Builds the assess and extract nodes' models from the configured provider. */
   chatModel?: ChatModelFactory;
-  /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
-  model?: string;
   artistCache?: ResearchCache["artists"];
   /** Told when another round of searching starts. */
   onSearchAgain?: () => void;
@@ -74,13 +71,11 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       if (deps.budget.remaining() <= 0) return { nextExtraQueries: [] };
       return deps.budget.run(6000, async (signal) => {
         const reflector = await createRecommendationReflector({
-          apiKey: deps.geminiApiKey,
           timeoutMs: deps.budget.allocate(6000),
           signal,
           maxExtraQueries: deps.maxReflectionSearches,
           modelClient: deps.modelClient,
           chatModel: deps.chatModel,
-          model: deps.model,
         });
         const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
         const reflection = await reflector({
@@ -129,12 +124,10 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       if (deps.budget.remaining() <= 0) return {};
       return deps.budget.run(12000, async (signal) => {
         const extract = await createCandidateExtractor({
-          apiKey: deps.geminiApiKey,
           timeoutMs: deps.budget.allocate(12000),
           signal,
           modelClient: deps.modelClient,
           chatModel: deps.chatModel,
-          model: deps.model,
         });
         const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
         const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
