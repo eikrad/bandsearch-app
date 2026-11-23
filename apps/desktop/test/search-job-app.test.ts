@@ -35,13 +35,18 @@ function appWithJobServer({
   follow,
   pendingSearch = memoryPendingSearch(),
   sessionMessages = [],
+  startJob,
+  sleep = async () => {},
 }: {
   follow: Follow;
+  startJob?: (signal: AbortSignal | null | undefined) => Promise<Response>;
+  sleep?: (ms: number) => Promise<void>;
   pendingSearch?: PendingSearchStore;
   sessionMessages?: Array<{ role: string; content: string }>;
 }) {
   const started: Array<Record<string, unknown>> = [];
   const stopped: string[] = [];
+  const feedback: Array<{ url: string; body: unknown }> = [];
   const follows: string[] = [];
   const attempts = new Map<string, number>();
   const fetchImpl = (async (url: string, init: RequestInit = {}) => {
@@ -53,7 +58,12 @@ function appWithJobServer({
     }
     if (address.endsWith("/recommendations/jobs") && method === "POST") {
       started.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      if (startJob) return startJob(init.signal);
       return jsonResponse({ jobId: `job-${started.length}` }, { status: 202 });
+    }
+    if (address.endsWith("/feedback")) {
+      feedback.push({ url: address, body: JSON.parse(String(init.body)) });
+      return jsonResponse({});
     }
     const job = /\/recommendations\/jobs\/([^/?]+)/.exec(address)?.[1];
     if (job && method === "DELETE") {
@@ -69,9 +79,9 @@ function appWithJobServer({
     return jsonResponse({});
   }) as unknown as typeof fetch;
 
-  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl, pendingSearch, sleep: async () => {} });
+  const app = bootstrapDesktopApp({ apiBaseUrl: "http://api.test", fetchImpl, pendingSearch, sleep });
   const shell = bootstrapDesktopReactShell({ app });
-  return { app, shell, started, stopped, follows };
+  return { app, shell, started, stopped, follows, feedback };
 }
 
 const settle = (ms = 5) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -268,4 +278,93 @@ test("a stored search that is not one is ignored", () => {
   assert.deepEqual(store.get(), { jobId: "job-1", query: "slowcore", mode: "fresh" });
   store.clear();
   assert.equal(store.get(), null);
+});
+
+for (const lateResponse of [false, true]) {
+  test(`Stop during start leaves no answer or spinner (late response: ${lateResponse})`, async () => {
+    let finish!: (response: Response) => void;
+    const pendingSearch = memoryPendingSearch();
+    const { shell, follows, stopped } = appWithJobServer({
+      pendingSearch,
+      startJob: (signal) => new Promise<Response>((resolve, reject) => {
+        finish = resolve;
+        if (!lateResponse) signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+      follow: () => sseResponse([frame(answer(), 1)]),
+    });
+    const searching = shell.submitQuery("slowcore");
+    await settle();
+    shell.cancelSearch();
+    finish(jsonResponse({ jobId: "job-1" }, { status: 202 }));
+    await searching;
+    assert.equal(shell.getViewProps().isLoading, false);
+    assert.equal(shell.getViewProps().actionStatus, null);
+    assert.deepEqual(chatOf(shell), []);
+    assert.deepEqual(follows, []);
+    assert.deepEqual(stopped, lateResponse ? ["job-1"] : []);
+    assert.equal(pendingSearch.current(), null);
+  });
+}
+
+test("repeated resume during backoff produces one answer and one feedback context", async () => {
+  let waiting!: () => void;
+  let live!: ReturnType<typeof liveSseResponse>;
+  const pendingSearch = memoryPendingSearch({ jobId: "job-7", query: "slowcore", mode: "preference-aware", obscurityTarget: "obscure" });
+  const { shell, follows, feedback } = appWithJobServer({
+    pendingSearch,
+    sleep: () => new Promise<void>((resolve) => { waiting = resolve; }),
+    follow: (_job, attempt, signal) => {
+      if (attempt === 0) throw new TypeError("offline");
+      live = liveSseResponse(signal);
+      return live.response;
+    },
+  });
+  const resuming = shell.resumeSearch();
+  await settle();
+  await Promise.all([shell.resumeSearch(), shell.resumeSearch(), shell.resumeSearch()]);
+  await settle();
+  waiting();
+  live.send(answer(), 1);
+  await resuming;
+  await shell.resumeSearch();
+  assert.equal(follows.length, 2);
+  await shell.submitFeedback("too_mainstream");
+  assert.deepEqual(feedback, [{
+    url: "http://api.test/recommendations/ev-1/feedback",
+    body: { feedbackType: "too_mainstream", query: "slowcore", mode: "preference-aware", obscurityTarget: "obscure", bandNames: ["Fen"] },
+  }]);
+  assert.deepEqual(chatOf(shell), ["user: slowcore", "assistant: Try Fen."]);
+  assert.equal(shell.getViewProps().cards.length, 1);
+  assert.equal(shell.getViewProps().showFeedbackBar, false, "feedback dismisses the resumed batch bar");
+  assert.equal(pendingSearch.current(), null);
+});
+
+for (const terminal of ["failed", "cancelled"] as const) {
+  test(`resuming a ${terminal} search shows one error with Retry and forgets it`, async () => {
+    const pendingSearch = memoryPendingSearch({ jobId: "job-7", query: "slowcore", mode: "fresh" });
+    const { shell, follows } = appWithJobServer({
+      pendingSearch,
+      follow: () => sseResponse([frame(terminal === "cancelled" ? { type: "cancelled" } : {
+        type: "error", status: 502, error: { code: "recommendation_unavailable", message: "down" },
+      }, 1)]),
+    });
+    await assert.rejects(shell.resumeSearch());
+    assert.equal(shell.getViewProps().isLoading, false);
+    assert.equal(shell.getViewProps().searchFailed, true);
+    assert.equal(shell.getViewProps().actionStatus?.type, "error");
+    assert.equal(pendingSearch.current(), null);
+    await shell.resumeSearch();
+    assert.equal(follows.length, 1);
+    assert.deepEqual(chatOf(shell), ["user: slowcore"]);
+  });
+}
+
+test("a throwing localStorage getter does not break a search", async () => {
+  const { shell } = appWithJobServer({
+    pendingSearch: createPendingSearchStore(() => { throw new Error("access denied"); }),
+    follow: () => sseResponse([frame(answer(), 1)]),
+  });
+  await shell.resumeSearch();
+  await shell.submitQuery("slowcore");
+  assert.deepEqual(chatOf(shell), ["user: slowcore", "assistant: Try Fen."]);
 });
