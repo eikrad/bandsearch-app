@@ -10,13 +10,17 @@ import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
  * runs on either side as not directly comparable instead of reporting the
  * change as a regression or an improvement.
  */
-export const GOLDEN_METRICS_VERSION = 4;
+export const GOLDEN_METRICS_VERSION = 5;
 // 1 → 2 (2026-10-05, #250): coverage also counts Last.fm tags for bands without
 // MusicBrainz tags, so it is known for far more queries and measured differently.
 // 2 → 3 (2026-10-05, #253): constraint queries add a third pass/fail gate.
 // 3 → 4 (2026-11-23, #329): the judge scores a why in another language than
 // the query low on evidence quality, and the golden set gains German and
 // Danish queries. Judge means before and after are not comparable.
+// 4 → 5 (2026-11-23, #329): the judge names the query's and the why's
+// language and the code caps evidence quality when they differ; a word-for-word
+// quote from a source no longer counts as another language. Judge means are
+// not comparable with 4.
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
 
