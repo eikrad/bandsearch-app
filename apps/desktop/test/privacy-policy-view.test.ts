@@ -4,6 +4,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PrivacyPolicyView } from "../src/ui/PrivacyPolicyView.js";
 import { PRIVACY_POLICY } from "../src/ui/privacyPolicyText.js";
+import { SEARCH_JOB_KEEP_MINUTES } from "../../../shared/schemas/src/contracts.js";
 
 function render() {
   return renderToStaticMarkup(React.createElement(PrivacyPolicyView, { handlers: { onBack: () => {} } }));
@@ -60,4 +61,12 @@ test("the privacy policy discloses stored recommendation feedback, who reads it 
   assert.match(html, /search text/i, "the stored context is named");
   assert.match(html, /operates the deployment reads it/i, "the operator as reader is named");
   assert.match(html, /Feedback on recommendations is deleted after 90 days/, "its retention is stated");
+});
+
+test("the privacy policy says how long a finished search waits on the server and what the device keeps", () => {
+  const text = PRIVACY_POLICY.flatMap((s) => s.paragraphs).join("\n");
+  // ADR 0006: an answer waits in the server's memory for the app to collect it,
+  // and the app keeps the question of a search it is waiting for.
+  assert.match(text, new RegExp(`answer waits in the server's memory for up to ${SEARCH_JOB_KEEP_MINUTES} minutes`));
+  assert.match(text, /keeps the question of a search it is still waiting for/);
 });

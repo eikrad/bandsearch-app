@@ -10,7 +10,7 @@
  * mandatory on top of the GDPR duty.
  */
 
-import { CONVERSATION_MEMORY_HOURS, FEEDBACK_RETENTION_DAYS } from "../../../../shared/schemas/src/contracts.js";
+import { CONVERSATION_MEMORY_HOURS, FEEDBACK_RETENTION_DAYS, SEARCH_JOB_KEEP_MINUTES } from "../../../../shared/schemas/src/contracts.js";
 
 export const LAST_UPDATED = "2026-11-18";
 
@@ -41,6 +41,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
       "Your feedback on recommendations: when you react to a batch of recommendations (Spot on, Too mainstream, Wrong direction), your verdict is stored with your account, together with the search text, the settings you chose and the artists that were shown. Whoever operates the deployment reads it to improve recommendations.",
       "Pipeline telemetry: anonymous records of how a search performed, used to measure and improve recommendation quality. These carry no account identifier and cannot be traced back to you.",
       "On the desktop app, your API keys and login token are stored locally in your operating system's config directory, never on a server.",
+      "While you wait for an answer, the app keeps the question of a search it is still waiting for on your device, so it can pick the search up again if the system closes the app. It is removed once the answer or an error was shown, or you stopped the search.",
     ],
   },
   {
@@ -76,6 +77,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
       `Pipeline telemetry is deleted after ${RETENTION_DAYS} days.`,
       `Feedback on recommendations is deleted after ${FEEDBACK_RETENTION_DAYS} days, or earlier when you delete your account.`,
       `The bands a conversation found stay in the server's memory for up to ${CONVERSATION_MEMORY_HOURS} hours, so a follow-up can be answered without another search. They are not written to a database, and are gone earlier when you delete your account.`,
+      `A search runs on the server even while the app is closed. Its answer waits in the server's memory for up to ${SEARCH_JOB_KEEP_MINUTES} minutes after it finished, for your app to collect it. It is never written to a database, and is gone earlier when you delete your account or the server restarts.`,
       "Your account, taste profile and conversations are kept for as long as your account exists. When you delete your account, all of it is deleted with it, immediately and permanently.",
     ],
   },
