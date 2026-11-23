@@ -1,4 +1,5 @@
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -66,7 +67,7 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
       const result = await handlers.onRegister?.(email.trim(), displayName.trim(), password, inviteRequired ? inviteCode.trim() : undefined);
       if (result?.recoveryCode) setRecoveryCode(result.recoveryCode);
     } catch (err: unknown) {
-      setLocalError(err instanceof Error ? err.message : "registration failed");
+      setLocalError(err instanceof Error ? err.message : t("register.failed"));
     } finally {
       setLoading(false);
     }
@@ -76,12 +77,12 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
     return React.createElement(
       "main",
       { style: { backgroundColor: palette.pageBg, color: palette.textPrimary, minHeight: "100vh", padding: "32px 24px", maxWidth: "480px", margin: "0 auto" } },
-      React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "12px" } }, "Account created"),
-      React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, "Save your recovery code somewhere safe. It's the only way to reset your password — it won't be shown again."),
+      React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "12px" } }, t("register.createdTitle")),
+      React.createElement("p", { style: { fontSize: "14px", color: palette.textSecondary, marginBottom: "20px", lineHeight: 1.55 } }, t("register.createdBody")),
       React.createElement(
         "div",
         { style: { backgroundColor: palette.successBg, border: `1px solid ${palette.successBorder}`, borderRadius: "8px", padding: "16px", marginBottom: "24px" } },
-        React.createElement("p", { style: { fontSize: "11px", color: palette.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" } }, "Recovery code"),
+        React.createElement("p", { style: { fontSize: "11px", color: palette.textSecondary, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" } }, t("auth.recoveryCode")),
         React.createElement(
           "code",
           { style: { display: "block", backgroundColor: palette.codeBg, color: palette.successText, padding: "10px 12px", borderRadius: "6px", fontSize: "13px", letterSpacing: "0.05em", wordBreak: "break-all" } },
@@ -95,7 +96,7 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
           onClick: () => handlers.onDone?.(),
           style: { backgroundColor: palette.accent, color: "#0a0d14", border: "none", borderRadius: "8px", padding: "11px 18px", fontWeight: "600", fontSize: "14px", cursor: "pointer" },
         },
-        "I've saved it — continue",
+        t("register.createdContinue"),
       ),
     );
   }
@@ -103,7 +104,7 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
   return React.createElement(
     "main",
     { style: { backgroundColor: palette.pageBg, color: palette.textPrimary, minHeight: "100vh", padding: "32px 24px", maxWidth: "480px", margin: "0 auto" } },
-    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "24px" } }, "Create account"),
+    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "24px" } }, t("register.title")),
     error && React.createElement("p", { style: { color: palette.errorText, fontSize: "13px", marginBottom: "16px" } }, error),
     React.createElement(
       "form",
@@ -112,7 +113,7 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
         React.createElement(
           "label",
           { style: labelStyle },
-          "Invite code",
+          t("register.inviteCode"),
           React.createElement("input", {
             type: "text",
             value: inviteCode,
@@ -125,13 +126,13 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
           React.createElement(
             "span",
             { style: { display: "block", fontSize: "12px", color: palette.textTertiary, marginTop: "6px", lineHeight: 1.5 } },
-            "Enter the code from your invitation. It only works for the email address you were invited with.",
+            t("register.inviteHelp"),
           ),
         ),
       React.createElement(
         "label",
         { style: labelStyle },
-        "Email",
+        t("auth.email"),
         React.createElement("input", {
           type: "email",
           value: email,
@@ -144,19 +145,19 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
       React.createElement(
         "label",
         { style: labelStyle },
-        "Display name",
+        t("register.displayName"),
         React.createElement("input", {
           type: "text",
           value: displayName,
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDisplayName(e.target.value),
-          placeholder: "How you want to be addressed",
+          placeholder: t("register.displayNamePlaceholder"),
           style: { ...inputStyle, marginTop: "6px" },
         }),
       ),
       React.createElement(
         "label",
         { style: labelStyle },
-        "Password",
+        t("auth.password"),
         React.createElement("input", {
           type: "password",
           value: password,
@@ -173,13 +174,13 @@ export function RegisterView({ viewProps, handlers }: { viewProps: RegisterViewP
           disabled: loading,
           style: { backgroundColor: palette.accent, color: "#0a0d14", border: "none", borderRadius: "8px", padding: "11px 18px", fontWeight: "600", fontSize: "14px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 },
         },
-        loading ? "Creating account…" : "Create account",
+        loading ? t("register.submitting") : t("register.submit"),
       ),
     ),
     React.createElement(
       "button",
       { type: "button", onClick: () => handlers.onNavigateLogin?.(), style: { background: "none", border: "none", color: palette.textSecondary, fontSize: "13px", cursor: "pointer", padding: 0, marginTop: "16px" } },
-      "Already have an account? Sign in",
+      t("register.toLogin"),
     ),
   );
 }

@@ -1,5 +1,6 @@
 import type { ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -52,16 +53,16 @@ export function ConnectingView({
     React.createElement(
       "h1",
       { style: { fontSize: "15px", fontWeight: 700, letterSpacing: "-0.01em" } },
-      waiting ? (longWait ? "Still starting…" : "Starting the server") : "Could not reach the server",
+      waiting ? (longWait ? t("connecting.longWaitTitle") : t("connecting.waitingTitle")) : t("connecting.failedTitle"),
     ),
     React.createElement(
       "p",
       { style: { fontSize: "13px", color: palette.textSecondary, maxWidth: "36ch", lineHeight: 1.5 } },
       waiting
         ? longWait
-          ? "A server that has been idle can take up to a minute to wake up."
-          : "This can take a moment if the server has been idle."
-        : "The server did not respond. Check your connection, or the API endpoint in Settings.",
+          ? t("connecting.longWaitBody")
+          : t("connecting.waitingBody")
+        : t("connecting.failedBody"),
     ),
     waiting
       ? null
@@ -82,7 +83,7 @@ export function ConnectingView({
               cursor: "pointer",
             },
           },
-          "Try again",
+          t("connecting.retry"),
         ),
   );
 }

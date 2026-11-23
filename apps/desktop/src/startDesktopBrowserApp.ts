@@ -1,3 +1,4 @@
+import { onLanguageChange } from "./i18n/i18n.js";
 import { bootstrapDesktopApp, bootstrapDesktopReactApp } from "./index.js";
 import { keepApiAwake } from "./keepApiAwake.js";
 import { createHashRouter } from "./createHashRouter.js";
@@ -259,6 +260,8 @@ export async function startDesktopBrowserApp({
 
   // Connecting progress changes the screen without a navigation.
   session.subscribe(() => void reactApp.mount());
+  // Views read their text while they render, so a new language is a new render (#329).
+  onLanguageChange(() => void reactApp.mount());
   // Something is on screen now, so the remaining retries are visible rather than
   // spent behind a blank window.
   await session.connectIfWaiting();

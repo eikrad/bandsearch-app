@@ -1,12 +1,13 @@
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 
-const BUTTONS: Array<{ value: ObscurityTarget; label: string }> = [
-  { value: "cult", label: "Cult Following" },
-  { value: "underground", label: "Underground" },
-  { value: "obscure", label: "Truly Obscure" },
-];
+const BUTTONS = [
+  { value: "cult", label: "obscurity.cult" },
+  { value: "underground", label: "obscurity.underground" },
+  { value: "obscure", label: "obscurity.obscure" },
+] as const satisfies ReadonlyArray<{ value: ObscurityTarget; label: string }>;
 
 export type ObscurityTargetPickerProps = {
   target: ObscurityTarget | undefined;
@@ -26,7 +27,7 @@ export function ObscurityTargetPicker({ target, onTargetChange }: ObscurityTarge
           className: target === value ? "active" : undefined,
           onClick: () => onTargetChange(target === value ? undefined : value),
         },
-        label,
+        t(label),
       ),
     ),
   );

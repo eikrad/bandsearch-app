@@ -1,13 +1,14 @@
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 import type { FeedbackType } from "../../../../shared/schemas/src/contracts.js";
 
 export type { FeedbackType };
 
-const BUTTONS: Array<{ value: FeedbackType; label: string }> = [
-  { value: "good", label: "Spot on" },
-  { value: "too_mainstream", label: "Too mainstream" },
-  { value: "wrong_direction", label: "Wrong direction" },
-];
+const BUTTONS = [
+  { value: "good", label: "feedback.good" },
+  { value: "too_mainstream", label: "feedback.tooMainstream" },
+  { value: "wrong_direction", label: "feedback.wrongDirection" },
+] as const satisfies ReadonlyArray<{ value: FeedbackType; label: string }>;
 
 export type FeedbackReactionBarProps = {
   visible: boolean;
@@ -26,12 +27,12 @@ export function FeedbackReactionBar({ visible, onFeedback, onDismiss }: Feedback
   return React.createElement(
     "div",
     { className: "feedback-reaction-bar" },
-    React.createElement("span", { className: "feedback-label" }, "How were these picks?"),
+    React.createElement("span", { className: "feedback-label" }, t("feedback.question")),
     ...BUTTONS.map(({ value, label }) =>
       React.createElement(
         "button",
         { key: value, type: "button", onClick: () => onFeedback(value) },
-        label,
+        t(label),
       ),
     ),
   );

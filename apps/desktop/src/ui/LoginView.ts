@@ -1,4 +1,5 @@
 import * as React from "react";
+import { t } from "../i18n/i18n.js";
 
 const palette = {
   pageBg: "#0d0f14",
@@ -59,7 +60,7 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
     try {
       await handlers.onLogin?.(email.trim(), password);
     } catch (err: unknown) {
-      setLocalError(err instanceof Error ? err.message : "login failed");
+      setLocalError(err instanceof Error ? err.message : t("login.failed"));
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
   return React.createElement(
     "main",
     { style: { backgroundColor: palette.pageBg, color: palette.textPrimary, minHeight: "100vh", padding: "32px 24px", maxWidth: "480px", margin: "0 auto" } },
-    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "24px" } }, "Sign in"),
+    React.createElement("h1", { style: { fontSize: "20px", fontWeight: "700", marginBottom: "24px" } }, t("login.title")),
     error && React.createElement("p", { style: { color: palette.errorText, fontSize: "13px", marginBottom: "16px" } }, error),
     React.createElement(
       "form",
@@ -76,7 +77,7 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
       React.createElement(
         "label",
         { style: labelStyle },
-        "Email",
+        t("auth.email"),
         React.createElement("input", {
           type: "email",
           value: email,
@@ -89,7 +90,7 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
       React.createElement(
         "label",
         { style: labelStyle },
-        "Password",
+        t("auth.password"),
         React.createElement("input", {
           type: "password",
           value: password,
@@ -106,7 +107,7 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
           disabled: loading,
           style: { backgroundColor: palette.accent, color: "#0a0d14", border: "none", borderRadius: "8px", padding: "11px 18px", fontWeight: "600", fontSize: "14px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 },
         },
-        loading ? "Signing in…" : "Sign in",
+        loading ? t("login.submitting") : t("login.submit"),
       ),
     ),
     React.createElement(
@@ -115,12 +116,12 @@ export function LoginView({ viewProps, handlers }: { viewProps: LoginViewProps; 
       React.createElement(
         "button",
         { type: "button", onClick: () => handlers.onNavigateRegister?.(), style: { background: "none", border: "none", color: palette.accent, fontSize: "13px", cursor: "pointer", padding: 0, textAlign: "left" } },
-        "Create an account →",
+        t("login.toRegister"),
       ),
       React.createElement(
         "button",
         { type: "button", onClick: () => handlers.onNavigateReset?.(), style: { background: "none", border: "none", color: palette.textSecondary, fontSize: "13px", cursor: "pointer", padding: 0, textAlign: "left" } },
-        "Forgot password? Use recovery code",
+        t("login.toReset"),
       ),
     ),
   );
