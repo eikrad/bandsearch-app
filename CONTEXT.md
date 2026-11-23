@@ -8,6 +8,8 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Conversation turn** — how one chat message is answered: by a **search** (the research graph), by a **pick** (ranking bands the conversation already found but has not shown) or by an **answer** in words (no bands). The turn router decides; when in doubt it searches.
 
+- **Search job** — one search (one chat message) running on the API apart from the request that started it (ADR 0006, #345). It runs to its end whether or not anyone follows it; its owner can follow it, leave, and come back to the events missed so far and its end: `done` (the answer), `error` or `cancelled`. Stopped only by its owner (Stop) or by a newer search of the same user, never by a dropped connection. In the server's memory only, kept an hour after it finished (`SEARCH_JOB_KEEP_MINUTES`); a restart loses it, and the app then calls the search *lost*. Someone else's job does not exist for you. The app keeps the id of the job it waits for on the device (`pendingSearchStore.ts`) and picks it up again at launch and when shown.
+
 - **Conversation memory** — the bands found and shown per user and conversation, in the server's memory for two hours. It makes picks possible and keeps shown bands from being shown again. Public artist data only, never what the user wrote.
 
 - **Research graph** — the LangGraph state machine in `agent/research/researchGraph.ts` that orchestrates: web search planning, Brave search execution, candidate extraction, MusicBrainz verification, optional reflection, and final ranking.

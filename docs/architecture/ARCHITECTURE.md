@@ -98,7 +98,7 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; streams its answer to clients that accept `text/event-stream`; every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered), `POST /recommendations/:eventId/feedback` (same auth and limit) |
+| Recommendations | `POST /recommendations/jobs` starts a search job (rate-limited to 30 starts/minute, shared with the older route), `GET /recommendations/jobs/:id` follows it as events or returns its state, `DELETE /recommendations/jobs/:id` stops it (both 300 requests/minute) — see [Search jobs](#search-jobs); `POST /recommendations` (the older held request over the same job: JSON, or events with `Accept: text/event-stream`); every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered; `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
@@ -132,17 +132,39 @@ A request without a `conversationId` (golden runs) always searches.
 
 An `answer` carries no `meta.eventId`: it is no batch to rate or score.
 
-### Streamed answers
+### Search jobs
 
-With `Accept: text/event-stream`, `POST /recommendations` sends `AnswerEvent`s
-(shared contracts): `progress` per stage, `reply` with the text so far, then
-`done` with the same response the JSON endpoint returns, or `error`. Only `done`
-is final; a reply shown before it may still be discarded. A request that fails
-or finishes before its first event gets plain JSON with its status. The ranker
-still answers in JSON; its reply is the first field and is read out of the
-unfinished text (`replySoFar`), so prompts and eval are the same either way.
+A message is answered by a search job (ADR 0006): `routes/recommendationRoutes.ts`
+validates it and hands one function — pipeline call, eval hook, provenance — to
+the job store, `searchJobs/searchJobs.ts`, which runs it whether or not anyone
+listens. The store is in memory: ids of 128 random bits, owner-checked on every
+call (someone else's job is a 404), one running job per user, finished jobs kept
+an hour, bounded in jobs and events. A restart loses them.
 
-A client that closes the request cancels the work behind it, streaming or not.
+`AnswerEvent`s (shared contracts): `progress` per stage, `reply` with the text
+so far, then `done` with the response, `error` (the same public error a JSON
+request gets, mapped once by `recommendationFailure`) or `cancelled`. Only the
+end is final; a reply shown before it may still be discarded. A job keeps a
+reply as its latest text only.
+
+- `POST /recommendations/jobs` → `202 { jobId }` with `Location`.
+- `GET /recommendations/jobs/:id`, `Accept: text/event-stream`: the events after
+  `Last-Event-ID` (or `?after=`), then live ones until the end, each with its
+  `id:`; a comment every 15 s keeps proxies and the app from taking a quiet
+  search for a dead connection. Without that header: `SearchJobState` as JSON.
+- `DELETE /recommendations/jobs/:id` → 204: Stop. Closing a connection only
+  stops following.
+- `POST /recommendations`: starts the same job and follows it over the request,
+  in JSON or as events (a request that fails or finishes before its first event
+  gets plain JSON with its status). Hanging up does not stop it.
+
+The app (`chatClient.followSearch`) re-attaches after the last event it saw when
+a connection fails, ends early or is quiet for 45 s, and keeps the job id on the
+device to pick the search up after the system stopped the app.
+
+The ranker still answers in JSON; its reply is the first field and is read out
+of the unfinished text (`replySoFar`), so prompts and eval are the same either
+way.
 
 ---
 

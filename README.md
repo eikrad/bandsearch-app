@@ -13,6 +13,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 - **Preference memory** — save bands without a rating, rate them when ready, and add categories or notes. Actions on earlier recommendation cards keep the selected artist's identity; later recommendations preserve your annotations. Future recommendations adapt to your saved preferences.
 - **English, German and Danish** — the app's screens follow your system's language, or the one you pick under Settings → Language. The chat replies, and writes each recommendation's explanation, in the language of your message. The chat screen and the privacy policy are still English; they follow (#329)
 - **Reflection loop** — if the first search pass is thin, the AI generates refined queries and searches again (up to 2 extra rounds)
+- **Searches that outlive the app** — a search keeps running on the server when the phone's screen turns off or the app is closed, and the app picks up its answer when you come back (ADR 0006)
 - **Native desktop app** — Tauri shell for Linux, macOS, and Windows; API keys stored in the OS config directory
 - **Flexible storage** — SQLite by default, Turso for shared/cloud deployments
 - **Optional multi-user auth** — activates automatically once you register the first account; single-user setups need no config. A hosted deployment can run closed (`AUTH_MODE=enforced`, email-bound invite codes)
@@ -105,6 +106,17 @@ Test it:
 curl -X POST http://localhost:3001/recommendations \
   -H "content-type: application/json" \
   -d '{"query": "I like Alcest and Agalloch"}'
+```
+
+That waits for the answer. The app instead starts a search job and follows it,
+which survives a dropped connection (see
+[ARCHITECTURE.md § Search jobs](docs/architecture/ARCHITECTURE.md#search-jobs)):
+
+```bash
+curl -X POST http://localhost:3001/recommendations/jobs \
+  -H "content-type: application/json" \
+  -d '{"query": "I like Alcest and Agalloch"}'          # → {"jobId":"…"}
+curl -N -H "accept: text/event-stream" http://localhost:3001/recommendations/jobs/<jobId>
 ```
 
 ---
@@ -229,7 +241,7 @@ Bandsearch is a minimal-risk AI system under the EU AI Act, and the transparency
 duty in Art. 50 applies to it. Two disclosures ship in the UI: a permanent line
 in the chat composer stating that a language model hosted in the EU (Scaleway, France) writes the recommendations, and a
 per-recommendation "AI-generated, not human-curated" caption. Recommendation
-cards also carry `data-ai-generated="true"`, and `/recommendations` returns
+cards also carry `data-ai-generated="true"`, and a finished search returns
 `aiGenerated`, `generatedAt`, `pipelineVersion` and the generating `model` in
 its `meta`.
 

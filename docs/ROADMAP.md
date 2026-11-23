@@ -109,7 +109,8 @@ place and is now under Deferred; #180's premise changed (see item 3).
        2.2 s, answer 1.0 s; routing 132 of 132 labelled messages right
      - [x] Step 6: progress and reply streamed (server-sent events, JSON for other
        clients), and a client that stops waiting cancels the search ✓ Done.
-       Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups
+       Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups.
+       The cancel on hang-up was reversed by step 9
      - [x] Step 7: Last.fm first. Its similar-artist lists answer Cult Following
        and Underground searches, with biographies as evidence; the web is
        searched when they hold too few bands of the requested size, for Truly
@@ -127,6 +128,11 @@ place and is now under Deferred; #180's premise changed (see item 3).
        bands that carry tags, which Last.fm's neighbours do more often
      - [x] Step 8: the app wakes a hosted API when the user comes back and keeps
        it awake while in use, at no cost (ADR 0003 keeps the free plan) ✓ Done
+     - [x] Step 9: a search survives the app (#345, ADR 0006): it runs as a
+       job on the API that the app can leave and rejoin, with the events missed
+       replayed; Stop is explicit; the app keeps the job id and picks the
+       search up at launch and when shown again; a lost search (API restart)
+       says so and offers Retry ✓ Done
      - [ ] Owner decision: Render Starter ($7/month) removes the remaining cold
        start on the first open after a pause; it would supersede ADR 0003
 4. ~~**Remove Gemini (last step of #237)** once Scaleway has run stably on Render
