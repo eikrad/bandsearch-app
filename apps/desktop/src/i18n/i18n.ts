@@ -118,3 +118,18 @@ export function onLanguageChange(listener: (language: Language) => void): () => 
   i18next.on("languageChanged", handler);
   return () => i18next.off("languageChanged", handler);
 }
+
+/** "A, B and C" in the current language. */
+export function formatList(items: readonly string[]): string {
+  return new Intl.ListFormat(currentLanguage(), { type: "conjunction" }).format(items);
+}
+
+/** A calendar date (`YYYY-MM-DD`) written out in the current language, read as that day wherever the user is. */
+export function formatDate(isoDate: string): string {
+  return new Intl.DateTimeFormat(currentLanguage(), { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/** A count with the current language's digit grouping. */
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat(currentLanguage()).format(value);
+}

@@ -1,3 +1,4 @@
+import { t } from "./i18n/i18n.js";
 import { BandsearchHttpError } from "./chatClient.js";
 
 /**
@@ -7,25 +8,25 @@ export function formatRecommendationQueryError(error: unknown): string {
   if (error instanceof BandsearchHttpError) {
     switch (error.code) {
       case "rate_limit_exceeded":
-        return "Too many recommendation requests in a short window. Wait about a minute, then try again.";
+        return t("errors.rateLimited");
       case "recommendation_initializing":
-        return "Recommendations are still starting up. Wait a few seconds and try again.";
+        return t("errors.starting");
       case "recommendation_context_unavailable":
-        return "Music lookup (MusicBrainz) is temporarily unavailable. Check your network connection and try again.";
+        return t("errors.musicBrainzUnavailable");
       case "search_unavailable":
-        return "Web search (Brave) is temporarily unavailable. Check your network connection and try again in a moment.";
+        return t("errors.searchUnavailable");
       case "recommendation_unavailable":
-        return "The AI model could not return recommendations. Open Settings and confirm your Scaleway API key; if it is correct, the model may be busy or unreachable — try again in a moment.";
+        return t("errors.modelUnavailable");
       case "validation_error":
         return typeof error.message === "string" && error.message.trim()
           ? error.message
-          : "That request could not be processed. Try rephrasing your message.";
+          : t("errors.invalidRequest");
       case "http_error":
         if (error.status === 429) {
-          return "Too many requests. Wait a moment and try again.";
+          return t("errors.tooManyRequests");
         }
         if (error.status === 503) {
-          return "Recommendations are still starting up. Wait a few seconds and try again.";
+          return t("errors.starting");
         }
         break;
       default:
@@ -36,7 +37,7 @@ export function formatRecommendationQueryError(error: unknown): string {
     }
   }
   if (error instanceof TypeError) {
-    return "Could not reach the Bandsearch API. If the app just started, wait until the API is ready, then try again.";
+    return t("errors.unreachableStarting");
   }
-  return "Could not reach the Bandsearch API. Check that the API server is running.";
+  return t("errors.unreachable");
 }

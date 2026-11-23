@@ -39,3 +39,19 @@ export async function untranslatedText(element: ReactElement, data: readonly str
     await i18next.changeLanguage(before);
   }
 }
+
+/** Runs `work` with i18next in `cimode`, so text built outside a view comes out as its key. */
+export async function withKeysOnly<T>(work: () => Promise<T> | T): Promise<T> {
+  const before = i18next.language;
+  await i18next.changeLanguage("cimode");
+  try {
+    return await work();
+  } finally {
+    await i18next.changeLanguage(before);
+  }
+}
+
+/** True for a translation key as `cimode` prints it. */
+export function isKey(text: string | undefined): boolean {
+  return typeof text === "string" && KEY.test(text);
+}
