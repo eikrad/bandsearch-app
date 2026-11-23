@@ -23,10 +23,15 @@ Decision (owner): gemma, the best on the human labels at about a seventh of
 glm-5.3's price (~0.1 ct per judged search). Known weakness: like every
 candidate but glm-5.3 it misses a fabricated URL next to a real one (ut-15);
 the deterministic citation support rate it is given covers part of that.
-**The language cases (ut-19, ut-20, #329) are not measured reliably yet:**
-calibration sends all directional cases in one batch, and judges carry a
-verdict over to a neighbouring case, which a live batch (one query) never
-has. Calibrating per query is the follow-up.
+**The language cases (ut-19, ut-20, #329) failed for another reason than first
+thought:** probed case by case, gemma named the query's and the why's language
+right and still scored an English why to a German query 1.0; in a batch it
+scored Danish whys 0.3. The judge now only reports the two languages (ISO
+639-1 codes) and whether they match, and `judgeBands` caps evidence quality at
+0.3 when they differ (`services/api/src/replyLanguage.ts`). Recalibrated with
+3 votes (label `judge-language-cap-2026-11-23`): agreement 97.3%, only ut-15
+failed; ut-19, ut-20 and the new ut-21 (a Danish why quoting an English
+review) pass.
 **Date:** 2026-10-05
 
 ## Context
