@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   KEPT_AS_IS,
+  REPLY_LANGUAGE_FIELD,
   REPLY_LANGUAGE_EVIDENCE_CAP,
   REPLY_LANGUAGE_RULE,
   REPLY_LANGUAGE_JUDGE_RULE,
@@ -19,13 +20,16 @@ import type { ChatModelClient } from "../src/agent/modelUtils.js";
  * read it from there, so the eval measures the rule the search follows.
  */
 
-function recordingModel(reply: string): { client: ChatModelClient; systems: string[] } {
+function recordingModel(reply: string): { client: ChatModelClient; systems: string[]; users: string[] } {
   const systems: string[] = [];
+  const users: string[] = [];
   return {
     systems,
+    users,
     client: {
       async invoke(prompt) {
         systems.push(prompt.filter((p) => p.role === "system").map((p) => p.content).join("\n"));
+        users.push(prompt.filter((p) => p.role === "user").map((p) => p.content).join("\n"));
         return { content: reply };
       },
     },
@@ -33,22 +37,39 @@ function recordingModel(reply: string): { client: ChatModelClient; systems: stri
 }
 
 test("the rule asks for the language of the user's newest message, not of the app", () => {
-  assert.match(REPLY_LANGUAGE_RULE, /language of the user's newest message/);
+  assert.match(REPLY_LANGUAGE_RULE, /newest message/);
   assert.match(REPLY_LANGUAGE_RULE, /band names/i, "names stay as they are");
 });
 
+// The baseline of 2026-11-23 (metrics 5) found English queries answered in
+// Norwegian ("obscure Norwegian black metal") and Portuguese ("pagan folk
+// metal"): a first search has no message history, and the model took the
+// language from the evidence. The rule now names the block the query is in.
+test("the rule names the block the query is in and says the evidence does not set the language", () => {
+  assert.ok(REPLY_LANGUAGE_RULE.includes("[USER_INPUT]"));
+  assert.match(REPLY_LANGUAGE_RULE, /evidence/);
+  assert.ok(REPLY_LANGUAGE_FIELD.includes("[USER_INPUT]"));
+  assert.match(REPLY_LANGUAGE_FIELD, /not of a country or language it names/);
+});
+
 test("the ranker tells the model to write the reply and every why in the user's language", async () => {
-  const { client, systems } = recordingModel(JSON.stringify({ reply: "Hier.", recommendations: [] }));
+  const { client, systems, users } = recordingModel(JSON.stringify({ reply: "Hier.", recommendations: [] }));
   const rank = await createRecommendationRanker({ modelClient: client });
   await rank({ query: "Bands wie Alcest", preferenceContext: "", messages: [], mode: "fresh", candidates: [] }).catch(() => {});
   assert.ok(systems.length > 0, "the ranker asked the model");
   assert.ok(systems[0]!.includes(REPLY_LANGUAGE_RULE));
+  assert.ok(users[0]!.includes("[USER_INPUT]\nBands wie Alcest"), "the query is in the block the rule names");
+  // The rule alone was not enough: an English query about Norwegian black metal
+  // still came back in Norwegian, others in Portuguese and Chinese. Naming the
+  // language first, as the answer's first field, fixed 36 of 36 live answers.
+  assert.ok(systems[0]!.includes(`{"language":"<${REPLY_LANGUAGE_FIELD}>","reply"`), "the answer names its language first");
 });
 
 test("an answer in words follows the same rule", async () => {
-  const { client, systems } = recordingModel("Gerne!");
+  const { client, systems, users } = recordingModel("Gerne!");
   await writeAnswer(client, { query: "Danke!", messages: [], shown: [] }, { timeoutMs: 5000 });
   assert.ok(systems[0]!.includes(REPLY_LANGUAGE_RULE));
+  assert.ok(users[0]!.includes("[USER_INPUT]\nDanke!"), "the query is in the block the rule names");
 });
 
 test("the judge names the query's and the why's language and whether they match", () => {

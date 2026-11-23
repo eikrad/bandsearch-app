@@ -19,7 +19,22 @@
 export const KEPT_AS_IS =
   "Band names, album and song titles, genre tags, URLs and words quoted word for word from a source";
 
-export const REPLY_LANGUAGE_RULE = `Write every text the user reads (the reply and each why) in the language of the user's newest message, whatever language earlier messages or the evidence are in. ${KEPT_AS_IS} stay as they are.`;
+/**
+ * Names the [USER_INPUT] block because a first search has no message history:
+ * told only "the newest message", the ranker took the language from the
+ * evidence and answered English queries in Norwegian and Portuguese (baseline
+ * of 2026-11-23).
+ */
+export const REPLY_LANGUAGE_RULE = `Write every text the user reads (the reply and each why) in the language the [USER_INPUT] block is written in: the user's newest message. The evidence, the bands' country and earlier messages do not set the language, whatever language they are in. ${KEPT_AS_IS} stay as they are.`;
+
+/**
+ * The first field of the ranker's answer. The rule alone was not enough: the
+ * ranker still answered an English query about Norwegian black metal in
+ * Norwegian. Naming the language before writing fixed every case tried live
+ * (36 of 36, 2026-11-23), as it did for the judge.
+ */
+export const REPLY_LANGUAGE_FIELD =
+  "ISO 639-1 code of the language the [USER_INPUT] text is written in, not of a country or language it names";
 
 /** The most evidence_quality a why in another language than the query can score. */
 export const REPLY_LANGUAGE_EVIDENCE_CAP = 0.3;
