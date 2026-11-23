@@ -583,11 +583,12 @@ test("a client that asks for a stream follows the answer and gets the whole resp
   const { type, events } = await askForStream(app, { query: "blackgaze" });
 
   assert.match(type, /^text\/event-stream/);
-  assert.deepEqual(events.slice(0, 3), [
-    { type: "progress", progress: { stage: "searching", anchorArtists: ["Alcest"] } },
-    { type: "reply", text: "Try" },
-    { type: "reply", text: "Try Fen." },
-  ]);
+  assert.deepEqual(events[0], { type: "progress", progress: { stage: "searching", anchorArtists: ["Alcest"] } });
+  // A reply carries the whole text so far, so not every one is sent: the
+  // stream sends at most one per 50 ms, and a job keeps only the newest.
+  const replies = events.filter((e) => e.type === "reply").map((e) => e.text as string);
+  assert.ok(replies.every((text) => "Try Fen.".startsWith(text)));
+  assert.equal(replies.at(-1), "Try Fen.");
   const done = events.at(-1)!;
   assert.equal(done.type, "done");
   const response = done.response as { recommendations: unknown[]; assistantReply: string; meta: Record<string, unknown> };
@@ -629,49 +630,66 @@ test("a failure or an answer before the first event is plain JSON with its statu
 });
 
 test("without asking for a stream the answer is one JSON response, whatever the pipeline reports", async () => {
-  let listened: unknown;
   const app = createApp({
     recommendationPipeline: {
       recommend: async (_req, listener) => {
-        listened = listener?.onReply;
         listener?.onProgress?.({ stage: "thinking" });
+        listener?.onReply?.("h");
         return { recommendations: [], assistantReply: "hi", meta: {} };
       },
     },
   });
   const result = await makeRequest(app, "/recommendations", { query: "blackgaze" });
+  assert.equal(result.status, 200);
   assert.equal(result.data.assistantReply, "hi");
-  assert.equal(listened, undefined, "nothing is written for nobody");
+  assert.equal("type" in result.data, false, "no event leaks into the JSON");
 });
 
-test("a client that stops waiting cancels the search", async () => {
-  let cancelled!: () => void;
-  const wasCancelled = new Promise<void>((resolve) => { cancelled = resolve; });
-  const controller = new AbortController();
-  const app = createApp({
-    recommendationPipeline: {
-      recommend: (_req, listener) => new Promise((_resolve, reject) => {
-        listener?.signal?.addEventListener("abort", () => { cancelled(); reject(listener.signal!.reason as Error); });
-        controller.abort();
-      }),
-    },
+// ADR 0006: a search runs as a job, and a dropped connection (a phone whose
+// screen went off) no longer throws the work away. Stop is an explicit DELETE.
+test("a client that stops waiting no longer cancels the search: it runs to its end", async () => {
+  let finish!: () => void;
+  let signal: AbortSignal | undefined;
+  const scored = new Promise<EvalEventContext>((resolve) => {
+    const evalWorker: EvalWorker = { processEvent: async (ctx) => resolve(ctx) };
+    const app = createApp({
+      recommendationPipeline: {
+        recommend: (_req, listener) => new Promise((resolve) => {
+          signal = listener?.signal;
+          finish = () => resolve({ recommendations: [{ artist: "Fen" }], assistantReply: "", meta: { turn: "search" } });
+        }),
+      },
+      evalWorker,
+    });
+    void hangUpEarly(app, () => finish());
   });
+  assert.equal((await scored).recommendations.length, 1, "the finished batch still reached eval");
+  assert.equal(signal?.aborted, false);
+});
+
+/** Posts a question, hangs up before the answer, then lets the search finish. */
+async function hangUpEarly(app: ReturnType<typeof createApp>, thenFinish: () => void) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
+  const controller = new AbortController();
   try {
-    await assert.rejects(fetch(`http://127.0.0.1:${address.port}/recommendations`, {
+    const request = fetch(`http://127.0.0.1:${address.port}/recommendations`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query: "blackgaze" }),
       signal: controller.signal,
-    }));
-    await wasCancelled;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+    await assert.rejects(request);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    thenFinish();
   } finally {
     server.close();
   }
-});
+}
 
 test("a recommendation response carries provenance for its generated text", async () => {
   const app = createApp({

@@ -27,6 +27,7 @@ import { createAuthMiddleware } from "./auth/authMiddleware.js";
 import { sendError } from "./http/errors.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
 import { registerBandsearchRoutes } from "./routes/registerBandsearchRoutes.js";
+import { redactSearchJobIds } from "./searchJobs/searchJobs.js";
 import type { BandsearchRouteContext } from "./routes/registerBandsearchRoutes.js";
 import type { LlmConfig } from "./config/models.js";
 import { createStorage, type StorageConfig } from "./storage/createStorage.js";
@@ -62,6 +63,8 @@ type CreateAppOptions = Partial<StorageRepositories> & {
   runtimeConfig?: AppRuntimeConfig;
   logger?: BandsearchRouteContext["logger"];
   createTursoClient?: BandsearchRouteContext["createTursoClient"];
+  /** Clock, timer and limits of the search job store (ADR 0006); tests inject a clock. */
+  searchJobs?: BandsearchRouteContext["searchJobOptions"];
 };
 
 export function createApp({
@@ -79,6 +82,7 @@ export function createApp({
   runtimeConfig = {},
   logger,
   createTursoClient,
+  searchJobs,
 }: CreateAppOptions = {}) {
   const app = express();
   // The API runs behind exactly one reverse proxy (Render). Trusting one hop
@@ -102,7 +106,8 @@ export function createApp({
         component: "http_request",
         requestId,
         method: req.method,
-        path: req.path,
+        // A search job id is its owner's handle on the job: never logged whole.
+        path: redactSearchJobIds(req.path),
         status: res.statusCode,
         durationMs: Date.now() - startMs,
       });
@@ -119,6 +124,21 @@ export function createApp({
       error: {
         code: "rate_limit_exceeded",
         message: "too many recommendation requests",
+      },
+    },
+  });
+
+  // Following and polling a search job: cheap, and only ever the caller's own
+  // job, so generous. Starting one counts against recommendationsLimiter.
+  const searchJobLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: "rate_limit_exceeded",
+        message: "too many requests for search jobs",
       },
     },
   });
@@ -241,6 +261,8 @@ export function createApp({
   registerBandsearchRoutes(app, {
     appVersion,
     recommendationsLimiter,
+    searchJobLimiter,
+    searchJobOptions: searchJobs,
     authLimiter,
     resolvedBandRepository,
     resolvedBandGroupRepository,
