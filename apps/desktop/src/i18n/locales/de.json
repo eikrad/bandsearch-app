@@ -1,1 +1,204 @@
-{}
+{
+  "common": {
+    "cancel": "Abbrechen",
+    "loading": "Wird geladen…",
+    "back": "Zurück"
+  },
+  "auth": {
+    "email": "E-Mail",
+    "password": "Passwort",
+    "recoveryCode": "Wiederherstellungscode"
+  },
+  "login": {
+    "title": "Anmelden",
+    "submit": "Anmelden",
+    "submitting": "Melde an…",
+    "failed": "Anmeldung fehlgeschlagen",
+    "toRegister": "Konto erstellen →",
+    "toReset": "Passwort vergessen? Verwende den Wiederherstellungscode"
+  },
+  "register": {
+    "failed": "Registrierung fehlgeschlagen",
+    "createdTitle": "Konto erstellt",
+    "createdBody": "Speichere deinen Wiederherstellungscode an einem sicheren Ort. Er ist die einzige Möglichkeit, dein Passwort zurückzusetzen – er wird nicht noch einmal angezeigt.",
+    "createdContinue": "Ich habe ihn gespeichert – weiter",
+    "submitting": "Konto wird erstellt…",
+    "submit": "Konto erstellen",
+    "title": "Konto erstellen",
+    "inviteCode": "Einladungscode",
+    "inviteHelp": "Gib den Code aus deiner Einladung ein. Er funktioniert nur mit der E-Mail-Adresse, für die du eingeladen wurdest.",
+    "displayName": "Anzeigename",
+    "displayNamePlaceholder": "Wie du angesprochen werden möchtest",
+    "toLogin": "Bereits ein Konto? Anmelden"
+  },
+  "reset": {
+    "failed": "Zurücksetzen fehlgeschlagen",
+    "doneTitle": "Passwort zurückgesetzt",
+    "doneBody": "Dein Passwort wurde aktualisiert. Speichere deinen neuen Wiederherstellungscode – er ersetzt den alten.",
+    "newRecoveryCode": "Neuer Wiederherstellungscode",
+    "doneContinue": "Ich habe ihn gespeichert – anmelden",
+    "submitting": "Wird zurückgesetzt…",
+    "submit": "Passwort zurücksetzen",
+    "title": "Passwort zurücksetzen",
+    "intro": "Gib deine E-Mail, den Wiederherstellungscode, den du bei der Kontoerstellung erhalten hast, und ein neues Passwort ein.",
+    "newPassword": "Neues Passwort",
+    "toLogin": "Zurück zur Anmeldung"
+  },
+  "welcome": {
+    "title": "Willkommen bei Bandsearch",
+    "body": "Bandsearch findet Nischenmusik mit KI-Sprachmodellen, die von Scaleway in Frankreich gehostet werden. Füge einmal auf diesem Gerät einen Scaleway-API-Schlüssel hinzu, dann kannst du loslegen. Du kannst ihn jederzeit in den Einstellungen ändern.",
+    "addKey": "API-Schlüssel hinzufügen",
+    "skip": "Überspringen"
+  },
+  "connecting": {
+    "waitingTitle": "Server wird gestartet",
+    "longWaitTitle": "Starte noch…",
+    "failedTitle": "Server nicht erreichbar",
+    "waitingBody": "Das kann einen Moment dauern, wenn der Server inaktiv war.",
+    "longWaitBody": "Ein inaktiver Server braucht bis zu einer Minute, um hochzufahren.",
+    "failedBody": "Der Server antwortet nicht. Prüfe deine Verbindung oder den API-Endpunkt in den Einstellungen.",
+    "retry": "Nochmal versuchen"
+  },
+  "update": {
+    "available": "Bandsearch {{version}} ist verfügbar.",
+    "install": "Installieren",
+    "later": "Später"
+  },
+  "obscurity": {
+    "cult": "Kultstatus",
+    "underground": "Underground",
+    "obscure": "Völlig unbekannt"
+  },
+  "feedback": {
+    "question": "Wie waren diese Vorschläge?",
+    "good": "Perfekt",
+    "tooMainstream": "Zu mainstream",
+    "wrongDirection": "Falsche Richtung"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "back": "← Empfehlungen",
+    "subtitle": "Deine Schlüssel werden lokal auf diesem Gerät gespeichert und an den Bandsearch-API-Prozess übergeben.",
+    "missingKeys_one": "{{names}}-API-Schlüssel ist noch nicht konfiguriert. Füge ihn unten hinzu, damit Empfehlungen funktionieren.",
+    "missingKeys_other": "{{names}}-API-Schlüssel sind noch nicht konfiguriert. Füge sie unten hinzu, damit Empfehlungen funktionieren.",
+    "fromEnv": "✓ Vorhanden – aus .env geladen",
+    "override": "Überschreiben",
+    "saveKey": "Schlüssel speichern",
+    "keyReplace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
+    "scalewayKey": "Scaleway-API-Schlüssel",
+    "scalewayKeyPlaceholder": "Füge deinen Scaleway-API-Schlüssel ein",
+    "braveKey": "Brave Search-API-Schlüssel",
+    "braveKeyPlaceholder": "Füge deinen Brave Search-API-Schlüssel ein",
+    "turso": {
+      "title": "Turso-Synchronisation zwischen Geräten",
+      "intro": "Füge eine Turso-Datenbank-URL hinzu, um deine gespeicherten Künstler zwischen Geräten zu synchronisieren. Deine lokalen Daten werden nicht automatisch übertragen – exportiere sie zuerst und importiere sie nach dem Wechsel.",
+      "connected": "Mit Turso verbunden. Deine lokalen SQLite-Daten bleiben auf diesem Gerät – du kannst jederzeit zurückwechseln.",
+      "url": "Datenbank-URL",
+      "urlReplace": "Gib eine neue URL ein, um die gespeicherte URL zu ersetzen",
+      "token": "Auth-Token",
+      "tokenReplace": "Gib ein neues Token ein, um das gespeicherte Token zu ersetzen",
+      "tokenPlaceholder": "Füge dein Turso-Auth-Token ein",
+      "save": "Speichern und verbinden",
+      "clear": "Zurück zu lokaler SQLite wechseln"
+    },
+    "endpoint": {
+      "title": "API-Endpunkt",
+      "remote": "Verbunden mit einer Remote-API unter {{url}}. Die integrierte lokale App wird nicht gestartet, solange ein Remote-Endpoint gesetzt ist.",
+      "local": "Nutzt die integrierte lokale App. Gib eine Remote-URL ein, um stattdessen mit einer gehosteten Bandsearch-API zu verbinden.",
+      "url": "Remote-API-URL",
+      "urlReplace": "Gib eine neue URL ein, um den gespeicherten Endpoint zu ersetzen",
+      "save": "Endpoint speichern",
+      "reset": "Zurück auf lokal setzen",
+      "keysInactive": "Ein Remote-Endpoint ist aktiv – die folgenden Schlüssel konfigurieren die integrierte lokale App und gelten nur, wenn du auf lokal zurücksetzt."
+    },
+    "privacy": {
+      "title": "Datenschutz & Daten",
+      "intro": "Lies, was Bandsearch sammelt und warum, oder lade eine Kopie aller über dich gespeicherten Daten herunter.",
+      "policy": "Datenschutzrichtlinie",
+      "export": "Meine Daten exportieren",
+      "deleteWarning": "Wenn du dein Konto löschst, werden deine gespeicherten Künstler, Gruppen und Chatverläufe gelöscht. Das kann nicht rückgängig gemacht werden.",
+      "deleteConfirm": "Bestätige dein Passwort, um dieses Konto dauerhaft zu löschen",
+      "deletePermanently": "Dauerhaft löschen",
+      "delete": "Konto löschen"
+    },
+    "status": {
+      "keyEmpty": "Gib einen nicht leeren API-Schlüssel ein.",
+      "keySaved": "Gespeichert. Der API-Prozess wurde mit deinem Schlüssel neu gestartet.",
+      "keyFailed": "Schlüssel konnte nicht gespeichert werden.",
+      "keyStoredInBrowser": "Im Browser-Speicher gespeichert (nur Entwicklung). Nutze eine .env-Datei oder die Desktop-App für die Produktion.",
+      "braveKeyEmpty": "Gib einen nicht leeren Brave-API-Schlüssel ein.",
+      "braveKeySaved": "Gespeichert. Der API-Prozess wurde mit deinem Brave-Schlüssel neu gestartet.",
+      "tursoUrlEmpty": "Gib eine nicht leere Datenbank-URL ein.",
+      "tursoConnectionFailed": "Verbindung fehlgeschlagen.",
+      "tursoSaved": "Gespeichert. Synchronisation über Turso ab dem nächsten Neustart.",
+      "tursoFailed": "Konfiguration konnte nicht gespeichert werden.",
+      "tursoStoredInBrowser": "Im Browser-Speicher gespeichert (nur Entwicklung).",
+      "endpointInvalid": "Gib eine gültige http(s)-URL ein oder lasse das Feld leer, um die integrierte lokale App zu nutzen.",
+      "endpointSaved": "Gespeichert. Die App nutzt ab dem nächsten Neustart die Remote-API.",
+      "endpointReset": "Zurückgesetzt. Die App nutzt ab dem nächsten Neustart die integrierte lokale API.",
+      "endpointFailed": "Endpoint konnte nicht gespeichert werden.",
+      "tursoCleared": "Auf lokale SQLite umgestellt.",
+      "tursoClearFailed": "Konfiguration konnte nicht zurückgesetzt werden."
+    },
+    "language": {
+      "title": "Sprache",
+      "chatNote": "Chat-Antworten folgen der Sprache, in der du schreibst."
+    }
+  },
+  "savedArtists": {
+    "title": "Gespeicherte Künstler",
+    "subtitle": "Deine Stilreferenzen",
+    "useAsStyleRef": "Als Stilreferenz verwenden",
+    "remove": "{{name}} entfernen",
+    "deleteGroup": "Gruppe „{{name}}“ löschen",
+    "add": "Hinzufügen",
+    "addArtist": "Künstler hinzufügen",
+    "searchPlaceholder": "Suche MusicBrainz…",
+    "search": "Suchen",
+    "searching": "Suche…",
+    "selected_one": "{{count}} ausgewählt",
+    "selected_other": "{{count}} ausgewählt",
+    "emptyGroup": "Keine Künstler in dieser Gruppe",
+    "groupByGenre": "Nach Genre gruppieren",
+    "newGroupPlaceholder": "Neuer Gruppenname…",
+    "createGroup": "Erstellen",
+    "export": "Exportieren",
+    "import": "Importieren",
+    "empty": "Noch keine gespeicherten Künstler. Speichere Künstler von Empfehlungskarten.",
+    "addedViaSearch": "Über Suche hinzugefügt.",
+    "status": {
+      "imported_one": "{{count}} Künstler importiert.",
+      "imported_other": "{{count}} Künstler importiert.",
+      "importedSkipped_one": "{{count}} Künstler importiert, {{skipped}} bereits gespeichert.",
+      "importedSkipped_other": "{{count}} Künstler importiert, {{skipped}} bereits gespeichert.",
+      "importedFailed_one": "{{count}} Künstler importiert; {{failed}} konnten nicht importiert werden.",
+      "importedFailed_other": "{{count}} Künstler importiert; {{failed}} konnten nicht importiert werden.",
+      "notAnExport": "Diese Datei ist kein Bandsearch-Export.",
+      "loadFailed": "Deine gespeicherten Künstler konnten nicht geladen werden.",
+      "searchFailed": "Künstlersuche fehlgeschlagen.",
+      "addFailed": "{{name}} konnte nicht hinzugefügt werden.",
+      "added": "{{name}} hinzugefügt.",
+      "removeFailed": "{{name}} konnte nicht entfernt werden.",
+      "removed": "{{name}} entfernt.",
+      "exportFailed": "Export fehlgeschlagen.",
+      "importFailed": "Import fehlgeschlagen.",
+      "createGroupFailed": "Die Gruppe „{{name}}“ konnte nicht erstellt werden.",
+      "deleteGroupFailed": "Die Gruppe konnte nicht gelöscht werden.",
+      "autoGroupFailed": "Konnte nicht nach Genre gruppieren."
+    }
+  },
+  "errors": {
+    "rateLimited": "Zu viele Empfehlungsanfragen in kurzer Zeit. Warte etwa eine Minute und versuche es erneut.",
+    "starting": "Empfehlungen werden noch gestartet. Warte ein paar Sekunden und versuche es erneut.",
+    "musicBrainzUnavailable": "Musiksuche (MusicBrainz) ist vorübergehend nicht verfügbar. Überprüfe deine Netzwerkverbindung und versuche es erneut.",
+    "searchUnavailable": "Websuche (Brave) ist vorübergehend nicht verfügbar. Überprüfe deine Netzwerkverbindung und versuche es in einem Moment erneut.",
+    "modelUnavailable": "Das KI-Modell konnte keine Empfehlungen zurückgeben. Öffne die Einstellungen und überprüfe deinen Scaleway-API-Schlüssel. Falls dieser korrekt ist, ist das Modell möglicherweise beschäftigt oder nicht erreichbar – versuche es in einem Moment erneut.",
+    "invalidRequest": "Diese Anfrage konnte nicht verarbeitet werden. Versuche, deine Nachricht umzuformulieren.",
+    "tooManyRequests": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
+    "unreachableStarting": "Die Bandsearch-API konnte nicht erreicht werden. Falls die App gerade gestartet wurde, warte, bis die API bereit ist, und versuche es erneut.",
+    "unreachable": "Konnte die Bandsearch-API nicht erreichen. Prüfe, ob der API-Server läuft."
+  },
+  "privacy": {
+    "lastUpdated": "Zuletzt aktualisiert: {{date}}"
+  }
+}

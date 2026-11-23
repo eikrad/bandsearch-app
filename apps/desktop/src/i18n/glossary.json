@@ -1,0 +1,174 @@
+{
+  "style": {
+    "de": "Address the user informally with \"du\" (lower case), as German consumer apps do; use German quotation marks („…“) where the English has quotes.",
+    "da": "Address the user with \"du\", as Danish apps do."
+  },
+  "terms": [
+    {
+      "en": "Bandsearch",
+      "keep": true,
+      "note": "product name"
+    },
+    {
+      "en": "MusicBrainz",
+      "keep": true,
+      "note": "service name"
+    },
+    {
+      "en": "Last.fm",
+      "keep": true,
+      "note": "service name"
+    },
+    {
+      "en": "Scaleway",
+      "keep": true,
+      "note": "service name"
+    },
+    {
+      "en": "Brave",
+      "keep": true,
+      "note": "service name (Brave Search)"
+    },
+    {
+      "en": "Turso",
+      "keep": true,
+      "note": "service name"
+    },
+    {
+      "en": "SQLite",
+      "keep": true,
+      "note": "database name"
+    },
+    {
+      "en": "Cult Following",
+      "note": "obscurity target, Last.fm 20k–500k listeners (CONTEXT.md)",
+      "de": {
+        "text": "Kultstatus",
+        "status": "draft"
+      },
+      "da": {
+        "text": "Kultstatus",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "Underground",
+      "note": "obscurity target, 2k–50k listeners; the scene word is used as is",
+      "de": {
+        "text": "Underground",
+        "status": "draft"
+      },
+      "da": {
+        "text": "Underground",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "Truly Obscure",
+      "note": "obscurity target, up to 5k listeners",
+      "de": {
+        "text": "Völlig unbekannt",
+        "status": "draft"
+      },
+      "da": {
+        "text": "Helt ukendt",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "API key",
+      "de": {
+        "text": "API-Schlüssel",
+        "status": "draft"
+      },
+      "da": {
+        "text": "API-nøgle",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "recovery code",
+      "note": "the code that resets a forgotten password",
+      "de": {
+        "text": "Wiederherstellungscode",
+        "status": "draft"
+      },
+      "da": {
+        "text": "gendannelseskode",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "invite code",
+      "note": "closed beta registration code (CONTEXT.md \"Invite\")",
+      "de": {
+        "text": "Einladungscode",
+        "status": "draft"
+      },
+      "da": {
+        "text": "invitationskode",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "style reference",
+      "note": "a saved artist used to steer recommendations",
+      "de": {
+        "text": "Stilreferenz",
+        "status": "draft"
+      },
+      "da": {
+        "text": "stilreference",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "recommendation",
+      "note": "stem: also matches the plural (Empfehlungen, anbefalinger)",
+      "de": {
+        "text": "Empfehlung",
+        "status": "draft"
+      },
+      "da": {
+        "text": "anbefaling",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "Settings",
+      "note": "the Settings screen; its Danish name is plural",
+      "de": {
+        "text": "Einstellungen",
+        "status": "draft"
+      },
+      "da": {
+        "text": "Indstillinger",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "artist",
+      "note": "stem: also matches the plural (Künstler, kunstnere)",
+      "de": {
+        "text": "Künstler",
+        "status": "draft"
+      },
+      "da": {
+        "text": "kunstner",
+        "status": "draft"
+      }
+    },
+    {
+      "en": "listener",
+      "note": "Last.fm listeners",
+      "de": {
+        "text": "Hörer",
+        "status": "draft"
+      },
+      "da": {
+        "text": "lytter",
+        "status": "draft"
+      }
+    }
+  ]
+}

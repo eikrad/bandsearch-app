@@ -1,0 +1,650 @@
+{
+  "common.cancel": {
+    "status": "draft",
+    "source": "19766ed6ccb2"
+  },
+  "common.loading": {
+    "status": "draft",
+    "source": "ba3bbbe10d8b"
+  },
+  "common.back": {
+    "status": "draft",
+    "source": "76900f1bfd16"
+  },
+  "auth.email": {
+    "status": "draft",
+    "source": "969ccbd3cf63"
+  },
+  "auth.password": {
+    "status": "draft",
+    "source": "e7cf3ef4f17c"
+  },
+  "auth.recoveryCode": {
+    "status": "draft",
+    "source": "5bda8302b5ec"
+  },
+  "login.title": {
+    "status": "draft",
+    "source": "bfd402b2f6f3"
+  },
+  "login.submit": {
+    "status": "draft",
+    "source": "bfd402b2f6f3"
+  },
+  "login.submitting": {
+    "status": "draft",
+    "source": "8b9d3de8ae00"
+  },
+  "login.failed": {
+    "status": "draft",
+    "source": "bb8655822004"
+  },
+  "login.toRegister": {
+    "status": "draft",
+    "source": "a38260317ee4"
+  },
+  "login.toReset": {
+    "status": "draft",
+    "source": "1f7151cfa174"
+  },
+  "register.failed": {
+    "status": "draft",
+    "source": "08383e346aa8"
+  },
+  "register.createdTitle": {
+    "status": "draft",
+    "source": "f63879fd691e"
+  },
+  "register.createdBody": {
+    "status": "draft",
+    "source": "bc19b6dae091"
+  },
+  "register.createdContinue": {
+    "status": "draft",
+    "source": "18a3b3d9d03b"
+  },
+  "register.submitting": {
+    "status": "draft",
+    "source": "f2daf61e527b"
+  },
+  "register.submit": {
+    "status": "draft",
+    "source": "798ca2ce18bf"
+  },
+  "register.title": {
+    "status": "draft",
+    "source": "798ca2ce18bf"
+  },
+  "register.inviteCode": {
+    "status": "draft",
+    "source": "c6a8991eaa52"
+  },
+  "register.inviteHelp": {
+    "status": "draft",
+    "source": "1937389d8291"
+  },
+  "register.displayName": {
+    "status": "draft",
+    "source": "2b7f6a84de91"
+  },
+  "register.displayNamePlaceholder": {
+    "status": "draft",
+    "source": "d0c44d3227a3"
+  },
+  "register.toLogin": {
+    "status": "draft",
+    "source": "0f5b1d1f5fc8"
+  },
+  "reset.failed": {
+    "status": "draft",
+    "source": "e774221f50d7"
+  },
+  "reset.doneTitle": {
+    "status": "draft",
+    "source": "359f68acb9b4"
+  },
+  "reset.doneBody": {
+    "status": "draft",
+    "source": "ee1a9c1a04e1"
+  },
+  "reset.newRecoveryCode": {
+    "status": "draft",
+    "source": "5335b90e2772"
+  },
+  "reset.doneContinue": {
+    "status": "draft",
+    "source": "52caad7ca249"
+  },
+  "reset.submitting": {
+    "status": "draft",
+    "source": "1505f40de62c"
+  },
+  "reset.submit": {
+    "status": "draft",
+    "source": "e0edfeb3a71a"
+  },
+  "reset.title": {
+    "status": "draft",
+    "source": "e0edfeb3a71a"
+  },
+  "reset.intro": {
+    "status": "draft",
+    "source": "20f4523baee4"
+  },
+  "reset.newPassword": {
+    "status": "draft",
+    "source": "3dd9df4441fb"
+  },
+  "reset.toLogin": {
+    "status": "draft",
+    "source": "71fe31ccd37c"
+  },
+  "welcome.title": {
+    "status": "draft",
+    "source": "d4924cc81811"
+  },
+  "welcome.body": {
+    "status": "draft",
+    "source": "9893ee2ae0b6"
+  },
+  "welcome.addKey": {
+    "status": "draft",
+    "source": "6f2d3db3648e"
+  },
+  "welcome.skip": {
+    "status": "draft",
+    "source": "b58eb52c8810"
+  },
+  "connecting.waitingTitle": {
+    "status": "draft",
+    "source": "372277076b2e"
+  },
+  "connecting.longWaitTitle": {
+    "status": "draft",
+    "source": "1aea721e4783"
+  },
+  "connecting.failedTitle": {
+    "status": "draft",
+    "source": "3ecbe36026f4"
+  },
+  "connecting.waitingBody": {
+    "status": "draft",
+    "source": "a84249b08dea"
+  },
+  "connecting.longWaitBody": {
+    "status": "draft",
+    "source": "90b4360f3bc2"
+  },
+  "connecting.failedBody": {
+    "status": "draft",
+    "source": "d8aa6dbd9b1a"
+  },
+  "connecting.retry": {
+    "status": "draft",
+    "source": "d8b8392e2c54"
+  },
+  "update.available": {
+    "status": "draft",
+    "source": "41caf9b6155a"
+  },
+  "update.install": {
+    "status": "draft",
+    "source": "569ca49f4aaf"
+  },
+  "update.later": {
+    "status": "draft",
+    "source": "73b6e48a1b55"
+  },
+  "obscurity.cult": {
+    "status": "draft",
+    "source": "5e664b8e3d0d"
+  },
+  "obscurity.underground": {
+    "status": "draft",
+    "source": "9e4fba019658"
+  },
+  "obscurity.obscure": {
+    "status": "draft",
+    "source": "11128375f29e"
+  },
+  "feedback.question": {
+    "status": "draft",
+    "source": "24949da573e5"
+  },
+  "feedback.good": {
+    "status": "draft",
+    "source": "6aefcee97da0"
+  },
+  "feedback.tooMainstream": {
+    "status": "draft",
+    "source": "06a7dd879dcb"
+  },
+  "feedback.wrongDirection": {
+    "status": "draft",
+    "source": "a648d111c609"
+  },
+  "settings.title": {
+    "status": "draft",
+    "source": "74a883a037bc"
+  },
+  "settings.back": {
+    "status": "draft",
+    "source": "4780c93d4764"
+  },
+  "settings.subtitle": {
+    "status": "draft",
+    "source": "16273452a17a"
+  },
+  "settings.missingKeys_one": {
+    "status": "draft",
+    "source": "95be3ea63504"
+  },
+  "settings.missingKeys_other": {
+    "status": "draft",
+    "source": "c4c2aaa95c37"
+  },
+  "settings.fromEnv": {
+    "status": "draft",
+    "source": "7daf105b63a1"
+  },
+  "settings.override": {
+    "status": "draft",
+    "source": "43bc0f5fc035"
+  },
+  "settings.saveKey": {
+    "status": "draft",
+    "source": "b6e0aef2a9f1"
+  },
+  "settings.keyReplace": {
+    "status": "draft",
+    "source": "c764de00955b"
+  },
+  "settings.scalewayKey": {
+    "status": "draft",
+    "source": "ebc9af2cf2e2"
+  },
+  "settings.scalewayKeyPlaceholder": {
+    "status": "draft",
+    "source": "8f5afe4ec3bd"
+  },
+  "settings.braveKey": {
+    "status": "draft",
+    "source": "c34a9ad35bd1"
+  },
+  "settings.braveKeyPlaceholder": {
+    "status": "draft",
+    "source": "228ccd85e8c3"
+  },
+  "settings.turso.title": {
+    "status": "draft",
+    "source": "98ee59f94566"
+  },
+  "settings.turso.intro": {
+    "status": "draft",
+    "source": "ddfa172fb3e6"
+  },
+  "settings.turso.connected": {
+    "status": "draft",
+    "source": "22c6037b1759"
+  },
+  "settings.turso.url": {
+    "status": "draft",
+    "source": "f15f64f32d9d"
+  },
+  "settings.turso.urlReplace": {
+    "status": "draft",
+    "source": "61e1c94dceb3"
+  },
+  "settings.turso.token": {
+    "status": "draft",
+    "source": "0d713eff3023"
+  },
+  "settings.turso.tokenReplace": {
+    "status": "draft",
+    "source": "b45e9393ed7b"
+  },
+  "settings.turso.tokenPlaceholder": {
+    "status": "draft",
+    "source": "a5cc2d7ce193"
+  },
+  "settings.turso.save": {
+    "status": "draft",
+    "source": "3466c1c0c085"
+  },
+  "settings.turso.clear": {
+    "status": "draft",
+    "source": "e84652c61177"
+  },
+  "settings.endpoint.title": {
+    "status": "draft",
+    "source": "a1abebca20cc"
+  },
+  "settings.endpoint.remote": {
+    "status": "draft",
+    "source": "8a52a5a56013"
+  },
+  "settings.endpoint.local": {
+    "status": "draft",
+    "source": "3a4ea42c9597"
+  },
+  "settings.endpoint.url": {
+    "status": "draft",
+    "source": "ddf1dedbce4c"
+  },
+  "settings.endpoint.urlReplace": {
+    "status": "draft",
+    "source": "452f9ea35be7"
+  },
+  "settings.endpoint.save": {
+    "status": "draft",
+    "source": "052607ab043a"
+  },
+  "settings.endpoint.reset": {
+    "status": "draft",
+    "source": "37bff3ca91ee"
+  },
+  "settings.endpoint.keysInactive": {
+    "status": "draft",
+    "source": "a194673813c8"
+  },
+  "settings.privacy.title": {
+    "status": "draft",
+    "source": "4391d8a99171"
+  },
+  "settings.privacy.intro": {
+    "status": "draft",
+    "source": "2f4d140f8409"
+  },
+  "settings.privacy.policy": {
+    "status": "draft",
+    "source": "ba445cff3898"
+  },
+  "settings.privacy.export": {
+    "status": "draft",
+    "source": "fddb7f9c69fe"
+  },
+  "settings.privacy.deleteWarning": {
+    "status": "draft",
+    "source": "df53908e9d98"
+  },
+  "settings.privacy.deleteConfirm": {
+    "status": "draft",
+    "source": "21dec00a23be"
+  },
+  "settings.privacy.deletePermanently": {
+    "status": "draft",
+    "source": "9003e1b7e7c2"
+  },
+  "settings.privacy.delete": {
+    "status": "draft",
+    "source": "a2e20a335700"
+  },
+  "settings.status.keyEmpty": {
+    "status": "draft",
+    "source": "c7d790a9d026"
+  },
+  "settings.status.keySaved": {
+    "status": "draft",
+    "source": "e6f61ccfc1b3"
+  },
+  "settings.status.keyFailed": {
+    "status": "draft",
+    "source": "dacd543ba5cf"
+  },
+  "settings.status.keyStoredInBrowser": {
+    "status": "draft",
+    "source": "59b9070f28bb"
+  },
+  "settings.status.braveKeyEmpty": {
+    "status": "draft",
+    "source": "ae8b76cf31dd"
+  },
+  "settings.status.braveKeySaved": {
+    "status": "draft",
+    "source": "1bb7220773a5"
+  },
+  "settings.status.tursoUrlEmpty": {
+    "status": "draft",
+    "source": "5387bdad8529"
+  },
+  "settings.status.tursoConnectionFailed": {
+    "status": "draft",
+    "source": "ab32978caeaa"
+  },
+  "settings.status.tursoSaved": {
+    "status": "draft",
+    "source": "d4948a7bb70f"
+  },
+  "settings.status.tursoFailed": {
+    "status": "draft",
+    "source": "e51310dd0c5d"
+  },
+  "settings.status.tursoStoredInBrowser": {
+    "status": "draft",
+    "source": "e12e5afc2b84"
+  },
+  "settings.status.endpointInvalid": {
+    "status": "draft",
+    "source": "bbc18b41a0fe"
+  },
+  "settings.status.endpointSaved": {
+    "status": "draft",
+    "source": "1cbeea2ec2be"
+  },
+  "settings.status.endpointReset": {
+    "status": "draft",
+    "source": "5ec9e5e741b9"
+  },
+  "settings.status.endpointFailed": {
+    "status": "draft",
+    "source": "5259be9a8026"
+  },
+  "settings.status.tursoCleared": {
+    "status": "draft",
+    "source": "123bc2a369cd"
+  },
+  "settings.status.tursoClearFailed": {
+    "status": "draft",
+    "source": "738555ec4c26"
+  },
+  "settings.language.title": {
+    "status": "draft",
+    "source": "a4fe65264ef7"
+  },
+  "settings.language.chatNote": {
+    "status": "draft",
+    "source": "9c3297af8922"
+  },
+  "savedArtists.title": {
+    "status": "draft",
+    "source": "df955fc14b5e"
+  },
+  "savedArtists.subtitle": {
+    "status": "draft",
+    "source": "5ee89d6fbcf6"
+  },
+  "savedArtists.useAsStyleRef": {
+    "status": "draft",
+    "source": "f38c9aa7ae35"
+  },
+  "savedArtists.remove": {
+    "status": "draft",
+    "source": "43e1269ac88a"
+  },
+  "savedArtists.deleteGroup": {
+    "status": "draft",
+    "source": "2f30618109f8"
+  },
+  "savedArtists.add": {
+    "status": "draft",
+    "source": "9fd728c66c9a"
+  },
+  "savedArtists.addArtist": {
+    "status": "draft",
+    "source": "a3a9e636ed11"
+  },
+  "savedArtists.searchPlaceholder": {
+    "status": "draft",
+    "source": "105ebb470d42"
+  },
+  "savedArtists.search": {
+    "status": "draft",
+    "source": "49c266baaaa7"
+  },
+  "savedArtists.searching": {
+    "status": "draft",
+    "source": "c31723ab3302"
+  },
+  "savedArtists.selected_one": {
+    "status": "draft",
+    "source": "c7f761b38b19"
+  },
+  "savedArtists.selected_other": {
+    "status": "draft",
+    "source": "c7f761b38b19"
+  },
+  "savedArtists.emptyGroup": {
+    "status": "draft",
+    "source": "562912f3b079"
+  },
+  "savedArtists.groupByGenre": {
+    "status": "draft",
+    "source": "db8404b36ec9"
+  },
+  "savedArtists.newGroupPlaceholder": {
+    "status": "draft",
+    "source": "ded092131464"
+  },
+  "savedArtists.createGroup": {
+    "status": "draft",
+    "source": "4759498ac2a7"
+  },
+  "savedArtists.export": {
+    "status": "draft",
+    "source": "3664895579f0"
+  },
+  "savedArtists.import": {
+    "status": "draft",
+    "source": "2cff9baabf56"
+  },
+  "savedArtists.empty": {
+    "status": "draft",
+    "source": "02477911ffaa"
+  },
+  "savedArtists.addedViaSearch": {
+    "status": "draft",
+    "source": "d9ca58650ba3"
+  },
+  "savedArtists.status.imported_one": {
+    "status": "draft",
+    "source": "9e80407dda39"
+  },
+  "savedArtists.status.imported_other": {
+    "status": "draft",
+    "source": "e944dc3188ba"
+  },
+  "savedArtists.status.importedSkipped_one": {
+    "status": "draft",
+    "source": "ceb6dac345cc"
+  },
+  "savedArtists.status.importedSkipped_other": {
+    "status": "draft",
+    "source": "a7d7f755a533"
+  },
+  "savedArtists.status.importedFailed_one": {
+    "status": "draft",
+    "source": "c8b99fcce738"
+  },
+  "savedArtists.status.importedFailed_other": {
+    "status": "draft",
+    "source": "95965d882572"
+  },
+  "savedArtists.status.notAnExport": {
+    "status": "draft",
+    "source": "2e2ff9b4d8eb"
+  },
+  "savedArtists.status.loadFailed": {
+    "status": "draft",
+    "source": "2797b80ec5a5"
+  },
+  "savedArtists.status.searchFailed": {
+    "status": "draft",
+    "source": "d9aba7f3db7a"
+  },
+  "savedArtists.status.addFailed": {
+    "status": "draft",
+    "source": "dd559ba531ef"
+  },
+  "savedArtists.status.added": {
+    "status": "draft",
+    "source": "c04036ace441"
+  },
+  "savedArtists.status.removeFailed": {
+    "status": "draft",
+    "source": "d617833a824d"
+  },
+  "savedArtists.status.removed": {
+    "status": "draft",
+    "source": "e3f211a85731"
+  },
+  "savedArtists.status.exportFailed": {
+    "status": "draft",
+    "source": "307cfd717ce3"
+  },
+  "savedArtists.status.importFailed": {
+    "status": "draft",
+    "source": "7f4790b2b984"
+  },
+  "savedArtists.status.createGroupFailed": {
+    "status": "draft",
+    "source": "8e0d5cccc440"
+  },
+  "savedArtists.status.deleteGroupFailed": {
+    "status": "draft",
+    "source": "4c3eb1aa204e"
+  },
+  "savedArtists.status.autoGroupFailed": {
+    "status": "draft",
+    "source": "5838354b1f7e"
+  },
+  "errors.rateLimited": {
+    "status": "draft",
+    "source": "03bb8daa2b6b"
+  },
+  "errors.starting": {
+    "status": "draft",
+    "source": "a9b4182914d9"
+  },
+  "errors.musicBrainzUnavailable": {
+    "status": "draft",
+    "source": "88288aec6148"
+  },
+  "errors.searchUnavailable": {
+    "status": "draft",
+    "source": "545f090a050e"
+  },
+  "errors.modelUnavailable": {
+    "status": "draft",
+    "source": "6ec3cff0643f"
+  },
+  "errors.invalidRequest": {
+    "status": "draft",
+    "source": "327b547f4399"
+  },
+  "errors.tooManyRequests": {
+    "status": "draft",
+    "source": "fa85b2431447"
+  },
+  "errors.unreachableStarting": {
+    "status": "draft",
+    "source": "d41d7a34ae8e"
+  },
+  "errors.unreachable": {
+    "status": "draft",
+    "source": "1c7eb22b4776"
+  },
+  "privacy.lastUpdated": {
+    "status": "draft",
+    "source": "9ab48a634d76"
+  }
+}

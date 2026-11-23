@@ -12,7 +12,10 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "i18n:translate": "tsx scripts/i18n/translate.ts",
+    "i18n:review": "tsx scripts/i18n/review.ts",
+    "i18n:check": "tsx scripts/i18n/check.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

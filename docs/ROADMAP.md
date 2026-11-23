@@ -146,7 +146,7 @@ place and is now under Deferred; #180's premise changed (see item 3).
      eval baseline). B and C (i18next, catalog, language switch in
      Settings) ✓ Done for every screen but the chat and the privacy policy
      text, which follow #349. D (translation routine with glossary and
-     review) next; the privacy
+     review) ✓ Done, first drafts in, waiting for review; the privacy
      policy is binding in all three languages, so its translations need human
      review before they ship
    - #251 judge as a quality gate — after #257's reflection work
