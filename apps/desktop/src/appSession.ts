@@ -2,15 +2,16 @@ import type { AuthApiClient, AuthStatus } from "./authApiClient.js";
 import { decideAuthRoute } from "./authGate.js";
 import { waitForAuthStatus } from "./waitForApi.js";
 import type { ConnectingViewProps } from "./ui/viewTypes.js";
+import type { Route } from "./createHashRouter.js";
 
 /** Screens that exist to get the user in. A let-in user is never left on one. */
-const GATE_SCREENS = new Set(["welcome", "connecting", "login", "register", "reset-password"]);
+const GATE_SCREENS = new Set<Route>(["welcome", "connecting", "login", "register", "reset-password"]);
 
 export type AppSessionDeps = {
   auth: Pick<AuthApiClient, "getAuthStatus" | "login" | "register" | "resetPassword" | "deleteAccount">;
   token: { get(): string | null; set(token: string): void; clear(): void };
   /** Must tell its listeners inside navigate(), so moving the user also repaints. */
-  router: { getRoute(): string; navigate(route: string): void };
+  router: { getRoute(): Route; navigate(route: Route): void };
   /** Injected so tests drive the Connecting retries instead of waiting them out. */
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -56,7 +57,7 @@ export function createAppSession({ auth, token, router, sleep, now }: AppSession
    * Sends the user where `route` says. `appRoute` is where a let-in user goes;
    * null keeps the current screen (a deep link at startup).
    */
-  function arrive(route: ReturnType<typeof decide>, appRoute: string | null): void {
+  function arrive(route: ReturnType<typeof decide>, appRoute: Route | null): void {
     if (route === "unavailable") {
       connectingViewProps = { state: "waiting", attempt: 1 };
       router.navigate("connecting");

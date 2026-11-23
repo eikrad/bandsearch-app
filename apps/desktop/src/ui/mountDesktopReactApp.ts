@@ -14,6 +14,7 @@ import { ConnectingView } from "./ConnectingView.js";
 import type { UpdateBannerHandlers, ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
 import { openExternalLink } from "../openExternalLink.js";
 import { downloadJson } from "./downloadJson.js";
+import type { Route } from "../createHashRouter.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -41,9 +42,9 @@ export type MountShell = {
 type ViewComponentLike = React.ComponentType<Record<string, unknown>>;
 
 type MountRouter = {
-  getRoute(): string;
+  getRoute(): Route;
   /** Must tell `onRouteChange` listeners before returning: the mount renders from that. */
-  navigate(route: string): void;
+  navigate(route: Route): void;
   onRouteChange(listener: () => void): unknown;
 };
 type MountSavedShell = {
@@ -537,7 +538,7 @@ export function createDesktopReactMount({
     lastRender = renderCurrent();
     return lastRender;
   }
-  function go(route: string) {
+  function go(route: Route) {
     if (!router) return render();
     router.navigate(route);
     return lastRender;

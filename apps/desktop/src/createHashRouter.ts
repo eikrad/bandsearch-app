@@ -1,30 +1,30 @@
-const ROUTE_MAP: Record<string, string> = {
-  "": "home",
-  "#/": "home",
-  "#/saved": "saved",
-  "#/settings": "settings",
-  "#/welcome": "welcome",
-  "#/login": "login",
-  "#/register": "register",
-  "#/reset-password": "reset-password",
-  "#/privacy": "privacy",
-  "#/connecting": "connecting",
-};
+/** The one route table: each route and the URL hash that opens it. */
+export const ROUTES = {
+  home: "#/",
+  saved: "#/saved",
+  settings: "#/settings",
+  welcome: "#/welcome",
+  login: "#/login",
+  register: "#/register",
+  "reset-password": "#/reset-password",
+  privacy: "#/privacy",
+  connecting: "#/connecting",
+} as const;
 
-function hashToRoute(hash: string): string {
-  return ROUTE_MAP[hash] ?? "home";
+export type Route = keyof typeof ROUTES;
+
+const ROUTE_BY_HASH = new Map<string, Route>(
+  (Object.entries(ROUTES) as Array<[Route, string]>).map(([route, hash]) => [hash, route]),
+);
+
+/** An empty or unknown hash, such as a stale bookmark, opens home. */
+function hashToRoute(hash: string): Route {
+  return ROUTE_BY_HASH.get(hash) ?? "home";
 }
 
-function routeToHash(route: string): string {
-  if (route === "saved") return "#/saved";
-  if (route === "settings") return "#/settings";
-  if (route === "welcome") return "#/welcome";
-  if (route === "login") return "#/login";
-  if (route === "register") return "#/register";
-  if (route === "reset-password") return "#/reset-password";
-  if (route === "privacy") return "#/privacy";
-  if (route === "connecting") return "#/connecting";
-  return "#/";
+function routeToHash(route: Route): string {
+  if (!Object.hasOwn(ROUTES, route)) throw new Error(`unknown route "${route}"`);
+  return ROUTES[route];
 }
 
 export type HashRouterOptions = {
@@ -52,27 +52,27 @@ export function createHashRouter({
     }
   },
 }: HashRouterOptions = {}) {
-  const changeCallbacks: Array<(route: string) => void> = [];
+  const changeCallbacks: Array<(route: Route) => void> = [];
   // The route listeners last heard about. A browser fires `hashchange` for our
   // own navigate() too, after the fact; this tells that echo apart from a real
   // change such as the back button, so a screen is not rendered twice.
   let reportedRoute = hashToRoute(getHash());
 
-  function getRoute(): string {
+  function getRoute(): Route {
     return hashToRoute(getHash());
   }
 
-  function report(route: string): void {
+  function report(route: Route): void {
     reportedRoute = route;
     changeCallbacks.forEach((fn) => fn(route));
   }
 
   /** Changes the route and tells listeners before returning, in every environment. */
-  function navigate(route: string): void {
+  function navigate(route: Route): void {
     const hash = routeToHash(route);
-    reportedRoute = hashToRoute(hash);
+    reportedRoute = route;
     setHash(hash);
-    report(hashToRoute(hash));
+    report(route);
   }
 
   function handleHashChange(): void {
@@ -86,7 +86,7 @@ export function createHashRouter({
   return {
     getRoute,
     navigate,
-    onRouteChange(fn: (route: string) => void) {
+    onRouteChange(fn: (route: Route) => void) {
       changeCallbacks.push(fn);
       return () => {
         const i = changeCallbacks.indexOf(fn);
