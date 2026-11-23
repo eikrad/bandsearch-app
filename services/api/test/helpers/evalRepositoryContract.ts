@@ -281,16 +281,4 @@ export function runEvalRepositoryContract(adapterName: string, createRepository:
 
     assert.equal((await repo.getLatestBaseline())?.label, "newer");
   });
-
-  // -------------------------------------------------------------- feedback
-
-  test(label("logFeedback accepts a feedback row"), async () => {
-    const repo = await createRepository();
-    const eventId = await repo.logEvent(sampleEvent);
-
-    // Nothing reads feedback back through this interface yet; the contract is
-    // that recording it succeeds and never throws on the response path.
-    await repo.logFeedback({ eventId, feedbackType: "good" });
-    await repo.logFeedback({ eventId, feedbackType: "too_mainstream", userId: "user-b" });
-  });
 }

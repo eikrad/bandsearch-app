@@ -7,6 +7,13 @@ import type {
   RecommendationResponse,
   SavedBand,
 } from "./domain.js";
+import { readAnswerEvents } from "./answerEvents.js";
+import {
+  MESSAGE_CONTENT_MAX_LEN,
+  MESSAGES_MAX_COUNT,
+  type AnswerEvent,
+  type RecommendationFeedbackSubmission,
+} from "../../../shared/schemas/src/contracts.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -86,6 +93,43 @@ export type ChatClientOptions = {
   getToken?: (() => string | null) | null;
 };
 
+export type RecommendationRequest = {
+  query: string;
+  mode?: string;
+  priorityContext?: string;
+  /** Earlier messages of the conversation, oldest first; the newest that the API accepts are sent. */
+  messages?: Array<{ role: string; content: string }>;
+  selectedArtistIds?: string[];
+  obscurityTarget?: string;
+  /** The conversation this message continues, so the API can answer from what it already found. */
+  conversationId?: string;
+  signal?: AbortSignal;
+  /** Follows the answer while it is made; without it the answer comes whole. */
+  onEvent?: (event: AnswerEvent) => void;
+};
+
+function recommendationBody({
+  query,
+  mode = "fresh",
+  priorityContext,
+  messages = [],
+  selectedArtistIds = [],
+  obscurityTarget,
+  conversationId,
+}: Omit<RecommendationRequest, "signal" | "onEvent">): Record<string, unknown> {
+  const body: Record<string, unknown> = { query, mode };
+  if (priorityContext) body.priorityContext = priorityContext;
+  if (messages.length > 0) {
+    body.messages = messages
+      .slice(-MESSAGES_MAX_COUNT)
+      .map((m) => ({ ...m, content: m.content.slice(0, MESSAGE_CONTENT_MAX_LEN) }));
+  }
+  if (selectedArtistIds.length > 0) body.selectedArtistIds = selectedArtistIds;
+  if (obscurityTarget) body.obscurityTarget = obscurityTarget;
+  if (conversationId) body.conversationId = conversationId;
+  return body;
+}
+
 export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = null }: ChatClientOptions) {
   const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
 
@@ -97,40 +141,37 @@ export function createChatClient({ apiBaseUrl, fetchImpl = fetch, getToken = nul
   }
 
   return {
-    async fetchRecommendations(
-      query: string,
-      mode = "fresh",
-      priorityContext = "",
-      messages: unknown[] = [],
-      selectedArtistIds: string[] = [],
-      obscurityTarget?: string,
-      signal?: AbortSignal,
-    ) {
-      const body: Record<string, unknown> = { query, mode };
-      if (priorityContext) body.priorityContext = priorityContext;
-      if (messages.length > 0) body.messages = messages;
-      if (Array.isArray(selectedArtistIds) && selectedArtistIds.length > 0) {
-        body.selectedArtistIds = selectedArtistIds.filter((id) => typeof id === "string");
-      }
-      if (obscurityTarget) body.obscurityTarget = obscurityTarget;
+    async fetchRecommendations({ signal, onEvent, ...request }: RecommendationRequest) {
       const response = await fetchImpl(`${baseUrl}/recommendations`, {
         method: "POST",
-        headers: jsonHeaders(),
-        body: JSON.stringify(body),
+        headers: { ...jsonHeaders(), ...(onEvent ? { accept: "text/event-stream" } : {}) },
+        body: JSON.stringify(recommendationBody(request)),
         signal,
       });
       await ensureOk(response);
+      // The API answers in plain JSON when it is done before there is anything to follow.
+      if (onEvent && response.body && response.headers.get("content-type")?.includes("text/event-stream")) {
+        for await (const event of readAnswerEvents(response.body)) {
+          if (event.type === "done") return event.response as RecommendationResponse;
+          if (event.type === "error") {
+            throw new BandsearchHttpError(event.error.message, { status: event.status, code: event.error.code });
+          }
+          onEvent(event);
+        }
+        throw new BandsearchHttpError("the answer broke off", { code: "recommendation_unavailable" });
+      }
       return response.json() as Promise<RecommendationResponse>;
     },
 
-    async sendFeedback(eventId: string, feedbackType: string) {
-      const response = await fetchImpl(`${baseUrl}/eval/feedback`, {
+    async sendFeedback(eventId: string, submission: RecommendationFeedbackSubmission) {
+      const response = await fetchImpl(`${baseUrl}/recommendations/${encodeURIComponent(eventId)}/feedback`, {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ eventId, feedbackType }),
+        body: JSON.stringify(submission),
       });
-      if (!response.ok) return;
-      return response.json();
+      // A refused click is an error the user sees, not a silent drop.
+      await ensureOk(response);
+      return response.json() as Promise<unknown>;
     },
 
     async createPreference(savedBand: unknown) {

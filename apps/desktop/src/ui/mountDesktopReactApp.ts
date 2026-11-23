@@ -13,6 +13,7 @@ import { UpdateBanner, type UpdateBannerViewProps } from "./UpdateBanner.js";
 import { ConnectingView } from "./ConnectingView.js";
 import type { UpdateBannerHandlers, ConnectingHandlers, ConnectingViewProps } from "./viewTypes.js";
 import { openExternalLink } from "../openExternalLink.js";
+import { downloadJson } from "./downloadJson.js";
 
 /** The shell surface this mount drives; everything optional is guarded with `?.`. */
 export type MountShell = {
@@ -28,7 +29,11 @@ export type MountShell = {
   ): Promise<unknown> | unknown;
   cancelSearch?(): void;
   retryLastSearch?(): Promise<unknown> | void;
-  desktopUi?: { setObscurityTarget?(target: string | undefined): void } | undefined;
+  updateObscurityTarget?(target: string | undefined): unknown;
+  submitFeedback?(feedbackType: string): Promise<unknown>;
+  dismissFeedback?(): void;
+  /** View props changed without a handler (a status message timing out). */
+  subscribe?(listener: () => void): unknown;
 };
 
 // The mount dispatches to views with differing prop shapes, so prop types are
@@ -37,6 +42,7 @@ type ViewComponentLike = React.ComponentType<Record<string, unknown>>;
 
 type MountRouter = {
   getRoute(): string;
+  /** Must tell `onRouteChange` listeners before returning: the mount renders from that. */
   navigate(route: string): void;
   onRouteChange(listener: () => void): unknown;
 };
@@ -50,10 +56,12 @@ type MountSavedShell = {
   deleteSavedArtist?(id: string): Promise<unknown>;
   activateStyleRef?(): Promise<unknown>;
   exportArtists?(): Promise<unknown[] | undefined>;
-  importArtists?(bands: unknown[]): Promise<unknown>;
+  importFile?(text: string): Promise<unknown>;
   createGroup?(name: string): Promise<unknown>;
   deleteGroup?(id: string): Promise<unknown>;
   autoGroup?(): Promise<unknown>;
+  /** View props changed without a handler (a status message timing out). */
+  subscribe?(listener: () => void): unknown;
 } | null;
 
 function defaultContainerResolver(): HTMLElement {
@@ -74,6 +82,11 @@ export interface DesktopReactMountOptions {
   clearTursoConfig?: () => Promise<void>;
   saveApiEndpointUrl?: (url: string) => Promise<void>;
   completeOnboarding?: () => Promise<void>;
+  /**
+   * Every way into the chat goes through here: the app session's auth gate in
+   * the app. Absent (tests of single views), it is a plain navigation.
+   */
+  enterApp?: () => Promise<unknown>;
   onLogin?: (email: string, password: string) => Promise<void>;
   onRegister?: (email: string, displayName: string, password: string, inviteCode?: string) => Promise<{ recoveryCode: string }>;
   getRegisterViewProps?: () => RegisterViewProps;
@@ -86,6 +99,7 @@ export interface DesktopReactMountOptions {
   createRootImpl?: typeof createRoot;
   resolveContainer?: () => HTMLElement;
   openExternalLinkImpl?: (url: string) => unknown;
+  downloadJsonImpl?: (filename: string, data: unknown) => void;
 }
 
 export function createDesktopReactMount({
@@ -107,6 +121,7 @@ export function createDesktopReactMount({
   onDeleteAccount,
   saveApiEndpointUrl = async (url) => { void url; },
   completeOnboarding = async () => {},
+  enterApp: enterAppThroughGate,
   onLogin,
   onRegister,
   onResetPassword,
@@ -117,6 +132,7 @@ export function createDesktopReactMount({
   createRootImpl = createRoot,
   resolveContainer = defaultContainerResolver,
   openExternalLinkImpl = openExternalLink,
+  downloadJsonImpl = downloadJson,
 }: DesktopReactMountOptions) {
   const container = resolveContainer();
   const root = createRootImpl(container);
@@ -153,9 +169,15 @@ export function createDesktopReactMount({
     paint();
   }
 
+  // Which shell's view was last painted. A change a shell reports on its own
+  // repaints only that shell's screen: re-rendering settings, for one, would
+  // repeat its IPC just to clear a message nobody can see.
+  let shellOnScreen: "chat" | "saved" | null = null;
+
   async function renderCurrent() {
     const route = router ? router.getRoute() : "home";
     if (route !== "saved") savedArtistsLoaded = false;
+    shellOnScreen = null;
 
     if (route === "login") {
       renderRoot(React.createElement(LoginView as unknown as ViewComponentLike, { viewProps: {}, handlers: loginHandlers }));
@@ -202,6 +224,7 @@ export function createDesktopReactMount({
         await savedArtistsShell.loadSavedArtists?.();
       }
       const viewProps = savedArtistsShell.getViewProps();
+      shellOnScreen = "saved";
       renderRoot(
         React.createElement(SavedArtistsView as unknown as ViewComponentLike, {
           viewProps,
@@ -237,9 +260,17 @@ export function createDesktopReactMount({
     }
 
     const viewProps = shell.getViewProps();
+    shellOnScreen = "chat";
     renderRoot(React.createElement(ChatAppView as unknown as ViewComponentLike, { viewProps, handlers }));
     return viewProps;
   }
+
+  shell.subscribe?.(() => {
+    if (shellOnScreen === "chat") void renderCurrent();
+  });
+  savedArtistsShell?.subscribe?.(() => {
+    if (shellOnScreen === "saved") void renderCurrent();
+  });
 
   const handlers = {
     onModeChange: async (mode: string) => {
@@ -298,7 +329,7 @@ export function createDesktopReactMount({
       openExternalLinkImpl(url);
     },
     onObscurityTargetChange: (target: string | undefined) => {
-      shell.desktopUi?.setObscurityTarget?.(target);
+      shell.updateObscurityTarget?.(target);
       return renderCurrent();
     },
     onStop: () => {
@@ -311,20 +342,33 @@ export function createDesktopReactMount({
         await renderCurrent();
         if (pending) await pending;
       } catch {
-        // error surfaced via actionStatus
+        // Error is surfaced via actionStatus in the shell; always re-render.
       }
+      return renderCurrent();
+    },
+    onFeedback: async (feedbackType: string) => {
+      try {
+        const pending = shell.submitFeedback?.(feedbackType);
+        // The bar closes on the click, not when the API answers.
+        await renderCurrent();
+        await pending;
+      } catch {
+        // Error is surfaced via actionStatus in the shell; always re-render.
+      }
+      return renderCurrent();
+    },
+    onFeedbackDismiss: () => {
+      shell.dismissFeedback?.();
       return renderCurrent();
     },
     onNavigateSaved: async () => {
       // Route, not view flag: `route === "saved"` is what selects the shell
       // implementation below. Setting only the app's view flag left the hash on
       // "home" and quietly served a second, less capable copy of this screen.
-      if (router) router.navigate("saved");
-      return renderCurrent();
+      return go("saved");
     },
     onNavigateSettings: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
     onSaveTursoConfig: async (url: string, token: string) => {
       await saveTursoConfig(url, token);
@@ -334,8 +378,7 @@ export function createDesktopReactMount({
 
   const settingsHandlers = {
     onNavigateChat: async () => {
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return enterApp();
     },
     onSaveApiKey: async (apiKey: string) => {
       await saveLlmApiKey(apiKey);
@@ -355,16 +398,13 @@ export function createDesktopReactMount({
       return renderCurrent();
     },
     onNavigatePrivacy: async () => {
-      if (router) router.navigate("privacy");
-      return renderCurrent();
+      return go("privacy");
     },
     // Left undefined when no collaborator was injected, rather than wrapped in a
     // function that silently returns. A present-but-inert handler is exactly how
     // #175 hid: the view could not tell the difference, so the button rendered
     // and did nothing. Absent, the view omits the control instead.
     onExportAccountData: !onExportAccountData ? undefined : async () => {
-      // Same Blob + a.download path the saved-artists export already uses:
-      // the Tauri webview blocks nothing here and it needs no new dependency.
       let bundle: Record<string, unknown>;
       try {
         bundle = await onExportAccountData();
@@ -376,13 +416,7 @@ export function createDesktopReactMount({
         return renderCurrent();
       }
       accountStatus = null;
-      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "bandsearch-account-data.json";
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadJsonImpl("bandsearch-account-data.json", bundle);
     },
     onDeleteAccount: !onDeleteAccount ? undefined : async (password: string) => {
       const result = await onDeleteAccount(password);
@@ -393,10 +427,9 @@ export function createDesktopReactMount({
         return renderCurrent();
       }
       accountStatus = null;
-      // Erasing the only account puts the install back to zero users, which is
-      // the first-run state — so send them where a fresh install starts.
-      if (router) router.navigate("register");
-      return renderCurrent();
+      // Where a signed-out user goes depends on who is left: Register on an
+      // emptied personal install, Login on a shared one. The gate asks.
+      return enterApp();
     },
   };
 
@@ -405,31 +438,27 @@ export function createDesktopReactMount({
 
   const privacyHandlers = {
     onBack: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
   };
 
   const welcomeHandlers = {
     onGoToSettings: async () => {
-      if (router) router.navigate("settings");
-      return renderCurrent();
+      return go("settings");
     },
     onSkip: async () => {
       await completeOnboarding();
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return enterApp();
     },
   };
 
   const loginHandlers = {
     onLogin: async (email: string, password: string) => {
       if (onLogin) await onLogin(email, password);
-      if (router) router.navigate("home");
-      return renderCurrent();
+      return enterApp();
     },
-    onNavigateRegister: () => { if (router) router.navigate("register"); renderCurrent(); },
-    onNavigateReset: () => { if (router) router.navigate("reset-password"); renderCurrent(); },
+    onNavigateRegister: () => go("register"),
+    onNavigateReset: () => go("reset-password"),
   };
 
   const registerHandlers = {
@@ -437,8 +466,8 @@ export function createDesktopReactMount({
       const result = onRegister ? await onRegister(email, displayName, password, inviteCode) : { recoveryCode: "" };
       return result;
     },
-    onDone: () => { if (router) router.navigate("home"); renderCurrent(); },
-    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
+    onDone: () => enterApp(),
+    onNavigateLogin: () => go("login"),
   };
 
   const resetPasswordHandlers = {
@@ -446,73 +475,81 @@ export function createDesktopReactMount({
       const result = onResetPassword ? await onResetPassword(email, recoveryCode, newPassword) : { newRecoveryCode: "" };
       return result;
     },
-    onDone: () => { if (router) router.navigate("login"); renderCurrent(); },
-    onNavigateLogin: () => { if (router) router.navigate("login"); renderCurrent(); },
+    onDone: () => go("login"),
+    onNavigateLogin: () => go("login"),
   };
 
   const savedHandlers = {
     onNavigate: (view: string) => {
-      if (view === "chat" && router) router.navigate("home");
-      renderCurrent();
+      return view === "chat" ? enterApp() : render();
     },
     onToggleSelection: (id: string) => {
       savedArtistsShell?.toggleArtistSelection(id);
-      renderCurrent();
+      return render();
     },
+    // The shell reports each failure in its status line and never throws, so
+    // every handler here only acts and repaints.
     onSearch: async (query: string) => {
       savedArtistsShell?.setSearchQuery(query);
       await savedArtistsShell?.searchArtists();
-      renderCurrent();
+      return render();
     },
-    onAddArtist: (artist: { id: string; name: string; disambiguation?: string }) => {
-      Promise.resolve(savedArtistsShell?.addArtist(artist)).then(() => renderCurrent());
+    onAddArtist: async (artist: { id: string; name: string; disambiguation?: string }) => {
+      await savedArtistsShell?.addArtist(artist);
+      return render();
     },
     onDelete: async (id: string) => {
       await savedArtistsShell?.deleteSavedArtist?.(id);
-      renderCurrent();
+      return render();
     },
     onActivateStyleRef: async () => {
       await savedArtistsShell?.activateStyleRef?.();
-      if (router) router.navigate("home");
-      renderCurrent();
+      return enterApp();
     },
     onExport: async () => {
       const bands = await savedArtistsShell?.exportArtists?.();
-      if (!bands) return;
-      const blob = new Blob([JSON.stringify(bands, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "bandsearch-artists.json";
-      a.click();
-      URL.revokeObjectURL(url);
+      if (bands) downloadJsonImpl("bandsearch-artists.json", bands);
+      return render();
     },
     onImportFile: async (file: File) => {
-      try {
-        const text = await file.text();
-        const bands = JSON.parse(text);
-        await savedArtistsShell?.importArtists?.(bands);
-        renderCurrent();
-      } catch {
-        // file read or parse error — silently ignore for now
-      }
+      await savedArtistsShell?.importFile?.(await file.text());
+      return render();
     },
     onCreateGroup: async (name: string) => {
       await savedArtistsShell?.createGroup?.(name);
-      renderCurrent();
+      return render();
     },
     onDeleteGroup: async (id: string) => {
       await savedArtistsShell?.deleteGroup?.(id);
-      renderCurrent();
+      return render();
     },
     onAutoGroup: async () => {
       await savedArtistsShell?.autoGroup?.();
-      renderCurrent();
+      return render();
     },
   };
 
+  // The router tells its listeners inside navigate(), so a navigation's render
+  // is the one recorded here. Rendering again after navigating would paint the
+  // same screen twice.
+  let lastRender: ReturnType<typeof renderCurrent> = Promise.resolve({});
+  function render() {
+    lastRender = renderCurrent();
+    return lastRender;
+  }
+  function go(route: string) {
+    if (!router) return render();
+    router.navigate(route);
+    return lastRender;
+  }
+  async function enterApp() {
+    if (!enterAppThroughGate) return go("home");
+    await enterAppThroughGate();
+    return lastRender;
+  }
+
   if (router) {
-    router.onRouteChange(() => renderCurrent());
+    router.onRouteChange(() => { void render(); });
   }
 
   return {

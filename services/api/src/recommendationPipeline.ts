@@ -1,13 +1,16 @@
 import type { ChatMessage } from "../../../shared/schemas/src/contracts.js";
-import { createResearchRecommendationService } from "./agent/research/researchService.js";
+import { createResearchCache } from "./agent/research/researchCache.js";
+import { conversationKey, createConversationMemory } from "./agent/conversation/conversationMemory.js";
+import { createConversationService, type TurnListener } from "./agent/conversation/conversationService.js";
 import type { RecommendationError } from "./recommendations.js";
 import {
   createRecommendationError,
   resolveRecommendationFacadeInput,
 } from "./recommendations.js";
 import { writeStructuredLog } from "./http/structuredLog.js";
-import type { LlmConfig } from "./config/models.js";
+import { DEFAULT_RESEARCH_MODEL, type LlmConfig } from "./config/models.js";
 import { createChatModelFactory } from "./llm/chatModel.js";
+import { BRAVE_MIN_INTERVAL_MS } from "./integrations/braveSearch.js";
 import { createReplayFetch } from "./integrations/replayFetch.js";
 
 /** MusicBrainz asks for at most one request per second per IP. */
@@ -16,19 +19,24 @@ const MUSICBRAINZ_MIN_INTERVAL_MS = 1100;
 /**
  * How the research graph reaches Brave, MusicBrainz and Last.fm. Normally the
  * network; with a replay directory, a recording transport whose real
- * MusicBrainz calls are spaced while replays are immediate.
+ * MusicBrainz and Brave calls are spaced while replays are immediate.
  */
 export function externalLookupsFor(cfg: Pick<RecommendationRuntimeConfig, "evalReplayDir">): {
   replay: boolean;
   fetchImpl?: typeof fetch;
   musicBrainzMinIntervalMs?: number;
+  braveMinIntervalMs?: number;
 } {
   const dir = String(cfg.evalReplayDir ?? "").trim();
   if (!dir) return { replay: false };
   return {
     replay: true,
-    fetchImpl: createReplayFetch({ dir, minIntervalMsByHost: { "musicbrainz.org": MUSICBRAINZ_MIN_INTERVAL_MS } }),
+    fetchImpl: createReplayFetch({
+      dir,
+      minIntervalMsByHost: { "musicbrainz.org": MUSICBRAINZ_MIN_INTERVAL_MS, "api.search.brave.com": BRAVE_MIN_INTERVAL_MS },
+    }),
     musicBrainzMinIntervalMs: 0,
+    braveMinIntervalMs: 0,
   };
 }
 import type { SavedBandContextSource } from "./savedBandContext.js";
@@ -81,7 +89,7 @@ export function createRecommendationPipeline({
     resolveFirstReady = resolve;
   });
 
-  let activeService: ReturnType<typeof createResearchRecommendationService> | null = null;
+  let activeService: ReturnType<typeof createConversationService> | null = null;
   let activeError: RecommendationError | null = createRecommendationError(
     "recommendation_initializing",
     "recommendation pipeline is initializing",
@@ -93,6 +101,10 @@ export function createRecommendationPipeline({
     writeStructuredLog(level, { component: "recommendation_pipeline", message, ...details });
   }
 
+  // Outlives a failed start and every search, so later searches find known artists.
+  const cache = createResearchCache();
+  const memory = createConversationMemory();
+
   async function initialize() {
     try {
       const apiKey = String(cfg.llm?.geminiApiKey ?? cfg.geminiApiKey ?? "").trim();
@@ -100,7 +112,9 @@ export function createRecommendationPipeline({
       const chatModel = cfg.llm ? createChatModelFactory(cfg.llm.research, cfg.llm) : undefined;
       const lookups = externalLookupsFor(cfg);
 
-      activeService = createResearchRecommendationService({
+      activeService = createConversationService({
+        memory,
+        model: cfg.llm?.research.model ?? cfg.researchModel ?? DEFAULT_RESEARCH_MODEL,
         graphDeps: {
           geminiApiKey: apiKey,
           chatModel,
@@ -114,8 +128,10 @@ export function createRecommendationPipeline({
           lastFmApiKey: String(cfg.lastFmApiKey ?? "").trim(),
           musicBrainzTimeoutMs: cfg.musicBrainzTimeoutMs,
           musicBrainzRetries: cfg.musicBrainzRetries,
+          cache,
           fetchImpl: lookups.fetchImpl,
           musicBrainzMinIntervalMs: lookups.musicBrainzMinIntervalMs,
+          braveMinIntervalMs: lookups.braveMinIntervalMs,
           onLog: (level, event, details) => {
             pipelineLog(level, event, details);
           },
@@ -171,7 +187,9 @@ export function createRecommendationPipeline({
   return {
     whenReady: () => whenReadyPromise,
     getReadinessSnapshot,
-    async recommend(request: Record<string, unknown> = {}) {
+    /** Drops what conversations of a deleted account left in memory. */
+    forgetUser: (userId: string) => memory.forgetUser(userId),
+    async recommend(request: Record<string, unknown> = {}, listener: TurnListener = {}) {
       if (!activeService) {
         throw activeError
           || createRecommendationError("recommendation_unavailable", "recommendation pipeline unavailable");
@@ -184,20 +202,24 @@ export function createRecommendationPipeline({
 
       const obscurityTarget = typeof request.obscurityTarget === "string" ? request.obscurityTarget : undefined;
 
-      const { recommendations, assistantReply = "", pipelineDiagnostics, model } = await activeService.getRecommendations(
-        String(request.query ?? ""),
-        {
-          mode,
-          preferenceContext,
-          messages: messages as ChatMessage[],
-          obscurityTarget,
-        },
-      );
+      const { turn, recommendations, assistantReply, pipelineDiagnostics, model } = await activeService.respond({
+        query: String(request.query ?? ""),
+        mode,
+        // Saved bands are the user's own input only in the mode that asks for them.
+        preferenceContext: mode === "preference-aware" ? preferenceContext : "",
+        messages: messages as ChatMessage[],
+        obscurityTarget,
+        conversationKey: conversationKey(
+          typeof request.userId === "string" ? request.userId : undefined,
+          typeof request.conversationId === "string" ? request.conversationId : undefined,
+        ),
+      }, listener);
 
       return {
         recommendations,
-        assistantReply: typeof assistantReply === "string" ? assistantReply : "",
+        assistantReply,
         meta: {
+          turn,
           modeUsed: mode,
           usedPreferenceContext: preferenceContext.length > 0,
           model,

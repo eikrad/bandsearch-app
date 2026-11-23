@@ -17,6 +17,12 @@ const sampleDiagnostics = {
   searchBudgetUsed: 3,
 };
 
+const noFit = { inRange: 0, tooObscure: 0, tooMainstream: 0 };
+const noTargetFit = {
+  obscurityTargetFit: { cult: noFit, underground: noFit, obscure: noFit },
+  obscurityInRangeRate: null,
+};
+
 function makeEvent(overrides = {}) {
   return {
     id: "evt-1",
@@ -156,6 +162,7 @@ test("aggregateMetrics: genericWhyRate = proportion of bands with flag set", () 
 
 test("computeDelta: returns correct difference between two metrics", () => {
   const current = {
+    ...noTargetFit,
     eventCount: 10,
     bandCount: 40,
     meanRelevance: 0.8,
@@ -190,6 +197,7 @@ test("computeDelta: returns correct difference between two metrics", () => {
 
 test("computeDelta: returns null for dimensions where either value is null", () => {
   const current = {
+    ...noTargetFit,
     eventCount: 5,
     bandCount: 10,
     meanRelevance: null,
@@ -219,4 +227,60 @@ test("computeDelta: returns null for dimensions where either value is null", () 
   assert.equal(delta.meanEvidenceQuality, null);
   assert.equal(delta.meanCitationSupportRate, null);
   assertCloseTo(delta.meanDiscoveryValue, 0, "meanDiscoveryValue");
+});
+
+test("the in-range rate is the share of fitted bands inside their request's range, by the search filter's rule", () => {
+  const events = [
+    makeEvent({ id: "cult-req", obscurityTarget: "cult" }),
+    makeEvent({ id: "ug-req", obscurityTarget: "underground" }),
+  ];
+  const scores = [
+    makeScore({ eventId: "cult-req", bandName: "A", listeners: 30_000 }),
+    makeScore({ eventId: "cult-req", bandName: "B", listeners: 3_000 }),
+    makeScore({ eventId: "ug-req", bandName: "C", listeners: 900 }),
+    makeScore({ eventId: "ug-req", bandName: "D", listeners: 10_000 }),
+    makeScore({ eventId: "ug-req", bandName: "E", listeners: null }),
+  ];
+  const result = aggregateMetrics(events, scores);
+  // E has no count but its request has others, so it counts as obscure, as in the filter.
+  assertCloseTo(result.obscurityInRangeRate, 0.4, "obscurityInRangeRate");
+});
+
+test("target fit is counted per target, so too-obscure picks for Cult Following show up", () => {
+  const events = [
+    makeEvent({ id: "cult-req", obscurityTarget: "cult" }),
+    makeEvent({ id: "ug-req", obscurityTarget: "underground" }),
+  ];
+  const scores = [
+    makeScore({ eventId: "cult-req", bandName: "A", listeners: 30_000 }),
+    makeScore({ eventId: "cult-req", bandName: "B", listeners: 3_000 }),
+    makeScore({ eventId: "cult-req", bandName: "C", listeners: 900_000 }),
+    makeScore({ eventId: "ug-req", bandName: "D", listeners: null }),
+  ];
+  const { obscurityTargetFit } = aggregateMetrics(events, scores);
+  assert.deepEqual(obscurityTargetFit.cult, { inRange: 1, tooObscure: 1, tooMainstream: 1 });
+  assert.deepEqual(obscurityTargetFit.underground, noFit, "a request with no listener count at all is not fitted");
+  assert.deepEqual(obscurityTargetFit.obscure, noFit);
+});
+
+test("bands from requests without a target, or without a listener count, leave the in-range rate open", () => {
+  const events = [makeEvent({ id: "free", obscurityTarget: null }), makeEvent({ id: "ug", obscurityTarget: "underground" })];
+  const scores = [
+    makeScore({ eventId: "free", listeners: 3_000 }),
+    makeScore({ eventId: "ug", listeners: null }),
+  ];
+  assert.equal(aggregateMetrics(events, scores).obscurityInRangeRate, null);
+});
+
+test("computeDelta compares the in-range rate, and a baseline saved before it existed gives no delta", () => {
+  const events = [makeEvent({ id: "e", obscurityTarget: "cult" })];
+  const current = aggregateMetrics(events, [makeScore({ eventId: "e", listeners: 30_000 })]);
+  const baseline = aggregateMetrics(events, [
+    makeScore({ eventId: "e", bandName: "A", listeners: 30_000 }),
+    makeScore({ eventId: "e", bandName: "B", listeners: 3_000 }),
+  ]);
+  assertCloseTo(computeDelta(current, baseline).obscurityInRangeRate, 0.5, "obscurityInRangeRate");
+
+  const savedBeforeRangesExisted = { ...baseline, obscurityInRangeRate: undefined, obscurityTargetFit: undefined };
+  assert.equal(computeDelta(current, savedBeforeRangesExisted).obscurityInRangeRate, null);
 });

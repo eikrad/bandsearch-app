@@ -8,21 +8,32 @@
  * a network call.
  */
 export type ChatModelClient = {
-  invoke(prompt: Array<{ role: string; content: string }>): Promise<{ content: unknown }>;
+  invoke(prompt: Array<{ role: string; content: string }>, options?: { signal?: AbortSignal }): Promise<{ content: unknown }>;
+  /** The answer in pieces; optional, so a fake model need not stream. */
+  stream?(
+    prompt: Array<{ role: string; content: string }>,
+    options?: { signal?: AbortSignal },
+  ): Promise<AsyncIterable<{ content: unknown }>>;
 };
+
+/**
+ * A model's answer without its thinking. Reasoning models (qwen3, deepseek, glm
+ * on Scaleway) may put that in a <think> block first; braces in there are not
+ * the answer. A known Scaleway bug can drop the opening tag, so the answer is
+ * whatever follows the last closing tag.
+ */
+export function withoutThinking(raw: string): string {
+  const closing = raw.toLowerCase().lastIndexOf("</think>");
+  return (closing === -1 ? raw : raw.slice(closing + "</think>".length))
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+}
 
 /**
  * Extract one balanced JSON object or array from text that may include model preamble or trailing prose.
  */
 export function parseModelJsonResponse(raw: string): unknown {
-  // Reasoning models (qwen3, deepseek, glm on Scaleway) may put their thinking
-  // in a <think> block before the answer; braces in there are not the answer.
-  // A known Scaleway bug can drop the opening tag, so the answer is whatever
-  // follows the last closing tag.
-  const closing = raw.toLowerCase().lastIndexOf("</think>");
-  const text = (closing === -1 ? raw : raw.slice(closing + "</think>".length))
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .trim()
+  const text = withoutThinking(raw)
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
@@ -88,7 +99,66 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMe
   const timeout = new Promise<T>((_, reject) => {
     timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
   });
-  return Promise.race([promise.finally(() => clearTimeout(timer!)), timeout]);
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!));
+}
+
+/**
+ * One model call within a research run: never starts once the run is cancelled,
+ * forwards cancellation to the provider and rejects with `timeoutMessage` at `timeoutMs`.
+ */
+export async function invokeModel(
+  client: ChatModelClient,
+  prompt: Array<{ role: string; content: string }>,
+  { signal, timeoutMs, timeoutMessage, onText }: {
+    signal?: AbortSignal;
+    timeoutMs: number;
+    timeoutMessage: string;
+    /** Told the raw answer so far as it arrives, when the client can stream. */
+    onText?: (soFar: string) => void;
+  },
+): Promise<{ content: unknown }> {
+  signal?.throwIfAborted();
+  if (!onText || !client.stream) return withTimeout(client.invoke(prompt, { signal }), timeoutMs, timeoutMessage);
+
+  const controller = new AbortController();
+  const read = async () => {
+    let text = "";
+    const pieces = await client.stream!(prompt, { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal });
+    for await (const piece of pieces) {
+      // A timed-out answer must not keep talking.
+      controller.signal.throwIfAborted();
+      if (typeof piece.content !== "string" || !piece.content) continue;
+      text += piece.content;
+      onText(text);
+    }
+    return { content: text };
+  };
+  try {
+    return await withTimeout(read(), timeoutMs, timeoutMessage);
+  } finally {
+    controller.abort();
+  }
+}
+
+/**
+ * The reply a ranker is writing, from its unfinished JSON answer; "" before it
+ * starts. The reply is the first field of that answer, so it can be shown while
+ * the recommendations are still being written.
+ */
+export function replySoFar(unfinishedJson: string): string {
+  const start = /"reply"\s*:\s*"/.exec(unfinishedJson);
+  if (!start) return "";
+  const rest = unfinishedJson.slice(start.index + start[0].length);
+  const closing = /(?<!\\)(?:\\\\)*"/.exec(rest);
+  // Without its closing quote the string may end inside an escape (\\, \\u00e), which is left out.
+  const written = closing
+    ? rest.slice(0, closing.index + closing[0].length - 1)
+    : rest.replace(/(?<!\\)((?:\\\\)*)\\(?:u[0-9a-fA-F]{0,3})?$/, "$1");
+  try {
+    return String(JSON.parse(`"${written.replace(/[\n\r\t]/g, " ")}"`)).trimStart();
+  } catch {
+    return "";
+  }
 }
 
 /** A thrown value as loggable text. */

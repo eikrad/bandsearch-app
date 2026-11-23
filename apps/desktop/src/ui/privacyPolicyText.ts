@@ -10,7 +10,9 @@
  * mandatory on top of the GDPR duty.
  */
 
-export const LAST_UPDATED = "2026-10-05";
+import { CONVERSATION_MEMORY_HOURS, FEEDBACK_RETENTION_DAYS } from "../../../../shared/schemas/src/contracts.js";
+
+export const LAST_UPDATED = "2026-11-18";
 
 export const MINIMUM_AGE = 16;
 
@@ -36,6 +38,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
       "Your account: email address, display name, and a bcrypt hash of your password and recovery code. Passwords and recovery codes themselves are never stored and cannot be recovered from the hashes.",
       "Your taste profile: the artists you save, your 1-5 ratings, categories, and any notes you write.",
       "Your conversations: the chat sessions and messages you exchange with the assistant.",
+      "Your feedback on recommendations: when you react to a batch of recommendations (Spot on, Too mainstream, Wrong direction), your verdict is stored with your account, together with the search text, the settings you chose and the artists that were shown. Whoever operates the deployment reads it to improve recommendations.",
       "Pipeline telemetry: anonymous records of how a search performed, used to measure and improve recommendation quality. These carry no account identifier and cannot be traced back to you.",
       "On the desktop app, your API keys and login token are stored locally in your operating system's config directory, never on a server.",
     ],
@@ -45,6 +48,7 @@ export const PRIVACY_POLICY: PolicySection[] = [
     paragraphs: [
       "Your taste profile and conversations are processed to deliver the personalised recommendations you asked for. That is the service itself, so the legal basis is performance of a contract (GDPR Art. 6(1)(b)).",
       "Pipeline telemetry is processed on the basis of legitimate interest (Art. 6(1)(f)) — improving recommendation quality. You have the right to object to this under Art. 21.",
+      "Feedback on recommendations is only stored when you give it, and is processed on the same basis — improving recommendation quality (Art. 6(1)(f)). You can simply not use the feedback bar, and you can object under Art. 21.",
       "We do not ask for or infer special category data. Music taste can occasionally correlate with beliefs or background, but Bandsearch never derives such inferences, and building any feature that did would be out of scope by design.",
     ],
   },
@@ -71,6 +75,8 @@ export const PRIVACY_POLICY: PolicySection[] = [
     heading: "How long it is kept",
     paragraphs: [
       `Pipeline telemetry is deleted after ${RETENTION_DAYS} days.`,
+      `Feedback on recommendations is deleted after ${FEEDBACK_RETENTION_DAYS} days, or earlier when you delete your account.`,
+      `The bands a conversation found stay in the server's memory for up to ${CONVERSATION_MEMORY_HOURS} hours, so a follow-up can be answered without another search. They are not written to a database, and are gone earlier when you delete your account.`,
       "Your account, taste profile and conversations are kept for as long as your account exists. When you delete your account, all of it is deleted with it, immediately and permanently.",
     ],
   },

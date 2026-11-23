@@ -1,3 +1,7 @@
+import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
+import type { MusicBrainzArtistRecord } from "../../integrations/musicbrainz.js";
+import { findArtistNamed } from "./artistNames.js";
+import { artistKey, type ResearchCache } from "./researchCache.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
 export type VerifiedCandidate = {
@@ -9,42 +13,42 @@ export type VerifiedCandidate = {
   verified: boolean;
   canonicalName?: string;
   mbTags?: string[];
-  mbGenres?: string[];
-  mbUrls?: string[];
   lifeSpan?: { begin?: string; end?: string; ended: boolean };
+  /** ISO 3166-1 code of the artist's country, when MusicBrainz records one. */
+  country?: string | null;
   listenerCount?: number | null;
+  /** Tags of Last.fm listeners, for the many small bands MusicBrainz has none for. */
+  listenerTags?: string[];
 };
 
-const OBSCURITY_THRESHOLDS: Record<string, number> = {
-  cult: 500_000,
-  underground: 50_000,
-  obscure: 5_000,
-};
+/** The ranker's pool under an obscurity target: in range or near it, topped up to this many. */
+export const OBSCURITY_POOL_MIN = 5;
 
-const OBSCURITY_FILTER_MIN = 1;
-
+/**
+ * Narrows the ranker's pool to the requested obscurity target (#325), with a
+ * floor as well as a ceiling. Far misses are dropped in both directions; near
+ * misses stay behind the in-range candidates, because the filter cannot see a
+ * query's hard constraints and the ranker can. When fewer than
+ * OBSCURITY_POOL_MIN candidates are left, the nearest far misses fill up the
+ * pool. How a candidate fits, missing counts included, is fitObscurityTarget's
+ * rule, which the eval shares; when it has nothing to fit against, the pool
+ * passes unchanged.
+ */
 export function filterCandidatesByObscurity(
   candidates: VerifiedCandidate[],
   obscurityTarget?: string,
 ): VerifiedCandidate[] {
-  if (!obscurityTarget || !(obscurityTarget in OBSCURITY_THRESHOLDS)) return candidates;
-  const threshold = OBSCURITY_THRESHOLDS[obscurityTarget];
-  const filtered = candidates.filter(
-    (c) => c.listenerCount == null || c.listenerCount <= threshold,
-  );
-  return filtered.length >= OBSCURITY_FILTER_MIN ? filtered : candidates;
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), obscurityTarget);
+  if (!fits) return candidates;
+  const byMiss = candidates
+    .map((c, i) => ({ c, fit: fits[i]! }))
+    .sort((a, b) => a.fit.miss - b.fit.miss);
+  const near = fits.filter(isNearTarget).length;
+  return byMiss.slice(0, Math.max(near, OBSCURITY_POOL_MIN)).map((x) => x.c);
 }
 
 export type MusicBrainzVerifyClient = {
-  searchArtists: (q: string) => Promise<Array<{ id?: string; name: string; score?: number }>>;
-  lookupArtist: (mbid: string) => Promise<{
-    id: string;
-    name: string;
-    tags: string[];
-    genres: string[];
-    urls: Array<{ type: string; url: string }>;
-    lifeSpan: { begin?: string; end?: string; ended: boolean };
-  }>;
+  findArtistsByName: (names: string[], options?: { includeAliases?: boolean }) => Promise<MusicBrainzArtistRecord[]>;
 };
 
 export function mergeVerifiedCandidates(candidates: VerifiedCandidate[]): VerifiedCandidate[] {
@@ -77,73 +81,65 @@ export function normalizeAnchorSet(anchorArtists: string[]): Set<string> {
   return s;
 }
 
-function pickSearchHit(
-  hits: Array<{ id?: string; name: string; score?: number }>,
-  minSearchScore: number,
-): { id?: string; name: string; score?: number } | null {
-  if (!Array.isArray(hits) || hits.length === 0) return null;
-  const acceptable = hits.find((h) => h.score === undefined || h.score >= minSearchScore);
-  return acceptable ?? hits[0];
-}
+/** Names per MusicBrainz request; more would push matches off its 100-artist result page. */
+const VERIFY_BATCH_SIZE = 50;
 
 /**
- * Resolve each extracted name against MusicBrainz search + artist lookup.
+ * Confirms extracted names against MusicBrainz in batches: one request for all
+ * names, then one more for those it missed, aliases included. MusicBrainz
+ * allows one request a second, so looking up each name on its own took two
+ * thirds of a search.
  */
 export async function verifyCandidatesWithMusicBrainz(
   mb: MusicBrainzVerifyClient,
   candidates: ExtractedCandidate[],
   anchorArtists: string[],
-  options: { minSearchScore?: number } = {},
+  options: { shouldContinue?: () => boolean; cache?: ResearchCache["artists"] } = {},
 ): Promise<VerifiedCandidate[]> {
   const anchors = normalizeAnchorSet(anchorArtists);
-  const minSearchScore = typeof options.minSearchScore === "number" ? options.minSearchScore : 35;
+  const wanted = candidates.filter((c) => {
+    const key = String(c.name || "").trim().toLowerCase();
+    return key !== "" && !anchors.has(key);
+  });
+  const names = [...new Set(wanted.map((c) => c.name.trim()))];
+  const found = new Map<string, MusicBrainzArtistRecord>();
+  const unknown = new Set<string>();
+  for (const name of names) {
+    const known = options.cache?.get(artistKey(name));
+    if (known) found.set(name, known);
+    else if (known === null) unknown.add(name);
+  }
 
-  const out: VerifiedCandidate[] = [];
-
-  for (const c of candidates) {
-    const nameKey = String(c.name || "").trim().toLowerCase();
-    if (!nameKey || anchors.has(nameKey)) continue;
-
-    let hits: Array<{ id?: string; name: string; score?: number }>;
-    try {
-      hits = await mb.searchArtists(c.name.trim());
-    } catch {
-      out.push({
-        ...c,
-        verified: false,
-      });
-      continue;
-    }
-
-    const hit = pickSearchHit(hits, minSearchScore);
-    if (!hit?.id) {
-      out.push({
-        ...c,
-        verified: false,
-      });
-      continue;
-    }
-
-    try {
-      const details = await mb.lookupArtist(hit.id);
-      out.push({
-        ...c,
-        mbid: hit.id,
-        verified: true,
-        canonicalName: details.name,
-        mbTags: details.tags,
-        mbGenres: details.genres,
-        mbUrls: details.urls.map((u) => u.url),
-        lifeSpan: details.lifeSpan,
-      });
-    } catch {
-      out.push({
-        ...c,
-        mbid: hit.id,
-        verified: false,
-      });
+  for (const includeAliases of [false, true]) {
+    const missing = names.filter((name) => !found.has(name) && !unknown.has(name));
+    for (let i = 0; i < missing.length; i += VERIFY_BATCH_SIZE) {
+      if (options.shouldContinue?.() === false) break;
+      const batch = missing.slice(i, i + VERIFY_BATCH_SIZE);
+      try {
+        const artists = await mb.findArtistsByName(batch, { includeAliases });
+        for (const name of batch) {
+          const artist = findArtistNamed(name, artists);
+          if (artist) found.set(name, artist);
+          // Only the second search, aliases included, shows that MusicBrainz lists no such artist.
+          if (artist || includeAliases) options.cache?.set(artistKey(name), artist);
+        }
+      } catch {
+        // These names stay unverified; the ones already found are kept.
+      }
     }
   }
 
-  return out;
+  return wanted.map((c) => {
+    const artist = found.get(c.name.trim());
+    if (!artist) return { ...c, verified: false };
+    return {
+      ...c,
+      mbid: artist.id,
+      verified: true,
+      canonicalName: artist.name,
+      mbTags: artist.tags,
+      lifeSpan: artist.lifeSpan,
+      country: artist.country,
+    };
+  });
 }

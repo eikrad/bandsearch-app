@@ -57,6 +57,77 @@ place and is now under Deferred; #180's premise changed (see item 3).
    budget; the default has been 180 s since 2026-09-16, so first check with one
    live run whether reflection now runs before treating it as broken. Each change measured
    with 3 judged golden runs against the deepseek baseline.
+   - **#325 — obscurity targets have no lower bound** (added 2026-11-19): every
+     level drifts toward Truly Obscure; 65% of Cult Following and 56% of
+     Underground picks are below their range. Targets are now listener ranges
+     (Cult 20k–500k, Underground 2k–50k, Obscure up to 5k).
+     - [x] Step 1: measure both directions — in-range rate and per-target fit in
+       the eval dashboard, two-sided judge rubric, fit counts in the research
+       log around the obscurity filter ✓ Done
+     - [x] Step 2–5: filter, ranker and planner use the ranges (floor and
+       ceiling); Bandcamp queries searched last for Cult, alternated for
+       Underground; one fit rule shared by search and eval
+       (`fitObscurityTarget`) ✓ Done
+     - [x] Measured 2026-11-19 (Brave free plan, so 3 runs before, 1 after):
+       Cult + Underground picks in range 18–20 of 32–33 → 33 of 33; Cult median
+       listeners 8k–41k → 217k; judge obscurity fit 0.71–0.76 → 0.89,
+       relevance unchanged. The pool already held enough in-range bands; the
+       ranker had been picking the smallest. Regression: `japanese-post-rock`
+       traded "from Japan" for the range (the filter cannot see hard
+       constraints)
+     - [x] Filter tolerance: drop only far misses (more than 10× outside the
+       range), leave near misses to the ranker, so a hard constraint can
+       outweigh the range ✓ Done. Measured 2026-11-19 (1 run):
+       `japanese-post-rock` passes again, with Japanese bands inside the range;
+       Cult + Underground in range 32 of 33; pass rate 0.75, constraint rate
+       0.80, judge obscurity fit 0.88. One run, so within run-to-run noise
+     - [ ] Follow-up: a deterministic `obscurityInRange@8` in golden runs (the
+       golden judge already scores both directions)
+   - **#336 — a search is fast enough for a conversation** (added 2026-11-22):
+     live searches took 68–118 s (mean 98.7 s), two thirds of it waiting for
+     MusicBrainz. One PR per step, measured like every #257 change.
+     - [x] Step 1: verification asks MusicBrainz for all names in one batch,
+       retries its 503s and accepts only artists of the same name (about 10% of
+       the recorded verifications were a different artist) ✓ Done. Measured
+       live: 117.9 s → 25.1 s for the same query, 24 of 25 candidates verified
+       instead of 6 of 22, no reflection round needed
+     - [x] Step 2: the planner plans only the queries that are searched (6, not
+       20); the extractor names hits by number and the code quotes them word for
+       word ✓ Done. Measured live: plan 2.5–3.0 s → 2.4 s, extract 6.4 s → 1.1 s
+     - [x] Step 3: searching stops once the 24 hits the extractor reads are
+       found (usually 3 searches, not 6); one Brave rate gate per process, so
+       search rounds and concurrent users no longer collide (429) ✓ Done
+     - [x] Step 4: Last.fm is asked as soon as a name is known and runs alongside
+       verification; a slow answer no longer discards every listener count (which
+       silently turned the obscurity filter off); artist facts are remembered
+       for a day per process ✓ Done. Measured live with steps 1–4: 105.6 s →
+       14.3 s for the same query
+     - [x] Step 5: follow-ups answered from the bands the chat already found
+       (conversation turns: search, pick, answer); shown bands are not repeated;
+       saving the chat no longer delays an answer ✓ Done. Measured live: pick
+       2.2 s, answer 1.0 s; routing 132 of 132 labelled messages right
+     - [x] Step 6: progress and reply streamed (server-sent events, JSON for other
+       clients), and a client that stops waiting cancels the search ✓ Done.
+       Measured live: first sign of life 0.1 s; first words 0.7 s for follow-ups
+     - [x] Step 7: Last.fm first. Its similar-artist lists answer Cult Following
+       and Underground searches, with biographies as evidence; the web is
+       searched when they hold too few bands of the requested size, for Truly
+       Obscure, and for demands similarity cannot show (vocals, lyrics) ✓ Done
+     - **Measured 2026-11-22** (golden set, replay, 3 runs each, paired 95%
+       intervals against the baseline `7a6b594`): steps 1–7 pass rate 0.69 →
+       0.85 *, judge relevance +0.070 *, discovery +0.029 *, judge quality
+       +0.026 * (* excludes zero); constraints 0.74 → 0.94, obscurity fit
+       −0.008, evidence +0.011 (not distinguishable from zero). Median latency
+       33.1 s → 8.9 s replayed; live, the four queries of #336 98.7 s → 10.8 s on
+       average (5–6 s from Last.fm, 16 s when the web is searched). Brave requests about 2
+       per query instead of 6–10. Steps 1–4 alone cost quality (obscurity fit
+       −0.036 *, constraints −0.26 *); the country and the Last.fm candidates of
+       step 7 won it back, so do not ship 2–4 without 7. The pass rate rewards
+       bands that carry tags, which Last.fm's neighbours do more often
+     - [x] Step 8: the app wakes a hosted API when the user comes back and keeps
+       it awake while in use, at no cost (ADR 0003 keeps the free plan) ✓ Done
+     - [ ] Owner decision: Render Starter ($7/month) removes the remaining cold
+       start on the first open after a pause; it would supersede ADR 0003
 4. **Remove Gemini (last step of #237)** once Scaleway has run stably on Render
    for a few days. Small; can slot in between #257 changes.
 5. **#238 — desktop defaults to the Render deployment**, local sidecar as an
@@ -557,8 +628,7 @@ Adding `@tursodatabase/sync` (Phase 5.5) surfaced this: the package is ESM-only,
 
 ### 10. Saved-band actions preserve the selected card's identity ✓ Done
 
-Implementation complete on the feature branch; integration through `staging`
-to `main` is pending.
+Merged through `staging` in #294 and reached `main` in #295.
 
 `apps/desktop/src/savedBandActions.ts` owns saved-band matching and writes.
 Historical cards and artist-search results carry their own MusicBrainz identity;
@@ -570,3 +640,166 @@ same identity rule, and a different same-named artist cannot inherit a note draf
 Coverage includes real browser card actions through the saved-band HTTP write,
 note provenance, shared state across turns, rating clearing/removal, and app
 regressions for normalized-name fallback and preservation of stored annotations.
+
+---
+
+### 11. Assemble a consistent account storage set ✓ Done
+
+Merged into `staging` in #298. Promotion to `main` is handled by the repository
+owner.
+
+`services/api/src/storage/createStorage.ts` selects preferences, users, invites,
+chat sessions and account export/erasure together. Direct Turso and `turso-sync`
+use the same complete adapter set; sync export/deletion no longer falls through
+to an unrelated SQLite database. Partial overrides leave the other defaults on
+the selected backend. SQLite account repositories share one connection, so
+`:memory:` export includes saved bands. Memory mode is ephemeral for every
+account repository. Backend startup failures are reported without substituting
+another store.
+
+Regression coverage exercises real registration, saved bands, group membership,
+chat messages, export and account deletion on SQLite, local libSQL and the sync
+engine, including another user's surviving account. It also covers partial
+Turso overrides, memory mode and refused startup.
+
+**Follow-up resolved by entry 12:** Include local eval feedback in account data.
+
+---
+
+### 12. Recommendation feedback ownership and account data ✓ Done
+
+Merged into `staging` in #299. Promotion to `main` is handled by the repository
+owner.
+
+> **Superseded by entry 15.** Feedback no longer stays with eval
+> events: it moved into the main database, so the cross-database export and
+> erasure described below, and `eval/recommendationFeedback.ts`, are gone. The
+> authenticated-ownership rules carry over unchanged.
+
+`eval/recommendationFeedback.ts` owns feedback validation, authenticated ownership
+and coordinated account export/deletion. The route ignores a body-supplied
+`userId` and uses the existing progressive/enforced auth rules. Export includes
+feedback from the account database and the local eval database without duplicate
+rows. Local feedback is erased before the account database, preserving a
+retryable account if cleanup fails; this is not a cross-database transaction.
+
+Feedback stays with its eval events, preserving existing local rows without a
+migration. Disabling the dashboard keeps its routes hidden while preserving
+account export/deletion of historical feedback. Anonymous rows are not guessed
+onto accounts. An unavailable local store refuses startup instead of silently
+substituting memory.
+
+Integration tests cover shared/separate databases, forged ownership, missing
+and invalid credentials, enforced disabled-account rejection, wrong passwords,
+cleanup failure/retry, dashboard disablement, and another user's surviving
+feedback across SQLite, Turso and the sync adapter. Repository contracts cover
+user-scoped reads/erasure and retention for SQLite and memory.
+
+---
+
+### 13. Enforce the research budget through final ranking (#301) ✓ Done
+
+Implemented in #300; integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`researchBudget.ts` owns operation caps, the complete graph deadline,
+cancellation and cleanup. Research reserves up to 12 seconds (at most one third
+of a small configured budget) for final ranking. At the research cutoff, the
+graph keeps completed verification results and bypasses later research stages.
+Ranking and its retry share one cap within the total deadline; a failed ranker
+fails the request.
+
+Model and HTTP calls receive cancellation, including Brave retries and
+Brave/MusicBrainz rate-limit waits. Controlled-clock tests run the actual graph
+with stalled model and HTTP clients, covering the total deadline, partial
+verification, skipped research, a cutoff during reflection, Last.fm cancellation
+and the shared ranking retry cap. Brave client tests cover cancelled spacing and
+429 waits. A failed ranker surfaces as `502 recommendation_unavailable`. Real
+Scaleway/Gemini adapters with fake HTTP transports cover cancellation propagation and complete Gemini answers; Gemini uses streaming internally and
+has background SDK retries disabled. No live provider calls are needed.
+
+---
+
+### 14. Chat Retry shares the search outcome path (#304) ✓ Done
+
+Implementation complete; integration into `staging` is pending. Promotion to
+`main` is handled by the repository owner.
+
+`chatAppModel.ts` owns submit, retry and cancel; the pass-through
+`desktopChatUiStack.ts` is gone. `chatRenderAdapter.ts` reads the model directly
+and owns the viewport, and the shell runs Search and Retry through one path. A
+failed retry now shows the same inline error as a failed search instead of
+nothing, and Stop stays silent. Retry re-runs an unanswered question in place:
+it is shown once, not sent again as history, and saved to the session once.
+
+Tests drive the real app, render adapter and shell against a fake API server:
+a failed retry, a stopped retry, and a retried failure that succeeds.
+
+---
+
+### 15. Recommendation feedback reaches the operator (#307, #306) ✓ Done
+
+Implementation complete on `feature/recommendation-feedback`; integration into
+`staging` is pending. Promotion to `main` is handled by the repository owner.
+
+In production no feedback ever arrived: the desktop mount never forwarded the
+bar's handlers, and the route behind them, `/eval/feedback`, returns 404 with
+the eval dashboard off. Feedback is now product data in the main database:
+
+- `feedback/` owns validation, the 500-character and 20-band caps, one verdict
+  per event and user, and the 90-day retention the API enforces at startup and
+  daily. Adapters for memory, SQLite and Turso; migration `006` replaces the old
+  table, and SQLite replaces it in place.
+- `POST /recommendations/:eventId/feedback` sits behind the recommendations'
+  auth and rate limit, takes the owner from the token, and carries the batch it
+  judges: query, mode, obscurity target and the bands shown. Every
+  recommendation response has an `eventId`.
+- The desktop mount and shell forward the bar's handlers; a refused verdict
+  shows an inline error (UI_GUIDELINES "Feedback states").
+- `npm run feedback:list -- [--days N] [--json]` is how the operator reads it.
+
+Leftovers of #306 that came with it: the storage module now also selects the
+eval store (a no-op with the dashboard off, local SQLite otherwise, never
+Turso), and `scripts/admin.ts` opens its stores through `openAdminStorage()`
+instead of its own backend selection.
+
+Tests: one repository contract on memory, SQLite and local libSQL; the module's
+validation, caps and retention; the route with the dashboard off, forged
+ownership, enforced auth and a disabled account; the account lifecycle on SQLite,
+Turso and `turso-sync`; the desktop click through the real app, shell and mount
+against a fake API; `feedback:list`; and the privacy disclosure.
+
+---
+
+### 16. One app session decides which screen comes next (#313) ✓ Done
+
+Implementation complete on `feature/app-session`; integration into `staging` is
+pending. Promotion to `main` is handled by the repository owner.
+
+"Which screen do I see?" was answered by closure variables in
+`startDesktopBrowserApp.ts`, `authGate.ts`, `waitForApi.ts` and about 20
+navigate-then-render pairs in the mount. `appSession.ts` now owns the startup
+gate, the Connecting retries, the account flags and the token events. Events
+only change the token; `enterApp()` asks `/auth/status` and routes, and every
+way into the chat goes through it. That fixed three bugs:
+
+- Skip on Welcome ran the gate and then went to the chat anyway, so a
+  logged-out user landed in the chat and a cold API never showed Connecting.
+- The account flags were read once: after registering the first account,
+  Settings hid export and deletion until a restart.
+- Deleting an account always went to Register, which on a closed deployment
+  needs an invite; it now goes to Login.
+
+Also in this change:
+
+- The hash router tells its listeners inside `navigate()` and ignores the
+  browser's echo, so each navigation renders once instead of twice.
+- Saved Artists reports every outcome in a status line. The 3 s / 10 s
+  lifecycle moved from the chat shell into `statusMessage.ts`, which both
+  screens use. Save, rate, remove and Category/Note errors in the chat now
+  stay up for the 10 s the spec already promised.
+- Both JSON downloads share `downloadJson`.
+
+Tests: the session against a fake auth client and router; one test per bug
+through the real startup, session, router and mount; the router's echo; and
+each Saved Artists action failing through the real shell and mount.

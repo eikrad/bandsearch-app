@@ -6,6 +6,7 @@ import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBra
 import { createRecommendationReflector } from "./recommendationReflector.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
+import type { ResearchCache } from "./researchCache.js";
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -21,6 +22,7 @@ export type ReflectionSubgraphDeps = {
   maxRounds: number;
   maxReflectionSearches: number;
   targetVerifiedCount: number;
+  hitsPerSearch: number;
   totalSearchBudget: number;
   onLog?: (level: "info" | "warn", event: string, details: Record<string, unknown>) => void;
   /** Chat model for the assess and extract nodes; defaults to Gemini from `geminiApiKey`. */
@@ -29,6 +31,11 @@ export type ReflectionSubgraphDeps = {
   chatModel?: ChatModelFactory;
   /** Model id for the assess and extract nodes; defaults to `DEFAULT_RESEARCH_MODEL`. */
   model?: string;
+  artistCache?: ResearchCache["artists"];
+  /** Told when another round of searching starts. */
+  onSearchAgain?: () => void;
+  /** Told the names a round found, before they are verified. */
+  onExtracted?: (candidates: ExtractedCandidate[]) => void;
 };
 
 export const REFLECTION_SCHEMA = new StateSchema({
@@ -49,46 +56,47 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
 
   return new StateGraph(REFLECTION_SCHEMA)
     .addNode("assess", async (state) => {
-      const reflector = await createRecommendationReflector({
-        apiKey: deps.geminiApiKey,
-        timeoutMs: deps.budget.allocate(6000),
-        maxExtraQueries: deps.maxReflectionSearches,
-        modelClient: deps.modelClient,
-        chatModel: deps.chatModel,
-        model: deps.model,
-      });
-      const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
-      let reflection;
-      try {
-        reflection = await reflector({
+      if (deps.budget.remaining() <= 0) return { nextExtraQueries: [] };
+      return deps.budget.run(6000, async (signal) => {
+        const reflector = await createRecommendationReflector({
+          apiKey: deps.geminiApiKey,
+          timeoutMs: deps.budget.allocate(6000),
+          signal,
+          maxExtraQueries: deps.maxReflectionSearches,
+          modelClient: deps.modelClient,
+          chatModel: deps.chatModel,
+          model: deps.model,
+        });
+        const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
+        const reflection = await reflector({
           userQuery: state.userQuery,
           plan: state.searchPlan ?? { anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: [] },
           verifiedCandidates: state.verifiedCandidates,
           targetVerifiedCount: deps.targetVerifiedCount,
           searchBudgetRemaining: budgetLeft,
         });
-      } catch (error) {
-        // Reflection only adds searches; without it the run keeps what it found.
+        const extraQueries = reflection.sufficient
+          ? []
+          : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
+        log("info", "research_reflection_assess", {
+          round: (state.roundsCompleted ?? 0) + 1,
+          sufficient: reflection.sufficient,
+          extraQueries: extraQueries.length,
+          gaps: reflection.gaps,
+        });
+        return { reflectionUsed: true, nextExtraQueries: extraQueries };
+      }).catch((error: unknown) => {
         log("warn", "research_reflection_skipped", { reason: errorMessage(error) });
         return { nextExtraQueries: [] };
-      }
-      const extraQueries = reflection.sufficient
-        ? []
-        : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
-      log("info", "research_reflection_assess", {
-        round: (state.roundsCompleted ?? 0) + 1,
-        sufficient: reflection.sufficient,
-        extraQueries: extraQueries.length,
-        gaps: reflection.gaps,
       });
-      return { reflectionUsed: true, nextExtraQueries: extraQueries };
     })
     .addNode("search", async (state) => {
+      deps.onSearchAgain?.();
       const budgetLeft = deps.totalSearchBudget - state.searchCallsUsed;
       const { hits: newHits, calls } = await deps.runQueries(
         state.nextExtraQueries ?? [],
         budgetLeft,
-        8,
+        deps.hitsPerSearch,
       );
       log("info", "research_brave_call", {
         phase: "reflection",
@@ -103,22 +111,24 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       };
     })
     .addNode("extract_r", async (state) => {
-      const extract = await createCandidateExtractor({
-        apiKey: deps.geminiApiKey,
-        timeoutMs: deps.budget.allocate(12000),
-        modelClient: deps.modelClient,
-        chatModel: deps.chatModel,
-        model: deps.model,
-      });
-      const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      try {
+      if (deps.budget.remaining() <= 0) return {};
+      return deps.budget.run(12000, async (signal) => {
+        const extract = await createCandidateExtractor({
+          apiKey: deps.geminiApiKey,
+          timeoutMs: deps.budget.allocate(12000),
+          signal,
+          modelClient: deps.modelClient,
+          chatModel: deps.chatModel,
+          model: deps.model,
+        });
+        const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
         const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
+        deps.onExtracted?.(fresh);
         return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
-      } catch (error) {
-        // The candidates from the first round are still good; keep them.
+      }).catch((error: unknown) => {
         log("warn", "research_reflection_extract_failed", { reason: errorMessage(error) });
         return {};
-      }
+      });
     })
     .addNode("verify_r", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
@@ -129,7 +139,10 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
       }
       const toVerify = state.extractedCandidates.filter((c) => !seen.has(c.name.toLowerCase()));
       const fresh = toVerify.length > 0
-        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors)
+        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, {
+            shouldContinue: () => deps.budget.remaining() > 0,
+            cache: deps.artistCache,
+          })
         : [];
       const merged = mergeVerifiedCandidates([...state.verifiedCandidates, ...fresh]);
       const round = (state.roundsCompleted ?? 0) + 1;

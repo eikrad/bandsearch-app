@@ -69,7 +69,8 @@ Example content structure:
 - User query bubble appears.
 
 ### Assistant loading
-- Inline assistant loading row appears in timeline.
+- Inline assistant loading row appears in timeline, its text following the progress line in UI_GUIDELINES.
+- The reply grows in the timeline as an assistant message; cards follow when it is complete.
 
 ### Assistant result
 - Recommendation cards render below assistant row.

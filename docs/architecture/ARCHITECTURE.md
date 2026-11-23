@@ -98,13 +98,51 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 |-------|--------|
 | Health / version | `GET /health`, `GET /version` |
 | Auth | `GET /auth/status`, `POST /auth/register`, `POST /auth/login`, `POST /auth/reset-password` |
-| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute) |
+| Recommendations | `POST /recommendations` (rate-limited to 30 requests/minute; streams its answer to clients that accept `text/event-stream`; every response with bands carries `meta.eventId`; `meta.turn` says how the message was answered), `POST /recommendations/:eventId/feedback` (same auth and limit) |
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/:id`, `POST /sessions/:id/messages` |
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
 | Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
 | Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [README § Privacy & transparency](../../README.md#privacy--transparency) |
-| Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `POST /eval/feedback`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
+| Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
+
+---
+
+## Conversation turns
+
+Not every message needs a search. `agent/conversation/conversationService.ts`
+decides how a message is answered (`TurnKind`, reported as `meta.turn`):
+
+| Turn | When | What runs | Typical time |
+|---|---|---|---|
+| `search` | first message, new taste or reference artists, hard facts, changed obscurity target, too few unseen bands | the whole research graph below | 10–13 s |
+| `pick` | the user wants more or different bands and the latest search still holds at least three unseen ones | the ranker, over the unseen bands after the obscurity filter | 2 s |
+| `answer` | a question about shown bands or music, thanks, small talk | one model call, grounded in the shown bands' evidence | 1 s |
+
+`turnRouter.ts` asks the research model (about 0.3 s) with the latest picks in
+order and the unseen bands with their tags. Anything doubtful, a failed router
+or a pick without result becomes a search. Bands already shown in the
+conversation are never shown again, by a pick or by a new search.
+
+`conversationMemory.ts` keeps the found bands per user and conversation
+(`conversationId` in the request, chosen by the client) in memory for two hours;
+never the user's words, never in a database, and not linked to eval telemetry.
+Deleting an account clears them. After a restart a follow-up simply searches.
+A request without a `conversationId` (golden runs) always searches.
+
+An `answer` carries no `meta.eventId`: it is no batch to rate or score.
+
+### Streamed answers
+
+With `Accept: text/event-stream`, `POST /recommendations` sends `AnswerEvent`s
+(shared contracts): `progress` per stage, `reply` with the text so far, then
+`done` with the same response the JSON endpoint returns, or `error`. Only `done`
+is final; a reply shown before it may still be discarded. A request that fails
+or finishes before its first event gets plain JSON with its status. The ranker
+still answers in JSON; its reply is the first field and is read out of the
+unfinished text (`replySoFar`), so prompts and eval are the same either way.
+
+A client that closes the request cancels the work behind it, streaming or not.
 
 ---
 
@@ -135,28 +173,36 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 ```mermaid
 flowchart TD
     START(["START"]) --> plan["plan\nLLM — builds Brave queries\nfrom user taste"]
-    plan --> brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
+    plan --> lastfm_first["lastfm_first\nLast.fm similar artists\n+ MusicBrainz"]
+    lastfm_first -->|"enough of the requested size"| rank
+    lastfm_first -->|"too few"| brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
     brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
-    extract --> verify["verify\nMusicBrainz — adds mbid,\ngenres, tags, URL relations"]
-    verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(runs if verified count < target)"]
+    extract --> verify["verify\nMusicBrainz — one batched search;\nadds mbid, tags, country, life span"]
+    verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(assesses whether more search is needed)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
     enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
+    plan -. research cutoff .-> rank
+    brave_initial -. research cutoff .-> rank
+    extract -. research cutoff .-> rank
+    verify -. research cutoff .-> rank
+    reflect_if_needed -. research cutoff .-> rank
 ```
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `plan` | LLM | Generates targeted Brave search queries from user taste (FFO/Bandcamp-style) |
-| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache |
-| `extract` | LLM | Identifies band names from snippets; filters out anchor artists |
-| `verify` | MusicBrainz | Looks up each candidate; adds `mbid`, genres, tags, URL relations |
-| `reflect_if_needed` | Reflection Subgraph | Conditionally runs extra searches when verified count < target |
-| `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists) and listener counts to verified candidates; no-op if `LASTFM_API_KEY` unset |
+| `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
+| `lastfm_first` | Last.fm (optional), MusicBrainz | Takes the 40 bands closest to the anchors from Last.fm's similar-artist lists, verifies and enriches them. With 8 verified ones inside the target's range (12 without a target) the run goes straight to `rank` without a web search (`lastFmFirst.ts`); otherwise up to 12 in range join the web search's candidates. Skipped for Truly Obscure, which those lists hardly know, and for demands they cannot show (vocals, lyrics, instruments, labels) |
+| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, 12 hits each, stopping once it has the 36 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
+| `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
+| `verify` | MusicBrainz | Searches all candidate names in one batched request (50 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
+| `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
+| `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists), listener counts, listener tags and the start of the biography (evidence with the artist's page as source) to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
-Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. Runs up to `maxRounds` (default 2) additional search-extract-verify cycles when the initial pass does not yield enough verified candidates.
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. The reflector first assesses whether the verified candidates meet the target; while it asks for more and at least 25 s of research time remain, the subgraph runs up to `maxRounds` (default 2) additional search-extract-verify cycles.
 
 ```mermaid
 flowchart TD
@@ -176,9 +222,35 @@ flowchart TD
 | `extract_r` | LLM | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
 | `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges via `mergeVerifiedCandidates` — preserves all prior-round results |
 
+### Artist cache (`researchCache.ts`)
+
+MusicBrainz matches, Last.fm listener counts and similar artists are remembered
+in memory for a day, per process and by artist name. Failed lookups are not
+remembered. The cache holds public artist data only.
+
 ### Budget management (`researchBudget.ts`)
 
-A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIMEOUT_MS` (default 180 s — needs headroom for MusicBrainz's ~1 req/s IP limit when verifying many candidates, and for Brave Search's 1 req/s free-plan throttle). Each node calls `budget.allocate(ms)` to claim a per-operation slice. When the budget is exhausted, conditional edges route directly to `END` rather than timing out mid-flight.
+`ResearchBudget` owns the complete graph deadline (`RESEARCH_TIMEOUT_MS`, default
+180 s), operation caps, abort signals and timer cleanup. Its `run(cap, work)`
+limits the whole operation, including retries, even if a transport ignores
+cancellation. The graph closes every scope on success or failure.
+
+A child research scope ends up to 12 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
+small configured budget for final ranking. Main-graph conditional edges bypass
+remaining research stages and enter `rank` at that cutoff. Last.fm lookups still under way are cancelled there. Verification keeps
+completed candidates and stops between batches; optional reflection and
+Last.fm enrichment cannot consume the reserve. Model calls and HTTP requests
+receive abort signals; retries and Brave/MusicBrainz rate-limit waits stop when
+cancelled. The Gemini adapter uses the pinned SDK's streaming transport while
+returning the assembled message to callers: its non-streaming path drops the
+signal. Gemini SDK retries are disabled because that retry loop can continue
+after cancellation; graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
+
+Ranking, including its evidence-repair retry, shares one 12 s cap and must finish
+before the total deadline. A failed or timed-out ranker fails the request with the route's generic
+`502 recommendation_unavailable`; it does not fabricate recommendations from
+partial research. A successful ranker can still return an
+empty discovery result.
 
 ---
 
@@ -189,7 +261,7 @@ A shared `ResearchBudget` instance tracks wall-clock time against `RESEARCH_TIME
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
 | **Google Gemini** (`@langchain/google-genai`) | `plan`, `extract`, `assess`, `rank` | Only with `LLM_PROVIDER=gemini`, the rollback until Gemini is removed (#237) |
 | **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (default since 2026-10-05); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
-| **MusicBrainz** | `verify`, `verify_r` | Artist metadata verification (mbid, genres, tags, URL relations) |
+| **MusicBrainz** | `verify`, `verify_r` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
@@ -208,12 +280,10 @@ flowchart LR
         T1["Tier 1 — Automatic metrics\nobscurity score · funnel counts\nsearch source quality"]
         T15["Tier 1.5 — Deterministic checks\ncitation support rate\ngeneric-why detection"]
         T2["Tier 2 — LLM-as-Judge\nScaleway judge scores each band\nrelevance · obscurity_fit\nevidence_quality · discovery_value"]
-        T3["Tier 3 — Human feedback\nimplicit saves · explicit batch reactions"]
         T1 --> T15 --> T2
     end
 
-    EVAL --> DB[(recommendation_events\nllm_eval_scores\nrecommendation_feedback\neval_baselines)]
-    T3 --> DB
+    EVAL --> DB[(recommendation_events\nllm_eval_scores\neval_baselines)]
 ```
 
 | Tier | Mechanism | When | Signals |
@@ -221,11 +291,14 @@ flowchart LR
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
 | **2 — LLM-as-Judge** | Async, fire-and-forget | When `SCW_SECRET_KEY` is set (and eval is enabled) | The Scaleway judge (`SCW_JUDGE_MODEL`) scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
-| **3 — Human feedback** | Event-driven | User action | Implicit saves + explicit one-tap batch reactions |
-
-Eval data is stored in `recommendation_events`, `llm_eval_scores`, `recommendation_feedback`, and `eval_baselines` tables.
+Eval data is stored in `recommendation_events`, `llm_eval_scores` and `eval_baselines`, in a local SQLite file (never Turso) and only while `EVAL_DASHBOARD_ENABLED=true`; otherwise the eval store is a no-op.
 
 A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
+
+Recommendation feedback (the one-tap batch reactions) is not eval data
+(#307). It lives
+with the account data, works with the dashboard off, and is read with
+`npm run feedback:list`; see [Storage](#storage).
 
 The `services/eval` workspace holds the golden dataset (`golden-set.json`), judge calibration data, and `run-golden.ts`/`run-calibration.ts` runners for evaluating the pipeline offline, outside of live traffic.
 
@@ -235,7 +308,38 @@ The `services/eval` workspace holds the golden dataset (`golden-set.json`), judg
 
 ## Storage
 
-Two persistence domains, both backed by an abstract repository pattern to allow swapping backends without changing business logic.
+`storage/createStorage.ts` assembles preferences, users, invites, chat sessions,
+recommendation feedback and account export/erasure as one `StorageRepositories`
+set, and selects the eval store beside it (a no-op with the dashboard off,
+otherwise a local SQLite file on its own connection, memory on a memory
+install, never Turso). `server.ts` awaits
+`openStorage()` and passes that complete set to `createApp()` and its preference
+repository to the recommendation pipeline. Consumers still receive only the
+repository interfaces they use. The admin CLI (`scripts/admin.ts`) opens the
+same stores through `openAdminStorage()`, which goes to the cloud database
+directly under `turso-sync` and refuses a memory store.
+
+Recommendation feedback (`feedback/`) keeps one row per event and user with the
+batch it judges (query, mode, obscurity target, bands shown). Account export and
+erasure cover it through the shared `USER_SCOPED_TABLES` list, in the same
+database as the rest of the account. `createApp()` purges rows older than 90
+days at startup and daily. SQLite adapters replace the old eval-era table shape
+in place; Turso gets the new table from migration `006`.
+
+`createStorage()` supports synchronous SQLite, memory and direct Turso setup;
+`openStorage()` additionally opens the asynchronous sync replica. Direct Turso
+and the replica share `createTursoRepositories()` so neither can omit the account
+data store. Each set uses one client, or one SQLite connection with foreign keys
+enabled. SQLite schema initialization lives with the adapters, including the
+saved-band schema formerly initialized by the standalone preference factory.
+
+The existing individual `createApp()` repository overrides remain available for
+tests. An override replaces only that repository; it does not change the backend
+of the remaining defaults. Supplying custom repositories is an explicit choice:
+the caller must supply compatible account export/erasure when needed. Supplying
+a complete `storage` set takes precedence over individual overrides. An
+incomplete sync set or an unavailable selected database refuses startup; account
+repositories never silently fall back to another database or memory.
 
 ### Preferences store (`PREFERENCE_STORE`)
 
@@ -250,11 +354,22 @@ Tables: `saved_bands` (rating, categories, notes), `artist_groups`
 
 ### Session store
 
-SQLite (`DATABASE_PATH`, default `bandsearch.db`) with in-memory fallback; with `PREFERENCE_STORE=turso` sessions live in Turso (`tursoChatSessionRepository`). Tables: `chat_sessions`, `chat_messages`.
+Selected alongside preferences: SQLite (`DATABASE_PATH`, default
+`bandsearch.db`), memory, direct Turso or the sync replica. Tables:
+`chat_sessions`, `chat_messages`.
 
 ### Auth store
 
 Same backend as preferences. Tables: `users` (bcrypt-hashed passwords, `disabled_at`) and `invites` (SHA-256 hashed codes bound to one email). JWTs with 30-day expiry; password recovery via single-use recovery codes.
+
+Memory mode keeps all account repositories and eval feedback ephemeral and has
+no durable account export/erasure (`userDataStore: null`). Optional eval telemetry
+retains its local store because feedback references its events. The
+recommendation-feedback module composes that store with account export/erasure
+for SQLite, Turso and the sync replica. The local store remains readable when
+the dashboard is disabled; dashboard visibility does not remove existing
+account data. Startup refuses an unavailable local feedback store rather than
+substituting an empty in-memory store.
 
 ---
 
@@ -292,6 +407,13 @@ flowchart TD
 - **API process:** spawned as a Node.js child process; production builds use a Tauri-bundled Node sidecar
 - **Screens:** Welcome, Login, Register, Reset Password, Chat, Saved Artists, Settings, Privacy policy (`#/privacy`) and a Connecting screen while the API starts (responsive layout via `matchMedia`, breakpoint 767 px), plus supporting UI like `FeedbackReactionBar` (Tier 3 eval feedback), `ObscurityTargetPicker` and `UpdateBanner` (in-app update notice)
 - **API key storage:** OS config directory (`~/.config/bandsearch/config.json` on Linux)
+- **Chat search path:** `chatAppModel.ts` owns the search lifecycle — submit,
+  retry, cancel, loading and the last query. `chatRenderAdapter.ts` turns the
+  model into view props and owns the viewport. `createDesktopReactShell.ts`
+  owns what the user sees: Search and Retry share one path, so either failure
+  shows the same inline error, while a stopped search settles without one. The
+  mount only re-renders. `bootstrapDesktopApp.ts` reuses an unanswered question
+  on retry instead of appending it again (#304).
 - **Saved-band actions:** `savedBandActions.ts` owns identity matching, creation,
   rating, Category/Note updates, removal, and client collection updates. Cards
   carry a typed target with artist name, optional MusicBrainz ID, and suggested
@@ -318,7 +440,7 @@ flowchart TD
 |----------|----------|
 | **One model for all graph nodes, chosen per role** | Consistent structured-JSON output across plan / extract / reflect / rank; each node keeps its own temperature (planner 0.2, extractor 0.1, reflector 0.15, ranker 0.35); provider and model come from `config/models.ts` (Scaleway `deepseek-v4-flash-0731` by default, ADR 0004) |
 | **Optional async judge on Scaleway** | Keeps the LLM judge off the critical response path; never the research model and preferably another family, against self-evaluation bias; calibration uses the same call and model, so its result describes the production judge; eval can be added/removed without touching the graph |
-| **Budget-aware graph** | Hard wall-clock deadline enforced via `researchBudget.ts`; conditional edges bypass remaining nodes gracefully instead of timing out mid-flight |
+| **Budget-aware graph** | Complete graph deadline and cancellation owned by `researchBudget.ts`; research stages preserve time for final ranking, whose retries share one cap |
 | **Pluggable storage** | Abstract repository pattern allows SQLite → Turso swap without touching business logic |
 | **Progressive auth** | Single-user deployments require no configuration; auth activates as users are added |
 | **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |

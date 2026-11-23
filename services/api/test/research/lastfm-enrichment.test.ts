@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createLastFmClient, type LastFmClientConfig } from "../../src/eval/lastFmClient.js";
+import { setImmediate } from "node:timers/promises";
+
+import { createLastFmClient, type LastFmClient, type LastFmClientConfig, type SimilarArtist } from "../../src/eval/lastFmClient.js";
+import type { VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
+import { createLastFmEnrichment } from "../../src/agent/research/lastFmEnrichment.js";
+import { createResearchBudget } from "../../src/agent/research/researchBudget.js";
+import { createResearchCache, type ResearchCache } from "../../src/agent/research/researchCache.js";
 
 type FetchLike = LastFmClientConfig["fetchImpl"];
 
@@ -86,4 +92,169 @@ test("getSimilarArtists returns empty array on network failure", async () => {
 
   const result = await client.getSimilarArtists("Band");
   assert.deepEqual(result, []);
+});
+
+// ─── alongside the search (#336) ─────────────────────────────────────────────
+
+function candidate(name: string, canonicalName = name): VerifiedCandidate {
+  return { name, canonicalName, verified: true, evidenceUrls: ["https://blog.example"], evidenceSnippets: [], sourceQueries: [] };
+}
+
+function fakeLastFm(answers: {
+  listeners?: (name: string) => Promise<number | null>;
+  similar?: SimilarArtist[];
+  tags?: string[];
+  biography?: string;
+}) {
+  const asked: string[] = [];
+  const client: LastFmClient = {
+    async getArtistInfo(name) {
+      asked.push(name);
+      const listeners = await (answers.listeners ? answers.listeners(name) : 1000);
+      return listeners === null ? null : { listeners, url: `https://www.last.fm/music/${name}`, tags: answers.tags ?? [], biography: answers.biography ?? "" };
+    },
+    async getListenerCount() {
+      throw new Error("the research asks for everything at once");
+    },
+    async getSimilarArtists(anchor) {
+      asked.push(`similar:${anchor}`);
+      return answers.similar ?? [];
+    },
+    async getTopTags() {
+      return null;
+    },
+  };
+  return { client, asked };
+}
+
+function enrichmentWith(client: LastFmClient, overrides: { budgetMs?: number; cache?: ResearchCache } = {}) {
+  const events: string[] = [];
+  return {
+    events,
+    lastFm: createLastFmEnrichment({
+      clientFor: () => client,
+      budget: createResearchBudget(overrides.budgetMs ?? 60_000),
+      cache: overrides.cache,
+      log: (_level, event) => events.push(event),
+    }),
+  };
+}
+
+test("lookups started early are not repeated when the candidates are ready", async () => {
+  const { client, asked } = fakeLastFm({ similar: [{ name: "fen", match: 0.9 }] });
+  const { lastFm } = enrichmentWith(client);
+  lastFm.prefetchSimilar(["Alcest"]);
+  lastFm.prefetchInfo(["Fen"]);
+
+  const [fen] = await lastFm.enrich([candidate("Fen")], ["Alcest"]);
+
+  assert.deepEqual(asked, ["similar:Alcest", "Fen"]);
+  assert.equal(fen!.listenerCount, 1000);
+  assert.deepEqual(fen!.evidenceSnippets, ["Similar to Alcest on last.fm (match: 0.90)"]);
+  assert.ok(fen!.evidenceUrls.includes("https://www.last.fm/music/Alcest/+similar"));
+});
+
+test("the count under the MusicBrainz name counts; the found spelling is the fallback", async () => {
+  const counts: Record<string, number | null> = { Haino: 5, "Keiji Haino": 90_000, 明日の叙景: null, Asunojokei: 41_000 };
+  const { client } = fakeLastFm({ listeners: async (name) => counts[name] ?? null });
+  const { lastFm } = enrichmentWith(client);
+  const out = await lastFm.enrich([candidate("Haino", "Keiji Haino"), candidate("Asunojokei", "明日の叙景")], []);
+  assert.deepEqual(out.map((c) => c.listenerCount), [90_000, 41_000]);
+});
+
+test("a slow answer does not cost the counts that did arrive", async (t) => {
+  // One answer over 5 s used to discard every count, which turned the obscurity filter off.
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const { client } = fakeLastFm({ listeners: (name) => (name === "Slow" ? new Promise(() => {}) : Promise.resolve(42_000)) });
+  const { lastFm, events } = enrichmentWith(client);
+  const result = lastFm.enrich([candidate("Fen"), candidate("Slow")], []);
+  for (let i = 0; i < 10; i++) await setImmediate();
+  t.mock.timers.tick(5000);
+  assert.deepEqual((await result).map((c) => c.listenerCount), [42_000, null]);
+  assert.ok(events.includes("research_lastfm_incomplete"));
+});
+
+test("a failing lookup leaves its band without a count", async () => {
+  const { client } = fakeLastFm({ listeners: async (name) => { if (name === "Bad") throw new Error("down"); return 7; } });
+  const { lastFm } = enrichmentWith(client);
+  assert.deepEqual((await lastFm.enrich([candidate("Bad"), candidate("Fen")], [])).map((c) => c.listenerCount), [null, 7]);
+});
+
+test("facts known from an earlier search are not asked for again; failures are", async () => {
+  const cache = createResearchCache();
+  const first = fakeLastFm({ listeners: async (name) => (name === "Fen" ? 42_000 : null), similar: [{ name: "Fen", match: 0.5 }] });
+  await enrichmentWith(first.client, { cache }).lastFm.enrich([candidate("Fen"), candidate("Missing")], ["Alcest"]);
+
+  const second = fakeLastFm({});
+  const out = await enrichmentWith(second.client, { cache }).lastFm.enrich([candidate("FEN"), candidate("Missing")], ["alcest"]);
+  assert.deepEqual(second.asked, ["Missing"]);
+  assert.equal(out[0]!.listenerCount, 42_000);
+});
+
+test("bands similar to several anchors come first, with the closest anchor as evidence", async () => {
+  const similarTo: Record<string, SimilarArtist[]> = {
+    Alcest: [{ name: "Fen", match: 0.5 }, { name: "Slowdive", match: 0.8 }, { name: "Olhava", match: 0.6 }],
+    Slowdive: [{ name: "fen", match: 0.4 }, { name: "Alcest", match: 0.9 }],
+  };
+  const { client } = fakeLastFm({});
+  client.getSimilarArtists = async (anchor) => similarTo[anchor] ?? [];
+  const { lastFm } = enrichmentWith(client);
+
+  const candidates = await lastFm.similarCandidates(["Alcest", "Slowdive"]);
+
+  assert.deepEqual(candidates, [
+    {
+      name: "Fen",
+      evidenceUrls: ["https://www.last.fm/music/Alcest/+similar"],
+      evidenceSnippets: ["Similar to Alcest on last.fm (match: 0.50)"],
+      sourceQueries: ["last.fm similar to Alcest"],
+    },
+    {
+      name: "Olhava",
+      evidenceUrls: ["https://www.last.fm/music/Alcest/+similar"],
+      evidenceSnippets: ["Similar to Alcest on last.fm (match: 0.60)"],
+      sourceQueries: ["last.fm similar to Alcest"],
+    },
+  ], "anchors themselves are not candidates");
+});
+
+test("similar artists that do not answer in time cost nothing but themselves", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const { client } = fakeLastFm({});
+  client.getSimilarArtists = (anchor) => (anchor === "Slow" ? new Promise(() => {}) : Promise.resolve([{ name: "Fen", match: 0.5 }]));
+  const { lastFm } = enrichmentWith(client);
+  const result = lastFm.similarCandidates(["Slow", "Alcest"]);
+  for (let i = 0; i < 10; i++) await setImmediate();
+  t.mock.timers.tick(2500);
+  assert.deepEqual((await result).map((c) => c.name), ["Fen"]);
+});
+
+test("a candidate found through Last.fm carries its similarity once", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Fen", match: 0.5 }] });
+  const { lastFm } = enrichmentWith(client);
+  const [found] = await lastFm.similarCandidates(["Alcest"]);
+  const [fen] = await lastFm.enrich([{ ...found!, verified: true }], ["Alcest"]);
+  assert.equal(fen!.evidenceUrls.length, 1);
+  assert.equal(fen!.evidenceSnippets.length, 1);
+});
+
+test("a band's biography is evidence, with its page, before any similarity", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Fen", match: 0.5 }], biography: "Fen are a post-black metal band from the English Fens.", tags: ["post-black metal"] });
+  const [fen] = await enrichmentWith(client).lastFm.enrich([candidate("Fen")], ["Alcest"]);
+  assert.deepEqual(fen!.evidenceSnippets, [
+    "On last.fm: Fen are a post-black metal band from the English Fens.",
+    "Similar to Alcest on last.fm (match: 0.50)",
+  ]);
+  assert.deepEqual(fen!.evidenceUrls, ["https://blog.example", "https://www.last.fm/music/Fen", "https://www.last.fm/music/Alcest/+similar"]);
+  assert.deepEqual(fen!.listenerTags, ["post-black metal"]);
+});
+
+test("a long biography is cut at a word; a page without one is no evidence", async () => {
+  const long = fakeLastFm({ biography: "word ".repeat(200).trim() });
+  const [cut] = await enrichmentWith(long.client).lastFm.enrich([candidate("Fen")], []);
+  assert.ok(cut!.evidenceSnippets[0]!.length < 290);
+  assert.match(cut!.evidenceSnippets[0]!, /word…$/);
+
+  const [bare] = await enrichmentWith(fakeLastFm({}).client).lastFm.enrich([candidate("Fen")], []);
+  assert.deepEqual(bare!.evidenceUrls, ["https://blog.example"]);
 });

@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createSavedArtistsShell, type SavedArtistsShellCollaborator } from "../src/createSavedArtistsShell.js";
 import { createDesktopReactMount } from "../src/ui/mountDesktopReactApp.js";
 import { SavedArtistsView } from "../src/ui/SavedArtistsView.js";
-import type { SavedArtistsHandlers } from "../src/ui/viewTypes.js";
+import type { SavedArtistsHandlers, SavedArtistsViewProps } from "../src/ui/viewTypes.js";
+import type { StatusMessageOptions } from "../src/statusMessage.js";
 import type { ArtistGroup, ArtistSearchResult, SavedBand } from "../src/domain.js";
 import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
 
@@ -30,7 +31,7 @@ function fakeShellApp(overrides: Partial<SavedArtistsShellCollaborator> = {}): S
     saveBand: async () => ({}),
     deleteSavedBand: async () => ({}),
     exportPreferences: async () => [],
-    importPreferences: async () => ({}),
+    importPreferences: async () => ({ imported: 0, skipped: 0, failed: 0 }),
     createGroup: async () => ({}),
     deleteGroup: async () => ({}),
     autoGroup: async () => ({}),
@@ -141,9 +142,10 @@ test("saved artists screen lists search results the user can add", async () => {
 
 type RenderedScreen = ReactElement<{ handlers: SavedArtistsHandlers }>;
 
-function mountSavedScreen(app: SavedArtistsShellCollaborator) {
-  const shell = createSavedArtistsShell({ app });
+function mountSavedScreen(app: SavedArtistsShellCollaborator, status?: StatusMessageOptions) {
+  const shell = createSavedArtistsShell({ app, status });
   let lastRender: RenderedScreen | null = null;
+  let renders = 0;
   const mount = createDesktopReactMount({
     shell: {
       getViewProps: () => ({}),
@@ -156,12 +158,21 @@ function mountSavedScreen(app: SavedArtistsShellCollaborator) {
       onRouteChange: () => {},
     },
     savedArtistsShell: shell,
-    createRootImpl: () => fakeReactRoot((element) => { lastRender = routedViewOf(element) as RenderedScreen; }),
+    createRootImpl: () => fakeReactRoot((element) => {
+      lastRender = routedViewOf(element) as RenderedScreen;
+      renders += 1;
+    }),
     resolveContainer: () => fakeContainer(),
   });
   return {
     shell,
     mount,
+    renders: () => renders,
+    statusMessage(): unknown {
+      const rendered: RenderedScreen | null = lastRender;
+      assert.ok(rendered, "expected the saved screen to have rendered");
+      return (rendered.props as unknown as { viewProps: SavedArtistsViewProps }).viewProps.statusMessage;
+    },
     // The handlers React would invoke on click, taken from the rendered element.
     handlers(): SavedArtistsHandlers {
       const rendered: RenderedScreen | null = lastRender;
@@ -237,7 +248,7 @@ test("the mounted screen deletes a group through the app", async () => {
 
 test("the mounted screen imports bands through the app", async () => {
   const imported: unknown[][] = [];
-  const screen = mountSavedScreen(fakeShellApp({ importPreferences: async (bands: unknown[]) => { imported.push(bands); return {}; } }));
+  const screen = mountSavedScreen(fakeShellApp({ importPreferences: async (bands: unknown[]) => { imported.push(bands); return { imported: bands.length, skipped: 0, failed: 0 }; } }));
   await screen.mount.mount();
 
   await screen.handlers().onImportFile?.({ text: async () => JSON.stringify([{ name: "Duster" }]) } as File);
@@ -263,4 +274,107 @@ test("the mounted screen deletes a saved artist through the app", async () => {
   await screen.handlers().onDelete?.("b1");
 
   assert.deepEqual(deleted, ["b1"]);
+});
+
+// --- The saved screen says what its actions did (#313) -----------------------
+
+const offline = async (): Promise<never> => { throw new Error("offline"); };
+
+async function savedScreenWith(app: Partial<SavedArtistsShellCollaborator>, status?: StatusMessageOptions) {
+  const screen = mountSavedScreen(fakeShellApp({ listSavedBands: async () => [CODEINE], ...app }), status);
+  await screen.mount.mount();
+  return screen;
+}
+
+test("adding an artist from search confirms it", async () => {
+  const screen = await savedScreenWith({});
+
+  await screen.handlers().onAddArtist?.({ id: "mb-fen", name: "Fen" });
+
+  assert.deepEqual(screen.statusMessage(), { type: "success", message: "Added Fen." });
+});
+
+test("each failing action on the saved screen says so instead of doing nothing", async () => {
+  const cases: Array<[string, Partial<SavedArtistsShellCollaborator>, (h: SavedArtistsHandlers) => unknown, string]> = [
+    ["add", { saveBand: offline }, (h) => h.onAddArtist?.({ id: "mb-fen", name: "Fen" }), "Could not add Fen."],
+    ["remove", { deleteSavedBand: offline }, (h) => h.onDelete?.("b1"), "Could not remove Codeine."],
+    ["search", { searchArtists: offline }, (h) => h.onSearch?.("fen"), "Artist search failed."],
+    ["export", { exportPreferences: offline }, (h) => h.onExport?.(), "Export failed."],
+    ["new group", { createGroup: offline }, (h) => h.onCreateGroup?.("Slowcore"), "Could not create the group Slowcore."],
+    ["delete group", { deleteGroup: offline }, (h) => h.onDeleteGroup?.("g1"), "Could not delete the group."],
+    ["auto group", { autoGroup: offline }, (h) => h.onAutoGroup?.(), "Could not group by genre."],
+  ];
+  for (const [name, app, act, message] of cases) {
+    const screen = await savedScreenWith(app);
+
+    await act(screen.handlers());
+
+    assert.deepEqual(screen.statusMessage(), { type: "error", message }, name);
+  }
+});
+
+test("a file that is not an export is refused without calling the API", async () => {
+  let imported = false;
+  const screen = await savedScreenWith({ importPreferences: async () => { imported = true; return { imported: 0, skipped: 0, failed: 0 }; } });
+
+  await screen.handlers().onImportFile?.(new File(["{\"not\": \"a list\"}"], "x.json"));
+
+  assert.equal(imported, false);
+  assert.deepEqual(screen.statusMessage(), { type: "error", message: "That file isn't a Bandsearch export." });
+});
+
+test("an import reports how many artists arrived and how many were already saved", async () => {
+  const screen = await savedScreenWith({ importPreferences: async () => ({ imported: 2, skipped: 1, failed: 0 }) });
+
+  await screen.handlers().onImportFile?.(new File(["[{}, {}, {}]"], "bands.json"));
+
+  assert.deepEqual(screen.statusMessage(), { type: "success", message: "Imported 2 artists, 1 already saved." });
+});
+
+test("an import with artists the API refused is reported as an error", async () => {
+  const screen = await savedScreenWith({ importPreferences: async () => ({ imported: 1, skipped: 0, failed: 2 }) });
+
+  await screen.handlers().onImportFile?.(new File(["[{}, {}, {}]"], "bands.json"));
+
+  assert.deepEqual(screen.statusMessage(), { type: "error", message: "Imported 1 artist; 2 could not be imported." });
+});
+
+test("a cleared message is repainted on the saved screen", async () => {
+  let fire = () => {};
+  const screen = await savedScreenWith({}, { setTimeoutImpl: (fn) => { fire = fn; return 1; }, clearTimeoutImpl: () => {} });
+  await screen.handlers().onAddArtist?.({ id: "mb-fen", name: "Fen" });
+  const rendersBefore = screen.renders();
+
+  fire();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.ok(screen.renders() > rendersBefore, "the screen was painted again");
+  assert.equal(screen.statusMessage(), null);
+});
+
+test("the saved screen shows its status line", async () => {
+  const shell = createSavedArtistsShell({ app: fakeShellApp({ saveBand: offline }) });
+
+  await shell.addArtist({ id: "mb-fen", name: "Fen" });
+
+  assert.match(renderScreen(shell), /Could not add Fen\./);
+});
+
+test("a successful export downloads the saved artists as a file", async () => {
+  const downloads: Array<[string, unknown]> = [];
+  const shell = createSavedArtistsShell({ app: fakeShellApp({ exportPreferences: async () => [{ name: "Codeine" }] }) });
+  let handlers: SavedArtistsHandlers = {};
+  const mount = createDesktopReactMount({
+    shell: { getViewProps: () => ({}), updateMode: async () => {}, submitQuery: async () => {} },
+    router: { getRoute: () => "saved", navigate: () => {}, onRouteChange: () => {} },
+    savedArtistsShell: shell,
+    downloadJsonImpl: (filename, data) => { downloads.push([filename, data]); },
+    createRootImpl: () => fakeReactRoot((element) => { handlers = (routedViewOf(element) as RenderedScreen).props.handlers; }),
+    resolveContainer: () => fakeContainer(),
+  });
+  await mount.mount();
+
+  await handlers.onExport?.();
+
+  assert.deepEqual(downloads, [["bandsearch-artists.json", [{ name: "Codeine" }]]]);
 });

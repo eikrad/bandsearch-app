@@ -5,7 +5,7 @@ import type {
   ConversationMessage,
   RenderableRecommendation,
 } from "../src/chatAppModel.js";
-import type { DesktopChatUiStack } from "../src/desktopChatUiStack.js";
+import type { ChatScreenModel } from "../src/chatRenderAdapter.js";
 
 function makeCard(
   title: string,
@@ -30,23 +30,22 @@ function makeCard(
   };
 }
 
-type TestDesktopUi = DesktopChatUiStack & {
+type TestChat = ChatScreenModel & {
   _setConversation(conversation: ConversationMessage[] | null): void;
   _setMode(mode: string): void;
 };
 
-function makeDesktopUi(overrides: Partial<TestDesktopUi> = {}): TestDesktopUi {
+function makeChat(overrides: Partial<TestChat> = {}): TestChat {
   let mode = "fresh";
   let obscurityTarget: string | undefined = "underground";
   let conversation: ConversationMessage[] | null = null;
-  let viewport = "desktop";
   return {
-    setViewport: (v: string) => { viewport = v; },
-    getViewport: () => viewport,
     cancelSearch: () => {},
-    retryLastSearch: async () => {},
+    retryLastSearch: async () => undefined,
     getMode: () => mode,
     isLoading: () => false,
+    getProgress: () => null,
+    subscribe: () => () => {},
     isShowFeedbackBar: () => false,
     dismissFeedbackBar: () => {},
     submitFeedback: async () => {},
@@ -54,7 +53,7 @@ function makeDesktopUi(overrides: Partial<TestDesktopUi> = {}): TestDesktopUi {
     setMode: (m: string) => { mode = m; },
     setObscurityTarget: (t: string | undefined) => { obscurityTarget = t; },
     getObscurityTarget: () => obscurityTarget,
-    submitQuery: async () => {},
+    submitQuery: async () => undefined,
     _setConversation: (c: ConversationMessage[] | null) => { conversation = c; },
     _setMode: (m: string) => { mode = m; },
     ...overrides,
@@ -62,12 +61,12 @@ function makeDesktopUi(overrides: Partial<TestDesktopUi> = {}): TestDesktopUi {
 }
 
 test("render adapter builds header and platform links from conversation cards", () => {
-  const ui = makeDesktopUi();
+  const ui = makeChat();
   ui._setConversation([
     { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
   ]);
 
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const adapter = createChatRenderAdapter({ chat: ui });
   const props = adapter.getViewProps();
 
   assert.equal(props.headerTitle, "Bandsearch");
@@ -80,7 +79,7 @@ test("render adapter builds header and platform links from conversation cards", 
 });
 
 test("render adapter preserves imageUrl from card", () => {
-  const ui = makeDesktopUi();
+  const ui = makeChat();
   ui._setConversation([
     {
       id: "a-0",
@@ -90,7 +89,7 @@ test("render adapter preserves imageUrl from card", () => {
     },
   ]);
 
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const adapter = createChatRenderAdapter({ chat: ui });
   const props = adapter.getViewProps();
 
   assert.equal(props.cards[0].imageUrl, "https://example.com/alcest.jpg");
@@ -103,13 +102,14 @@ test("render adapter preserves imageUrl from card", () => {
 // spec written 15 minutes before the code that broke it.
 for (const viewport of ["mobile", "desktop"] as const) {
   test(`render adapter keeps save/rate/more actions visible on ${viewport}`, () => {
-    const ui = makeDesktopUi({ getViewport: () => viewport });
+    const ui = makeChat();
     ui._setConversation([
       { id: "a-0", role: "assistant", content: "", cards: [makeCard("Fen")] },
     ]);
 
-    const adapter = createChatRenderAdapter({ desktopUi: ui });
+    const adapter = createChatRenderAdapter({ chat: ui, viewport });
     const props = adapter.getViewProps();
+    assert.equal(props.viewport, viewport);
 
     assert.equal(props.cards[0].actions.save.visible, true, `save visible on ${viewport}`);
     assert.equal(props.cards[0].actions.rate.visible, true, `rate visible on ${viewport}`);
@@ -118,23 +118,23 @@ for (const viewport of ["mobile", "desktop"] as const) {
 }
 
 test("onModeChange updates mode and returns refreshed view props", () => {
-  const ui = makeDesktopUi();
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const ui = makeChat();
+  const adapter = createChatRenderAdapter({ chat: ui });
 
   const afterMode = adapter.onModeChange("preference-aware");
 
   assert.equal(afterMode.modeValue, "preference-aware");
 });
 
-test("onSubmitQuery delegates to desktopUi and returns updated cards", async () => {
-  const ui = makeDesktopUi();
+test("onSubmitQuery runs the search and returns updated cards", async () => {
+  const ui = makeChat();
   ui.submitQuery = async () => {
     ui._setConversation([
       { id: "a-0", role: "assistant", content: "", cards: [makeCard("Alcest")] },
     ]);
   };
 
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const adapter = createChatRenderAdapter({ chat: ui });
   const afterSubmit = await adapter.onSubmitQuery("I like blackgaze");
 
   assert.equal(afterSubmit.cards[0].title, "Alcest");
@@ -143,16 +143,28 @@ test("onSubmitQuery delegates to desktopUi and returns updated cards", async () 
 // ─── Phase 8.3b: obscurityTarget in viewProps ────────────────────────────────
 
 test("render adapter includes obscurityTarget in viewProps (default: underground)", () => {
-  const ui = makeDesktopUi();
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const ui = makeChat();
+  const adapter = createChatRenderAdapter({ chat: ui });
   const props = adapter.getViewProps();
   assert.equal(props.obscurityTarget, "underground");
 });
 
 test("render adapter onObscurityTargetChange updates viewProps", () => {
-  const ui = makeDesktopUi();
-  const adapter = createChatRenderAdapter({ desktopUi: ui });
+  const ui = makeChat();
+  const adapter = createChatRenderAdapter({ chat: ui });
   adapter.onObscurityTargetChange("obscure");
   const props = adapter.getViewProps();
   assert.equal(props.obscurityTarget, "obscure");
+});
+
+test("the in-flight line says what the API is doing, and whether it was heard from at all", () => {
+  const adapter = createChatRenderAdapter({
+    chat: makeChat({ isLoading: () => true, getProgress: () => ({ stage: "checking", found: 25 }) }),
+  });
+  assert.equal(adapter.getViewProps().progressLabel, "Found 25 bands, checking them…");
+  assert.equal(adapter.getViewProps().awaitingApi, false);
+
+  const waiting = createChatRenderAdapter({ chat: makeChat({ isLoading: () => true }) }).getViewProps();
+  assert.equal(waiting.awaitingApi, true);
+  assert.equal(createChatRenderAdapter({ chat: makeChat() }).getViewProps().awaitingApi, false, "nothing is in flight");
 });

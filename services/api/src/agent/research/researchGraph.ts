@@ -1,16 +1,20 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import type { AnswerProgress, ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
-import { createLastFmClient, type LastFmClient } from "../../eval/lastFmClient.js";
+import { createLastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
-import { createCandidateExtractor, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
+import { filterCandidatesByObscurity, mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { fitObscurityTarget, type ObscurityTargetFit } from "../../obscurityTargets.js";
+import { createLastFmEnrichment } from "./lastFmEnrichment.js";
+import { asksLastFmFirst, enoughFromLastFm } from "./lastFmFirst.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
-import { createResearchBudget, type ResearchBudget } from "./researchBudget.js";
+import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
+import { artistKey, type ResearchCache } from "./researchCache.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -24,12 +28,14 @@ export type ResearchGraphDeps = {
   totalSearchBudget: number;
   targetVerifiedCount: number;
   researchTimeoutMs: number;
-  /** Cap on search hits fed into the candidate extractor; limits output size and latency. */
+  /** Search hits the candidate extractor reads per round; searching stops once they are found. */
   maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   /** Spacing of MusicBrainz calls; 0 when the transport already spaces real calls (replay). */
   musicBrainzMinIntervalMs?: number;
+  /** Spacing of Brave calls; 0 when the transport already spaces real calls (replay). */
+  braveMinIntervalMs?: number;
   /**
    * Chat model for every Gemini-backed node. Defaults to Gemini built from
    * `geminiApiKey`; supply one to run the graph without a key or a network call.
@@ -42,8 +48,15 @@ export type ResearchGraphDeps = {
    * Reported back as the run's `model`, the provenance of the ranker's prose.
    */
   model?: string;
+  /** Artist facts shared by the searches of this process; without it every search asks again. */
+  cache?: ResearchCache;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
+  /** Told what the run is doing, and the reply while it is written. */
+  onProgress?: (progress: AnswerProgress) => void;
+  onReply?: (text: string) => void;
+  /** Ends the run early, as when the user stopped waiting. */
+  signal?: AbortSignal;
   onLog?: (
     level: "info" | "warn",
     event: string,
@@ -57,6 +70,8 @@ export type ResearchGraphInput = {
   messages: ChatMessage[];
   mode: RecommendationMode;
   obscurityTarget?: string;
+  /** Bands the user has already been shown, in lower case: never ranked again. */
+  excludeNames?: ReadonlySet<string>;
 };
 
 export const RESEARCH_SCHEMA = new StateSchema({
@@ -65,7 +80,10 @@ export const RESEARCH_SCHEMA = new StateSchema({
   messages: z.custom<ChatMessage[]>(),
   mode: z.custom<RecommendationMode>(),
   obscurityTarget: z.string().optional(),
+  excludeNames: z.custom<ReadonlySet<string> | undefined>(),
   searchPlan: z.custom<SearchPlan | undefined>(),
+  /** Last.fm alone found enough bands of the requested size: no web search. */
+  enoughFromLastFm: z.boolean(),
   braveHits: z.custom<SearchHitInput[]>(),
   newHits: z.custom<SearchHitInput[]>(),
   searchCallsUsed: z.number(),
@@ -80,10 +98,23 @@ export const RESEARCH_SCHEMA = new StateSchema({
 
 export type ResearchGraphState = typeof RESEARCH_SCHEMA.State;
 
+/** A Brave request costs the same, in time and quota, however many hits it returns. */
+export const HITS_PER_SEARCH = 12;
+
+/** Bands of a Last.fm round that was not enough, beside the web search's own. */
+const MAX_KEPT_FROM_LASTFM = 12;
+
 type BraveDedupCache = Map<string, { results: Array<{ title: string; url: string; description: string }> }>;
 
 async function runBraveQueries(
-  config: { apiKey: string; dedupCache: BraveDedupCache; budget: ResearchBudget; fetchImpl?: typeof fetch },
+  config: {
+    apiKey: string;
+    dedupCache: BraveDedupCache;
+    budget: ResearchBudget;
+    enoughHits: number;
+    minIntervalMs?: number;
+    fetchImpl?: typeof fetch;
+  },
   queries: string[],
   budgetLeft: number,
   perQueryCount: number,
@@ -94,13 +125,21 @@ async function runBraveQueries(
     retries: 1,
     dedupCache: config.dedupCache,
     fetchImpl: config.fetchImpl,
+    minIntervalMs: config.minIntervalMs,
   });
   const hits: SearchHitInput[] = [];
   let calls = 0;
   for (const q of queries) {
-    if (calls >= budgetLeft) break;
-    const res = await brave.search(q, { count: perQueryCount });
+    if (calls >= budgetLeft || hits.length >= config.enoughHits || config.budget.remaining() <= 0) break;
+    let res;
     calls += 1;
+    try {
+      res = await config.budget.run(config.budget.remaining(), (signal) =>
+        brave.search(q, { count: perQueryCount, signal }));
+    } catch (error) {
+      if (config.budget.remaining() <= 0) break;
+      throw error;
+    }
     for (const r of res.results) {
       hits.push({ sourceQuery: q, title: r.title, url: r.url, description: r.description });
     }
@@ -111,90 +150,171 @@ async function runBraveQueries(
 export async function buildResearchGraph(deps: ResearchGraphDeps, budget: ResearchBudget) {
   const log = deps.onLog ?? (() => {});
 
-  const mb = createMusicBrainzClient({
+  // Research ends early so final ranking always has its reserve within the total deadline.
+  const researchScope = budget.reserve(RANKING_RESERVE_MS);
+  const musicBrainzFor = (signal: AbortSignal) => createMusicBrainzClient({
     timeoutMs: deps.musicBrainzTimeoutMs ?? 5000,
     retries: deps.musicBrainzRetries ?? 1,
     fetchImpl: deps.fetchImpl,
+    signal,
     ...(deps.musicBrainzMinIntervalMs !== undefined ? { minIntervalMs: deps.musicBrainzMinIntervalMs } : {}),
   });
+  const mb = {
+    findArtistsByName: (names: string[], options?: { includeAliases?: boolean }) =>
+      researchScope.run(researchScope.remaining(), (signal) => musicBrainzFor(signal).findArtistsByName(names, options)),
+  };
 
-  const lastFm: LastFmClient | null = deps.lastFmApiKey
-    ? createLastFmClient({ apiKey: deps.lastFmApiKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl })
+  const lastFmKey = deps.lastFmApiKey;
+  const lastFm = lastFmKey
+    ? createLastFmEnrichment({
+        clientFor: (signal) => createLastFmClient({ apiKey: lastFmKey, timeoutMs: 5000, fetchImpl: deps.fetchImpl, signal }),
+        budget: researchScope,
+        cache: deps.cache,
+        log,
+      })
     : null;
 
+  // At the research cutoff every remaining stage is skipped and the graph ranks what it has.
+  const untilCutoff = <Next extends string>(next: Next): [() => Next | "rank", Array<Next | "rank">] =>
+    [() => (researchScope.remaining() > 0 ? next : "rank"), [next, "rank"]];
+
+  // More hits would not reach the extractor: it caps them, so its candidate
+  // list stays manageable within the timeout. Searching for them only takes time.
+  const maxExtractHits = deps.maxExtractHits ?? 36;
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
-    runBraveQueries({ apiKey: deps.braveApiKey, dedupCache: braveDedup, budget, fetchImpl: deps.fetchImpl }, queries, budgetLeft, perQueryCount);
+    runBraveQueries({
+      apiKey: deps.braveApiKey,
+      dedupCache: braveDedup,
+      budget: researchScope,
+      enoughHits: maxExtractHits,
+      minIntervalMs: deps.braveMinIntervalMs,
+      fetchImpl: deps.fetchImpl,
+    }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
     geminiApiKey: deps.geminiApiKey,
     mb,
     runQueries,
-    budget,
+    budget: researchScope,
     maxRounds: 2,
     maxReflectionSearches: deps.maxReflectionSearches,
     targetVerifiedCount: deps.targetVerifiedCount,
+    hitsPerSearch: HITS_PER_SEARCH,
     totalSearchBudget: deps.totalSearchBudget,
     onLog: deps.onLog,
     modelClient: deps.modelClient,
     chatModel: deps.chatModel,
     model: deps.model,
+    artistCache: deps.cache?.artists,
+    onSearchAgain: () => deps.onProgress?.({ stage: "searchingAgain" }),
+    onExtracted: (candidates) => lastFm?.prefetchInfo(candidates.map((c) => c.name)),
   });
 
   const graph = new StateGraph(RESEARCH_SCHEMA)
-    .addNode("plan", async (state) => {
+    .addNode("plan", async (state) => researchScope.run(20000, async (signal) => {
       const planWeb = await createWebSearchPlanner({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(20000),
+        timeoutMs: researchScope.allocate(20000),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
+        maxQueries: deps.maxInitialSearches,
       });
-      let plan: SearchPlan;
-      try {
-        plan = await planWeb({
-          userQuery: state.userQuery,
-          preferenceContext: state.preferenceContext,
-          messages: state.messages,
-          obscurityTarget: state.obscurityTarget,
-        });
-      } catch (error) {
-        // A planner that times out or errors must not fail the request: the
-        // broad fallback queries still find candidates, just less precisely.
-        log("warn", "research_plan_fallback", { reason: errorMessage(error) });
-        plan = fallbackSearchPlan(state.userQuery);
-      }
+      const plan = await planWeb({
+        userQuery: state.userQuery,
+        preferenceContext: state.preferenceContext,
+        messages: state.messages,
+        obscurityTarget: state.obscurityTarget,
+      });
       log("info", "research_plan_resolved", {
         anchorCount: plan.anchorArtists.length,
         queryCount: plan.queries.length,
       });
+      lastFm?.prefetchSimilar(plan.anchorArtists);
+      deps.onProgress?.({ stage: "searching", anchorArtists: plan.anchorArtists });
       return { searchPlan: plan };
+    }).catch((error: unknown) => {
+      // Broad searches can still succeed when planning fails within its cap.
+      log("warn", "research_plan_fallback", { reason: errorMessage(error) });
+      return { searchPlan: fallbackSearchPlan(state.userQuery, state.obscurityTarget) };
+    }))
+    .addNode("lastfm_first", async (state) => {
+      const anchors = state.searchPlan?.anchorArtists ?? [];
+      if (!lastFm || anchors.length === 0 || !asksLastFmFirst(state.userQuery, state.obscurityTarget)) return {};
+      const found = await lastFm.similarCandidates(anchors);
+      if (found.length === 0 || researchScope.remaining() <= 0) return {};
+      lastFm.prefetchInfo(found.map((c) => c.name));
+      deps.onProgress?.({ stage: "checking", found: found.length });
+      const verified = await verifyCandidatesWithMusicBrainz(mb, found, anchors, {
+        shouldContinue: () => researchScope.remaining() > 0,
+        cache: deps.cache?.artists,
+      });
+      const candidates = await lastFm.enrich(verified, anchors);
+      const enough = enoughFromLastFm(withoutNames(candidates, state.excludeNames), state.obscurityTarget);
+      log("info", "research_lastfm_first", {
+        found: found.length,
+        verified: candidates.filter((c) => c.verified).length,
+        fit: countTargetFit(candidates, state.obscurityTarget),
+        enough,
+      });
+      // Not enough: the bands of the right size still join those of the web search.
+      const kept = enough ? candidates : inRangeOnly(candidates, state.obscurityTarget).slice(0, MAX_KEPT_FROM_LASTFM);
+      const names = new Set(kept.map((c) => c.name));
+      if (!enough) deps.onProgress?.({ stage: "searching", anchorArtists: anchors });
+      return {
+        enoughFromLastFm: enough,
+        verifiedCandidates: kept,
+        extractedCandidates: found.filter((c) => names.has(c.name)),
+      };
     })
     .addNode("brave_initial", async (state) => {
       const slice = state.searchPlan?.queries.slice(0, deps.maxInitialSearches) ?? [];
-      const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, 8);
+      const { hits, calls } = await runQueries(slice, deps.totalSearchBudget, HITS_PER_SEARCH);
       log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
       return { braveHits: hits, searchCallsUsed: calls };
     })
-    .addNode("extract", async (state) => {
+    .addNode("extract", async (state) => researchScope.run(18000, async (signal) => {
       const extract = await createCandidateExtractor({
         apiKey: deps.geminiApiKey,
-        timeoutMs: budget.allocate(18000),
+        timeoutMs: researchScope.allocate(18000),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      // Cap hits so the model emits a manageable candidate list within the timeout.
-      const maxExtractHits = deps.maxExtractHits ?? 24;
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
-      const candidates = await extract({ hits: hitsForExtract, anchorArtists: anchors });
-      log("info", "research_candidates_extracted", { count: candidates.length });
+      const fromWeb = await extract({ hits: hitsForExtract, anchorArtists: anchors });
+      const candidates = mergeExtractedCandidates([...fromWeb, ...state.extractedCandidates]);
+      log("info", "research_candidates_extracted", {
+        count: candidates.length,
+        fromWeb: fromWeb.length,
+        fromLastFm: state.extractedCandidates.length,
+      });
+      lastFm?.prefetchInfo(candidates.map((c) => c.name));
+      deps.onProgress?.({ stage: "checking", found: candidates.length });
       return { extractedCandidates: candidates };
-    })
+    }).catch((error: unknown) => {
+      if (researchScope.remaining() > 0) throw error;
+      return {};
+    }))
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const verified = await verifyCandidatesWithMusicBrainz(mb, state.extractedCandidates, anchors);
+      // Bands of the Last.fm round are verified already; what the web adds about them is merged in.
+      const known = new Map(state.verifiedCandidates.map((c) => [artistKey(c.name), c]));
+      const fresh = await verifyCandidatesWithMusicBrainz(
+        mb,
+        state.extractedCandidates.filter((c) => !known.has(artistKey(c.name))),
+        anchors,
+        { shouldContinue: () => researchScope.remaining() > 0, cache: deps.cache?.artists },
+      );
+      const again = state.extractedCandidates.flatMap((c) => {
+        const earlier = known.get(artistKey(c.name));
+        return earlier ? [{ ...earlier, ...c, name: earlier.name }] : [];
+      });
+      const verified = mergeVerifiedCandidates([...again, ...fresh]);
       const verifiedCount = verified.filter((v) => v.verified).length;
       log("info", "research_verification_done", {
         phase: "initial",
@@ -206,74 +326,28 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("enrich_lastfm", async (state) => {
       if (!lastFm) return {};
-      const anchors = state.searchPlan?.anchorArtists ?? [];
-      if (!state.verifiedCandidates?.length) return {};
-
-      // Fetch similar-artist signals and listener counts in parallel.
-      const [similarResults, listenerResults] = await Promise.all([
-        anchors.length
-          ? Promise.all(anchors.map((a) => lastFm.getSimilarArtists(a)))
-          : Promise.resolve([]),
-        Promise.allSettled(
-          state.verifiedCandidates.map((c) =>
-            lastFm.getListenerCount(c.canonicalName || c.name),
-          ),
-        ),
-      ]);
-
-      const similarMap = new Map<string, { anchor: string; match: number }>();
-      for (let i = 0; i < anchors.length; i++) {
-        for (const s of similarResults[i] ?? []) {
-          const key = s.name.toLowerCase();
-          const existing = similarMap.get(key);
-          if (!existing || s.match > existing.match) {
-            similarMap.set(key, { anchor: anchors[i], match: s.match });
-          }
-        }
-      }
-
-      let matchCount = 0;
-      const enriched = state.verifiedCandidates.map((c, idx) => {
-        const key = (c.canonicalName || c.name).trim().toLowerCase();
-        const hit = similarMap.get(key);
-        const listenerCount =
-          listenerResults[idx].status === "fulfilled" ? listenerResults[idx].value : null;
-
-        let next: VerifiedCandidate = { ...c, listenerCount };
-        if (hit) {
-          matchCount++;
-          const similarUrl = `https://www.last.fm/music/${encodeURIComponent(hit.anchor)}/+similar`;
-          next = {
-            ...next,
-            evidenceUrls: [...next.evidenceUrls, similarUrl],
-            evidenceSnippets: [...next.evidenceSnippets, `Similar to ${hit.anchor} on last.fm (match: ${hit.match.toFixed(2)})`],
-          };
-        }
-        return next;
-      });
-
-      log("info", "research_lastfm_enrichment", {
-        anchorCount: anchors.length,
-        candidateCount: state.verifiedCandidates.length,
-        matchCount,
-        listenersFetched: listenerResults.filter((r) => r.status === "fulfilled" && r.value != null).length,
-      });
-      return { verifiedCandidates: enriched };
+      return { verifiedCandidates: await lastFm.enrich(state.verifiedCandidates ?? [], state.searchPlan?.anchorArtists ?? []) };
     })
-    .addNode("rank", async (state) => {
+    .addNode("rank", async (state) => budget.run(RANKING_RESERVE_MS, async (signal) => {
       const ranker = await createRecommendationRanker({
         apiKey: deps.geminiApiKey,
-        timeoutMs: Math.max(budget.allocate(12000), 12000),
+        timeoutMs: budget.allocate(RANKING_RESERVE_MS),
+        signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
         model: deps.model,
       });
-      const filteredCandidates = filterCandidatesByObscurity(state.verifiedCandidates, state.obscurityTarget);
+      const fresh = withoutNames(state.verifiedCandidates, state.excludeNames);
+      const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
       log("info", "research_obscurity_filter", {
         obscurityTarget: state.obscurityTarget ?? "none",
-        before: state.verifiedCandidates.length,
+        before: fresh.length,
         after: filteredCandidates.length,
+        // Shows whether in-range bands were found and filtered or ranked away, or never found (#325).
+        fitBefore: countTargetFit(fresh, state.obscurityTarget),
+        fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
       });
+      deps.onProgress?.({ stage: "choosing", candidates: filteredCandidates.length });
       const { recommendations, assistantReply } = await ranker({
         query: state.userQuery,
         preferenceContext: state.preferenceContext,
@@ -281,22 +355,52 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         mode: state.mode,
         candidates: filteredCandidates,
         obscurityTarget: state.obscurityTarget,
+        onReply: deps.onReply,
       });
       log("info", "research_ranked", {
         finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
       });
       return { recommendations, assistantReply };
-    })
+    }))
     .addEdge(START, "plan")
-    .addEdge("plan", "brave_initial")
-    .addEdge("brave_initial", "extract")
-    .addEdge("extract", "verify")
-    .addEdge("verify", "reflect_if_needed")
-    .addEdge("reflect_if_needed", "enrich_lastfm")
+    .addConditionalEdges("plan", ...untilCutoff("lastfm_first"))
+    .addConditionalEdges(
+      "lastfm_first",
+      (state) => (state.enoughFromLastFm || researchScope.remaining() <= 0 ? "rank" : "brave_initial"),
+      ["brave_initial", "rank"],
+    )
+    .addConditionalEdges("brave_initial", ...untilCutoff("extract"))
+    .addConditionalEdges("extract", ...untilCutoff("verify"))
+    .addConditionalEdges("verify", ...untilCutoff("reflect_if_needed"))
+    .addConditionalEdges("reflect_if_needed", ...untilCutoff("enrich_lastfm"))
     .addEdge("enrich_lastfm", "rank")
     .addEdge("rank", END);
 
   return graph.compile();
+}
+
+/** The candidates not known under any of the names (lower case). */
+function withoutNames(candidates: VerifiedCandidate[], names: ReadonlySet<string> | undefined): VerifiedCandidate[] {
+  if (!names?.size) return candidates;
+  return candidates.filter((c) => ![c.name, c.canonicalName ?? c.name].some((n) => names.has(n.trim().toLowerCase())));
+}
+
+/** The candidates of the requested size; all of them when there is no size to tell by. */
+function inRangeOnly(candidates: VerifiedCandidate[], target: string | undefined): VerifiedCandidate[] {
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), target);
+  return fits ? candidates.filter((_, i) => fits[i]!.fit === "inRange") : candidates;
+}
+
+/** Candidates per fit against the requested target's range, by the filter's own rule; null when there is nothing to fit. */
+function countTargetFit(
+  candidates: VerifiedCandidate[],
+  target: string | undefined,
+): Record<ObscurityTargetFit, number> | null {
+  const fits = fitObscurityTarget(candidates.map((c) => c.listenerCount), target);
+  if (!fits) return null;
+  const counts: Record<ObscurityTargetFit, number> = { inRange: 0, tooObscure: 0, tooMainstream: 0 };
+  for (const { fit } of fits) counts[fit]++;
+  return counts;
 }
 
 export type PipelineDiagnostics = {
@@ -313,46 +417,60 @@ export async function invokeResearchGraph(
 ): Promise<{
   recommendations: unknown[];
   assistantReply: string;
+  /** Every candidate found, with its evidence: what a follow-up can pick from. */
+  candidates: VerifiedCandidate[];
   pipelineDiagnostics: PipelineDiagnostics;
   /** The model that wrote the ranker's prose — the run's provenance. */
   model: string;
 }> {
+  deps.signal?.throwIfAborted();
   const budget = createResearchBudget(deps.researchTimeoutMs);
-  const graph = await buildResearchGraph(deps, budget);
-  const result = await graph.invoke({
-    userQuery: input.userQuery,
-    preferenceContext: input.preferenceContext,
-    messages: input.messages,
-    mode: input.mode,
-    obscurityTarget: input.obscurityTarget,
-    braveHits: [],
-    newHits: [],
-    searchCallsUsed: 0,
-    extractedCandidates: [],
-    verifiedCandidates: [],
-    reflectionUsed: false,
-    roundsCompleted: 0,
-    nextExtraQueries: [],
-    recommendations: [],
-    assistantReply: "",
-  });
+  const stop = () => budget.close();
+  deps.signal?.addEventListener("abort", stop, { once: true });
+  deps.onProgress?.({ stage: "thinking" });
+  try {
+    const graph = await buildResearchGraph(deps, budget);
+    const result = await budget.run(budget.remaining(), (signal) => graph.invoke({
+      userQuery: input.userQuery,
+      preferenceContext: input.preferenceContext,
+      messages: input.messages,
+      mode: input.mode,
+      obscurityTarget: input.obscurityTarget,
+      excludeNames: input.excludeNames,
+      enoughFromLastFm: false,
+      braveHits: [],
+      newHits: [],
+      searchCallsUsed: 0,
+      extractedCandidates: [],
+      verifiedCandidates: [],
+      reflectionUsed: false,
+      roundsCompleted: 0,
+      nextExtraQueries: [],
+      recommendations: [],
+      assistantReply: "",
+    }, { signal }));
 
-  const pipelineDiagnostics: PipelineDiagnostics = {
-    braveHitCount: Array.isArray(result.braveHits) ? result.braveHits.length : 0,
-    extractedCandidateCount: Array.isArray(result.extractedCandidates) ? result.extractedCandidates.length : 0,
-    verifiedCount: Array.isArray(result.verifiedCandidates)
-      ? result.verifiedCandidates.filter((v: VerifiedCandidate) => v.verified).length
-      : 0,
-    reflectionTriggered: Boolean(result.reflectionUsed),
-    searchBudgetUsed: typeof result.searchCallsUsed === "number" ? result.searchCallsUsed : 0,
-  };
+    const pipelineDiagnostics: PipelineDiagnostics = {
+      braveHitCount: Array.isArray(result.braveHits) ? result.braveHits.length : 0,
+      extractedCandidateCount: Array.isArray(result.extractedCandidates) ? result.extractedCandidates.length : 0,
+      verifiedCount: Array.isArray(result.verifiedCandidates)
+        ? result.verifiedCandidates.filter((v: VerifiedCandidate) => v.verified).length
+        : 0,
+      reflectionTriggered: Boolean(result.reflectionUsed),
+      searchBudgetUsed: typeof result.searchCallsUsed === "number" ? result.searchCallsUsed : 0,
+    };
 
-  return {
-    recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
-    assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
-    pipelineDiagnostics,
-    // Every node runs on deps.model today. Should they ever diverge, this must
-    // name the ranker's model: the ranker writes the user-visible `why` prose.
-    model: deps.model ?? DEFAULT_RESEARCH_MODEL,
-  };
+    return {
+      recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
+      assistantReply: typeof result.assistantReply === "string" ? result.assistantReply : "",
+      candidates: Array.isArray(result.verifiedCandidates) ? result.verifiedCandidates : [],
+      pipelineDiagnostics,
+      // Every node runs on deps.model today. Should they ever diverge, this must
+      // name the ranker's model: the ranker writes the user-visible `why` prose.
+      model: deps.model ?? DEFAULT_RESEARCH_MODEL,
+    };
+  } finally {
+    deps.signal?.removeEventListener("abort", stop);
+    budget.close();
+  }
 }

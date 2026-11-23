@@ -1,6 +1,11 @@
 import { fetchWithTimeoutAndRetry } from "./httpClient.js";
+import { createRateGate, type RateGate } from "./rateGate.js";
 
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
+/** The Brave Free plan allows 1 request per second. */
+export const BRAVE_MIN_INTERVAL_MS = 1100;
+/** How often a 429 is retried, each time in a new slot of the gate, before the query gives no results. */
+const RATE_LIMIT_RETRIES = 2;
 const USER_AGENT = "bandsearch-app/0.1.0 (https://github.com/eikrad/bandsearch-app)";
 
 export class BraveSearchError extends Error {
@@ -29,7 +34,8 @@ export function normalizeQueryKey(query: string) {
   return String(query || "").trim().toLowerCase();
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Every Brave client in this process shares one rate limit: search rounds and concurrent users alike. */
+const sharedGate = createRateGate();
 
 export function createBraveSearchClient(opts: {
   fetchImpl?: typeof fetch;
@@ -38,14 +44,11 @@ export function createBraveSearchClient(opts: {
   timeoutMs?: number;
   retries?: number;
   dedupCache?: Map<string, CacheEntry>;
-  /** Minimum delay between successive requests; the Brave Free plan allows 1 req/sec. */
-  minRequestSpacingMs?: number;
-  /** Delay before retrying after an HTTP 429. */
-  rateLimitRetryMs?: number;
-  /** How many times to retry a 429 before giving up and returning empty results. */
-  rateLimitMaxRetries?: number;
-  sleepImpl?: (ms: number) => Promise<void>;
-  nowImpl?: () => number;
+  /** Floor between request starts; 0 disables it (tests, replay). */
+  minIntervalMs?: number;
+  /** Where starts are spaced; the process-wide gate unless a test brings its own. */
+  gate?: RateGate;
+  signal?: AbortSignal;
 } = {}) {
   const {
     fetchImpl = fetch,
@@ -54,11 +57,9 @@ export function createBraveSearchClient(opts: {
     timeoutMs = 5000,
     retries = 1,
     dedupCache,
-    minRequestSpacingMs = 1100,
-    rateLimitRetryMs = 1100,
-    rateLimitMaxRetries = 2,
-    sleepImpl = defaultSleep,
-    nowImpl = Date.now,
+    minIntervalMs = BRAVE_MIN_INTERVAL_MS,
+    gate = sharedGate,
+    signal: defaultSignal,
   } = opts;
   const key = String(apiKey ?? "").trim();
   if (!key) {
@@ -66,19 +67,11 @@ export function createBraveSearchClient(opts: {
   }
 
   const cache = dedupCache ?? null;
-  let lastRequestAt = 0;
-
-  async function throttle() {
-    if (minRequestSpacingMs <= 0) return;
-    const wait = minRequestSpacingMs - (nowImpl() - lastRequestAt);
-    if (wait > 0) {
-      await sleepImpl(wait);
-    }
-    lastRequestAt = nowImpl();
-  }
 
   return {
-    async search(query: string, options: { count?: number } = {}) {
+    async search(query: string, options: { count?: number; signal?: AbortSignal } = {}) {
+      const signal = options.signal ?? defaultSignal;
+      signal?.throwIfAborted();
       const qKey = normalizeQueryKey(query);
       if (!qKey) {
         return { results: [] as SearchResult[], fromDuplicateCache: false };
@@ -103,14 +96,13 @@ export function createBraveSearchClient(opts: {
       };
 
       let response: Awaited<ReturnType<typeof fetchWithTimeoutAndRetry>> | null = null;
-      for (let rateAttempt = 0; rateAttempt <= rateLimitMaxRetries; rateAttempt += 1) {
-        await throttle();
-        response = await fetchWithTimeoutAndRetry({ fetchImpl, url, timeoutMs, retries, headers });
+      for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt += 1) {
+        response = await gate.schedule(
+          minIntervalMs,
+          () => fetchWithTimeoutAndRetry({ fetchImpl, url, timeoutMs, retries, headers, signal }),
+          signal,
+        );
         if (response.status !== 429) break;
-        // Rate limited (Brave Free plan = 1 req/sec). Wait and retry; soft-fail if it persists.
-        if (rateAttempt < rateLimitMaxRetries) {
-          await sleepImpl(rateLimitRetryMs);
-        }
       }
 
       if (!response || response.status === 429) {

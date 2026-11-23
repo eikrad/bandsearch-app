@@ -32,18 +32,16 @@ function verified(name: string, isVerified = true): VerifiedCandidate {
 }
 
 const mbClient: MusicBrainzVerifyClient = {
-  async searchArtists(q) {
-    return [{ id: `mbid-${q.toLowerCase()}`, name: q, score: 100 }];
-  },
-  async lookupArtist(mbid) {
-    return {
-      id: mbid,
-      name: mbid.replace("mbid-", ""),
+  async findArtistsByName(names) {
+    return names.map((name) => ({
+      id: `mbid-${name.toLowerCase()}`,
+      name,
+      score: 100,
+      aliases: [],
       tags: [],
-      genres: [],
-      urls: [],
       lifeSpan: { ended: false },
-    };
+      country: null,
+    }));
   },
 };
 
@@ -75,7 +73,7 @@ async function runSubgraph({
   const { client } = fakeModelClient({
     reflect,
     extract: () => extractedCandidates([
-      { name: "Downfall of Gaia", evidenceUrls: ["https://blog.example/more"] },
+      { name: "Downfall of Gaia" },
     ]),
   });
 
@@ -91,6 +89,7 @@ async function runSubgraph({
     maxRounds,
     maxReflectionSearches: 2,
     targetVerifiedCount: 4,
+    hitsPerSearch: 12,
     totalSearchBudget: 10,
     onLog: (level, event) => logs.push({ level, event }),
   });
@@ -199,6 +198,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
   // the drain to "a search has happened" avoids depending on how many times
   // the graph asks for the remaining time.
   const drainingBudget = {
+    ...createResearchBudget(120_000),
     allocate: (cap: number) => cap,
     remaining: () => (searchCalls.length === 0 ? 120_000 : 1_000),
   };
@@ -207,7 +207,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
   const { client } = fakeModelClient({
     reflect: () => ({ sufficient: false, gaps: ["thin"], extraQueries: ["extra query"] }),
     extract: () => extractedCandidates([
-      { name: "Downfall of Gaia", evidenceUrls: ["https://blog.example/more"] },
+      { name: "Downfall of Gaia" },
     ]),
   });
 
@@ -223,6 +223,7 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
     maxRounds: 5,
     maxReflectionSearches: 2,
     targetVerifiedCount: 4,
+    hitsPerSearch: 12,
     totalSearchBudget: 10,
     onLog: (level, event) => logs.push({ level, event }),
   });

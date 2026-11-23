@@ -1,20 +1,15 @@
 import { createTursoSyncClient } from "./tursoSyncClient.js";
 import type { TursoSyncClient } from "./tursoSyncClient.js";
-import { createTursoPreferenceRepository } from "../preferences/tursoPreferenceRepository.js";
-import { createTursoUserRepository } from "../auth/tursoUserRepository.js";
-import { createTursoInviteRepository } from "../auth/tursoInviteRepository.js";
-import { createTursoChatSessionRepository } from "../sessions/tursoChatSessionRepository.js";
-import type { PreferenceRepository } from "../preferences/preferenceRepository.js";
+import { createTursoRepositories, type StorageRepositories } from "../storage/storageRepositories.js";
 
 // Builds the repository set for PREFERENCE_STORE=turso-sync.
 //
 // It lives outside createApp because opening the local replica is asynchronous
-// and createApp is not; server.ts awaits this and injects the result through
-// the repository options createApp already has. That keeps the sync path from
-// changing anything for PREFERENCE_STORE=turso, which still goes straight to
-// the cloud on every statement.
+// and createApp is not; openStorage awaits this and server.ts passes the complete
+// storage set to createApp. PREFERENCE_STORE=turso still goes straight to the
+// cloud on every statement.
 //
-// One client serves all three repositories on purpose: they share a database,
+// One client serves all account repositories on purpose: they share a database,
 // and a second client would mean a second replica file and a second sync loop
 // racing the first.
 
@@ -26,13 +21,7 @@ export type TursoSyncRepositoriesOptions = {
   logger?: { warn: (entry: Record<string, unknown>) => void };
 };
 
-export type TursoSyncRepositories = {
-  client: TursoSyncClient;
-  preferenceRepository: PreferenceRepository;
-  userRepository: ReturnType<typeof createTursoUserRepository>;
-  inviteRepository: ReturnType<typeof createTursoInviteRepository>;
-  chatSessionRepository: ReturnType<typeof createTursoChatSessionRepository>;
-};
+export type TursoSyncRepositories = StorageRepositories & { client: TursoSyncClient };
 
 export async function createTursoSyncRepositories({
   tursoSyncPath,
@@ -53,11 +42,5 @@ export async function createTursoSyncRepositories({
   // does not answer from a stale local copy.
   await client.sync();
 
-  return {
-    client,
-    preferenceRepository: createTursoPreferenceRepository({ client }),
-    userRepository: createTursoUserRepository({ client }),
-    inviteRepository: createTursoInviteRepository({ client }),
-    chatSessionRepository: createTursoChatSessionRepository({ client }),
-  };
+  return { client, ...createTursoRepositories(client) };
 }

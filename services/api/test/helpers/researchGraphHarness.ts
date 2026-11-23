@@ -24,7 +24,10 @@ export function fakeModelClient(
     plan?: () => unknown;
     extract?: (call: ModelCall) => unknown;
     reflect?: (call: ModelCall) => unknown;
-    rank?: () => unknown;
+    rank?: (call: ModelCall) => unknown;
+    route?: (call: ModelCall) => unknown;
+    /** An answer in words, not JSON. */
+    answer?: (call: ModelCall) => string;
   } = {},
 ): { client: ChatModelClient; calls: ModelCall[] } {
   const calls: ModelCall[] = [];
@@ -56,13 +59,29 @@ export function fakeModelClient(
           return responders.extract?.(call) ?? { candidates: [] };
         }
         if (system.startsWith("You recommend niche bands")) {
-          return responders.rank?.() ?? { reply: "", recommendations: [] };
+          return responders.rank?.(call) ?? { reply: "", recommendations: [] };
+        }
+        if (system.startsWith("You decide how a music discovery chat")) {
+          return responders.route?.(call) ?? { action: "search" };
+        }
+        if (system.startsWith("You are the conversational side")) {
+          return responders.answer?.(call) ?? "Glad you like them.";
         }
         throw new Error(`unrouted model call in research graph test: ${system.slice(0, 60)}`);
       })();
 
-      return { content: JSON.stringify(body) };
+      return { content: typeof body === "string" ? body : JSON.stringify(body) };
     },
+  };
+
+  // Streams the same answers in two pieces, to callers that listen.
+  client.stream = async (prompt, options) => {
+    const text = String((await client.invoke(prompt, options)).content);
+    const half = Math.ceil(text.length / 2);
+    return (async function* () {
+      yield { content: text.slice(0, half) };
+      yield { content: text.slice(half) };
+    })();
   };
 
   return { client, calls };
@@ -78,8 +97,7 @@ export type FetchLog = { url: string }[];
  */
 export function fakeFetch(handlers: {
   brave?: (url: string) => unknown;
-  musicbrainzSearch?: (url: string) => unknown;
-  musicbrainzLookup?: (url: string) => unknown;
+  musicbrainz?: (url: string) => unknown;
   lastFm?: (url: string) => unknown;
 }): { fetchImpl: typeof fetch; log: FetchLog } {
   const log: FetchLog = [];
@@ -98,11 +116,7 @@ export function fakeFetch(handlers: {
       return json(handlers.brave?.(url) ?? { web: { results: [] } });
     }
     if (url.includes("musicbrainz.org")) {
-      // `/artist?query=` is the search; `/artist/<mbid>` is the lookup.
-      if (url.includes("query=")) {
-        return json(handlers.musicbrainzSearch?.(url) ?? { artists: [] });
-      }
-      return json(handlers.musicbrainzLookup?.(url) ?? { id: "", name: "", tags: [], genres: [], relations: [] });
+      return json(handlers.musicbrainz?.(url) ?? { artists: [] });
     }
     if (url.includes("audioscrobbler.com")) {
       return json(handlers.lastFm?.(url) ?? {});
@@ -119,36 +133,14 @@ export function braveResults(hits: Array<{ title: string; url: string; descripti
   return { web: { results: hits } };
 }
 
-/** MusicBrainz search hit list. */
+/** MusicBrainz answer to a search for several artist names. */
 export function musicbrainzArtists(artists: Array<{ id: string; name: string; score?: number }>) {
   return { artists: artists.map((a) => ({ score: 100, ...a })) };
 }
 
-/** MusicBrainz artist lookup record. */
-export function musicbrainzArtist(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "mbid-1",
-    name: "Fen",
-    tags: [{ name: "blackgaze", count: 3 }],
-    genres: [{ name: "post-black metal" }],
-    relations: [],
-    "life-span": { begin: "2006", ended: false },
-    ...overrides,
-  };
-}
-
-/** The extractor's output shape. */
-export function extractedCandidates(
-  names: Array<{ name: string; evidenceUrls?: string[]; evidenceSnippets?: string[]; sourceQueries?: string[] }>,
-) {
-  return {
-    candidates: names.map((c) => ({
-      evidenceUrls: [],
-      evidenceSnippets: [],
-      sourceQueries: [],
-      ...c,
-    })),
-  };
+/** The extractor's output: each band with the numbers of the hits it appears in (the first by default). */
+export function extractedCandidates(candidates: Array<{ name: string; hits?: number[] }>) {
+  return { candidates: candidates.map((c) => ({ hits: [1], ...c })) };
 }
 
 /** A ranker payload the recommendation contract accepts. */
@@ -172,6 +164,7 @@ export function graphDeps(overrides: Partial<ResearchGraphDeps> = {}): ResearchG
     totalSearchBudget: 6,
     targetVerifiedCount: 2,
     researchTimeoutMs: 60_000,
+    braveMinIntervalMs: 0,
     ...overrides,
   };
 }

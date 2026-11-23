@@ -8,7 +8,6 @@ import {
   fakeFetch,
   fakeModelClient,
   graphDeps,
-  musicbrainzArtist,
   musicbrainzArtists,
   rankedRecommendations,
 } from "../helpers/researchGraphHarness.js";
@@ -38,8 +37,8 @@ const twoBraveHits = braveResults([
 function happyPath(overrides: Parameters<typeof fakeModelClient>[0] = {}) {
   const { client, calls } = fakeModelClient({
     extract: () => extractedCandidates([
-      { name: "Fen", evidenceUrls: ["https://blog.example/ffo-alcest"] },
-      { name: "Ghost Bath", evidenceUrls: ["https://blog.example/blackgaze"] },
+      { name: "Fen", hits: [1] },
+      { name: "Ghost Bath", hits: [2] },
     ]),
     rank: () => rankedRecommendations([
       { artist: "Fen", why: "Post-black, see https://blog.example/ffo-alcest" },
@@ -49,16 +48,7 @@ function happyPath(overrides: Parameters<typeof fakeModelClient>[0] = {}) {
 
   const { fetchImpl, log } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: (url) =>
-      musicbrainzArtists([
-        url.includes("Fen")
-          ? { id: "mbid-fen", name: "Fen" }
-          : { id: "mbid-ghost", name: "Ghost Bath" },
-      ]),
-    musicbrainzLookup: (url) =>
-      url.includes("mbid-fen")
-        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
-        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
   });
 
   return { client, calls, fetchImpl, log };
@@ -131,6 +121,26 @@ test("invokeResearchGraph caps initial searches at maxInitialSearches", async ()
   assert.equal(braveCalls.length, 2, "planner offered five queries; only two are in budget");
 });
 
+test("searching stops once the extractor has as many hits as it reads", async () => {
+  const { client, calls } = fakeModelClient({
+    plan: () => ({ anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: ["q1", "q2", "q3", "q4"] }),
+  });
+  const { fetchImpl, log } = fakeFetch({
+    brave: (url) => braveResults([1, 2, 3].map((n) => ({
+      title: `${new URL(url).searchParams.get("q")} hit ${n}`, url: `https://blog.example/${n}`, description: "",
+    }))),
+  });
+
+  await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, maxInitialSearches: 4, maxExtractHits: 6 }),
+    input,
+  );
+
+  assert.equal(log.filter((c) => c.url.includes("api.search.brave.com")).length, 2, "two searches filled the six hits");
+  const extraction = calls.find((c) => nodeOf(c.system) === "extract")!.user;
+  assert.match(extraction, /q2 hit 3/);
+});
+
 test("invokeResearchGraph passes the user query through to the planner", async () => {
   const { client, calls, fetchImpl } = happyPath();
 
@@ -144,13 +154,13 @@ test("invokeResearchGraph passes the user query through to the planner", async (
 test("invokeResearchGraph drops candidates MusicBrainz cannot confirm", async () => {
   const { client } = fakeModelClient({
     extract: () => extractedCandidates([
-      { name: "Not A Real Band", evidenceUrls: ["https://blog.example/ffo-alcest"] },
+      { name: "Not A Real Band", hits: [1] },
     ]),
     rank: () => rankedRecommendations([]),
   });
   const { fetchImpl } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: () => ({ artists: [] }),
+    musicbrainz: () => ({ artists: [] }),
   });
 
   const { pipelineDiagnostics, recommendations } = await invokeResearchGraph(
@@ -166,9 +176,9 @@ test("invokeResearchGraph drops candidates MusicBrainz cannot confirm", async ()
 
 test("invokeResearchGraph drops extracted candidates that carry no evidence", async () => {
   const { client } = fakeModelClient({
-    // No evidenceUrls and no evidenceSnippets: the extractor discards these
-    // before verification, so an unsupported name never reaches MusicBrainz.
-    extract: () => extractedCandidates([{ name: "Unsupported Name" }]),
+    // In none of the hits: the extractor discards these before verification,
+    // so an unsupported name never reaches MusicBrainz.
+    extract: () => extractedCandidates([{ name: "Unsupported Name", hits: [] }]),
     rank: () => rankedRecommendations([]),
   });
   const { fetchImpl, log } = fakeFetch({ brave: () => twoBraveHits });
@@ -202,8 +212,7 @@ test("invokeResearchGraph survives a ranker that returns unusable JSON", async (
   const { client } = happyPath({ rank: () => ({ nonsense: true }) });
   const { fetchImpl } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }]),
-    musicbrainzLookup: () => musicbrainzArtist({ id: "mbid-fen", name: "Fen" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }]),
   });
 
   await assert.rejects(
@@ -226,14 +235,7 @@ test("invokeResearchGraph enriches candidates with Last.fm listener counts", asy
   const { client } = happyPath();
   const { fetchImpl, log } = fakeFetch({
     brave: () => twoBraveHits,
-    musicbrainzSearch: (url) =>
-      musicbrainzArtists([
-        url.includes("Fen") ? { id: "mbid-fen", name: "Fen" } : { id: "mbid-ghost", name: "Ghost Bath" },
-      ]),
-    musicbrainzLookup: (url) =>
-      url.includes("mbid-fen")
-        ? musicbrainzArtist({ id: "mbid-fen", name: "Fen" })
-        : musicbrainzArtist({ id: "mbid-ghost", name: "Ghost Bath" }),
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
     lastFm: (url) =>
       url.includes("artist.getsimilar")
         ? { similarartists: { artist: [{ name: "Fen", match: "0.9" }] } }
@@ -249,6 +251,83 @@ test("invokeResearchGraph enriches candidates with Last.fm listener counts", asy
     log.some((c) => c.url.includes("audioscrobbler")),
     "the enrich_lastfm node should call Last.fm when a key is configured",
   );
+});
+
+/** Last.fm naming `count` bands near Alcest, each with these listeners. */
+function lastFmNaming(count: number, listeners: number) {
+  const names = Array.from({ length: count }, (_, i) => `Band ${String.fromCharCode(65 + i)}`);
+  return {
+    names,
+    lastFm: (url: string) => {
+      if (url.includes("artist.getSimilar")) return { similarartists: { artist: names.map((name) => ({ name, match: "0.7" })) } };
+      return { artist: { url: "https://www.last.fm/music/x", stats: { listeners: String(listeners) }, bio: { summary: "A band." } } };
+    },
+  };
+}
+
+async function runWithLastFm(count: number, listeners: number, overrides: Partial<Parameters<typeof invokeResearchGraph>[1]> = {}) {
+  const { names, lastFm } = lastFmNaming(count, listeners);
+  const { client, calls } = fakeModelClient({
+    extract: () => extractedCandidates([{ name: "Fen" }, { name: "Band A" }]),
+    rank: () => rankedRecommendations([{ artist: "Band A", why: "See https://www.last.fm/music/x" }]),
+  });
+  const { fetchImpl, log } = fakeFetch({
+    brave: () => twoBraveHits,
+    musicbrainz: () => musicbrainzArtists([...names, "Fen"].map((name) => ({ id: `mbid-${name}`, name }))),
+    lastFm,
+  });
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm" }),
+    { ...input, obscurityTarget: "underground", ...overrides },
+  );
+  return {
+    result,
+    searches: log.filter((c) => c.url.includes("api.search.brave.com")).length,
+    nodes: calls.map((c) => nodeOf(c.system)),
+    evidence: calls.find((c) => nodeOf(c.system) === "rank")!.user,
+  };
+}
+
+test("with enough bands of the requested size from Last.fm, the web is not searched", async () => {
+  const { result, searches, nodes, evidence } = await runWithLastFm(8, 20_000);
+  assert.equal(searches, 0);
+  assert.deepEqual(nodes, ["plan", "rank"]);
+  assert.match(evidence, /artist: Band H/);
+  assert.match(evidence, /On last\.fm: A band\./);
+  assert.equal(result.pipelineDiagnostics.verifiedCount, 8);
+  assert.equal(result.pipelineDiagnostics.searchBudgetUsed, 0);
+  const [pick] = result.recommendations as Array<{ sourceSignals: string[] }>;
+  assert.ok(pick!.sourceSignals.includes("lastfm_similarity"));
+  assert.equal(pick!.sourceSignals.includes("web_search"), false, "no web search found it");
+});
+
+test("with too few bands of the requested size, the web is searched and both sources are ranked", async () => {
+  const { result, searches, evidence } = await runWithLastFm(3, 20_000);
+  assert.ok(searches > 0);
+  assert.match(evidence, /artist: Fen/, "from the web");
+  assert.match(evidence, /artist: Band C/, "from Last.fm");
+  assert.equal(evidence.match(/artist: Band A\n/g)?.length, 1, "named by both, one candidate");
+  assert.match(evidence, /artist: Band A\n.*\nevidence_urls: [^\n]*blog\.example[^\n]*last\.fm|artist: Band A\n.*\nevidence_urls: [^\n]*last\.fm[^\n]*blog\.example/);
+  const [pick] = result.recommendations as Array<{ sourceSignals: string[] }>;
+  assert.ok(pick!.sourceSignals.includes("web_search"));
+});
+
+test("bands far from the requested size are not enough, and do not join the web search's", async () => {
+  const { searches, evidence } = await runWithLastFm(20, 3_000_000);
+  assert.ok(searches > 0);
+  assert.doesNotMatch(evidence, /artist: Band B/);
+});
+
+test("for Truly Obscure the web is searched at once", async () => {
+  const { searches, nodes } = await runWithLastFm(20, 900, { obscurityTarget: "obscure" });
+  assert.ok(searches > 0);
+  assert.deepEqual(nodes.slice(0, 2), ["plan", "extract"]);
+});
+
+test("bands the user has seen do not count as enough", async () => {
+  const seen = new Set(["band a", "band b", "band c"]);
+  const { searches } = await runWithLastFm(9, 20_000, { excludeNames: seen });
+  assert.ok(searches > 0);
 });
 
 // ------------------------------------------------------------- logging
@@ -272,6 +351,31 @@ test("invokeResearchGraph emits a log event per node", async () => {
   ]) {
     assert.ok(events.includes(expected), `expected a ${expected} log event, got ${events.join(", ")}`);
   }
+});
+
+test("the obscurity filter log shows where candidates fall against the target range, before and after filtering (#325)", async () => {
+  const { client } = happyPath();
+  const { fetchImpl } = fakeFetch({
+    brave: () => twoBraveHits,
+    musicbrainz: () => musicbrainzArtists([{ id: "mbid-fen", name: "Fen" }, { id: "mbid-ghost", name: "Ghost Bath" }]),
+    lastFm: (url) => {
+      if (url.includes("artist.getsimilar")) return { similarartists: { artist: [] } };
+      const listeners = decodeURIComponent(url).includes("artist=Fen") ? "42000" : "900";
+      return { artist: { stats: { listeners } } };
+    },
+  });
+  const events: Array<{ event: string; details: Record<string, unknown> }> = [];
+
+  await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, lastFmApiKey: "lastfm-key", onLog: (_level, event, details) => events.push({ event, details }) }),
+    { ...input, obscurityTarget: "cult" },
+  );
+
+  const filter = events.find((e) => e.event === "research_obscurity_filter");
+  assert.ok(filter, "the filter is logged");
+  const twoCandidates = { inRange: 1, tooObscure: 1, tooMainstream: 0 };
+  assert.deepEqual(filter.details.fitBefore, twoCandidates);
+  assert.deepEqual(filter.details.fitAfter, twoCandidates, "with fewer than five in range, the too-obscure candidate fills the pool");
 });
 
 // ------------------------------------------------------------ provenance
@@ -343,8 +447,8 @@ test("a failing extraction in the reflection round keeps the candidates already 
       extractCalls += 1;
       if (extractCalls > 1) throw new Error("candidate extractor timeout");
       return extractedCandidates([
-        { name: "Fen", evidenceUrls: ["https://blog.example/ffo-alcest"] },
-        { name: "Ghost Bath", evidenceUrls: ["https://blog.example/blackgaze"] },
+        { name: "Fen", hits: [1] },
+        { name: "Ghost Bath", hits: [2] },
       ]);
     },
   });

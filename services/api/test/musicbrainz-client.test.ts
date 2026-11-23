@@ -36,6 +36,97 @@ test("MusicBrainz client throws on non-OK responses", async () => {
   );
 });
 
+test("a busy MusicBrainz (503) is asked again, so a real artist is not reported as missing", async () => {
+  const statuses = [503, 503, 200];
+  const client = createMusicBrainzClient({
+    fetchImpl: async () => {
+      const status = statuses.shift()!;
+      return status === 200 ? jsonResponse({ artists: [{ id: "a1", name: "Alcest", score: 100 }] }) : new Response(null, { status });
+    },
+    minIntervalMs: 0,
+  });
+  assert.deepEqual((await client.searchArtists("alcest")).map((a) => a.id), ["a1"]);
+});
+
+test("a retry after 503 waits for its own slot in the rate gate", async () => {
+  const startedAt: number[] = [];
+  const client = createMusicBrainzClient({
+    fetchImpl: async () => {
+      startedAt.push(Date.now());
+      return startedAt.length === 1 ? new Response(null, { status: 503 }) : jsonResponse({ artists: [] });
+    },
+    minIntervalMs: 40,
+  });
+  await client.searchArtists("alcest");
+  assert.equal(startedAt.length, 2);
+  assert.ok(startedAt[1]! - startedAt[0]! >= 35, `retry gap too small: ${startedAt[1]! - startedAt[0]!}ms`);
+});
+
+test("findArtistsByName asks for many artists in one request and maps tags, aliases and life span", async () => {
+  const urls: URL[] = [];
+  const client = createMusicBrainzClient({
+    fetchImpl: async (url: string | URL | Request) => {
+      urls.push(new URL(String(url)));
+      return jsonResponse({
+        artists: [
+          {
+            id: "fen", name: "Fen", score: 100,
+            tags: [{ name: "blackgaze", count: 3 }],
+            aliases: [{ name: "Fen (UK)" }],
+            "life-span": { begin: "2006", ended: null },
+            country: "GB",
+          },
+          { id: "sunn", name: "Sunn O)))", score: 90 },
+        ],
+      });
+    },
+    minIntervalMs: 0,
+  });
+
+  const artists = await client.findArtistsByName(["Fen", "Sunn O)))", 'The "Quoted" Band']);
+
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0]!.searchParams.get("query"), 'artist:"Fen" OR artist:"Sunn O)))" OR artist:"The \\"Quoted\\" Band"');
+  assert.equal(urls[0]!.searchParams.get("limit"), "100");
+  assert.deepEqual(artists, [
+    { id: "fen", name: "Fen", score: 100, aliases: ["Fen (UK)"], tags: ["blackgaze"], lifeSpan: { begin: "2006", end: undefined, ended: false }, country: "GB" },
+    { id: "sunn", name: "Sunn O)))", score: 90, aliases: [], tags: [], lifeSpan: { begin: undefined, end: undefined, ended: false }, country: null },
+  ]);
+});
+
+test("findArtistsByName can also search aliases", async () => {
+  let query: string | null = null;
+  const client = createMusicBrainzClient({
+    fetchImpl: async (url: string | URL | Request) => {
+      query = new URL(String(url)).searchParams.get("query");
+      return jsonResponse({ artists: [] });
+    },
+    minIntervalMs: 0,
+  });
+  await client.findArtistsByName(["Keiji Haino"], { includeAliases: true });
+  assert.equal(query, 'artist:"Keiji Haino" OR alias:"Keiji Haino"');
+});
+
+test("a busy MusicBrainz is asked once more for aliases, four times more for names", async () => {
+  for (const [includeAliases, requests] of [[true, 2], [false, 5]] as const) {
+    let sent = 0;
+    const client = createMusicBrainzClient({
+      fetchImpl: async () => { sent += 1; return new Response(null, { status: 503 }); },
+      minIntervalMs: 0,
+    });
+    await assert.rejects(client.findArtistsByName(["Fen"], { includeAliases }), /503/);
+    assert.equal(sent, requests);
+  }
+});
+
+test("findArtistsByName sends nothing when there is no name to look for", async () => {
+  const client = createMusicBrainzClient({
+    fetchImpl: async () => { throw new Error("unexpected request"); },
+    minIntervalMs: 0,
+  });
+  assert.deepEqual(await client.findArtistsByName([" ", ""]), []);
+});
+
 test("MusicBrainz client spaces concurrent requests by minIntervalMs", async () => {
   // MusicBrainz declines *all* traffic from an IP that averages above 1 req/s
   // (HTTP 503) until the rate drops — so search + lookup must share one gate.

@@ -138,13 +138,14 @@ test("ChatAppView shows loading indicator while recommendations are in flight", 
         modeOptions: FRESH_ONLY,
         queryDisabled: true,
         isLoading: true,
+        progressLabel: "Looking for bands near Alcest…",
       }),
       handlers: chatHandlers({ onNavigateSettings: () => {}, onNavigateSaved: () => {} }),
     }),
   );
 
-  assert.equal(html.includes("Searching"), true, "submit button shows in-flight label");
-  assert.equal(html.includes("Finding niche recommendations"), true, "status text visible");
+  assert.equal(html.includes("Answering…"), true, "submit button shows in-flight label");
+  assert.equal(html.includes("Looking for bands near Alcest…"), true, "the line says what is happening");
   assert.equal(html.includes("bandsearch-spinner"), true, "spinner CSS hook present");
   assert.equal(html.includes("search-in-progress"), true, "loading region present");
 });
@@ -501,6 +502,7 @@ test("a user is told they are talking to an AI before they type anything", () =>
     "empty state discloses that recommendations come from an AI",
   );
   assert.match(html, /Scaleway/, "the disclosure names the model provider");
+  assert.match(html, /hosted in the EU/i, "the disclosure says the model is hosted in Europe");
 });
 
 test("the AI disclosure stays visible while results are on screen", () => {

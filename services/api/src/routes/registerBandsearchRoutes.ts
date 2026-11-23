@@ -5,17 +5,21 @@ import { createClient as createLibsqlClient } from "@libsql/client";
 import { validateRecommendationRequest } from "../recommendations.js";
 import { buildSavedBandContext } from "../savedBandContext.js";
 import { BraveSearchError } from "../integrations/braveSearch.js";
+import type { TurnListener } from "../agent/conversation/conversationService.js";
+import { answerStreamFor } from "../http/answerStream.js";
 import { sendError } from "../http/errors.js";
 import { handleArtistSearch } from "../http/artistSearchHandler.js";
 import { writeStructuredLog } from "../http/structuredLog.js";
 import { registerEvalRoutes } from "../eval/evalRoutes.js";
 import { createNoOpEvalRepository } from "../eval/evalRepository.js";
+import type { RecommendationFeedback } from "../feedback/recommendationFeedback.js";
 import type { EvalWorker } from "../eval/evalWorker.js";
 import type { EvalRepository, PipelineDiagnostics } from "../eval/evalRepository.js";
 import { inferAndApplyGroupAssignments } from "../preferences/bandGroupInference.js";
 import type { SavedBand } from "../preferences/preferenceRepository.js";
 import type { UserDataStore } from "../privacy/userDataStore.js";
 import type { InviteService } from "../auth/inviteService.js";
+import type { ChatSessionRepository } from "../sessions/chatSessionRepository.js";
 import type { Invite } from "../auth/inviteRepository.js";
 
 // Augment Express Request to carry the authenticated user id set by authMiddleware.
@@ -54,19 +58,14 @@ export type BandsearchRouteContext = {
     lookupArtist?: (mbid: string) => Promise<{ id: string; name: string; genres: string[]; tags: string[] }>;
   };
   resolvedArtistImageClient: { getArtistImageUrl: (name: string) => Promise<string | null> };
-  resolvedChatSessionRepository: {
-    createSession: (input: { title: string }, userId?: string) => Promise<Record<string, unknown>>;
-    listSessions: (userId?: string) => Promise<Record<string, unknown>[]>;
-    getSession: (id: string, userId?: string) => Promise<Record<string, unknown> | null>;
-    getMessages: (id: string) => Promise<Record<string, unknown>[]>;
-    addMessage: (id: string, msg: { role: string; content: string }) => Promise<Record<string, unknown>>;
-  };
+  resolvedChatSessionRepository: ChatSessionRepository;
   resolvedRecommendationPipeline?: {
-    recommend: (req: Record<string, unknown>) => Promise<{
+    recommend: (req: Record<string, unknown>, listener?: TurnListener) => Promise<{
       recommendations: unknown[];
       assistantReply?: string;
       meta?: unknown;
     }>;
+    forgetUser?: (userId: string) => void;
   };
   getRecommendationReadiness?: (() => Record<string, unknown>) | null;
   logger?: {
@@ -76,6 +75,7 @@ export type BandsearchRouteContext = {
   createTursoClient?: (config: { url: string; authToken?: string }) => TursoClient;
   evalWorker?: EvalWorker;
   evalRepository?: EvalRepository;
+  recommendationFeedback: RecommendationFeedback;
   evalDashboardEnabled?: boolean;
   evalDashboardPassword?: string;
   resolvedAuthService?: {
@@ -91,6 +91,20 @@ export type BandsearchRouteContext = {
   resolvedInviteService?: InviteService;
   resolvedUserDataStore?: UserDataStore | null;
 };
+
+/** What the client is told about a failed recommendation. */
+function recommendationFailure(error: unknown, code: string): { status: number; code: string; message: string } {
+  if (code === "recommendation_initializing") {
+    return { status: 503, code, message: "recommendation pipeline is initializing" };
+  }
+  if (code === "recommendation_context_unavailable") {
+    return { status: 502, code, message: "recommendation context unavailable" };
+  }
+  if (error instanceof BraveSearchError) {
+    return { status: 502, code: "search_unavailable", message: error.message };
+  }
+  return { status: 502, code: "recommendation_unavailable", message: "recommendation service unavailable" };
+}
 
 export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteContext) {
   const {
@@ -108,6 +122,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     createTursoClient,
     evalWorker,
     evalRepository,
+    recommendationFeedback,
     evalDashboardEnabled = false,
     evalDashboardPassword,
     resolvedAuthService,
@@ -206,6 +221,7 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         }
         return sendError(res, 401, "auth_error", result.error ?? "invalid credentials");
       }
+      resolvedRecommendationPipeline?.forgetUser?.(req.userId);
       return res.status(200).json({ ok: true, erased: result.erased });
     });
 
@@ -297,6 +313,16 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
     });
   });
 
+  // Recommendation feedback (#307): product data, so it sits behind the
+  // same auth and rate limit as the recommendations it judges, and does not
+  // depend on the eval dashboard. The owner comes from the token, never from
+  // the body; an install without accounts stores it without one.
+  app.post("/recommendations/:eventId/feedback", recommendationsLimiter, async (req, res) => {
+    const result = await recommendationFeedback.submit(req.params.eventId, req.body, req.userId ?? null);
+    if (!result.ok) return sendError(res, 400, "validation_error", result.error);
+    return res.status(200).json({ ok: true });
+  });
+
   app.post("/recommendations", recommendationsLimiter, async (req, res) => {
     const validation = validateRecommendationRequest(req.body);
     if (validation.ok === false) {
@@ -307,6 +333,13 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
       const logFn = logger?.warn ?? ((obj) => writeStructuredLog("warn", obj));
       logFn({ component: "prompt_safety", event: "prompt_safety_truncate", fields: validation.truncated });
     }
+
+    const stream = answerStreamFor(req, res);
+    // A user who stopped waiting must not use up searches.
+    const cancelled = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) cancelled.abort(new Error("the client closed the request"));
+    });
 
     try {
       if (!resolvedRecommendationPipeline) {
@@ -320,10 +353,19 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         messages: validation.messages,
         userId: req.userId,
         obscurityTarget: validation.obscurityTarget,
+        conversationId: validation.conversationId,
+      }, {
+        signal: cancelled.signal,
+        ...(stream ? {
+          onProgress: (progress) => stream.send({ type: "progress", progress }),
+          onReply: (text) => stream.send({ type: "reply", text }),
+        } : {}),
       });
 
-      const eventId = evalWorker ? randomUUID() : undefined;
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
+      // Every batch gets an id: feedback refers to it, and eval (when enabled)
+      // records the batch under the same id. An answer in words is no batch.
+      const eventId = publicMeta.turn === "answer" ? undefined : randomUUID();
       if (evalWorker && eventId) {
         void evalWorker.processEvent({
           eventId,
@@ -352,14 +394,19 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         pipelineVersion: appVersion,
       };
 
-      return res.status(200).json({
+      const response = {
         recommendations: pipelineResult.recommendations,
         assistantReply: pipelineResult.assistantReply ?? "",
-        meta: eventId !== undefined
-          ? { ...publicMeta, ...provenance, eventId }
-          : { ...publicMeta, ...provenance },
-      });
+        meta: { ...publicMeta, ...provenance, ...(eventId ? { eventId } : {}) },
+      };
+      if (!stream?.isOpen()) return res.status(200).json(response);
+      stream.send({ type: "done", response });
+      return stream.end();
     } catch (error) {
+      if (cancelled.signal.aborted) {
+        writeStructuredLog("info", { component: "recommendations", event: "recommendation_cancelled" });
+        return;
+      }
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
       // The response only carries a generic code; without this line a failed
       // request leaves no trace of why (seen as a silent 502 in #241).
@@ -370,16 +417,10 @@ export function registerBandsearchRoutes(app: Express, ctx: BandsearchRouteConte
         code: code || null,
         error: error instanceof Error ? error.message : String(error),
       });
-      if (code === "recommendation_initializing") {
-        return sendError(res, 503, "recommendation_initializing", "recommendation pipeline is initializing");
-      }
-      if (code === "recommendation_context_unavailable") {
-        return sendError(res, 502, "recommendation_context_unavailable", "recommendation context unavailable");
-      }
-      if (error instanceof BraveSearchError) {
-        return sendError(res, 502, "search_unavailable", error.message);
-      }
-      return sendError(res, 502, "recommendation_unavailable", "recommendation service unavailable");
+      const failure = recommendationFailure(error, code);
+      if (!stream?.isOpen()) return sendError(res, failure.status, failure.code, failure.message);
+      stream.send({ type: "error", status: failure.status, error: { code: failure.code, message: failure.message } });
+      return stream.end();
     }
   });
 

@@ -2,6 +2,7 @@ export const QUERY_MAX_LENGTH = 2000;
 export const MESSAGE_CONTENT_MAX_LEN = 4000;
 export const MESSAGES_MAX_COUNT = 50;
 export const PRIORITY_CONTEXT_MAX_LEN = 2000;
+export const CONVERSATION_ID_MAX_LEN = 100;
 
 export type RecommendationMode = "fresh" | "preference-aware";
 
@@ -27,6 +28,62 @@ export function validateFeedbackType(value: unknown): FeedbackType | undefined {
   return undefined;
 }
 
+/**
+ * How long recommendation feedback is kept (GDPR Art. 5(1)(e)). The API
+ * purges by it and the privacy policy states it, so both read it from here.
+ */
+export const FEEDBACK_RETENTION_DAYS = 90;
+
+/**
+ * Body of `POST /recommendations/:eventId/feedback` (#307): the verdict
+ * plus the batch it judges, as the user asked for it. Nothing else records the
+ * batch in production, so the feedback carries it.
+ */
+export type RecommendationFeedbackSubmission = {
+  feedbackType: FeedbackType;
+  query: string;
+  mode: string;
+  obscurityTarget: string | null;
+  bandNames: string[];
+};
+
+/**
+ * How a message was answered: by a new search, by picking from the bands the
+ * conversation already found, or in words alone (no bands asked for).
+ */
+export type TurnKind = "search" | "pick" | "answer";
+
+/** What the API is doing for a message, in the order it happens; a search may skip stages. */
+export type AnswerProgress =
+  /** Deciding how to answer, or planning the search. */
+  | { stage: "thinking" }
+  /** Searching the web; the reference artists the search starts from. */
+  | { stage: "searching"; anchorArtists: string[] }
+  /** Looking up the bands found. */
+  | { stage: "checking"; found: number }
+  /** Too few good bands: searching once more. */
+  | { stage: "searchingAgain" }
+  /** Choosing among the candidates and writing. */
+  | { stage: "choosing"; candidates: number };
+
+/**
+ * `POST /recommendations` with `Accept: text/event-stream`: server-sent events
+ * of these shapes, ending in `done` (the JSON response) or `error` (the JSON
+ * error). `reply` carries the whole text so far; only `done` is final. A
+ * request that fails or finishes before the first event gets plain JSON.
+ */
+export type AnswerEvent =
+  | { type: "progress"; progress: AnswerProgress }
+  | { type: "reply"; text: string }
+  | { type: "done"; response: unknown }
+  | { type: "error"; status: number; error: { code: string; message: string } };
+
+/**
+ * How long the API remembers the bands a conversation found, in memory only.
+ * The privacy policy states it, so both read it from here.
+ */
+export const CONVERSATION_MEMORY_HOURS = 2;
+
 export type ChatTurnRole = "user" | "assistant";
 
 export type ChatMessage = { role: ChatTurnRole; content: string };
@@ -50,6 +107,8 @@ export type ValidatedRecommendationHttpBody =
       readonly priorityContext: string;
       readonly truncated: string[];
       readonly obscurityTarget: ObscurityTarget | undefined;
+      /** Which conversation the message continues; undefined for a one-off question. */
+      readonly conversationId: string | undefined;
     };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -189,7 +248,13 @@ export function validateRecommendationHttpBody(body: unknown): ValidatedRecommen
     priorityContext,
     truncated,
     obscurityTarget: validateObscurityTarget(b.obscurityTarget),
+    conversationId: validateConversationId(b.conversationId),
   };
+}
+
+function validateConversationId(value: unknown): string | undefined {
+  const id = typeof value === "string" ? value.trim() : "";
+  return id && id.length <= CONVERSATION_ID_MAX_LEN ? id : undefined;
 }
 
 /**

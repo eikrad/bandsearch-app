@@ -7,6 +7,7 @@ import {
   type DesktopReactMountOptions,
 } from "../src/ui/mountDesktopReactApp.js";
 import { fakeContainer, fakeReactRoot, routedViewOf } from "./helpers/fakeDom.js";
+import { createHashRouter } from "../src/createHashRouter.js";
 
 type MountShell = DesktopReactMountOptions["shell"];
 type MountRouter = NonNullable<DesktopReactMountOptions["router"]>;
@@ -235,4 +236,32 @@ test("routed mount calls render with PrivacyPolicyView when route is privacy", a
 
   assert.equal(renders.length, 1);
   assert.equal(renderedComponentName(renders[0]), "PrivacyPolicyView");
+});
+
+test("a navigation renders the new screen once, even when the browser echoes it", async () => {
+  // A real hash router in a browser: setting the hash fires `hashchange` later.
+  let hash = "";
+  const hashListeners: Array<() => void> = [];
+  const router = createHashRouter({
+    getHash: () => hash,
+    setHash: (next) => { hash = next; },
+    addListener: (fn) => hashListeners.push(fn),
+    removeListener: () => {},
+  });
+  const renders: ReactElement[] = [];
+  const mount = createDesktopReactMount({
+    shell: makeShell(),
+    router,
+    getSettingsViewProps: () => ({ headerTitle: "Settings" }),
+    createRootImpl: () => recordingRoot(renders),
+    resolveContainer: () => fakeContainer(),
+  });
+  await mount.mount();
+  renders.length = 0;
+
+  await mount.handlers.onNavigateSettings();
+  hashListeners.forEach((fn) => fn());
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(renders.map(renderedComponentName), ["SettingsView"]);
 });

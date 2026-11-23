@@ -3,6 +3,7 @@ import type { UserDataStore, ExportedChatSession } from "./userDataStore.js";
 import {
   USER_SCOPED_TABLES,
   emptyExport,
+  rowToExportedFeedback,
   rowToExportedUser,
   rowToSavedBand,
 } from "./userDataStore.js";
@@ -79,12 +80,7 @@ export function createTursoUserDataStore({ client }: { client: TursoClient }): U
             createdAt: String(m.created_at),
           })),
       }));
-      bundle.recommendationFeedback = feedback.rows.map((r) => ({
-        id: String(r.id),
-        eventId: String(r.event_id),
-        feedbackType: String(r.feedback_type),
-        createdAt: String(r.created_at),
-      }));
+      bundle.recommendationFeedback = feedback.rows.map(rowToExportedFeedback);
 
       return bundle;
     },

@@ -95,25 +95,45 @@ test("buildJudgePrompt: includes all required fields per band", () => {
   assert.ok("generic_why_flag" in wittr);
 });
 
-// ─── F3: judge thresholds aligned with obscurityScorer ──────────────────────
+// ─── #325: obscurity fit is two-sided, against the target ranges ─────────────
 
-test("buildJudgePrompt: system prompt thresholds match OBSCURITY_THRESHOLDS", () => {
+test("the judge is told each target's listener range and that missing it downwards is a miss too", () => {
   const { system } = buildJudgePrompt(sampleBands);
-  // Correct tier floors from obscurityScorer: cult 20k, underground 2k, mainstream 500k
-  assert.ok(system.includes("20,000"), "cult floor 20,000 should appear");
-  assert.ok(system.includes("2,000"), "underground floor 2,000 should appear");
-  assert.ok(system.includes("500,000"), "mainstream floor 500,000 should appear");
-  // The old, wrong numbers must be gone
-  assert.ok(!/100k|under 100,000|< 100,000/.test(system), "stale 100k underground threshold removed");
-  assert.ok(!/\b10k\b|under 10,000|< 10,000/.test(system), "stale 10k obscure threshold removed");
+  assert.ok(system.includes("cult = 20,000–500,000"), "cult range");
+  assert.ok(system.includes("underground = 2,000–50,000"), "underground range");
+  assert.ok(system.includes("obscure = 0–5,000"), "obscure range");
+  assert.match(system, /more obscure than (the target|requested)/i);
+  assert.doesNotMatch(system, /at or below the target/i, "the one-sided rule is gone");
 });
 
-test("buildJudgePrompt: includes obscurity_tier per band when provided", () => {
-  const bands = [{ ...sampleBands[0], obscurityTier: "cult" }];
+test("each band tells the judge where its listeners fall against the requested range", () => {
+  const bands = [
+    { ...sampleBands[0], obscurityTarget: "cult", listeners: 3_000 },
+    { ...sampleBands[0], bandName: "Fits", obscurityTarget: "underground", listeners: 30_000 },
+    { ...sampleBands[0], bandName: "No count", obscurityTarget: "underground", listeners: null },
+    { ...sampleBands[0], bandName: "No target", obscurityTarget: null, listeners: 3_000 },
+  ];
   const parsed: unknown = JSON.parse(buildJudgePrompt(bands).user);
   assertArray(parsed);
-  assertRecord(parsed[0]);
-  assert.equal(parsed[0].obscurity_tier, "cult");
+  const fits = parsed.map((band) => {
+    assertRecord(band);
+    return band.target_range_fit;
+  });
+  // "No count" shares its target with a counted band, so it counts as obscure, as in the search filter.
+  assert.deepEqual(fits, ["tooObscure", "inRange", "tooObscure", null]);
+});
+
+test("with no listener count for any band, the judge gets no fit and judges from the evidence", () => {
+  const bands = [
+    { ...sampleBands[0], obscurityTarget: "cult", listeners: null },
+    { ...sampleBands[0], bandName: "Other", obscurityTarget: "cult", listeners: undefined },
+  ];
+  const parsed: unknown = JSON.parse(buildJudgePrompt(bands).user);
+  assertArray(parsed);
+  for (const band of parsed) {
+    assertRecord(band);
+    assert.equal(band.target_range_fit, null);
+  }
 });
 
 test("the judge sends all bands in one call, system prompt first", async () => {

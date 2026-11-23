@@ -1,11 +1,13 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
-import type { ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
-import { validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
-import { capAndTrim, escapeEnvelopeChars, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
+import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
+import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
+import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
-import { parseModelJsonResponse, withTimeout } from "../modelUtils.js";
+import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.js";
 
+import { foundOnTheWeb } from "./lastFmEnrichment.js";
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
 import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
@@ -44,12 +46,11 @@ function normalizeRankPayload(parsed: unknown): { assistantReply: string; recomm
 }
 
 /**
- * True if `why` cites at least one evidence or MB URL (substring or same host).
+ * True if `why` cites at least one evidence URL (substring or same host).
  */
-export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[], mbUrls: string[] = []): boolean {
-  const all = [...evidenceUrls, ...mbUrls].filter(Boolean);
+export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[]): boolean {
   const w = why.toLowerCase();
-  for (const u of all) {
+  for (const u of evidenceUrls) {
     if (!u) continue;
     if (w.includes(String(u).toLowerCase())) return true;
     try {
@@ -91,18 +92,21 @@ export function attachEvidenceCitationsToRecommendations(
     if (!artist || !why) continue;
 
     const cand = findCandidateForArtist(artist, candidates);
-    const evidenceUrls = cand?.evidenceUrls ?? [];
-    const mbUrls = cand?.mbUrls ?? [];
+    // A candidate found in a snippet without a URL is still attributable to its MusicBrainz record.
+    const recordUrl = cand?.mbid ? `https://musicbrainz.org/artist/${cand.mbid}` : undefined;
+    const evidenceUrls = cand?.evidenceUrls.length ? cand.evidenceUrls : recordUrl ? [recordUrl] : [];
 
     let nextWhy = why;
-    if (!whyContainsEvidenceCitation(nextWhy, evidenceUrls, mbUrls)) {
-      const fallback = evidenceUrls[0] ?? mbUrls[0];
+    if (!whyContainsEvidenceCitation(nextWhy, evidenceUrls)) {
+      const fallback = evidenceUrls[0];
       if (!fallback) continue;
       nextWhy = `${why} (see ${fallback})`;
     }
 
-    const signals = Array.isArray(row.sourceSignals) ? [...(row.sourceSignals as string[])] : [];
-    if (!signals.includes("web_search")) signals.push("web_search");
+    const modelSignals = Array.isArray(row.sourceSignals) ? [...(row.sourceSignals as string[])] : [];
+    // Where a band was found is known here; what the model claims about it is not evidence.
+    const found = cand && !foundOnTheWeb(cand) ? "lastfm_similarity" : "web_search";
+    const signals = [...modelSignals.filter((s) => s !== "web_search" && s !== "lastfm_similarity"), found];
     if (cand?.verified && !signals.includes("musicbrainz_verification")) {
       signals.push("musicbrainz_verification");
     }
@@ -117,10 +121,12 @@ export function attachEvidenceCitationsToRecommendations(
   return out;
 }
 
-export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string {
+export function formatEvidenceForPrompt(candidates: VerifiedCandidate[], obscurityTarget?: string): string {
   const deduped = mergeVerifiedCandidates(candidates);
+  // The filter's own rule, so the ranker sees each candidate as the filter and eval do (#325).
+  const fits = fitObscurityTarget(deduped.map((c) => c.listenerCount), obscurityTarget);
   const lines: string[] = [];
-  for (const c of deduped) {
+  for (const [i, c] of deduped.entries()) {
     const name = c.canonicalName || c.name;
     const bits = [
       `artist: ${name}`,
@@ -129,9 +135,11 @@ export function formatEvidenceForPrompt(candidates: VerifiedCandidate[]): string
       `snippets: ${c.evidenceSnippets.join(" / ")}`,
     ];
     if (c.mbTags?.length) bits.push(`mb_tags: ${c.mbTags.join(", ")}`);
-    if (c.mbGenres?.length) bits.push(`mb_genres: ${c.mbGenres.join(", ")}`);
+    if (c.listenerTags?.length) bits.push(`lastfm_tags: ${c.listenerTags.join(", ")}`);
+    if (c.country) bits.push(`country: ${c.country}`);
     if (c.lifeSpan?.begin) bits.push(`active_from: ${c.lifeSpan.begin}, ended: ${c.lifeSpan.ended}`);
     if (c.listenerCount != null) bits.push(`lastfm_listeners: ${c.listenerCount.toLocaleString("en-US")}`);
+    if (fits) bits.push(`target_range_fit: ${fits[i]!.fit}`);
     lines.push(bits.join("\n"));
   }
   return lines.join("\n---\n");
@@ -142,19 +150,34 @@ const RANK_SYSTEM = [
   'Shape: {"reply":"<string>","recommendations":[{"artist":"<string>","why":"<string>","sourceSignals":["<string>",...]}]}.',
   "The reply must be 2–4 sentences: acknowledge the user's taste, tie picks to their query, ask one follow-up.",
   "Recommendations: at most 3 items. Each why MUST quote or include at least one full URL from evidence_urls for that artist (Bandcamp, blog, etc.).",
-  "sourceSignals must include agent_reasoning, web_search, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
+  "sourceSignals must include agent_reasoning, musicbrainz_verification when the candidate was verified, and user_preferences when relevant.",
   "Only recommend artists present in the evidence list; use the exact spelling from evidence.",
 ].join(" ");
 
-const RANK_OBSCURITY: Record<string, string> = {
-  cult: "Prefer acts that feel like genuine discoveries — known within their scene but not household names. Deprioritise any band with major-label backing or heavy mainstream press.",
-  underground: "Strongly favour lesser-known artists. Evidence from Bandcamp, DIY labels, and niche blogs is a positive signal. If an act appears mainstream or heavily-streamed, skip them for more underground candidates.",
-  obscure: "Only pick truly obscure deep cuts — Bandcamp/DIY evidence and niche underground blog mentions only. Penalise any artist with mainstream exposure, major-label affiliation, or widespread streaming presence.",
+const RANK_HISTORY_MAX_CHARS = 7000;
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+const RANK_OBSCURITY_FLAVOUR: Record<ObscurityTarget, string> = {
+  cult: "Acts known within their scene but not household names.",
+  underground: "Genuinely underground acts with a real but small audience.",
+  obscure: "Deep cuts: Bandcamp, DIY and niche-blog acts.",
 };
+
+/** The ranker's obscurity instruction, from the same ranges the filter and eval use (#325). */
+function rankObscurity(target: ObscurityTarget): string {
+  const { min, max } = OBSCURITY_TARGET_RANGES[target];
+  return [
+    `Pick artists with ${fmt(min)}–${fmt(max)} Last.fm listeners. ${RANK_OBSCURITY_FLAVOUR[target]}`,
+    "A pick below the range is as wrong as one above it.",
+    "Prefer candidates whose target_range_fit is inRange; pick one outside the range only when too few inRange candidates fit the query, and then the nearest.",
+  ].join(" ");
+}
 
 export type CreateRecommendationRankerOptions = {
   apiKey: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   model?: string;
   /**
    * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
@@ -172,7 +195,19 @@ export type RankInput = {
   mode: RecommendationMode;
   candidates: VerifiedCandidate[];
   obscurityTarget?: string;
+  /** Told the reply so far while it is written. */
+  onReply?: (text: string) => void;
 };
+
+/** Passes on a reply as it grows out of the ranker's JSON, without repeating itself. */
+function replyListener(onReply: ((text: string) => void) | undefined): ((raw: string) => void) | undefined {
+  if (!onReply) return undefined;
+  let last = "";
+  return (raw) => {
+    const reply = replySoFar(raw);
+    if (reply && reply !== last) onReply(last = reply);
+  };
+}
 
 export function buildRankUserPartsForTest(input: {
   query: string;
@@ -185,12 +220,10 @@ export function buildRankUserPartsForTest(input: {
   const prefBlock = wrapPreferenceContext(input.preferenceContext ?? "");
   const parts = [`query: ${wrappedQuery}`, `mode: ${input.mode}`];
   if (prefBlock) parts.push(prefBlock);
-  const obscurityConstraint = input.obscurityTarget ? RANK_OBSCURITY[input.obscurityTarget] : undefined;
-  if (obscurityConstraint) {
-    parts.push(`obscurity_rank (${input.obscurityTarget}): ${obscurityConstraint}`);
-  }
+  const target = validateObscurityTarget(input.obscurityTarget);
+  if (target) parts.push(`obscurity_rank (${target}): ${rankObscurity(target)}`);
   if (input.candidates) {
-    const evidence = formatEvidenceForPrompt(input.candidates);
+    const evidence = formatEvidenceForPrompt(input.candidates, input.obscurityTarget);
     parts.push(`evidence_candidates:\n${evidence}`, "limit: 3");
   }
   return parts;
@@ -199,6 +232,7 @@ export function buildRankUserPartsForTest(input: {
 export async function createRecommendationRanker({
   apiKey,
   timeoutMs = 12000,
+  signal,
   model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
   chatModel,
@@ -212,26 +246,17 @@ export async function createRecommendationRanker({
   }
 
   const temperature = 0.35;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? new ChatGoogleGenerativeAI({
+  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
     model,
     apiKey: trimmedKey,
     temperature,
-    thinkingConfig: { thinkingBudget: 0 },
   });
 
   return async function rank(input) {
     const prompt: Array<{ role: string; content: string }> = [
       { role: "system", content: RANK_SYSTEM },
+      ...recentTurns(input.messages, RANK_HISTORY_MAX_CHARS),
     ];
-
-    let historyChars = 0;
-    for (const msg of input.messages) {
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      const content = capAndTrim(escapeEnvelopeChars(String(msg.content ?? "")), 4000);
-      if (!content || historyChars + content.length > 7000) break;
-      prompt.push({ role: msg.role, content });
-      historyChars += content.length;
-    }
 
     const parts = buildRankUserPartsForTest({
       query: input.query,
@@ -242,7 +267,7 @@ export async function createRecommendationRanker({
     });
     prompt.push({ role: "user", content: parts.join("\n") });
 
-    const response = await withTimeout(modelClient.invoke(prompt), timeoutMs, "recommendation ranker timeout");
+    const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker timeout", onText: replyListener(input.onReply) });
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
     let normalized = normalizeRankPayload(parsed);
@@ -259,7 +284,7 @@ export async function createRecommendationRanker({
           content: `${(prompt[prompt.length - 1] as { content: string }).content}\n\nYour previous answer omitted required evidence URLs in why fields. Repeat with each why containing a full https URL from evidence_urls.`,
         },
       ];
-      const response2 = await withTimeout(modelClient.invoke(retryPrompt), timeoutMs, "recommendation ranker retry");
+      const response2 = await invokeModel(modelClient, retryPrompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker retry", onText: replyListener(input.onReply) });
       const raw2 = typeof response2.content === "string" ? response2.content : "";
       const parsed2 = parseModelJsonResponse(raw2);
       normalized = normalizeRankPayload(parsed2);

@@ -1,24 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  resolveRecommendationFacadeInput,
-  enrichRecommendationsWithMbIds,
-} from "../src/recommendations.js";
+import { resolveRecommendationFacadeInput } from "../src/recommendations.js";
 import type { SavedBandForContext } from "../src/savedBandContext.js";
 
 function savedBand(overrides: Partial<SavedBandForContext> = {}): SavedBandForContext {
   return { id: "b1", name: "Alcest", rating: 5, categories: [], note: "", noteEdited: false, ...overrides };
 }
-
-test("enrichRecommendationsWithMbIds attaches MusicBrainz id when names match", () => {
-  const items = [{ artist: "Fen", why: "x", sourceSignals: ["a"] }];
-  const artists = [{ id: "mbid-fen", name: "Fen", score: 99, disambiguation: "" }];
-  const out = enrichRecommendationsWithMbIds(items, artists);
-  const first = out[0];
-  assert.ok(first && typeof first === "object");
-  assert.equal((first as Record<string, unknown>).musicbrainzArtistId, "mbid-fen");
-});
 
 test("resolveRecommendationFacadeInput fresh mode does not call repository", async () => {
   let buildCalled = false;

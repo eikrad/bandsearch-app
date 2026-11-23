@@ -12,14 +12,18 @@ type RecommendationApiResponse = {
  * Brave runs it, MusicBrainz verifies each candidate. They are excluded from
  * `npm run test:e2e` and run by `npm run test:e2e:live`.
  *
- * They are opt-in because their wall time is not ours to control. MusicBrainz
- * allows roughly one request per second, so verifying ~25 candidates dominates
- * the run and degrades sharply once it starts throttling: the same query has
- * measured 26 s on a cold client and over 150 s after a handful of consecutive
- * runs. That is a property of the upstream service, not a regression, and no
- * timeout value makes it deterministic — so it does not belong in the suite
- * people run before committing.
+ * They are opt-in because their wall time is not ours to control: a search
+ * usually takes 10–15 s, but waits whenever Brave or MusicBrainz is busy. No
+ * timeout value makes that deterministic, and every run spends search quota, so
+ * it does not belong in the suite people run before committing.
  */
+/** The response of a streamed answer (its last event), or of a plain JSON one. */
+function finalResponse(body: string): RecommendationApiResponse {
+  const last = body.split("\n\n").filter((block) => block.startsWith("data: ")).at(-1);
+  if (!last) return JSON.parse(body) as RecommendationApiResponse;
+  return (JSON.parse(last.slice("data: ".length)) as { response: RecommendationApiResponse }).response;
+}
+
 const LIVE_PIPELINE_TIMEOUT_MS = 180_000;
 
 test.describe("Bandsearch UI", () => {
@@ -53,8 +57,7 @@ test.describe("Bandsearch UI", () => {
 
     await page.route("**/recommendations", async (route) => {
       const response = await route.fetch();
-      const body = await response.json() as RecommendationApiResponse;
-      apiResponses.push(body);
+      apiResponses.push(finalResponse(await response.text()));
       await route.fulfill({ response });
     });
 

@@ -25,7 +25,7 @@ function stringField(record: Record<string, unknown>, key: string): string {
 }
 
 /** An app backed by a real in-memory SQLite database with the production schema. */
-function freshApp() {
+function freshApp({ forgetUser }: { forgetUser?: (userId: string) => void } = {}) {
   const db = new Database(":memory:");
   db.exec(fs.readFileSync(SCHEMA_PATH, "utf8"));
   const app = createApp({
@@ -33,6 +33,7 @@ function freshApp() {
     userDataStore: createSqliteUserDataStore({ db }),
     preferenceRepository: createPreferenceRepository({ preferenceStore: "memory" }),
     runtimeConfig: { jwtSecret: JWT_SECRET },
+    ...(forgetUser ? { recommendationPipeline: { recommend: async () => ({ recommendations: [] }), forgetUser } } : {}),
   });
   return { app, db };
 }
@@ -86,6 +87,18 @@ test("a user can delete their account and all of their data is gone", async () =
   const bands = db.prepare("SELECT COUNT(*) n FROM saved_bands WHERE user_id = ?").get(userId) as { n: number };
   assert.equal(users.n, 0, "the account is gone");
   assert.equal(bands.n, 0, "their saved bands went with it");
+});
+
+test("deleting an account also clears what its conversations left in memory", async () => {
+  const forgotten: string[] = [];
+  const { app, db } = freshApp({ forgetUser: (userId) => { forgotten.push(userId); } });
+  const token = await registerUser(app, "one@example.com");
+  const userId = (db.prepare("SELECT id FROM users LIMIT 1").get() as { id: string }).id;
+
+  await req(app, "POST", "/account/delete", { password: "not-my-password" }, token);
+  assert.deepEqual(forgotten, [], "not for a refused deletion");
+  await req(app, "POST", "/account/delete", { password: "pw" }, token);
+  assert.deepEqual(forgotten, [userId]);
 });
 
 test("a wrong password deletes nothing", async () => {

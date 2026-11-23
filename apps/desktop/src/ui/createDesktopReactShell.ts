@@ -1,23 +1,26 @@
 import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatViewProps } from "../chatRenderAdapter.js";
-import type { DesktopChatUiStack } from "../desktopChatUiStack.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatAppView } from "./ChatAppView.js";
 import { formatRecommendationQueryError } from "../apiErrorMessages.js";
+import { createStatusMessage, type StatusMessage, type TimerHandle } from "../statusMessage.js";
 
-type ActionStatus = { type: "success" | "error"; message: string } | null;
-
-/** Node returns a Timeout, browsers and test fakes return a number. */
-type TimerHandle = ReturnType<typeof setTimeout> | number;
+type ActionStatus = StatusMessage | null;
 
 interface CreateDesktopReactShellOptions {
   renderAdapter: {
     onModeChange: (mode: string) => unknown;
     onSubmitQuery: (query: string) => unknown;
     onObscurityTargetChange?: (target: string | undefined) => unknown;
+    onRetrySearch?: () => unknown;
+    onCancelSearch?: () => unknown;
+    onFeedback?: (feedbackType: string) => unknown;
+    onFeedbackDismiss?: () => unknown;
+    setViewport?: (viewport: string) => void;
     getViewProps: () => ChatViewProps;
+    subscribe?: (listener: () => void) => () => void;
   };
   actionHandlers?: Partial<ChatHandlers>;
   statusTimeoutMs?: number;
@@ -26,8 +29,6 @@ interface CreateDesktopReactShellOptions {
   // the seam does not need the full setTimeout signature (which drags in
   // __promisify__ and forces fakes to be Node Timeouts).
   setTimeoutImpl?: (handler: () => void, timeout: number) => TimerHandle;
-  cancelSearchImpl?: () => void;
-  retryLastSearchImpl?: () => Promise<unknown> | void;
 }
 
 export function createDesktopReactShell({
@@ -36,19 +37,24 @@ export function createDesktopReactShell({
   statusTimeoutMs = 3000,
   errorStatusTimeoutMs = 10000,
   setTimeoutImpl = setTimeout,
-  cancelSearchImpl,
-  retryLastSearchImpl,
 }: CreateDesktopReactShellOptions) {
-  let actionStatus: ActionStatus = null;
-  let clearStatusTimer: TimerHandle | null = null;
+  const status = createStatusMessage({
+    confirmationMs: statusTimeoutMs,
+    errorMs: errorStatusTimeoutMs,
+    setTimeoutImpl,
+  });
 
-  function scheduleStatusClear(customDelayMs?: number) {
-    const delayMs = typeof customDelayMs === "number" ? customDelayMs : statusTimeoutMs;
-    if (clearStatusTimer) clearTimeout(clearStatusTimer);
-    clearStatusTimer = setTimeoutImpl(() => {
-      actionStatus = null;
-      clearStatusTimer = null;
-    }, delayMs);
+  /**
+   * Search and Retry fail the same way: an inline error the user can act on.
+   * A stopped search is not a failure — the model settles it without an error.
+   */
+  async function runSearch(start: () => unknown) {
+    try {
+      return await start();
+    } catch (error) {
+      status.show({ type: "error", message: formatRecommendationQueryError(error) });
+      throw new Error("query failed", { cause: error });
+    }
   }
 
   const handlers = {
@@ -62,59 +68,74 @@ export function createDesktopReactShell({
   };
 
   const shell = {
-    desktopUi: undefined as DesktopChatUiStack | undefined,
+    /** Calls `listener` when the view props change outside a handler. Returns an unsubscribe. */
+    subscribe(listener: () => void) {
+      const unsubscribes = [status.subscribe(listener), renderAdapter.subscribe?.(listener)];
+      return () => { for (const unsubscribe of unsubscribes) unsubscribe?.(); };
+    },
     getViewProps(): ChatViewProps & { actionStatus?: ActionStatus } {
       const base = renderAdapter.getViewProps();
-      return { ...base, actionStatus };
+      return { ...base, actionStatus: status.get() };
     },
     async updateMode(mode: string) {
       return handlers.onModeChange(mode);
     },
+    updateObscurityTarget(target: string | undefined) {
+      return handlers.onObscurityTargetChange(target);
+    },
+    setViewport(viewport: string) {
+      renderAdapter.setViewport?.(viewport);
+    },
     async submitQuery(query: string) {
+      return runSearch(() => handlers.onQuerySubmit(query));
+    },
+    async retryLastSearch() {
+      return runSearch(() => renderAdapter.onRetrySearch?.());
+    },
+    cancelSearch() {
+      renderAdapter.onCancelSearch?.();
+    },
+    async submitFeedback(feedbackType: string) {
       try {
-        return await handlers.onQuerySubmit(query);
+        return await renderAdapter.onFeedback?.(feedbackType);
       } catch (error) {
-        actionStatus = { type: "error", message: formatRecommendationQueryError(error) };
-        scheduleStatusClear(errorStatusTimeoutMs);
-        throw new Error("query failed", { cause: error });
+        status.show({ type: "error", message: "Your feedback could not be sent." });
+        throw error;
       }
+    },
+    dismissFeedback() {
+      renderAdapter.onFeedbackDismiss?.();
     },
     async saveBand(target: SavedBandTarget) {
       try {
         const result = await handlers.onSave(target);
-        actionStatus = { type: "success", message: `Saved ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Saved ${target.name}.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Save failed for ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Save failed for ${target.name}.` });
         throw error;
       }
     },
     async rateBand(target: SavedBandTarget, rating: number | null) {
       try {
         const result = await handlers.onRate(target, rating);
-        actionStatus =
-          rating === null
-            ? { type: "success", message: `Cleared the rating for ${target.name}.` }
-            : { type: "success", message: `Rated ${target.name}: ${rating}/5.` };
-        scheduleStatusClear();
+        status.show({
+          type: "success",
+          message: rating === null ? `Cleared the rating for ${target.name}.` : `Rated ${target.name}: ${rating}/5.`,
+        });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Rating failed for ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Rating failed for ${target.name}.` });
         throw error;
       }
     },
     async unsaveBand(savedBandId: string, artistName: string) {
       try {
         const result = await handlers.onUnsave(savedBandId, artistName);
-        actionStatus = { type: "success", message: `Removed ${artistName} from saved artists.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Removed ${artistName} from saved artists.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Could not remove ${artistName}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Could not remove ${artistName}.` });
         throw error;
       }
     },
@@ -124,20 +145,12 @@ export function createDesktopReactShell({
     ) {
       try {
         const result = await handlers.onSaveCategoryNote(target, updates);
-        actionStatus = { type: "success", message: `Updated ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "success", message: `Updated ${target.name}.` });
         return result;
       } catch (error) {
-        actionStatus = { type: "error", message: `Could not update ${target.name}.` };
-        scheduleStatusClear();
+        status.show({ type: "error", message: `Could not update ${target.name}.` });
         throw error;
       }
-    },
-    cancelSearch() {
-      cancelSearchImpl?.();
-    },
-    async retryLastSearch() {
-      return retryLastSearchImpl?.();
     },
     renderHtml() {
       const viewProps = renderAdapter.getViewProps();

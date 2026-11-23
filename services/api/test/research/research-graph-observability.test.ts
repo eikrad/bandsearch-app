@@ -15,8 +15,7 @@ const BASE_DEPS = {
 };
 
 const STUB_MB = {
-  async searchArtists() { return []; },
-  async lookupArtist() { throw new Error("unexpected lookup"); },
+  async findArtistsByName() { return []; },
 };
 
 const STUB_RUN_QUERIES = async () => ({ hits: [], calls: 0 });
@@ -62,6 +61,7 @@ test("all reflection subgraph channels are present in the parent graph", async (
     maxRounds: 2,
     maxReflectionSearches: 2,
     targetVerifiedCount: 8,
+    hitsPerSearch: 12,
     totalSearchBudget: 5,
   });
 

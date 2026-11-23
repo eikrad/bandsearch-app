@@ -1,4 +1,8 @@
 import type { RecommendationEvent, BandEvalScore } from "./evalRepository.js";
+import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
+import { fitObscurityTarget } from "../obscurityTargets.js";
+
+export type TargetFitCounts = { inRange: number; tooObscure: number; tooMainstream: number };
 
 export type AggregatedMetrics = {
   eventCount: number;
@@ -8,6 +12,13 @@ export type AggregatedMetrics = {
   meanEvidenceQuality: number | null;
   meanDiscoveryValue: number | null;
   obscurityDistribution: { mainstream: number; cult: number; underground: number; obscure: number; unknown: number };
+  /**
+   * Bands per requested target, by where their listeners fall against its range,
+   * fitted per request by the same rule the research filter uses (#325).
+   */
+  obscurityTargetFit: Record<ObscurityTarget, TargetFitCounts>;
+  /** Share of fitted bands that land inside their request's target range. */
+  obscurityInRangeRate: number | null;
   sourceQualityDistribution: { high: number; medium: number; low: number };
   meanCitationSupportRate: number | null;
   genericWhyRate: number | null;
@@ -20,7 +31,14 @@ export type MetricsDelta = {
   meanDiscoveryValue: number | null;
   meanCitationSupportRate: number | null;
   genericWhyRate: number | null;
+  obscurityInRangeRate: number | null;
 };
+
+/** Baselines saved before #325 carry no target-fit metrics. */
+export type StoredMetrics = Omit<AggregatedMetrics, "obscurityTargetFit" | "obscurityInRangeRate"> &
+  Partial<Pick<AggregatedMetrics, "obscurityTargetFit" | "obscurityInRangeRate">>;
+
+const noFit = (): TargetFitCounts => ({ inRange: 0, tooObscure: 0, tooMainstream: 0 });
 
 function mean(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -38,6 +56,7 @@ export function aggregateMetrics(
 ): AggregatedMetrics {
   const obscurityDistribution = { mainstream: 0, cult: 0, underground: 0, obscure: 0, unknown: 0 };
   const sourceQualityDistribution = { high: 0, medium: 0, low: 0 };
+  const targetFit: Record<ObscurityTarget, TargetFitCounts> = { cult: noFit(), underground: noFit(), obscure: noFit() };
 
   const relevances: number[] = [];
   const obscurityFits: number[] = [];
@@ -71,6 +90,17 @@ export function aggregateMetrics(
     }
   }
 
+  // Fitted per request, like the filter: a band without a count only counts as
+  // obscure when Last.fm had counts for that request at all.
+  for (const event of events) {
+    const listeners = bandScores.filter((s) => s.eventId === event.id).map((s) => s.listeners);
+    const fits = fitObscurityTarget(listeners, event.obscurityTarget);
+    if (fits) for (const { fit } of fits) targetFit[event.obscurityTarget as ObscurityTarget][fit]++;
+  }
+  const counts = Object.values(targetFit);
+  const inRange = counts.reduce((n, f) => n + f.inRange, 0);
+  const decided = counts.reduce((n, f) => n + f.inRange + f.tooObscure + f.tooMainstream, 0);
+
   return {
     eventCount: events.length,
     bandCount: bandScores.length,
@@ -79,6 +109,8 @@ export function aggregateMetrics(
     meanEvidenceQuality: mean(evidenceQualities),
     meanDiscoveryValue: mean(discoveryValues),
     obscurityDistribution,
+    obscurityTargetFit: targetFit,
+    obscurityInRangeRate: decided > 0 ? inRange / decided : null,
     sourceQualityDistribution,
     meanCitationSupportRate: mean(citationRates),
     genericWhyRate: genericWhyTotal > 0 ? genericWhyCount / genericWhyTotal : null,
@@ -87,7 +119,7 @@ export function aggregateMetrics(
 
 export function computeDelta(
   current: AggregatedMetrics,
-  baseline: AggregatedMetrics,
+  baseline: StoredMetrics,
 ): MetricsDelta {
   return {
     meanRelevance: nullableDiff(current.meanRelevance, baseline.meanRelevance),
@@ -96,5 +128,6 @@ export function computeDelta(
     meanDiscoveryValue: nullableDiff(current.meanDiscoveryValue, baseline.meanDiscoveryValue),
     meanCitationSupportRate: nullableDiff(current.meanCitationSupportRate, baseline.meanCitationSupportRate),
     genericWhyRate: nullableDiff(current.genericWhyRate, baseline.genericWhyRate),
+    obscurityInRangeRate: nullableDiff(current.obscurityInRangeRate, baseline.obscurityInRangeRate ?? null),
   };
 }

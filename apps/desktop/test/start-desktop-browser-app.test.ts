@@ -19,11 +19,9 @@ type BootstrapCall = {
 
 type BootstrappedReactApp = ReturnType<typeof bootstrapDesktopReactApp>;
 
-// The real bootstrap hands back a full mount API and UI stack; these tests only
-// drive `mount` and the viewport hook, so the rest is narrowed away here.
-type ReactAppDouble = Partial<Omit<BootstrappedReactApp, "desktopUi">> & {
-  desktopUi?: { setViewport: (viewport: string) => void };
-};
+// The real bootstrap hands back a full mount API; these tests only drive
+// `mount` and the viewport hook, so the rest is narrowed away here.
+type ReactAppDouble = Partial<BootstrappedReactApp>;
 
 function fakeReactApp(overrides: ReactAppDouble): BootstrappedReactApp {
   return overrides as BootstrappedReactApp;
@@ -119,7 +117,7 @@ test("startDesktopBrowserApp picks mobile viewport when matchMedia matches narro
               calls.push({ type: "mount" });
               return {};
             },
-            desktopUi: { setViewport: () => {} },
+            setViewport: () => {},
           });
         },
       },
@@ -241,6 +239,7 @@ async function startAgainstWakingApi(downFor: number) {
   });
   const routes: string[] = [];
   let connectingProps: (() => { state: string; attempt?: number }) | undefined;
+  let finalRoute = (): string => "";
 
   await startDesktopBrowserApp({
     // Onboarding complete, otherwise the welcome gate short-circuits the auth
@@ -261,6 +260,7 @@ async function startAgainstWakingApi(downFor: number) {
       bootstrapDesktopApp: (options) => bootstrapDesktopApp(options),
       bootstrapDesktopReactApp: (options) => {
         connectingProps = options.getConnectingViewProps;
+        finalRoute = () => options.router?.getRoute() ?? "";
         routes.push(options.router?.getRoute() ?? "");
         return fakeReactApp({
           mount: async () => { routes.push(options.router?.getRoute() ?? ""); return {}; },
@@ -270,6 +270,9 @@ async function startAgainstWakingApi(downFor: number) {
     },
   });
 
+  // Routing on renders through the router's listener, which this fake app has
+  // none of; where the user ended up is what the router says.
+  routes.push(finalRoute());
   Object.defineProperty(globalThis, "location", {
     value: prevLocation, configurable: true, writable: true,
   });

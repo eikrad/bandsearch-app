@@ -2,10 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Express, Request, Response, NextFunction } from "express";
 import { sendError } from "../http/errors.js";
-import type { EvalRepository, FeedbackInput } from "./evalRepository.js";
-import { validateFeedbackType } from "../../../../shared/schemas/src/contracts.js";
+import type { EvalRepository } from "./evalRepository.js";
 import { aggregateMetrics, computeDelta } from "./evalAggregator.js";
-import type { AggregatedMetrics } from "./evalAggregator.js";
+import type { AggregatedMetrics, StoredMetrics } from "./evalAggregator.js";
 
 export type EvalRouteContext = {
   evalRepository: EvalRepository;
@@ -53,7 +52,7 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
       return res.status(200).json({ current, baseline: null, delta: null });
     }
 
-    const baselineMetrics: AggregatedMetrics = JSON.parse(latestBaseline.metricsJson);
+    const baselineMetrics: StoredMetrics = JSON.parse(latestBaseline.metricsJson);
     const delta = computeDelta(current, baselineMetrics);
 
     return res.status(200).json({
@@ -80,24 +79,6 @@ export function registerEvalRoutes(app: Express, ctx: EvalRouteContext) {
     return res.status(200).json({
       baselines: baselines.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt })),
     });
-  });
-
-  app.post("/eval/feedback", async (req, res) => {
-    const { eventId, feedbackType, userId } = req.body ?? {};
-    if (!eventId || typeof eventId !== "string") {
-      return sendError(res, 400, "validation_error", "eventId is required");
-    }
-    const validatedType = validateFeedbackType(feedbackType);
-    if (!validatedType) {
-      return sendError(res, 400, "validation_error", "feedbackType must be one of: good, too_mainstream, wrong_direction");
-    }
-    const input: FeedbackInput = {
-      eventId,
-      feedbackType: validatedType,
-      userId: typeof userId === "string" ? userId : undefined,
-    };
-    await evalRepository.logFeedback(input);
-    return res.status(200).json({ ok: true });
   });
 
   app.get("/eval/dashboard", (req, res) => {

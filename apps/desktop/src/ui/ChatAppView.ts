@@ -3,11 +3,18 @@ import type { CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ChatHandlers } from "./viewTypes.js";
 import type { PlatformLink } from "../platformLinks.js";
 import * as React from "react";
+import { StatusBanner } from "./StatusBanner.js";
 import { validateObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import type { ObscurityTarget } from "../../../../shared/schemas/src/contracts.js";
 import { ObscurityTargetPicker } from "./ObscurityTargetPicker.js";
 import { FeedbackReactionBar } from "./FeedbackReactionBar.js";
-import { nextRatingForStarTap, parseCategoriesInput } from "../cardActionLogic.js";
+import {
+  categoryNoteUpdates,
+  editCategories,
+  editNote,
+  nextRatingForStarTap,
+  startCategoryNoteDraft,
+} from "../cardActionLogic.js";
 
 function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
@@ -183,11 +190,8 @@ function CategoryNoteSheet({
   onSave: (updates: CategoryNoteUpdates) => void;
   onClose: () => void;
 }) {
-  const [categoriesText, setCategoriesText] = React.useState(card.categories.join(", "));
-  const [categoriesTouched, setCategoriesTouched] = React.useState(false);
-  const [note, setNote] = React.useState(card.note);
-  const [noteTouched, setNoteTouched] = React.useState(false);
-  const isPrefilled = !card.noteEdited && card.note.length > 0;
+  // What gets sent is decided by the draft (cardActionLogic.ts), not here.
+  const [draft, setDraft] = React.useState(() => startCategoryNoteDraft(card));
 
   const fieldLabelStyle: React.CSSProperties = {
     display: "grid",
@@ -230,10 +234,10 @@ function CategoryNoteSheet({
       "Category (comma-separated)",
       React.createElement("input", {
         type: "text",
-        value: categoriesText,
+        value: draft.categoriesText,
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-          setCategoriesText(event.target.value);
-          setCategoriesTouched(true);
+          const text = event.target.value;
+          setDraft((current) => editCategories(current, text));
         },
         style: fieldStyle,
       }),
@@ -242,7 +246,7 @@ function CategoryNoteSheet({
       "label",
       fieldLabelStyle,
       "Note",
-      isPrefilled
+      draft.noteIsAiSuggested
         ? React.createElement(
             "span",
             { style: { fontSize: "11px", fontStyle: "italic" } },
@@ -250,10 +254,10 @@ function CategoryNoteSheet({
           )
         : null,
       React.createElement("textarea", {
-        value: note,
+        value: draft.note,
         onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-          setNote(event.target.value);
-          setNoteTouched(true);
+          const text = event.target.value;
+          setDraft((current) => editNote(current, text));
         },
         rows: 3,
         style: { ...fieldStyle, resize: "vertical" as const },
@@ -283,10 +287,7 @@ function CategoryNoteSheet({
         "button",
         {
           type: "button",
-          onClick: () => onSave({
-            ...(categoriesTouched ? { categories: parseCategoriesInput(categoriesText) } : {}),
-            ...(noteTouched ? { note } : {}),
-          }),
+          onClick: () => onSave(categoryNoteUpdates(draft)),
           style: {
             backgroundColor: theme.accent,
             color: "#0a0d14",
@@ -499,18 +500,18 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
   );
 }
 
-function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme: ReturnType<typeof getTheme>; onStop?: () => void }) {
+function SearchInProgress({ visible, label, awaitingApi, theme, onStop }: { visible: boolean; label: string; awaitingApi: boolean; theme: ReturnType<typeof getTheme>; onStop?: () => void }) {
   const [showSlowHint, setShowSlowHint] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
 
   React.useEffect(() => {
-    if (!visible) {
+    if (!visible || !awaitingApi) {
       setShowSlowHint(false);
       return;
     }
     const timer = setTimeout(() => setShowSlowHint(true), 8000);
     return () => clearTimeout(timer);
-  }, [visible]);
+  }, [visible, awaitingApi]);
 
   if (!visible) return null;
   return React.createElement(
@@ -547,7 +548,7 @@ function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme:
       React.createElement(
         "span",
         null,
-        "Finding niche recommendations…",
+        label,
         showSlowHint
           ? React.createElement(
               "span",
@@ -590,24 +591,31 @@ function SearchInProgress({ visible, theme, onStop }: { visible: boolean; theme:
   );
 }
 
-function StatusBanner({ actionStatus }: { actionStatus: ChatViewProps["actionStatus"] }) {
-  if (!actionStatus) return null;
-  const isError = actionStatus.type === "error";
-  return React.createElement(
-    "p",
-    {
-      style: {
-        margin: "0 0 16px 0",
-        padding: "9px 12px",
-        borderRadius: "8px",
-        fontSize: "13px",
-        backgroundColor: isError ? "#2a1218" : "#0f2318",
-        color: isError ? "#f8a8b0" : "#7dd4a8",
-        border: `1px solid ${isError ? "#7a2a35" : "#2a6048"}`,
-      },
-    },
-    actionStatus.message,
-  );
+/** How close to the end counts as reading the newest message. */
+const FOLLOW_WITHIN_PX = 120;
+
+/**
+ * Keeps the newest message in view as the conversation grows, unless the user
+ * scrolled up to read something earlier. Their own message always comes into view.
+ */
+function useFollowNewest(messages: MessageViewProps[] | null | undefined) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const following = React.useRef(true);
+  const count = messages?.length ?? 0;
+  const last = messages?.[count - 1];
+  const written = last?.content?.length ?? 0;
+  const own = last?.role === "user";
+
+  React.useEffect(() => {
+    const box = ref.current;
+    if (box && (own || following.current)) box.scrollTop = box.scrollHeight;
+  }, [count, written, own]);
+
+  const onScroll = () => {
+    const box = ref.current;
+    if (box) following.current = box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_WITHIN_PX;
+  };
+  return { ref, onScroll };
 }
 
 function findLastAssistantWithCardsIndex(messages: MessageViewProps[] | null | undefined): number {
@@ -901,6 +909,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
   const theme = getTheme(viewProps.modeValue);
   const isMobile = viewProps.viewport === "mobile";
   const searchInFlight = viewProps.isLoading === true;
+  const followNewest = useFollowNewest(viewProps.messages);
 
   const latestFromThread = getLatestAssistantCards(viewProps.messages);
   const legacyCards =
@@ -997,10 +1006,11 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
             React.createElement(
               "div",
               {
+                ...followNewest,
                 className: "bandsearch-chat-scroll bandsearch-chat-scroll--main",
                 style: { overflowY: "auto", paddingBottom: "8px" },
               },
-              React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+              React.createElement(StatusBanner, { status: viewProps.actionStatus }),
               React.createElement(MessageThread, {
                 messages: viewProps.messages,
                 theme,
@@ -1042,10 +1052,11 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
         : React.createElement(
             "div",
             {
+              ...followNewest,
               className: "bandsearch-chat-scroll",
               style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" },
             },
-            React.createElement(StatusBanner, { actionStatus: viewProps.actionStatus }),
+            React.createElement(StatusBanner, { status: viewProps.actionStatus }),
             React.createElement(MessageThread, {
               messages: viewProps.messages,
               theme,
@@ -1090,7 +1101,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
           backgroundColor: theme.pageBg,
         },
       },
-      React.createElement(SearchInProgress, { visible: searchInFlight, theme, onStop: handlers.onStop }),
+      React.createElement(SearchInProgress, { visible: searchInFlight, label: viewProps.progressLabel, awaitingApi: viewProps.awaitingApi, theme, onStop: handlers.onStop }),
       React.createElement(FeedbackReactionBar, {
         visible: viewProps.showFeedbackBar === true,
         onFeedback: (type: string) => handlers.onFeedback?.(type),
@@ -1156,7 +1167,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
               whiteSpace: "nowrap",
             },
           },
-          searchInFlight ? "Searching…" : "Recommend",
+          searchInFlight ? "Answering…" : "Recommend",
         ),
       ),
       React.createElement(
@@ -1170,7 +1181,7 @@ export function ChatAppView({ viewProps, handlers }: { viewProps: ChatViewProps;
             lineHeight: 1.4,
           },
         },
-        "AI-generated recommendations — a language model hosted by Scaleway writes the picks and the explanations, verified against MusicBrainz. Not a human curator.",
+        "AI-generated recommendations — a language model hosted in the EU (Scaleway, France) writes the picks and the explanations, verified against MusicBrainz. Not a human curator.",
       ),
     ),
   );

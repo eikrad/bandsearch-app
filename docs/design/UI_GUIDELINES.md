@@ -241,6 +241,19 @@ is not rendered at all, and the view is unchanged.
 
 ### Chat and request states
 - Show a clear loading state in the assistant flow while fetching recommendations.
+- **Progress line** (next to the spinner) says what is happening, in these words:
+  "Sending your message…" until the API answers, then "Thinking…", "Looking for
+  bands near A, B and C…" (at most three reference artists; "Searching the web…"
+  without any), "Found N bands, checking them…", "Too few good matches yet,
+  searching once more…", "Choosing the best matches…". The "server may be waking
+  up" hint appears after 8 s only while nothing was heard from the API.
+- **The reply is shown while it is written**, as an ordinary assistant message;
+  its cards appear together when the answer is complete. A reply that a later
+  stage discards, or that fails, disappears.
+- The submit button reads "Answering…" meanwhile: not every message is a search.
+- The thread follows the newest message while the user is within 120 px of its
+  end; scrolled further up, it stays where they are reading. Their own message
+  always comes into view.
 - Show inline recoverable errors with retry.
 - Keep state feedback local to the interaction context (not global alerts by default).
 
@@ -306,10 +319,31 @@ CSS must be defined in `styles.css` under `.obscurity-target-picker` and `.obscu
 ### Error states
 - Show request errors inline in chat context.
 - Provide a clear retry action near the failed interaction.
+- Retry re-runs the failed question in place: the question appears once, is not
+  sent again as conversation history, and is saved to the chat session once.
+- A failed retry shows the same inline error as a failed search. Stopping a
+  search or a retry is not an error and shows none (#304).
 
 ### Feedback states
-- Use local confirmations for Save/Rate actions.
+- Use local confirmations for Save/Rate actions. A confirmation clears itself
+  after 3 seconds, an error after 10, without waiting for the next interaction
+  (#311).
+- Saved Artists has the same status line, under its header, with the same
+  timing. Every action there reports a failure in it: adding, removing,
+  searching, exporting, importing, creating or deleting a group, grouping by
+  genre, and loading the list. Adding and removing an artist confirm
+  ("Added Fen.", "Removed Fen."); an import says how many artists arrived and
+  how many were already saved, and is an error if the API refused any. A file
+  that is not a Bandsearch export is refused before anything is sent ("That
+  file isn't a Bandsearch export."). Nothing on this screen fails silently
+  (#313).
+- A status line is announced to screen readers: an error as an alert, a
+  confirmation as a polite status.
 - Avoid disruptive global notifications for routine success events.
+- The recommendation feedback bar under a batch (Spot on / Too mainstream /
+  Wrong direction) closes on the click or on dismiss; a successful verdict shows
+  no confirmation. A verdict the API refuses shows the inline error "Your
+  feedback could not be sent." — it is never dropped silently (#307).
 
 ## Responsiveness Policy
 

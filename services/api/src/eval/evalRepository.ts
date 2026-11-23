@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import type { AggregatedMetrics } from "./evalAggregator.js";
-import type { FeedbackType } from "../../../../shared/schemas/src/contracts.js";
-
-export type { FeedbackType };
 
 export type PipelineDiagnostics = {
   braveHitCount: number;
@@ -62,12 +59,6 @@ export type EvalBaseline = {
   createdAt: string;
 };
 
-export type FeedbackInput = {
-  eventId: string;
-  feedbackType: FeedbackType;
-  userId?: string;
-};
-
 export type EvalRepository = {
   logEvent(input: RecommendationEventInput): Promise<string>;
   listEvents(limit?: number): Promise<RecommendationEvent[]>;
@@ -77,11 +68,11 @@ export type EvalRepository = {
   createBaseline(label: string, metrics: AggregatedMetrics): Promise<EvalBaseline>;
   listBaselines(): Promise<EvalBaseline[]>;
   getLatestBaseline(): Promise<EvalBaseline | null>;
-  logFeedback(input: FeedbackInput): Promise<void>;
   /**
    * GDPR Art. 5(1)(e): telemetry is kept for a stated period, not forever.
-   * Deletes events created before `cutoffIso` along with their scores and
-   * feedback. Returns how many events went.
+   * Deletes events created before `cutoffIso` along with their scores.
+   * Returns how many events went. Recommendation feedback is not eval data
+   * (#307) and has its own retention.
    */
   purgeEventsOlderThan(cutoffIso: string): Promise<number>;
 };
@@ -115,7 +106,6 @@ export function createNoOpEvalRepository(): EvalRepository {
     async getLatestBaseline() {
       return null;
     },
-    async logFeedback() {},
   };
 }
 
@@ -183,7 +173,6 @@ export function createInMemoryEvalRepository(): EvalRepository {
       if (baselines.length === 0) return null;
       return [...baselines].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     },
-    async logFeedback() {},
   };
 }
 
@@ -310,14 +299,6 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       UNIQUE(event_id, band_name)
     );
     CREATE INDEX IF NOT EXISTS idx_band_eval_scores_event_id ON band_eval_scores (event_id);
-    CREATE TABLE IF NOT EXISTS recommendation_feedback (
-      id            TEXT PRIMARY KEY,
-      event_id      TEXT NOT NULL REFERENCES recommendation_events(id),
-      user_id       TEXT NOT NULL DEFAULT 'anonymous',
-      feedback_type TEXT NOT NULL,
-      created_at    TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_event_id ON recommendation_feedback (event_id);
     CREATE TABLE IF NOT EXISTS eval_baselines (
       id           TEXT PRIMARY KEY,
       label        TEXT NOT NULL,
@@ -333,10 +314,6 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
       const purge = db.transaction((cutoff: string) => {
         db.prepare(
           `DELETE FROM band_eval_scores
-           WHERE event_id IN (SELECT id FROM recommendation_events WHERE created_at < ?)`,
-        ).run(cutoff);
-        db.prepare(
-          `DELETE FROM recommendation_feedback
            WHERE event_id IN (SELECT id FROM recommendation_events WHERE created_at < ?)`,
         ).run(cutoff);
         return db.prepare("DELETE FROM recommendation_events WHERE created_at < ?").run(cutoff).changes;
@@ -455,14 +432,6 @@ export function createSqliteEvalRepository({ db }: { db: Database }): EvalReposi
         `SELECT * FROM eval_baselines ORDER BY created_at DESC LIMIT 1`,
       ).get() as BaselineRow | undefined;
       return row ? mapBaselineRow(row) : null;
-    },
-
-    async logFeedback(input) {
-      const id = randomUUID();
-      const createdAt = new Date().toISOString();
-      db.prepare(
-        `INSERT INTO recommendation_feedback (id, event_id, user_id, feedback_type, created_at) VALUES (?, ?, ?, ?, ?)`,
-      ).run(id, input.eventId, input.userId ?? "anonymous", input.feedbackType, createdAt);
     },
   };
 }
