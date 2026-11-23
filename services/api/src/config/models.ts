@@ -32,9 +32,15 @@ export type ModelRef = {
  * clearly worse on constraints and judge quality, mistral-small timed out on
  * 21% of queries. Judge: glm-5.2, 98.7% agreement with the human labels and
  * every directional check, from a family none of the research models uses.
+ *
+ * 2026-11-23: Scaleway no longer serves glm-5.2. The judge is now
+ * gemma-4-26b-a4b-it (owner decision): the best of five candidates on the
+ * human labels (97.3%) at a fraction of the price (€0.25 / €0.50 per million
+ * tokens, against €1.80 / €5.50 for glm-5.3). Google family, so not the
+ * research model's. See ADR 0004.
  */
 export const DEFAULT_SCALEWAY_RESEARCH_MODEL = "deepseek-v4-flash-0731";
-export const DEFAULT_SCALEWAY_JUDGE_MODEL = "glm-5.2";
+export const DEFAULT_SCALEWAY_JUDGE_MODEL = "gemma-4-26b-a4b-it";
 
 export type LlmConfig = {
   research: ModelRef;

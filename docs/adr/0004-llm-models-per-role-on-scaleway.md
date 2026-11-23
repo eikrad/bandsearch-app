@@ -6,6 +6,27 @@ kept underneath for the record.
 **Update (#303):** the Gemini rollback (`LLM_PROVIDER=gemini`) has been
 removed; Scaleway is the only provider. This ADR stays as the record of the
 choice. Rolling back to Gemini now means redeploying an earlier release.
+**Update (2026-11-23): judge `gemma-4-26b-a4b-it`.** Scaleway no longer serves
+`glm-5.2`. Five candidates calibrated against the 25 labels and 20 directional
+checks, 3 votes each (`history/judge-runs.jsonl`, label
+`judge-candidates-2026-11-23`):
+
+| Judge | Price in / out per M tokens | Agreement | Directional checks failed |
+|---|---|---|---|
+| **gemma-4-26b-a4b-it** | €0.25 / €0.50 | **97.3%** | ut-15, ut-20 |
+| mistral-medium-3.5-128b | — | 96.0% | ut-15, ut-20 |
+| mistral-small-3.2-24b | €0.15 / €0.35 | 96.0% | ut-15, ut-19, ut-20 |
+| qwen3.6-35b-a3b | €0.25 / €1.50 | 93.3% | ut-15, ut-19, ut-20 |
+| glm-5.3 | €1.80 / €5.50 | 93.3% | ut-19 |
+
+Decision (owner): gemma, the best on the human labels at about a seventh of
+glm-5.3's price (~0.1 ct per judged search). Known weakness: like every
+candidate but glm-5.3 it misses a fabricated URL next to a real one (ut-15);
+the deterministic citation support rate it is given covers part of that.
+**The language cases (ut-19, ut-20, #329) are not measured reliably yet:**
+calibration sends all directional cases in one batch, and judges carry a
+verdict over to a neighbouring case, which a live batch (one query) never
+has. Calibrating per query is the follow-up.
 **Date:** 2026-10-05
 
 ## Context
@@ -114,6 +135,7 @@ baseline, judged on quality, latency, failure rate and cost.
 ## Consequences
 
 - Self-hosters need one LLM key (`SCW_SECRET_KEY`); Gemini is gone since #303.
+- The judge is `gemma-4-26b-a4b-it` since 2026-11-23 (update above).
 - `MISTRAL_API_KEY`, `MISTRAL_JUDGE_ENDPOINT`, `MISTRAL_JUDGE_MODEL` and
   `ANTHROPIC_API_KEY` are no longer read.
 - The privacy policy names Scaleway as the optional quality-scoring recipient.

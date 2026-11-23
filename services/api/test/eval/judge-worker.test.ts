@@ -256,7 +256,7 @@ test("the configured judge asks Scaleway for JSON at temperature 0", async () =>
         id: "c",
         object: "chat.completion",
         created: 0,
-        model: "glm-5.2",
+        model: "gemma-4-26b-a4b-it",
         choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: judgeReply } }],
       }),
       { status: 200, headers: { "content-type": "application/json" } },
@@ -272,7 +272,7 @@ test("the configured judge asks Scaleway for JSON at temperature 0", async () =>
   assert.equal(bodies.length, 1);
   assert.equal(bodies[0]!.url, "https://api.scaleway.ai/v1/chat/completions");
   assert.equal(bodies[0]!.auth, "Bearer scw");
-  assert.equal(bodies[0]!.body.model, "glm-5.2");
+  assert.equal(bodies[0]!.body.model, "gemma-4-26b-a4b-it");
   assert.equal(bodies[0]!.body.temperature, 0);
   assert.deepEqual(bodies[0]!.body.response_format, { type: "json_object" });
 });
