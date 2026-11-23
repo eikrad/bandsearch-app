@@ -102,6 +102,9 @@ export function registerRecommendationRoutes(app: Express, deps: RecommendationR
         onReply: (text) => emit({ type: "reply", text }),
       });
 
+      // A pipeline may resolve even after cancellation or the job deadline.
+      signal.throwIfAborted();
+
       const { pipelineDiagnostics, ...publicMeta } = (pipelineResult.meta ?? {}) as Record<string, unknown>;
       // Every batch gets an id: feedback refers to it, and eval (when enabled)
       // records the batch under the same id. An answer in words is no batch.
@@ -123,6 +126,10 @@ export function registerRecommendationRoutes(app: Express, deps: RecommendationR
             searchBudgetUsed: 0,
           },
           recommendations: pipelineResult.recommendations,
+        }).catch(() => {
+          // Eval is best-effort: keep the answer and never log upstream payloads.
+          const logError = logger?.error ?? ((obj) => writeStructuredLog("error", obj));
+          logError({ component: "recommendations", event: "recommendation_eval_failed", eventId });
         });
       }
 

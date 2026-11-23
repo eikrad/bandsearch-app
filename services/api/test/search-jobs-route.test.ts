@@ -14,7 +14,7 @@ type StreamedEvent = { id: number | null; event: Record<string, unknown> };
 const quiet = { warn: () => {}, error: () => {} };
 
 /** A pipeline the test drives: it reports what the test says and answers when told. */
-function heldPipeline() {
+function heldPipeline(honourAbort = true) {
   const calls: Array<{ request: Record<string, unknown>; listener: TurnListener }> = [];
   const answers: Array<(value: { recommendations: unknown[]; assistantReply: string; meta: Record<string, unknown> }) => void> = [];
   const failures: Array<(error: unknown) => void> = [];
@@ -23,7 +23,7 @@ function heldPipeline() {
       calls.push({ request, listener: listener ?? {} });
       answers.push(resolve);
       failures.push(reject);
-      listener?.signal?.addEventListener("abort", () => reject(listener.signal!.reason as Error));
+      if (honourAbort) listener?.signal?.addEventListener("abort", () => reject(listener.signal!.reason as Error));
     }),
   };
   return {
@@ -402,5 +402,80 @@ test("resuming at or beyond a finished job's final event closes the stream", asy
         assert.equal(await response.text(), "");
       }
     }
+  });
+});
+
+for (const ending of ["delete", "replacement", "deadline", "failure"] as const) {
+  test(`eval ignores a search ended by ${ending}, including late pipeline results`, async () => {
+    const held = heldPipeline(false);
+    const processed: EvalEventContext[] = [];
+    let expire = () => {};
+    const app = createApp({
+      recommendationPipeline: held.pipeline,
+      evalWorker: { processEvent: async (event) => { processed.push(event); } },
+      logger: quiet,
+      searchJobs: { schedule: (run) => { expire = run; return () => {}; } },
+    });
+    await withServer(app, async (base) => {
+      const api = client(base);
+      const id = await api.start();
+      if (ending === "delete") await api.send("DELETE", `/recommendations/jobs/${id}`);
+      else if (ending === "replacement") await api.start();
+      else if (ending === "deadline") expire();
+      else held.fail(new Error("pipeline failed"), 0);
+      held.answer("Late answer", 0);
+      await tick();
+      assert.equal((await api.send("GET", `/recommendations/jobs/${id}`)).data.status,
+        ending === "deadline" || ending === "failure" ? "failed" : "cancelled");
+      assert.equal(processed.length, 0, "only a finished batch is evaluated");
+    });
+  });
+}
+
+test("eval rejection is safely logged while the finished answer remains replayable", async () => {
+  const held = heldPipeline();
+  const errors: Array<Record<string, unknown>> = [];
+  const processed: EvalEventContext[] = [];
+  const app = createApp({
+    recommendationPipeline: held.pipeline,
+    logger: { warn: () => {}, error: (entry) => { errors.push(entry); } },
+    evalWorker: { processEvent: async (event) => {
+      processed.push(event);
+      throw new Error("secret upstream detail");
+    } },
+  });
+  await withServer(app, async (base) => {
+    const api = client(base);
+    const id = await api.start();
+    held.answer();
+    await tick(); // node:test also fails this test on any unhandled rejection.
+    const state = await api.send("GET", `/recommendations/jobs/${id}`);
+    assert.equal(state.data.status, "done");
+    assertRecord(state.data.response);
+    assert.equal(state.data.response.assistantReply, "Try Fen.");
+    assert.deepEqual(types((await api.follow(id)).events), ["done"]);
+    assert.deepEqual(types((await api.follow(id)).events), ["done"]);
+    assert.equal(processed.length, 1);
+    assert.deepEqual(errors, [{
+      component: "recommendations", event: "recommendation_eval_failed", eventId: processed[0]!.eventId,
+    }]);
+  });
+});
+
+test("the compatibility route evaluates its finished batch exactly once", async () => {
+  const processed: EvalEventContext[] = [];
+  const app = createApp({
+    recommendationPipeline: { recommend: async () => ({
+      recommendations: [{ artist: "Fen" }], assistantReply: "Try Fen.", meta: { turn: "search" },
+    }) },
+    evalWorker: { processEvent: async (event) => { processed.push(event); } },
+  });
+  await withServer(app, async (base) => {
+    const result = await client(base).send("POST", "/recommendations", { query: "blackgaze" });
+    assert.equal(result.status, 200);
+    assertRecord(result.data.meta);
+    await tick();
+    assert.equal(processed.length, 1);
+    assert.equal(processed[0]!.eventId, result.data.meta.eventId);
   });
 });
