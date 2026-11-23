@@ -5,7 +5,7 @@ import { buildReflectionSubgraph } from "../../src/agent/research/reflectionSubg
 import { createResearchBudget } from "../../src/agent/research/researchBudget.js";
 
 const BASE_DEPS = {
-  geminiApiKey: "x",
+  model: "test-research-model",
   braveApiKey: "y",
   maxInitialSearches: 2,
   maxReflectionSearches: 2,
@@ -54,7 +54,6 @@ test("all reflection subgraph channels are present in the parent graph", async (
   const budget = createResearchBudget(5000);
   const parentGraph = await buildResearchGraph(BASE_DEPS, budget);
   const subgraph = buildReflectionSubgraph({
-    geminiApiKey: "x",
     mb: STUB_MB,
     runQueries: STUB_RUN_QUERIES,
     budget,

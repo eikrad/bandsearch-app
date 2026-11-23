@@ -22,21 +22,10 @@ test("a Scaleway research model sends each node's temperature to Scaleway", asyn
 
   const chatModel = createChatModelFactory(
     { provider: "scaleway", model: "gemma-4-26b-a4b-it" },
-    { geminiApiKey: "", scalewayApiKey: "scw", scalewayBaseUrl: "", fetchImpl },
+    { scalewayApiKey: "scw", scalewayBaseUrl: "", fetchImpl },
   );
   await chatModel({ temperature: 0.35 }).invoke([{ role: "user", content: "rank" }]);
 
   assert.equal(bodies[0]!.model, "gemma-4-26b-a4b-it");
   assert.equal(bodies[0]!.temperature, 0.35);
-});
-
-test("a Gemini research model needs a Gemini key", () => {
-  assert.throws(
-    () =>
-      createChatModelFactory(
-        { provider: "gemini", model: "gemini-2.5-flash" },
-        { geminiApiKey: "", scalewayApiKey: "", scalewayBaseUrl: "" },
-      ),
-    /GEMINI_API_KEY/,
-  );
 });

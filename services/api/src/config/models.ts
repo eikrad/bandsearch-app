@@ -8,10 +8,13 @@
  * (#204). Every model now comes from here; see ADR 0004 for the choices.
  */
 
-export type LlmProvider = "gemini" | "scaleway";
+export type LlmProvider = "scaleway";
 
-/** The first one is the default (Scaleway since 2026-10-05, ADR 0004); Gemini stays for rollback until removed. */
-export const LLM_PROVIDERS: readonly LlmProvider[] = ["scaleway", "gemini"];
+/**
+ * The first one is the default. Scaleway since 2026-10-05 (ADR 0004); the
+ * Gemini rollback provider was removed in #303.
+ */
+export const LLM_PROVIDERS: readonly LlmProvider[] = ["scaleway"];
 
 export type ModelRef = {
   provider: LlmProvider;
@@ -19,9 +22,6 @@ export type ModelRef = {
   /** Scaleway only: reasoning_effort sent with every call; "none" unless configured. */
   reasoningEffort?: string;
 };
-
-/** Research model on Gemini, kept for rollback (LLM_PROVIDER=gemini) until Gemini is removed (#237). */
-export const DEFAULT_RESEARCH_MODEL = "gemini-2.5-flash";
 
 /**
  * Scaleway defaults, chosen by measurement on 2026-10-05 (ADR 0004, #237).
@@ -40,7 +40,6 @@ export type LlmConfig = {
   research: ModelRef;
   /** Null when no judge can run (no Scaleway key): live eval scoring is then off. */
   judge: ModelRef | null;
-  geminiApiKey: string;
   scalewayApiKey: string;
   /** Empty for Scaleway's default endpoint; a project-scoped URL otherwise. */
   scalewayBaseUrl: string;
@@ -77,24 +76,16 @@ export function resolveLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
     throw new Error(`LLM_PROVIDER must be one of ${LLM_PROVIDERS.join(", ")} (got "${providerSetting}")`);
   }
   const provider = providerSetting as LlmProvider;
-  const geminiApiKey = trimmed(env.GEMINI_API_KEY);
   const scalewayApiKey = trimmed(env.SCW_SECRET_KEY);
-
-  if (provider === "gemini" && !geminiApiKey) {
-    throw new Error("GEMINI_API_KEY is required when LLM_PROVIDER=gemini");
-  }
-  if (provider === "scaleway" && !scalewayApiKey) {
-    throw new Error("SCW_SECRET_KEY is required (Scaleway is the default LLM provider; LLM_PROVIDER=gemini selects Gemini)");
+  if (!scalewayApiKey) {
+    throw new Error("SCW_SECRET_KEY is required (Scaleway is the LLM provider)");
   }
 
-  const research: ModelRef =
-    provider === "gemini"
-      ? { provider, model: trimmed(env.GEMINI_MODEL) || DEFAULT_RESEARCH_MODEL }
-      : {
-          provider,
-          model: trimmed(env.SCW_MODEL) || DEFAULT_SCALEWAY_RESEARCH_MODEL,
-          reasoningEffort: trimmed(env.SCW_REASONING_EFFORT) || "none",
-        };
+  const research: ModelRef = {
+    provider,
+    model: trimmed(env.SCW_MODEL) || DEFAULT_SCALEWAY_RESEARCH_MODEL,
+    reasoningEffort: trimmed(env.SCW_REASONING_EFFORT) || "none",
+  };
 
   const judge: ModelRef | null = scalewayApiKey
     ? {
@@ -121,7 +112,6 @@ export function resolveLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
   return {
     research,
     judge,
-    geminiApiKey,
     scalewayApiKey,
     scalewayBaseUrl: trimmed(env.SCW_BASE_URL),
     warnings,

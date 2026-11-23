@@ -89,8 +89,6 @@ export function validateRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
 
   return {
     llm,
-    geminiApiKey: llm.geminiApiKey,
-    researchModel: llm.research.model,
     lastFmApiKey: String(env.LASTFM_API_KEY ?? "").trim(),
     evalDashboardPassword: String(env.EVAL_DASHBOARD_PASSWORD ?? "").trim(),
     braveApiKey,

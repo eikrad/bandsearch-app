@@ -1,4 +1,3 @@
-import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
@@ -9,8 +8,7 @@ import { invokeModel, parseModelJsonResponse, replySoFar } from "../modelUtils.j
 
 import { foundOnTheWeb } from "./lastFmEnrichment.js";
 import { mergeVerifiedCandidates, type VerifiedCandidate } from "./candidateVerifier.js";
-import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
-import type { ChatModelFactory } from "../../llm/chatModel.js";
+import { nodeModel, type ChatModelFactory } from "../../llm/chatModel.js";
 
 function pickReplyFromParsed(parsed: unknown): string {
   if (!parsed || typeof parsed !== "object") return "";
@@ -175,14 +173,9 @@ function rankObscurity(target: ObscurityTarget): string {
 }
 
 export type CreateRecommendationRankerOptions = {
-  apiKey: string;
   timeoutMs?: number;
   signal?: AbortSignal;
-  model?: string;
-  /**
-   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
-   * drive this factory's closure without a key or a network call.
-   */
+  /** A ready chat model; tests pass one to run the closure without a network call. */
   modelClient?: ChatModelClient;
   /** Builds this node's model from the configured provider (llm/chatModel.ts). */
   chatModel?: ChatModelFactory;
@@ -230,27 +223,14 @@ export function buildRankUserPartsForTest(input: {
 }
 
 export async function createRecommendationRanker({
-  apiKey,
   timeoutMs = 12000,
   signal,
-  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
   chatModel,
 }: CreateRecommendationRankerOptions): Promise<
   (input: RankInput) => Promise<{ recommendations: unknown[]; assistantReply: string }>
 > {
-  // An injected client stands in for Gemini entirely, so it needs no key.
-  const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !chatModel && !trimmedKey) {
-    throw new Error("apiKey is required for recommendation ranker");
-  }
-
-  const temperature = 0.35;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
-    model,
-    apiKey: trimmedKey,
-    temperature,
-  });
+  const modelClient = nodeModel("recommendation ranker", { modelClient: injectedModelClient, chatModel }, { temperature: 0.35 });
 
   return async function rank(input) {
     const prompt: Array<{ role: string; content: string }> = [

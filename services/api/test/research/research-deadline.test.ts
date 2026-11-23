@@ -312,71 +312,43 @@ test("a verification batch cancelled in the MusicBrainz queue never reaches the 
   }
 });
 
-for (const provider of ["gemini", "scaleway"] as const) {
-  test(`the ${provider} adapter forwards deadline cancellation to its HTTP request`, async (t) => {
-    t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
-    const started = deferred();
-    let requestSignal: AbortSignal | null | undefined;
-    let requests = 0;
-    const transport: typeof fetch = async (_url, init) => {
-      requests++;
-      requestSignal = init?.signal;
-      started.resolve();
-      return new Promise<Response>((_resolve, reject) => {
-        requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
-      });
-    };
-    t.mock.method(globalThis, "fetch", transport);
-    const { client: answers } = fakeModelClient();
-    const modelFactory = createChatModelFactory(
-      { provider, model: "test-model" },
-      { geminiApiKey: "test-key", scalewayApiKey: "test-key", scalewayBaseUrl: "", fetchImpl: transport },
-    );
-    const { fetchImpl } = fakeFetch({});
-    const outcome = invokeResearchGraph(graphDeps({
-      chatModel: (settings) => rankerVia(modelFactory(settings), answers),
-      fetchImpl,
-      researchTimeoutMs: 3000,
-    }), input).catch((error: unknown) => error);
-    await started.promise;
-    try {
-      t.mock.timers.tick(3000);
-      await flushGraph();
-      assert.match(String(await outcome), /timeout/);
-      assert.equal(requestSignal?.aborted, true, "the provider must forward the graph's abort signal");
-      t.mock.timers.tick(60_000);
-      await flushGraph();
-      assert.equal(requests, 1, "provider cancellation cannot cause a background SDK retry");
-    } finally {
-      t.mock.timers.tick(60_000);
-      await outcome;
-    }
-  });
-}
-
-test("the Gemini adapter assembles a streamed answer before the graph returns recommendations", async (t) => {
-  const payload = JSON.stringify({ reply: "Try Fen.", recommendations: [{ artist: "Fen", why: "See https://blog.example/fen", sourceSignals: [] }] });
-  const chunks = [payload.slice(0, 30), payload.slice(30)];
-  t.mock.method(globalThis, "fetch", async () => new Response(chunks.map((text, index) => `data: ${JSON.stringify({
-    candidates: [{ index: 0, content: { role: "model", parts: [{ text }] }, ...(index === 1 ? { finishReason: "STOP" } : {}) }],
-  })}\n\n`).join(""), { headers: { "content-type": "text/event-stream" } }));
+test("the Scaleway adapter forwards deadline cancellation to its HTTP request", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const started = deferred();
+  let requestSignal: AbortSignal | null | undefined;
+  let requests = 0;
+  const transport: typeof fetch = async (_url, init) => {
+    requests++;
+    requestSignal = init?.signal;
+    started.resolve();
+    return new Promise<Response>((_resolve, reject) => {
+      requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    });
+  };
+  t.mock.method(globalThis, "fetch", transport);
+  const { client: answers } = fakeModelClient();
   const modelFactory = createChatModelFactory(
-    { provider: "gemini", model: "gemini-2.5-flash" },
-    { geminiApiKey: "test-key", scalewayApiKey: "", scalewayBaseUrl: "" },
+    { provider: "scaleway", model: "test-model" },
+    { scalewayApiKey: "test-key", scalewayBaseUrl: "", fetchImpl: transport },
   );
-  const { client } = fakeModelClient({
-    extract: () => ({ candidates: [{ name: "Fen", hits: [1] }] }),
-  });
-  const { fetchImpl } = fakeFetch({
-    brave: () => ({ web: { results: [{ title: "Fen", url: "https://blog.example/fen", description: "Try Fen" }] } }),
-    musicbrainz: () => ({ artists: [{ id: "fen", name: "Fen", score: 100 }] }),
-  });
-  const result = await invokeResearchGraph(graphDeps({
-    chatModel: (settings) => rankerVia(modelFactory(settings), client),
+  const { fetchImpl } = fakeFetch({});
+  const outcome = invokeResearchGraph(graphDeps({
+    chatModel: (settings) => rankerVia(modelFactory(settings), answers),
     fetchImpl,
-    musicBrainzMinIntervalMs: 0,
-  }), input);
-  assert.equal(result.assistantReply, "Try Fen.");
-  assert.equal(result.recommendations.length, 1);
-  assert.equal((result.recommendations[0] as { artist: string }).artist, "Fen");
+    researchTimeoutMs: 3000,
+  }), input).catch((error: unknown) => error);
+  await started.promise;
+  try {
+    t.mock.timers.tick(3000);
+    await flushGraph();
+    assert.match(String(await outcome), /timeout/);
+    assert.equal(requestSignal?.aborted, true, "the provider must forward the graph's abort signal");
+    t.mock.timers.tick(60_000);
+    await flushGraph();
+    assert.equal(requests, 1, "provider cancellation cannot cause a background SDK retry");
+  } finally {
+    t.mock.timers.tick(60_000);
+    await outcome;
+  }
 });
+

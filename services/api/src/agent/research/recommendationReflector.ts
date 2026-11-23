@@ -1,4 +1,3 @@
-import { createGeminiChatClient } from "../../llm/geminiChat.js";
 
 import { capAndTrim, wrapUserContent } from "../promptGuards.js";
 import type { ChatModelClient } from "../modelUtils.js";
@@ -6,8 +5,7 @@ import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
 
 import type { SearchPlan } from "./webSearchPlanner.js";
 import type { VerifiedCandidate } from "./candidateVerifier.js";
-import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
-import type { ChatModelFactory } from "../../llm/chatModel.js";
+import { nodeModel, type ChatModelFactory } from "../../llm/chatModel.js";
 
 export const REFLECTION_QUERY_MAX_LENGTH = 400;
 
@@ -74,26 +72,19 @@ export function tryParseReflectionFromModelText(raw: string, maxExtraQueries: nu
 }
 
 export type CreateRecommendationReflectorOptions = {
-  apiKey: string;
   timeoutMs?: number;
   signal?: AbortSignal;
   maxExtraQueries?: number;
-  model?: string;
-  /**
-   * Chat model to use. Defaults to Gemini built from `apiKey`; supply one to
-   * drive this factory's closure without a key or a network call.
-   */
+  /** A ready chat model; tests pass one to run the closure without a network call. */
   modelClient?: ChatModelClient;
   /** Builds this node's model from the configured provider (llm/chatModel.ts). */
   chatModel?: ChatModelFactory;
 };
 
 export async function createRecommendationReflector({
-  apiKey,
   timeoutMs = 6000,
   signal,
   maxExtraQueries = 4,
-  model = DEFAULT_RESEARCH_MODEL,
   modelClient: injectedModelClient,
   chatModel,
 }: CreateRecommendationReflectorOptions): Promise<
@@ -105,18 +96,7 @@ export async function createRecommendationReflector({
     searchBudgetRemaining: number;
   }) => Promise<ReflectionResult>
 > {
-  // An injected client stands in for Gemini entirely, so it needs no key.
-  const trimmedKey = apiKey.trim();
-  if (!injectedModelClient && !chatModel && !trimmedKey) {
-    throw new Error("apiKey is required for recommendation reflector");
-  }
-
-  const temperature = 0.15;
-  const modelClient: ChatModelClient = injectedModelClient ?? chatModel?.({ temperature }) ?? createGeminiChatClient({
-    model,
-    apiKey: trimmedKey,
-    temperature,
-  });
+  const modelClient = nodeModel("recommendation reflector", { modelClient: injectedModelClient, chatModel }, { temperature: 0.15 });
 
   async function invokeOnce(systemText: string, userContent: string): Promise<ReflectionResult | null> {
     const prompt = [

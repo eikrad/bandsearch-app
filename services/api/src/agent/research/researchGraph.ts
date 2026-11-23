@@ -16,11 +16,9 @@ import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
 import { artistKey, type ResearchCache } from "./researchCache.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
-import { DEFAULT_RESEARCH_MODEL } from "../../config/models.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
 export type ResearchGraphDeps = {
-  geminiApiKey: string;
   braveApiKey: string;
   lastFmApiKey?: string;
   maxInitialSearches: number;
@@ -37,17 +35,17 @@ export type ResearchGraphDeps = {
   /** Spacing of Brave calls; 0 when the transport already spaces real calls (replay). */
   braveMinIntervalMs?: number;
   /**
-   * Chat model for every Gemini-backed node. Defaults to Gemini built from
-   * `geminiApiKey`; supply one to run the graph without a key or a network call.
+   * A ready chat model for every research node; supply one to run the graph
+   * without a network call. One of this and `chatModel` is required.
    */
   modelClient?: ChatModelClient;
   /** Builds each node's model from the configured provider; used when no `modelClient` is given. */
   chatModel?: ChatModelFactory;
   /**
-   * Model id for every research node; defaults to `DEFAULT_RESEARCH_MODEL`.
-   * Reported back as the run's `model`, the provenance of the ranker's prose.
+   * Model id the research nodes run on. Reported back as the run's `model`,
+   * the provenance of the ranker's prose (#134).
    */
-  model?: string;
+  model: string;
   /** Artist facts shared by the searches of this process; without it every search asks again. */
   cache?: ResearchCache;
   /** Transport for the Brave, MusicBrainz and Last.fm clients. Defaults to global fetch. */
@@ -193,7 +191,6 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     }, queries, budgetLeft, perQueryCount);
 
   const reflectionSubgraph = buildReflectionSubgraph({
-    geminiApiKey: deps.geminiApiKey,
     mb,
     runQueries,
     budget: researchScope,
@@ -205,7 +202,6 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     onLog: deps.onLog,
     modelClient: deps.modelClient,
     chatModel: deps.chatModel,
-    model: deps.model,
     artistCache: deps.cache?.artists,
     onSearchAgain: () => deps.onProgress?.({ stage: "searchingAgain" }),
     onExtracted: (candidates) => lastFm?.prefetchInfo(candidates.map((c) => c.name)),
@@ -214,12 +210,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   const graph = new StateGraph(RESEARCH_SCHEMA)
     .addNode("plan", async (state) => researchScope.run(20000, async (signal) => {
       const planWeb = await createWebSearchPlanner({
-        apiKey: deps.geminiApiKey,
         timeoutMs: researchScope.allocate(20000),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
-        model: deps.model,
         maxQueries: deps.maxInitialSearches,
       });
       const plan = await planWeb({
@@ -277,12 +271,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     })
     .addNode("extract", async (state) => researchScope.run(18000, async (signal) => {
       const extract = await createCandidateExtractor({
-        apiKey: deps.geminiApiKey,
         timeoutMs: researchScope.allocate(18000),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
-        model: deps.model,
       });
       const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
       const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
@@ -330,12 +322,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     })
     .addNode("rank", async (state) => budget.run(RANKING_RESERVE_MS, async (signal) => {
       const ranker = await createRecommendationRanker({
-        apiKey: deps.geminiApiKey,
         timeoutMs: budget.allocate(RANKING_RESERVE_MS),
         signal,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
-        model: deps.model,
       });
       const fresh = withoutNames(state.verifiedCandidates, state.excludeNames);
       const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
@@ -467,7 +457,7 @@ export async function invokeResearchGraph(
       pipelineDiagnostics,
       // Every node runs on deps.model today. Should they ever diverge, this must
       // name the ranker's model: the ranker writes the user-visible `why` prose.
-      model: deps.model ?? DEFAULT_RESEARCH_MODEL,
+      model: deps.model,
     };
   } finally {
     deps.signal?.removeEventListener("abort", stop);

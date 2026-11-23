@@ -391,14 +391,6 @@ test("a research run names the model that wrote its prose", async () => {
   assert.equal(result.model, "test-model-7b");
 });
 
-test("a research run without a configured model names the default", async () => {
-  const { client, fetchImpl } = happyPath();
-
-  const result = await invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl }), input);
-
-  assert.equal(result.model, "gemini-2.5-flash");
-});
-
 // ------------------------------------------------- degraded, not failed (#241)
 
 function timesOut(node: string) {

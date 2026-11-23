@@ -676,7 +676,6 @@ async function main(): Promise<void> {
       model: createChatModelFactory(
         { provider: "scaleway", model: judgeConfig.model, reasoningEffort: judgeConfig.reasoningEffort },
         {
-          geminiApiKey: "",
           scalewayApiKey: process.env.SCW_SECRET_KEY ?? "",
           scalewayBaseUrl: process.env.SCW_BASE_URL?.trim() ?? "",
         },

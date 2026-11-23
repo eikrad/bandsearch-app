@@ -140,12 +140,10 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
     listener.onProgress?.({ stage: "choosing", candidates: unseen.length });
     const { recommendations, assistantReply } = await within(PICK_TIMEOUT_MS, listener.signal, async (signal) => {
       const rank = await createRecommendationRanker({
-        apiKey: graphDeps.geminiApiKey,
         timeoutMs: PICK_TIMEOUT_MS,
         signal,
         modelClient: graphDeps.modelClient,
         chatModel: graphDeps.chatModel,
-        model: graphDeps.model,
       });
       return rank({
         query: request.query,

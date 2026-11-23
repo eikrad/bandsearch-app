@@ -262,7 +262,7 @@ test("the configured judge asks Scaleway for JSON at temperature 0", async () =>
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }) as typeof fetch;
-  const llm = resolveLlmConfig({ GEMINI_API_KEY: "g", SCW_SECRET_KEY: "scw" });
+  const llm = resolveLlmConfig({ SCW_SECRET_KEY: "scw" });
 
   const judgeModel = judgeModelFor(llm, fetchImpl);
   assert.ok(judgeModel, "a Scaleway key configures a judge");
@@ -277,6 +277,6 @@ test("the configured judge asks Scaleway for JSON at temperature 0", async () =>
   assert.deepEqual(bodies[0]!.body.response_format, { type: "json_object" });
 });
 
-test("without a Scaleway key there is no judge model", () => {
-  assert.equal(judgeModelFor(resolveLlmConfig({ LLM_PROVIDER: "gemini", GEMINI_API_KEY: "g" })), null);
+test("a config without a judge gives no judge model", () => {
+  assert.equal(judgeModelFor({ ...resolveLlmConfig({ SCW_SECRET_KEY: "scw" }), judge: null }), null);
 });

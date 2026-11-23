@@ -7,7 +7,7 @@ test("buildResearchGraph compiles", async () => {
   const budget = createResearchBudget(5000);
   const g = await buildResearchGraph(
     {
-      geminiApiKey: "x",
+      model: "test-research-model",
       braveApiKey: "y",
       maxInitialSearches: 2,
       maxReflectionSearches: 2,

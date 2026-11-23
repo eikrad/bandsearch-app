@@ -76,7 +76,6 @@ async function runSubgraph({
   });
 
   const subgraph = buildReflectionSubgraph({
-    geminiApiKey: "",
     modelClient: client,
     mb: mbClient,
     runQueries: async (queries) => {
@@ -210,7 +209,6 @@ test("reflection stops mid-loop when the budget drains during a round", async ()
   });
 
   const subgraph = buildReflectionSubgraph({
-    geminiApiKey: "",
     modelClient: client,
     mb: mbClient,
     runQueries: async (queries) => {

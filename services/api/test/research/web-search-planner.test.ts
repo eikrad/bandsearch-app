@@ -29,9 +29,6 @@ test("the fallback plan for Cult Following searches Bandcamp last", () => {
   assert.doesNotMatch(plan.queries[0]!, /bandcamp\.com/);
 });
 
-test("createWebSearchPlanner rejects empty apiKey", async () => {
-  await assert.rejects(() => createWebSearchPlanner({ apiKey: "  " }), /apiKey is required/);
-});
 
 // ─── Phase 8.3: obscurityTarget constraint ─────────────────────────────────
 
@@ -55,7 +52,6 @@ test("for Cult Following the planner is steered to scene-level sources rather th
 /** A planner whose model answers with these queries. */
 async function plannerAnswering(queries: string[]) {
   return createWebSearchPlanner({
-    apiKey: "",
     modelClient: {
       async invoke() {
         return { content: JSON.stringify({ anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries }) };
@@ -113,7 +109,6 @@ test("PLANNER_SYSTEM_PROMPT_FOR_TEST instructs model to treat follow-ups as refi
 test("the planner is asked for as many queries as will be searched, and returns no more", async () => {
   let system = "";
   const planner = await createWebSearchPlanner({
-    apiKey: "",
     maxQueries: 3,
     modelClient: {
       async invoke(prompt) {

@@ -11,7 +11,6 @@ const hits: SearchHitInput[] = [
 async function extractWith(answers: unknown[], input: { hits?: SearchHitInput[]; anchorArtists?: string[] } = {}) {
   const prompts: string[] = [];
   const extract = await createCandidateExtractor({
-    apiKey: "",
     modelClient: {
       async invoke(prompt) {
         prompts.push(prompt.map((p) => p.content).join("\n"));
