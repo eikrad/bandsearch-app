@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildReflectionSubgraph } from "../../src/agent/research/reflectionSubgraph.js";
+import { buildReflectionSubgraph, MIN_REFLECTION_CYCLE_MS } from "../../src/agent/research/reflectionSubgraph.js";
 import { createResearchBudget } from "../../src/agent/research/researchBudget.js";
 import type { MusicBrainzVerifyClient, VerifiedCandidate } from "../../src/agent/research/candidateVerifier.js";
 import type { SearchHitInput } from "../../src/agent/research/candidateExtractor.js";
@@ -16,8 +16,6 @@ import { extractedCandidates, fakeModelClient } from "../helpers/researchGraphHa
  * below one cycle) and none of them had a test, so the budget guard that keeps
  * a slow run from overshooting its deadline was unverified.
  */
-
-const MIN_REFLECTION_CYCLE_MS = 25_000;
 
 function verified(name: string, isVerified = true): VerifiedCandidate {
   return {
