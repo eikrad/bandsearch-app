@@ -115,13 +115,13 @@ async function runSubgraph({
 
 // --------------------------------------------------------- assess routing
 
-test("reflection ends immediately when the reflector reports enough candidates", async () => {
+test("reflection is skipped when the verified pool already meets its target", async () => {
   const { result, searchCalls } = await runSubgraph({
-    reflect: () => ({ sufficient: true, gaps: [], extraQueries: [] }),
+    initialVerified: [verified("A"), verified("B"), verified("C"), verified("D")],
   });
 
-  assert.equal(searchCalls.length, 0, "a sufficient assessment must not spend a search call");
-  assert.equal(result.reflectionUsed, true);
+  assert.equal(searchCalls.length, 0, "a full pool must not spend a search call");
+  assert.equal(result.reflectionUsed, false);
   assert.equal(result.roundsCompleted, 0);
 });
 

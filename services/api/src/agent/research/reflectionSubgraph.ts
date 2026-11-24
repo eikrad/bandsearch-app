@@ -1,9 +1,9 @@
-import { mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
+import { type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
+import { type MusicBrainzVerifyClient, type VerifiedCandidate } from "./candidateVerifier.js";
+import { runCandidatePoolRound } from "./candidatePoolRound.js";
 import { createRecommendationReflector } from "./recommendationReflector.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import type { ResearchBudget } from "./researchBudget.js";
@@ -69,7 +69,11 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
 
   return new StateGraph(REFLECTION_SCHEMA)
     .addNode("assess", async (state) => {
-      if (deps.budget.remaining() <= 0) return { nextExtraQueries: [] };
+      const verifiedCount = state.verifiedCandidates.filter((candidate) => candidate.verified).length;
+      if (verifiedCount >= deps.targetVerifiedCount) {
+        return { nextExtraQueries: [], reflectionUsed: state.reflectionUsed };
+      }
+      if (deps.budget.remaining() <= 0) return { nextExtraQueries: [], reflectionUsed: true };
       return deps.budget.run(6000, async (signal) => {
         const reflector = await createRecommendationReflector({
           timeoutMs: deps.budget.allocate(6000),
@@ -86,12 +90,17 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
           targetVerifiedCount: deps.targetVerifiedCount,
           searchBudgetRemaining: budgetLeft,
         });
-        const extraQueries = reflection.sufficient
+        // The pool size is a search rule. The model can describe gaps and
+        // suggest queries, but cannot waive the verified-candidate target.
+        const extraQueries = budgetLeft <= 0
           ? []
           : reflection.extraQueries.slice(0, deps.maxReflectionSearches);
         log("info", "research_reflection_assess", {
           round: (state.roundsCompleted ?? 0) + 1,
-          sufficient: reflection.sufficient,
+          sufficient: verifiedCount >= deps.targetVerifiedCount || budgetLeft <= 0,
+          modelSufficient: reflection.sufficient,
+          verifiedCount,
+          targetVerifiedCount: deps.targetVerifiedCount,
           extraQueries: extraQueries.length,
           gaps: reflection.gaps,
         });
@@ -121,52 +130,34 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
         searchCallsUsed: state.searchCallsUsed + calls,
       };
     })
-    .addNode("extract_r", async (state) => {
-      if (deps.budget.remaining() <= 0) return {};
-      return deps.budget.run(12000, async (signal) => {
-        const extract = await createCandidateExtractor({
-          timeoutMs: deps.budget.allocate(12000),
-          signal,
-          modelClient: deps.modelClient,
-          chatModel: deps.chatModel,
-        });
-        const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-        const fresh = await extract({ hits: state.newHits ?? [], anchorArtists: anchors });
-        deps.onExtracted?.(fresh);
-        return { extractedCandidates: mergeExtractedCandidates([...state.extractedCandidates, ...fresh]) };
-      }).catch((error: unknown) => {
-        log("warn", "research_reflection_extract_failed", { reason: errorMessage(error) });
-        return {};
-      });
-    })
-    .addNode("verify_r", async (state) => {
+    .addNode("candidate_round", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const toVerify = state.extractedCandidates.filter((c) => !state.verifiedCandidates.some((v) => mayBeSameArtist(v, c)));
-      const fresh = toVerify.length > 0
-        ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, {
-            shouldContinue: () => deps.budget.remaining() > 0,
-            cache: deps.artistCache,
-          })
-        : [];
-      const merged = mergeVerifiedCandidates([...state.verifiedCandidates, ...fresh]);
       const round = (state.roundsCompleted ?? 0) + 1;
-      log("info", "research_verification_done", {
+      const result = await runCandidatePoolRound({
+        mb: deps.mb,
+        budget: deps.budget,
+        modelClient: deps.modelClient,
+        chatModel: deps.chatModel,
+        artistCache: deps.artistCache,
+        onLog: deps.onLog,
+        onExtracted: deps.onExtracted,
+      }, {
+        hits: state.newHits ?? [],
+        anchorArtists: anchors,
+        extractedCandidates: state.extractedCandidates,
+        verifiedCandidates: state.verifiedCandidates,
+        round: round + 1,
         phase: "reflection",
-        round,
-        verified: merged.filter((v) => v.verified).length,
-        total: merged.length,
-        newlyVerified: fresh.length,
       });
-      return { verifiedCandidates: merged, roundsCompleted: round };
+      return { ...result, roundsCompleted: round };
     })
     .addEdge(START, "assess")
     .addConditionalEdges("assess", (state) => {
       if ((state.nextExtraQueries?.length ?? 0) === 0) return END;
       return hasTimeForAnotherCycle() ? "search" : END;
     })
-    .addEdge("search", "extract_r")
-    .addEdge("extract_r", "verify_r")
-    .addConditionalEdges("verify_r", (state) => {
+    .addEdge("search", "candidate_round")
+    .addConditionalEdges("candidate_round", (state) => {
       if ((state.roundsCompleted ?? 0) >= deps.maxRounds) return END;
       return hasTimeForAnotherCycle() ? "assess" : END;
     })

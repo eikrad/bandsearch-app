@@ -198,16 +198,14 @@ flowchart TD
     plan --> lastfm_first["lastfm_first\nLast.fm similar artists\n+ MusicBrainz"]
     lastfm_first -->|"enough of the requested size"| rank
     lastfm_first -->|"too few"| brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
-    brave_initial --> extract["extract\nLLM — extracts band names\nfrom search snippets"]
-    extract --> verify["verify\nMusicBrainz — one batched search;\nadds mbid, tags, country, life span"]
-    verify --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(assesses whether more search is needed)"]
+    brave_initial --> candidate_round["candidate_pool_round\nLLM + MusicBrainz — extracts,\ndeduplicates and verifies"]
+    candidate_round --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(continues below the verified target)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
     enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
     rank --> END(["END"])
     plan -. research cutoff .-> rank
     brave_initial -. research cutoff .-> rank
-    extract -. research cutoff .-> rank
-    verify -. research cutoff .-> rank
+    candidate_round -. research cutoff .-> rank
     reflect_if_needed -. research cutoff .-> rank
 ```
 
@@ -215,34 +213,31 @@ flowchart TD
 |------|----------------|-------------|
 | `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
 | `lastfm_first` | Last.fm (optional), MusicBrainz | Takes the 40 bands closest to the anchors from Last.fm's similar-artist lists, verifies and enriches them. With 8 verified ones inside the target's range (12 without a target) the run goes straight to `rank` without a web search (`lastFmFirst.ts`); otherwise up to 12 in range join the web search's candidates. Skipped for Truly Obscure, which those lists hardly know, and for demands they cannot show (vocals, lyrics, instruments, labels) |
-| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` queries with dedup cache, 12 hits each, stopping once it has the 36 hits the extractor reads. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
-| `extract` | LLM | Identifies band names from snippets and the numbers of the hits naming them; URLs and snippets are then taken from those hits, word for word. Filters out anchor artists |
-| `verify` | MusicBrainz | Searches all candidate names in one batched request (50 names each), then once more for those missed, aliases included; adds `mbid`, tags, country and life span. A candidate is verified only by an artist of the same name or alias (`artistNames.ts`): MusicBrainz always returns its nearest names, so a hit alone proves nothing |
-| `reflect_if_needed` | Reflection Subgraph | Assesses whether extra searches are needed, then runs bounded search rounds |
+| `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` planned queries (12 hits each), subject to the total call budget and research deadline. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
+| `candidate_pool_round` | LLM, MusicBrainz | Shared by the first search and reflection rounds. Extracts names from the round's new hits, merges evidence by artist identity and verifies new candidates. MusicBrainz searches names in batches (50 each), then retries missed names with aliases; it adds `mbid`, tags, country and life span. A candidate verifies only by the same name or alias (`artistNames.ts`) |
+| `reflect_if_needed` | Reflection Subgraph | Skips assessment when the verified pool has reached the configured target (8 by default); otherwise asks for more queries and runs bounded rounds. The code-enforced target takes precedence over the model's `sufficient` answer |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists), listener counts, listener tags and the start of the biography (evidence with the artist's page as source) to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
-Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. The reflector first assesses whether the verified candidates meet the target; while it asks for more and at least 25 s of research time remain, the subgraph runs up to `maxRounds` (default 2) additional search-extract-verify cycles.
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. It skips the reflector once the code-owned target of verified candidates is met. Below target, the reflector supplies queries and each additional search goes through the same `candidate_pool_round` module as the first search. It can run up to `maxRounds` (default 2) additional rounds while the total call budget remains and at least 25 s of research time remain.
 
 ```mermaid
 flowchart TD
     subSTART(["START"]) --> assess["assess\nLLM — evaluates results,\ngenerates extraQueries if gaps found"]
-    assess -->|"sufficient or budget gone"| subEND(["END"])
+    assess -->|"target reached, no queries or budget gone"| subEND(["END"])
     assess -->|"needs more data"| search["search\nBrave Search API\nexecutes extra queries"]
-    search --> extract_r["extract_r\nLLM — extracts from\nnew hits only"]
-    extract_r --> verify_r["verify_r\nMusicBrainz — verifies\nnew candidates only"]
-    verify_r -->|"maxRounds or budget gone"| subEND
-    verify_r -->|"rounds remaining"| assess
+    search --> candidate_round["candidate_pool_round\nshared extraction, identity\ndeduplication and verification"]
+    candidate_round -->|"maxRounds or budget gone"| subEND
+    candidate_round -->|"rounds remaining"| assess
 ```
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `assess` | LLM | Evaluates current results; generates `extraQueries` when gaps are found |
+| `assess` | LLM | Evaluates current results and generates `extraQueries`. Its `sufficient` flag cannot override the target; code stops only when the verified count reaches the target or the search-call budget is spent |
 | `search` | Brave Search API | Executes extra queries against remaining budget; stores new hits in `newHits` separately from the accumulated `braveHits` |
-| `extract_r` | LLM | Extracts candidates from `newHits` **only** (not all accumulated hits); merges into existing `extractedCandidates` via `mergeExtractedCandidates` |
-| `verify_r` | MusicBrainz | Verifies only candidates not yet present in `verifiedCandidates` (by name/canonicalName); merges via `mergeVerifiedCandidates` — preserves all prior-round results |
+| `candidate_pool_round` | LLM, MusicBrainz | Calls the shared `candidatePoolRound.ts` implementation on `newHits`; it applies the same extraction, identity deduplication, evidence merge and verification rules as the first search |
 
 ### Artist cache (`researchCache.ts`)
 
@@ -280,8 +275,8 @@ empty discovery result.
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `extract`, `assess`, `rank` (since 2026-10-05; the only provider since #303); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
-| **MusicBrainz** | `verify`, `verify_r` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
+| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `candidate_pool_round`, `assess`, `rank` (since 2026-10-05; the only provider since #303); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
+| **MusicBrainz** | `candidate_pool_round` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
 | **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 

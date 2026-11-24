@@ -12,7 +12,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
 - **Conversation memory** — the bands found and shown per user and conversation, in the server's memory for two hours. It makes picks possible and keeps shown bands from being shown again, under any spelling (**artist identity**, possible matches included). Public artist data only, never what the user wrote.
 
-- **Research graph** — the LangGraph state machine in `agent/research/researchGraph.ts` that orchestrates: web search planning, Brave search execution, candidate extraction, MusicBrainz verification, optional reflection, and final ranking.
+- **Research graph** — the LangGraph state machine in `agent/research/researchGraph.ts` that orchestrates web search planning, the candidate pool round, optional reflection rounds, Last.fm enrichment and final ranking. The first search and each reflection search use the same candidate pool round (`candidatePoolRound.ts`) to extract, deduplicate and verify candidates.
 
 - **Last.fm round** — the first candidate source of a search: the bands Last.fm's listeners file next to the anchor artists. With enough verified bands of the requested size the search is answered from them; otherwise the web is searched too. Not used for Truly Obscure, nor for a demand similarity cannot show, such as "with female vocals".
 
@@ -31,7 +31,7 @@ AI-powered music recommendations for niche and lesser-known artists. Combines co
 
   Each use decides what *possibly* means for it. Verification accepts only *same*: it assigns an ID. The search (dedupe, anchors, shown bands, attribution), conversation memory and the eval metrics treat *possibly* as the same band, since at worst a band is not shown twice. Saved bands accept only *same* for now; asking the user about a possible match is #367 and **not built yet**. Cache keys (`artistKey`) are not identity: one key per spelling.
 
-- **Reflection subgraph** — a nested LangGraph subgraph that asks the reflector whether the verified candidates meet `RESEARCH_TARGET_VERIFIED_CANDIDATES`, then runs up to `maxRounds` additional search-extract-verify cycles while the reflector asks for more and at least 25 s of research time remain.
+- **Reflection subgraph** — a nested LangGraph subgraph that adds bounded search-extract-verify rounds when the verified pool is below `RESEARCH_TARGET_VERIFIED_CANDIDATES` (8 by default). The code owns that target: the reflector's `sufficient` answer cannot waive it. Reflection stops when the target is reached, no more queries are available, the search-call budget or `maxRounds` is spent, or less than 25 s of research time remains. Every round uses the shared candidate pool round.
 
 - **Research budget** — a wall-clock time limit (`RESEARCH_TIMEOUT_MS`) for the complete research graph, including final ranking and retries. Research ends early to reserve up to 20 seconds (at most one third of the configured budget) for ranking; at 12 s, 5% of rankings were cut off (#369). At that cutoff, in-flight research is cancelled, completed verification results are kept, and remaining research stages are skipped. Ranking, its evidence retry included, must finish within both its 20-second cap and the total deadline; if it cannot, or the ranker fails, the request fails (`502 recommendation_unavailable`) instead of returning unranked research.
 

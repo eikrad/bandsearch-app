@@ -41,19 +41,17 @@ flowchart TD
     plan --> lastfm_first["lastfm_first\nLast.fm similar artists (optional)"]
     lastfm_first -- "enough of the requested size" --> rank
     lastfm_first -- "too few" --> brave_initial["brave_initial\nBrave Search API"]
-    brave_initial --> extract["extract\nCandidateExtractor · LLM"]
-    extract --> verify["verify\nMusicBrainz"]
-    verify --> reflect_if_needed
+    brave_initial --> candidate_round["candidate_pool_round\nCandidateExtractor + MusicBrainz"]
+    candidate_round --> reflect_if_needed
 
     subgraph reflect_if_needed["reflect_if_needed — Reflection Subgraph"]
         direction TD
         subSTART(["START"]) --> assess["assess\nRecommendationReflector · LLM"]
-        assess -- "sufficient or budget gone" --> subEND(["END"])
+        assess -- "target reached, no queries or budget gone" --> subEND(["END"])
         assess -- "needs more data" --> search["search\nBrave Search API"]
-        search --> extract_r["extract_r\nCandidateExtractor · LLM"]
-        extract_r --> verify_r["verify_r\nMusicBrainz"]
-        verify_r -- "maxRounds or budget gone" --> subEND
-        verify_r -- "loop" --> assess
+        search --> reflection_round["candidate_pool_round\nshared extract + verify"]
+        reflection_round -- "target, maxRounds or budget" --> subEND
+        reflection_round -- "pool still below target" --> assess
     end
 
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional)"]
