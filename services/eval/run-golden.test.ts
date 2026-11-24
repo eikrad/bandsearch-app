@@ -263,9 +263,19 @@ test("MB_POST_RECOMMENDATION_COOLDOWN_MS leaves at least one MusicBrainz IP inte
 
 function apiReturning(body: unknown, status = 200): { fetchImpl: typeof fetch; requests: Request[] } {
   const requests: Request[] = [];
+  const responseBody = body && typeof body === "object" && "recommendations" in body && Array.isArray((body as { recommendations?: unknown }).recommendations)
+    ? {
+        ...(body as Record<string, unknown>),
+        recommendations: ((body as { recommendations: unknown[] }).recommendations).map((rec) =>
+          rec && typeof rec === "object"
+            ? { why: "A specific recommendation.", sourceSignals: [], evidenceUrls: [], listenerCount: null, ...(rec as Record<string, unknown>) }
+            : rec,
+        ),
+      }
+    : body;
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     requests.push(new Request(input, init));
-    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify(responseBody), { status, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   return { fetchImpl, requests };
 }
@@ -554,8 +564,8 @@ function judgeRecording(score: number, seen: Array<Record<string, unknown>> = []
 
 const judgedAnswer = {
   recommendations: [
-    { artist: "Fen", musicbrainzArtistId: "m1", why: "Post-black from the fens, see https://fen.bandcamp.com", sourceSignals: ["https://fen.bandcamp.com"] },
-    { artist: "Ghost Bath", musicbrainzArtistId: "m2", why: "Similar to Alcest.", sourceSignals: [] },
+    { artist: "Fen", musicbrainzArtistId: "m1", why: "Post-black from the fens, see https://fen.bandcamp.com", sourceSignals: ["web_search"], evidenceUrls: ["https://fen.bandcamp.com"], listenerCount: 12000 },
+    { artist: "Ghost Bath", musicbrainzArtistId: "m2", why: "Similar to Alcest.", sourceSignals: ["agent_reasoning"], evidenceUrls: [], listenerCount: null },
   ],
   meta: { model: "gemma-4-26b-a4b-it" },
 };
@@ -570,20 +580,21 @@ test("a judged golden query records the judge's mean scores over its top bands",
   assert.deepEqual(result.judgeScores, { relevance: 0.75, obscurityFit: 0.75, evidenceQuality: 0.75, discoveryValue: 0.75 });
 });
 
-test("the golden judge sees what the live judge sees: why, sources, listeners and evidence checks", async () => {
+test("the golden judge uses typed search-time listeners and evidence URLs", async () => {
   const { fetchImpl } = apiReturning(judgedAnswer);
   const seen: Array<Record<string, unknown>> = [];
   await runGoldenEntry("http://api.test", { id: "x", query: "blackgaze", obscurityTarget: "underground" }, noTags, {
     fetchImpl,
     mbCooldownMs: 0,
-    judge: { model: judgeRecording(0.5, seen), modelId: "llama", listenersOf: async (name) => (name === "Fen" ? 12000 : null) },
+    judge: { model: judgeRecording(0.5, seen), modelId: "llama" },
   });
 
   const fen = seen.find((b) => b.band_name === "Fen")!;
   assert.equal(fen.query, "blackgaze");
   assert.equal(fen.obscurity_target, "underground");
   assert.match(String(fen.why), /fens/);
-  assert.deepEqual(fen.source_signals, ["https://fen.bandcamp.com"]);
+  assert.deepEqual(fen.source_signals, ["web_search"]);
+  assert.deepEqual(fen.evidence_urls, ["https://fen.bandcamp.com"]);
   assert.equal(fen.listeners, 12000);
   assert.equal(fen.target_range_fit, "inRange");
   assert.equal(fen.citation_support_rate, 1);

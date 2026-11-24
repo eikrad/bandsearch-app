@@ -414,7 +414,7 @@ npm run dashboard -w services/eval                               # rebuild the d
 npm run calibrate -w services/eval                               # check the LLM judge against human labels
 ```
 
-Metrics, replay mode, constraints, run history and the dashboard are described in [docs/evaluation.md](docs/evaluation.md).
+Metrics, replay mode, constraints, run history and the dashboard are described in [docs/evaluation.md](docs/evaluation.md). Golden eval uses the search-time recommendation evidence URLs and listener counts; changes to those judge inputs require a new metrics-version baseline.
 
 ---
 

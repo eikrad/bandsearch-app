@@ -35,6 +35,13 @@ section groups repeats of one configuration and compares each setup with the
 baseline's per query, with a 95% interval (paired bootstrap); only differences
 outside the noise are highlighted.
 
+Recommendations carry retrieved `evidenceUrls` and the nullable Last.fm
+`listenerCount` observed during search through the API response. Production eval
+and golden runs use these fields directly; source labels remain in
+`sourceSignals`. This changes citation support and judge context (metrics
+version 7), so version 6 judge and golden scores are not directly comparable.
+Record a new `baseline` after this change.
+
 The judge is checked the same way: `npm run calibrate -w services/eval` scores
 the 25 hand-labelled examples and 20 directional checks with the configured
 judge (`--judge <model>` compares candidates) and appends the agreement to

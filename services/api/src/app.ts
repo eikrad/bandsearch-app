@@ -7,7 +7,6 @@ import { createNoOpEvalRepository, type EvalRepository } from "./eval/evalReposi
 import { createNoOpEvalWorker, createEvalWorker } from "./eval/evalWorker.js";
 import type { EvalWorker } from "./eval/evalWorker.js";
 import { createRecommendationFeedback } from "./feedback/recommendationFeedback.js";
-import { createLastFmClient } from "./eval/lastFmClient.js";
 import { createJudgeWorker, createNoOpJudgeWorker, judgeModelFor } from "./eval/judgeWorker.js";
 
 // ESM/CJS interop — these modules may wrap their export in a .default in some build environments
@@ -251,9 +250,6 @@ export function createApp({
     (runtimeConfig.evalDashboardEnabled
       ? createEvalWorker({
           evalRepository: resolvedEvalRepository,
-          lastFmClient: runtimeConfig.lastFmApiKey
-            ? createLastFmClient({ apiKey: runtimeConfig.lastFmApiKey })
-            : undefined,
           judgeWorker: resolvedJudgeWorker,
         })
       : createNoOpEvalWorker());

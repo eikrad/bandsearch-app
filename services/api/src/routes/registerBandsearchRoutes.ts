@@ -1,5 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { createClient as createLibsqlClient } from "@libsql/client";
+import type { Recommendation } from "../../../../shared/schemas/src/contracts.js";
 
 import { buildSavedBandContext } from "../savedBandContext.js";
 import type { TurnListener } from "../agent/conversation/conversationService.js";
@@ -62,7 +63,7 @@ export type BandsearchRouteContext = {
   resolvedChatSessionRepository: ChatSessionRepository;
   resolvedRecommendationPipeline?: {
     recommend: (req: Record<string, unknown>, listener?: TurnListener) => Promise<{
-      recommendations: unknown[];
+      recommendations: Recommendation[];
       assistantReply?: string;
       meta?: unknown;
     }>;

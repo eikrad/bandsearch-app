@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { config as loadEnv } from "dotenv";
 
 import { mayBeSameArtist } from "../../shared/schemas/src/artistIdentity.js";
+import { validateRecommendation, type Recommendation } from "../../shared/schemas/src/contracts.js";
 import type { ChatModelClient } from "../api/src/agent/modelUtils.js";
 import { modelFamily } from "../api/src/config/models.js";
 import { createChatModelFactory } from "../api/src/llm/chatModel.js";
@@ -65,13 +66,6 @@ export type GoldenEntry = {
   /** Share of decided top bands that must meet the constraints; default 0.75. */
   minConstraintRate?: number;
   notes?: string;
-};
-
-export type Recommendation = {
-  artist: string;
-  musicbrainzArtistId?: string;
-  why?: string;
-  sourceSignals?: string[];
 };
 
 export type GoldenResult = {
@@ -238,7 +232,7 @@ export type TagSource = "musicbrainz" | "lastfm";
 export type BandTags = { tags: string[]; source: TagSource | null };
 
 /** Tags for one recommended band; null when every source failed (unknown, not "no tags"). */
-export type TagLookup = { tagsFor(rec: Recommendation): Promise<BandTags | null> };
+export type TagLookup = { tagsFor(rec: Pick<Recommendation, "artist" | "musicbrainzArtistId">): Promise<BandTags | null> };
 
 /**
  * Last.fm weights tags 0–100 relative to the artist's top tag. Below this,
@@ -357,18 +351,15 @@ async function fetchRecommendations(
   }
 
   const data = (await response.json()) as {
-    recommendations?: Array<{ artist?: string; musicbrainzArtistId?: string; why?: unknown; sourceSignals?: unknown }>;
+    recommendations?: unknown;
     meta?: { model?: unknown; pipelineVersion?: unknown; evalReplay?: unknown };
   };
+  const rawRecommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+  if (!rawRecommendations.every(validateRecommendation)) {
+    throw new Error("recommendation API returned an invalid recommendation");
+  }
   return {
-    recommendations: (data.recommendations ?? [])
-      .map((r) => ({
-        artist: r.artist ?? "",
-        musicbrainzArtistId: r.musicbrainzArtistId,
-        why: typeof r.why === "string" ? r.why : undefined,
-        sourceSignals: Array.isArray(r.sourceSignals) ? r.sourceSignals.filter((x): x is string => typeof x === "string") : undefined,
-      }))
-      .filter((r) => r.artist.length > 0),
+    recommendations: rawRecommendations,
     model: typeof data.meta?.model === "string" ? data.meta.model : null,
     pipelineVersion: typeof data.meta?.pipelineVersion === "string" ? data.meta.pipelineVersion : null,
     replay: data.meta?.evalReplay === true,
@@ -390,8 +381,6 @@ export type RunGoldenEntryOptions = {
     model: ChatModelClient;
     modelId: string;
     votes?: number;
-    /** Last.fm listener count per band, for the obscurity tier; omit to send none. */
-    listenersOf?: (artist: string) => Promise<number | null>;
   };
   /** Checks bands against an entry's constraints; required when the entry has any. */
   constraintChecker?: {
@@ -489,15 +478,15 @@ export async function runGoldenEntry(
     try {
       const inputs: JudgeInput[] = await Promise.all(
         topK.map(async (r) => {
-          const listeners = judge.listenersOf ? await judge.listenersOf(r.artist) : null;
-          const evidence = checkEvidence(r.why ?? "", r.sourceSignals ?? []);
+          const evidence = checkEvidence(r.why, r.evidenceUrls);
           return {
             bandName: r.artist,
             query: entry.query,
             obscurityTarget: entry.obscurityTarget ?? null,
-            why: r.why ?? "",
-            sourceSignals: r.sourceSignals ?? [],
-            listeners,
+            why: r.why,
+            sourceSignals: r.sourceSignals,
+            evidenceUrls: r.evidenceUrls,
+            listeners: r.listenerCount,
             citationSupportRate: evidence.citationSupportRate,
             genericWhyFlag: evidence.genericWhyFlag,
           };
@@ -671,7 +660,6 @@ async function main(): Promise<void> {
       reasoningEffort: effort || "none",
       votes: Math.max(1, Number.parseInt(args["judge-votes"] ?? "1", 10) || 1),
     };
-    const lastFm = lastFmKey ? createLastFmClient({ apiKey: lastFmKey, fetchImpl: lookupFetch }) : null;
     judge = {
       // The same settings as the live judge (judgeModelFor): temperature 0, JSON mode.
       model: createChatModelFactory(
@@ -683,7 +671,6 @@ async function main(): Promise<void> {
       )({ temperature: 0, json: true }),
       modelId: judgeConfig.model,
       votes: judgeConfig.votes,
-      listenersOf: lastFm ? (artist) => lastFm.getListenerCount(artist) : undefined,
     };
     console.log(`Judging top bands with ${judgeConfig.model} (reasoning ${judgeConfig.reasoningEffort}, ${judgeConfig.votes} vote(s))`);
   }

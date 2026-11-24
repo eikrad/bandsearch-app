@@ -2,7 +2,7 @@ import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
 import { findArtist, mayBeSameArtist, type ArtistRef } from "../../../../../shared/schemas/src/artistIdentity.js";
-import type { AnswerProgress, ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
+import type { AnswerProgress, ChatMessage, Recommendation, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient } from "../../eval/lastFmClient.js";
@@ -91,7 +91,7 @@ export const RESEARCH_SCHEMA = new StateSchema({
   reflectionUsed: z.boolean(),
   roundsCompleted: z.number(),
   nextExtraQueries: z.array(z.string()),
-  recommendations: z.custom<unknown[]>(),
+  recommendations: z.custom<Recommendation[]>(),
   assistantReply: z.string(),
 });
 
@@ -419,7 +419,7 @@ export async function invokeResearchGraph(
   deps: ResearchGraphDeps,
   input: ResearchGraphInput,
 ): Promise<{
-  recommendations: unknown[];
+  recommendations: Recommendation[];
   assistantReply: string;
   /** Every candidate found, with its evidence: what a follow-up can pick from. */
   candidates: VerifiedCandidate[];

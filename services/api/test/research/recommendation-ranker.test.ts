@@ -33,6 +33,7 @@ test("attachEvidenceCitationsToRecommendations appends see url when why lacks ci
         sourceQueries: ["q"],
         verified: true,
         mbid: "mbid-1",
+        listenerCount: 42_000,
       },
     ],
   );
@@ -40,8 +41,22 @@ test("attachEvidenceCitationsToRecommendations appends see url when why lacks ci
   assertRecord(recs[0]);
   assert.match(String(recs[0].why), /https:\/\/source\.example\/a/);
   assert.equal(recs[0].musicbrainzArtistId, "mbid-1");
+  assert.deepEqual(recs[0].evidenceUrls, ["https://source.example/a"]);
+  assert.equal(recs[0].listenerCount, 42_000);
   assert.ok(Array.isArray(recs[0].sourceSignals));
   assert.equal(recs[0].sourceSignals.includes("web_search"), true);
+});
+
+test("recommendations keep evidence URLs separate from categorical source signals", () => {
+  const [recommendation] = attachEvidenceCitationsToRecommendations(
+    [{ artist: "Test Band", why: "Grounded at https://source.example/a", sourceSignals: ["agent_reasoning", "https://source.example/a"] }],
+    [{ name: "Test Band", evidenceUrls: ["https://source.example/a"], evidenceSnippets: [], sourceQueries: ["query"], verified: false, listenerCount: null }],
+  );
+  assert.ok(recommendation);
+  assert.deepEqual(recommendation.evidenceUrls, ["https://source.example/a"]);
+  assert.equal(recommendation.listenerCount, null);
+  assert.ok(recommendation.sourceSignals.includes("agent_reasoning"));
+  assert.equal(recommendation.sourceSignals.some((signal) => signal.startsWith("http")), false);
 });
 
 

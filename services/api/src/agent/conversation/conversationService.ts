@@ -1,5 +1,5 @@
 import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
-import type { AnswerProgress, ChatMessage, RecommendationMode, TurnKind } from "../../../../../shared/schemas/src/contracts.js";
+import type { AnswerProgress, ChatMessage, Recommendation, RecommendationMode, TurnKind } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { filterCandidatesByObscurity, type VerifiedCandidate } from "../research/candidateVerifier.js";
 import { createRecommendationRanker } from "../research/recommendationRanker.js";
@@ -41,7 +41,7 @@ export type TurnListener = {
 
 export type TurnResult = {
   turn: TurnKind;
-  recommendations: unknown[];
+  recommendations: Recommendation[];
   assistantReply: string;
   pipelineDiagnostics: PipelineDiagnostics | null;
   model: string;
@@ -101,11 +101,10 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
   }
 
   /** The conversation after an answer showed these bands. */
-  function remember(request: TurnRequest, conversation: Conversation, recommendations: unknown[]) {
+  function remember(request: TurnRequest, conversation: Conversation, recommendations: Recommendation[]) {
     if (!request.conversationKey) return;
     const shown = recommendations.flatMap((r) => {
-      const artist = String((r as { artist?: unknown }).artist ?? "").trim();
-      return (artist && findArtist({ name: artist }, conversation.candidates)) || [];
+      return findArtist({ name: r.artist }, conversation.candidates) || [];
     });
     memory.set(request.conversationKey, {
       ...conversation,

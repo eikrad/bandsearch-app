@@ -13,6 +13,7 @@ export type JudgeInput = {
   obscurityTarget?: string | null;
   why?: string;
   sourceSignals?: string[];
+  evidenceUrls?: string[];
   listeners?: number | null;
   citationSupportRate?: number;
   genericWhyFlag?: boolean;
@@ -51,6 +52,7 @@ Scoring dimensions (each 0.0–1.0):
 - relevance: Does the band genuinely fit the requested genre/style/mood described in the query?
 - obscurity_fit: ${OBSCURITY_FIT_GUIDANCE}
 - evidence_quality: Is the why-text specific and grounded in cited sources, or generic boilerplate? Penalise generic_why_flag=true and uncited claims. ${REPLY_LANGUAGE_JUDGE_RULE}
+- source_signals are categorical provenance labels. evidence_urls are the URLs search retrieved or used to support the why; use citation_support_rate to assess whether cited URLs are among them.
 - discovery_value: Would a curious music fan be genuinely surprised and pleased? Penalise extremely well-known mainstream bands for discovery-focused queries.
 
 Return ONLY a JSON object with this exact structure — no prose, no markdown fences:
@@ -90,6 +92,7 @@ export function buildJudgePrompt(bands: JudgeInput[]): { system: string; user: s
       obscurity_target: b.obscurityTarget ?? null,
       why: b.why ?? "",
       source_signals: b.sourceSignals ?? [],
+      evidence_urls: b.evidenceUrls ?? [],
       listeners: b.listeners ?? null,
       target_range_fit: fits[i],
       citation_support_rate: b.citationSupportRate ?? null,
