@@ -10,7 +10,7 @@ import type { GoldenEntry, GoldenResult } from "./run-golden.ts";
  * runs on either side as not directly comparable instead of reporting the
  * change as a regression or an improvement.
  */
-export const GOLDEN_METRICS_VERSION = 5;
+export const GOLDEN_METRICS_VERSION = 6;
 // 1 → 2 (2026-10-05, #250): coverage also counts Last.fm tags for bands without
 // MusicBrainz tags, so it is known for far more queries and measured differently.
 // 2 → 3 (2026-10-05, #253): constraint queries add a third pass/fail gate.
@@ -21,6 +21,9 @@ export const GOLDEN_METRICS_VERSION = 5;
 // language and the code caps evidence quality when they differ; a word-for-word
 // quote from a source no longer counts as another language. Judge means are
 // not comparable with 4.
+// 5 → 6 (2026-11-24, #366): antiBandRate@8 and the top-8 overlap tell bands
+// apart by the search's artist identity, so "Cure" counts against the
+// anti-band "The Cure" and a respelled band no longer lowers the overlap.
 
 export type GitState = { commit: string; branch: string; dirty: boolean };
 

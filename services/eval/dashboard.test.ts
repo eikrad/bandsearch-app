@@ -341,3 +341,8 @@ test("a run comparison reports the change in each judge dimension", () => {
   const cmp = compareRuns(runWith([judged(0.5)], "gemini"), runWith([judged(0.75)], "gemma"));
   assert.equal(cmp.summaryDelta["judgeMeans.relevance"], 0.25);
 });
+
+test("top-8 overlap counts a band once under any spelling of it, by the search's artist identity (#366)", () => {
+  assert.equal(top8Overlap(["The Cure", "Alcést"], ["Cure, The", "alcest"]), 1);
+  assert.equal(top8Overlap(["The Cure", "Cure", "Fen"], ["Fen"]), 0.5);
+});
