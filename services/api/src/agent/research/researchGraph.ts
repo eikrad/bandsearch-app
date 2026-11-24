@@ -321,38 +321,51 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       if (!lastFm) return {};
       return { verifiedCandidates: await lastFm.enrich(state.verifiedCandidates ?? [], state.searchPlan?.anchorArtists ?? []) };
     })
-    .addNode("rank", async (state) => budget.run(RANKING_RESERVE_MS, async (signal) => {
-      const ranker = await createRecommendationRanker({
-        timeoutMs: budget.allocate(RANKING_RESERVE_MS),
-        signal,
-        modelClient: deps.modelClient,
-        chatModel: deps.chatModel,
-      });
-      const fresh = withoutArtists(state.verifiedCandidates, state.exclude);
-      const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
-      log("info", "research_obscurity_filter", {
-        obscurityTarget: state.obscurityTarget ?? "none",
-        before: fresh.length,
-        after: filteredCandidates.length,
-        // Shows whether in-range bands were found and filtered or ranked away, or never found (#325).
-        fitBefore: countTargetFit(fresh, state.obscurityTarget),
-        fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
-      });
-      deps.onProgress?.({ stage: "choosing", candidates: filteredCandidates.length });
-      const { recommendations, assistantReply } = await ranker({
-        query: state.userQuery,
-        preferenceContext: state.preferenceContext,
-        messages: state.messages,
-        mode: state.mode,
-        candidates: filteredCandidates,
-        obscurityTarget: state.obscurityTarget,
-        onReply: deps.onReply,
-      });
-      log("info", "research_ranked", {
-        finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
-      });
-      return { recommendations, assistantReply };
-    }))
+    .addNode("rank", async (state) => {
+      // How long ranking took and whether it needed the evidence retry, which shares the cap (#369).
+      const started = Date.now();
+      let attempts = 0;
+      try {
+        return await budget.run(RANKING_RESERVE_MS, async (signal) => {
+          const ranker = await createRecommendationRanker({
+            timeoutMs: budget.allocate(RANKING_RESERVE_MS),
+            signal,
+            modelClient: deps.modelClient,
+            chatModel: deps.chatModel,
+          });
+          const fresh = withoutArtists(state.verifiedCandidates, state.exclude);
+          const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
+          log("info", "research_obscurity_filter", {
+            obscurityTarget: state.obscurityTarget ?? "none",
+            before: fresh.length,
+            after: filteredCandidates.length,
+            // Shows whether in-range bands were found and filtered or ranked away, or never found (#325).
+            fitBefore: countTargetFit(fresh, state.obscurityTarget),
+            fitAfter: countTargetFit(filteredCandidates, state.obscurityTarget),
+          });
+          deps.onProgress?.({ stage: "choosing", candidates: filteredCandidates.length });
+          const { recommendations, assistantReply } = await ranker({
+            query: state.userQuery,
+            preferenceContext: state.preferenceContext,
+            messages: state.messages,
+            mode: state.mode,
+            candidates: filteredCandidates,
+            obscurityTarget: state.obscurityTarget,
+            onReply: deps.onReply,
+            onAttempt: () => { attempts++; },
+          });
+          log("info", "research_ranked", {
+            finalCount: Array.isArray(recommendations) ? recommendations.length : 0,
+            durationMs: Date.now() - started,
+            attempts,
+          });
+          return { recommendations, assistantReply };
+        });
+      } catch (error) {
+        log("warn", "research_rank_failed", { durationMs: Date.now() - started, attempts, reason: errorMessage(error) });
+        throw error;
+      }
+    })
     .addEdge(START, "plan")
     .addConditionalEdges("plan", ...untilCutoff("lastfm_first"))
     .addConditionalEdges(

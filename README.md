@@ -324,7 +324,7 @@ Common optional variables:
 | `TURSO_SYNC_PATH` | `bandsearch-sync.db` | Local replica file used by `turso-sync` |
 | `LASTFM_API_KEY` | — | Last.fm fallback for artist images and obscurity scoring |
 | `LANGSMITH_API_KEY` | — | LangSmith distributed tracing |
-| `RESEARCH_TIMEOUT_MS` | `180000` | Total graph deadline, including retries and ranking; reserves up to 12 s (at most one third) for ranking, cancels research at the cutoff, and fails the request (`502 recommendation_unavailable`) if ranking cannot finish |
+| `RESEARCH_TIMEOUT_MS` | `180000` | Total graph deadline, including retries and ranking; reserves up to 20 s (at most one third) for ranking, cancels research at the cutoff, and fails the request (`502 recommendation_unavailable`) if ranking cannot finish |
 | `RESEARCH_TARGET_VERIFIED_CANDIDATES` | `8` | Verified bands needed before the reflection loop stops |
 | `RESEARCH_MAX_INITIAL_SEARCHES` / `RESEARCH_MAX_REFLECTION_SEARCHES` / `RESEARCH_TOTAL_SEARCH_BUDGET` | `6` / `4` / `10` | Brave search caps for the first pass, for reflection, and in total |
 | `CORS_ORIGIN` | `*` (`.env.example` sets `http://localhost:1420`) | Allowed browser origin for the API |

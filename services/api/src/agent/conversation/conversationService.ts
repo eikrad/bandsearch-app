@@ -3,7 +3,7 @@ import type { AnswerProgress, ChatMessage, RecommendationMode, TurnKind } from "
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { filterCandidatesByObscurity, type VerifiedCandidate } from "../research/candidateVerifier.js";
 import { createRecommendationRanker } from "../research/recommendationRanker.js";
-import { createResearchBudget } from "../research/researchBudget.js";
+import { createResearchBudget, RANKING_RESERVE_MS } from "../research/researchBudget.js";
 import {
   invokeResearchGraph,
   type PipelineDiagnostics,
@@ -15,7 +15,8 @@ import { isShown, shownBands, type Conversation, type ConversationMemory } from 
 import { routeTurn } from "./turnRouter.js";
 
 const ROUTE_TIMEOUT_MS = 4000;
-const PICK_TIMEOUT_MS = 12_000;
+/** A pick asks the same ranker as a search, so it gets the same time (#369). */
+const PICK_TIMEOUT_MS = RANKING_RESERVE_MS;
 const ANSWER_TIMEOUT_MS = 12_000;
 /** Fewer unseen bands than one answer shows are not worth picking from. */
 const MIN_UNSEEN = 3;

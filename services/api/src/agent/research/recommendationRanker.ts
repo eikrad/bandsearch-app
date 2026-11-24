@@ -1,5 +1,6 @@
 
 import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
+import { RANKING_RESERVE_MS } from "./researchBudget.js";
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
@@ -182,6 +183,8 @@ export type RankInput = {
   obscurityTarget?: string;
   /** Told the reply so far while it is written. */
   onReply?: (text: string) => void;
+  /** Told before each answer is asked for: the first, then the evidence retry. */
+  onAttempt?: () => void;
 };
 
 /** Passes on a reply as it grows out of the ranker's JSON, without repeating itself. */
@@ -215,7 +218,7 @@ export function buildRankUserPartsForTest(input: {
 }
 
 export async function createRecommendationRanker({
-  timeoutMs = 12000,
+  timeoutMs = RANKING_RESERVE_MS,
   signal,
   modelClient: injectedModelClient,
   chatModel,
@@ -239,6 +242,7 @@ export async function createRecommendationRanker({
     });
     prompt.push({ role: "user", content: parts.join("\n") });
 
+    input.onAttempt?.();
     const response = await invokeModel(modelClient, prompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker timeout", onText: replyListener(input.onReply) });
     const raw = typeof response.content === "string" ? response.content : "";
     const parsed = parseModelJsonResponse(raw);
@@ -256,6 +260,7 @@ export async function createRecommendationRanker({
           content: `${(prompt[prompt.length - 1] as { content: string }).content}\n\nYour previous answer omitted required evidence URLs in why fields. Repeat with each why containing a full https URL from evidence_urls.`,
         },
       ];
+      input.onAttempt?.();
       const response2 = await invokeModel(modelClient, retryPrompt, { signal, timeoutMs, timeoutMessage: "recommendation ranker retry", onText: replyListener(input.onReply) });
       const raw2 = typeof response2.content === "string" ? response2.content : "";
       const parsed2 = parseModelJsonResponse(raw2);
