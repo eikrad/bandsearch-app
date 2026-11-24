@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
+import { mayBeSameArtist } from "../../shared/schemas/src/artistIdentity.js";
 import { loadRuns, type GoldenRunRecord, type GoldenRunResult } from "./history.ts";
 import { seededRandom } from "./random.ts";
 
@@ -98,13 +99,22 @@ function binomial(n: number, k: number): number {
   return result;
 }
 
+/** Each band once, under the first spelling it appears in, by the search's artist identity (#366). */
+function distinctBands(names: string[]): string[] {
+  const bands: string[] = [];
+  for (const name of names) {
+    if (!bands.some((band) => mayBeSameArtist({ name: band }, { name }))) bands.push(name);
+  }
+  return bands;
+}
+
 /** Shared bands as a share of the longer list; null when both are empty. */
 export function top8Overlap(a: string[], b: string[]): number | null {
-  const left = new Set(a.slice(0, 8).map((n) => n.toLowerCase()));
-  const right = new Set(b.slice(0, 8).map((n) => n.toLowerCase()));
-  const size = Math.max(left.size, right.size);
+  const left = distinctBands(a.slice(0, 8));
+  const right = distinctBands(b.slice(0, 8));
+  const size = Math.max(left.length, right.length);
   if (size === 0) return null;
-  return [...left].filter((n) => right.has(n)).length / size;
+  return left.filter((name) => right.some((other) => mayBeSameArtist({ name }, { name: other }))).length / size;
 }
 
 function mean(values: number[]): number | null {

@@ -610,3 +610,9 @@ test("a judge from the research model's own family is flagged on the query", asy
   });
   assert.ok(result.warnings.some((w) => /same model family \(google\)/.test(w)));
 });
+
+test("computeAntiBandRate counts an anti-band under any spelling of it, the way the search tells artists apart (#366)", () => {
+  const antiBands = ["The Cure", "Motörhead"];
+  const results = ["Cure", "Motorhead", "Fen", "Mudhoney"];
+  assert.equal(computeAntiBandRate(antiBands, results, 8), 0.5);
+});

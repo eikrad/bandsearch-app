@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 
 import { config as loadEnv } from "dotenv";
 
+import { mayBeSameArtist } from "../../shared/schemas/src/artistIdentity.js";
 import type { ChatModelClient } from "../api/src/agent/modelUtils.js";
 import { modelFamily } from "../api/src/config/models.js";
 import { createChatModelFactory } from "../api/src/llm/chatModel.js";
@@ -127,8 +128,8 @@ export function computeAntiBandRate(antiBands: string[], results: string[], k: n
   if (results.length === 0) return 0;
   const topK = results.slice(0, k);
   if (topK.length === 0) return 0;
-  const normalizedAnti = new Set(antiBands.map((n) => n.toLowerCase()));
-  const hits = topK.filter((r) => normalizedAnti.has(r.toLowerCase())).length;
+  // The search's own rule: a possible match counts as the same band (#366).
+  const hits = topK.filter((r) => antiBands.some((anti) => mayBeSameArtist({ name: anti }, { name: r }))).length;
   return hits / topK.length;
 }
 
