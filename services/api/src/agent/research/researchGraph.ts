@@ -1,14 +1,15 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import { findArtist, mayBeSameArtist, type ArtistRef } from "../../../../../shared/schemas/src/artistIdentity.js";
+import { mayBeSameArtist, type ArtistRef } from "../../../../../shared/schemas/src/artistIdentity.js";
 import type { AnswerProgress, ChatMessage, Recommendation, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
 import { createLastFmClient } from "../../eval/lastFmClient.js";
 import { createMusicBrainzClient } from "../../integrations/musicbrainz.js";
-import { createCandidateExtractor, mergeExtractedCandidates, type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
-import { filterCandidatesByObscurity, mergeVerifiedCandidates, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { type ExtractedCandidate, type SearchHitInput } from "./candidateExtractor.js";
+import { filterCandidatesByObscurity, verifyCandidatesWithMusicBrainz, type VerifiedCandidate } from "./candidateVerifier.js";
+import { runCandidatePoolRound } from "./candidatePoolRound.js";
 import { fitObscurityTarget, type ObscurityTargetFit } from "../../obscurityTargets.js";
 import { createLastFmEnrichment } from "./lastFmEnrichment.js";
 import { asksLastFmFirst, enoughFromLastFm } from "./lastFmFirst.js";
@@ -27,8 +28,6 @@ export type ResearchGraphDeps = {
   totalSearchBudget: number;
   targetVerifiedCount: number;
   researchTimeoutMs: number;
-  /** Search hits the candidate extractor reads per round; searching stops once they are found. */
-  maxExtractHits?: number;
   musicBrainzTimeoutMs?: number;
   musicBrainzRetries?: number;
   /** Spacing of MusicBrainz calls; 0 when the transport already spaces real calls (replay). */
@@ -110,7 +109,6 @@ async function runBraveQueries(
     apiKey: string;
     dedupCache: BraveDedupCache;
     budget: ResearchBudget;
-    enoughHits: number;
     minIntervalMs?: number;
     fetchImpl?: typeof fetch;
   },
@@ -129,7 +127,7 @@ async function runBraveQueries(
   const hits: SearchHitInput[] = [];
   let calls = 0;
   for (const q of queries) {
-    if (calls >= budgetLeft || hits.length >= config.enoughHits || config.budget.remaining() <= 0) break;
+    if (calls >= budgetLeft || config.budget.remaining() <= 0) break;
     let res;
     calls += 1;
     try {
@@ -177,16 +175,12 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   const untilCutoff = <Next extends string>(next: Next): [() => Next | "rank", Array<Next | "rank">] =>
     [() => (researchScope.remaining() > 0 ? next : "rank"), [next, "rank"]];
 
-  // More hits would not reach the extractor: it caps them, so its candidate
-  // list stays manageable within the timeout. Searching for them only takes time.
-  const maxExtractHits = deps.maxExtractHits ?? 36;
   const braveDedup: BraveDedupCache = new Map();
   const runQueries = (queries: string[], budgetLeft: number, perQueryCount: number) =>
     runBraveQueries({
       apiKey: deps.braveApiKey,
       dedupCache: braveDedup,
       budget: researchScope,
-      enoughHits: maxExtractHits,
       minIntervalMs: deps.braveMinIntervalMs,
       fetchImpl: deps.fetchImpl,
     }, queries, budgetLeft, perQueryCount);
@@ -270,51 +264,26 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       log("info", "research_brave_call", { phase: "initial", calls, hitCount: hits.length });
       return { braveHits: hits, searchCallsUsed: calls };
     })
-    .addNode("extract", async (state) => researchScope.run(18000, async (signal) => {
-      const extract = await createCandidateExtractor({
-        timeoutMs: researchScope.allocate(18000),
-        signal,
+    .addNode("candidate_round", async (state) => {
+      const anchors = state.searchPlan?.anchorArtists ?? [];
+      const result = await runCandidatePoolRound({
+        mb,
+        budget: researchScope,
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
-      });
-      const anchors = state.searchPlan?.anchorArtists?.length ? state.searchPlan.anchorArtists : [];
-      const hitsForExtract = Array.isArray(state.braveHits) ? state.braveHits.slice(0, maxExtractHits) : [];
-      const fromWeb = await extract({ hits: hitsForExtract, anchorArtists: anchors });
-      const candidates = mergeExtractedCandidates([...fromWeb, ...state.extractedCandidates]);
-      log("info", "research_candidates_extracted", {
-        count: candidates.length,
-        fromWeb: fromWeb.length,
-        fromLastFm: state.extractedCandidates.length,
-      });
-      lastFm?.prefetchInfo(candidates.map((c) => c.name));
-      deps.onProgress?.({ stage: "checking", found: candidates.length });
-      return { extractedCandidates: candidates };
-    }).catch((error: unknown) => {
-      if (researchScope.remaining() > 0) throw error;
-      return {};
-    }))
-    .addNode("verify", async (state) => {
-      const anchors = state.searchPlan?.anchorArtists ?? [];
-      // Bands of the Last.fm round are verified already; what the web adds about them is merged in.
-      const knownAs = (c: ExtractedCandidate) => findArtist(c, state.verifiedCandidates);
-      const fresh = await verifyCandidatesWithMusicBrainz(
-        mb,
-        state.extractedCandidates.filter((c) => !knownAs(c)),
-        anchors,
-        { shouldContinue: () => researchScope.remaining() > 0, cache: deps.cache?.artists },
-      );
-      const again = state.extractedCandidates.flatMap((c) => {
-        const earlier = knownAs(c);
-        return earlier ? [{ ...earlier, ...c, name: earlier.name }] : [];
-      });
-      const verified = mergeVerifiedCandidates([...again, ...fresh]);
-      const verifiedCount = verified.filter((v) => v.verified).length;
-      log("info", "research_verification_done", {
+        artistCache: deps.cache?.artists,
+        onLog: deps.onLog,
+        onExtracted: (candidates) => lastFm?.prefetchInfo(candidates.map((candidate) => candidate.name)),
+      }, {
+        hits: state.braveHits ?? [],
+        anchorArtists: anchors,
+        extractedCandidates: state.extractedCandidates ?? [],
+        verifiedCandidates: state.verifiedCandidates ?? [],
+        round: 1,
         phase: "initial",
-        verified: verifiedCount,
-        total: verified.length,
       });
-      return { verifiedCandidates: verified };
+      deps.onProgress?.({ stage: "checking", found: result.extractedCandidates.length });
+      return result;
     })
     .addNode("reflect_if_needed", reflectionSubgraph)
     .addNode("enrich_lastfm", async (state) => {
@@ -373,9 +342,8 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
       (state) => (state.enoughFromLastFm || researchScope.remaining() <= 0 ? "rank" : "brave_initial"),
       ["brave_initial", "rank"],
     )
-    .addConditionalEdges("brave_initial", ...untilCutoff("extract"))
-    .addConditionalEdges("extract", ...untilCutoff("verify"))
-    .addConditionalEdges("verify", ...untilCutoff("reflect_if_needed"))
+    .addConditionalEdges("brave_initial", ...untilCutoff("candidate_round"))
+    .addConditionalEdges("candidate_round", ...untilCutoff("reflect_if_needed"))
     .addConditionalEdges("reflect_if_needed", ...untilCutoff("enrich_lastfm"))
     .addEdge("enrich_lastfm", "rank")
     .addEdge("rank", END);

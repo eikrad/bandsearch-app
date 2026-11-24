@@ -78,12 +78,12 @@ function nodeOf(system: string): string {
   return "unknown";
 }
 
-test("invokeResearchGraph visits every node in order", async () => {
+test("invokeResearchGraph skips reflection once the verified target is reached", async () => {
   const { client, calls, fetchImpl } = happyPath();
 
   await invokeResearchGraph(graphDeps({ modelClient: client, fetchImpl }), input);
 
-  assert.deepEqual(calls.map((c) => nodeOf(c.system)), ["plan", "extract", "reflect", "rank"]);
+  assert.deepEqual(calls.map((c) => nodeOf(c.system)), ["plan", "extract", "rank"]);
 });
 
 test("invokeResearchGraph reports pipeline diagnostics from the run", async () => {
@@ -98,7 +98,7 @@ test("invokeResearchGraph reports pipeline diagnostics from the run", async () =
   assert.equal(pipelineDiagnostics.extractedCandidateCount, 2);
   assert.equal(pipelineDiagnostics.verifiedCount, 2);
   assert.equal(pipelineDiagnostics.searchBudgetUsed, 1);
-  assert.equal(pipelineDiagnostics.reflectionTriggered, true);
+  assert.equal(pipelineDiagnostics.reflectionTriggered, false);
 });
 
 test("invokeResearchGraph caps initial searches at maxInitialSearches", async () => {
@@ -121,24 +121,42 @@ test("invokeResearchGraph caps initial searches at maxInitialSearches", async ()
   assert.equal(braveCalls.length, 2, "planner offered five queries; only two are in budget");
 });
 
-test("searching stops once the extractor has as many hits as it reads", async () => {
+test("the candidate pool keeps searching until the verified target is reached", async () => {
   const { client, calls } = fakeModelClient({
-    plan: () => ({ anchorArtists: [], styleSignals: [], mustHave: [], avoid: [], queries: ["q1", "q2", "q3", "q4"] }),
+    plan: () => ({ anchorArtists: ["Alcest"], styleSignals: [], mustHave: [], avoid: [], queries: ["q1", "q2"] }),
+    extract: (() => {
+      let round = 0;
+      return () => {
+        round += 1;
+        const names = round === 1
+          ? ["Band A", "Band B"]
+          : ["Band C", "Band D", "Band E", "Band F", "Band G", "Band H"];
+        return extractedCandidates(names.map((name) => ({ name })));
+      };
+    })(),
+    // A model's optimistic assessment must not bypass the code-owned target.
+    reflect: () => ({ sufficient: true, gaps: [], extraQueries: ["q2"] }),
   });
   const { fetchImpl, log } = fakeFetch({
-    brave: (url) => braveResults([1, 2, 3].map((n) => ({
-      title: `${new URL(url).searchParams.get("q")} hit ${n}`, url: `https://blog.example/${n}`, description: "",
-    }))),
+    brave: (url) => braveResults([{
+      title: `${new URL(url).searchParams.get("q")} hit`,
+      url: `https://blog.example/${new URL(url).searchParams.get("q")}`,
+      description: "An independent band recommendation.",
+    }]),
+    musicbrainz: () => musicbrainzArtists(
+      ["Band A", "Band B", "Band C", "Band D", "Band E", "Band F", "Band G", "Band H"]
+        .map((name) => ({ id: `mbid-${name.toLowerCase().replaceAll(" ", "-")}`, name })),
+    ),
   });
 
-  await invokeResearchGraph(
-    graphDeps({ modelClient: client, fetchImpl, maxInitialSearches: 4, maxExtractHits: 6 }),
+  const result = await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, maxInitialSearches: 1, targetVerifiedCount: 8 }),
     input,
   );
 
-  assert.equal(log.filter((c) => c.url.includes("api.search.brave.com")).length, 2, "two searches filled the six hits");
-  const extraction = calls.find((c) => nodeOf(c.system) === "extract")!.user;
-  assert.match(extraction, /q2 hit 3/);
+  assert.equal(log.filter((c) => c.url.includes("api.search.brave.com")).length, 2);
+  assert.equal(result.pipelineDiagnostics.verifiedCount, 8);
+  assert.deepEqual(calls.map((c) => nodeOf(c.system)), ["plan", "extract", "reflect", "extract", "rank"]);
 });
 
 test("invokeResearchGraph passes the user query through to the planner", async () => {
@@ -496,6 +514,7 @@ test("every research node builds its model from the configured factory, at its o
     graphDeps({
       fetchImpl,
       model: "gemma-4-26b-a4b-it",
+      targetVerifiedCount: 5,
       chatModel: ({ temperature }) => {
         temperatures.push(temperature);
         return client;

@@ -133,10 +133,10 @@ function obscurityConstraint(target: ObscurityTarget): string {
 const isBandcampQuery = (q: string) => /bandcamp\.com/i.test(q);
 
 /**
- * Searching stops once the extractor has enough hits, usually after the first
- * three queries, so their order decides the candidate pool. Bandcamp finds the smallest acts: for Cult
- * Following its queries go last, for Underground they alternate with the
- * others, other first. Nothing is dropped.
+ * Queries run until the initial search allowance is spent; their order still
+ * matters when the total search budget or research deadline cuts that short.
+ * Bandcamp finds the smallest acts: for Cult Following its queries go last,
+ * for Underground they alternate with the others, other first. Nothing is dropped.
  */
 function orderQueriesForTarget(queries: string[], target: ObscurityTarget | undefined): string[] {
   if (target !== "cult" && target !== "underground") return queries;
