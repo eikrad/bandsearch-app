@@ -1,3 +1,4 @@
+import { mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import { CONVERSATION_MEMORY_HOURS } from "../../../../../shared/schemas/src/contracts.js";
 import { createTtlCache } from "../../integrations/ttlCache.js";
 import type { VerifiedCandidate } from "../research/candidateVerifier.js";
@@ -45,11 +46,12 @@ export function conversationKey(userId: string | undefined, conversationId: stri
 
 export const bandName = (c: VerifiedCandidate) => c.canonicalName || c.name;
 
-/** The names of every band shown, in lower case, under each spelling it is known by. */
-export function shownNames(conversation: Conversation): Set<string> {
-  return new Set(conversation.shown.flat().flatMap((c) => [c.name, bandName(c)]).map((n) => n.trim().toLowerCase()));
+/** Every band the conversation has shown, oldest first. */
+export function shownBands(conversation: Conversation): VerifiedCandidate[] {
+  return conversation.shown.flat();
 }
 
-export function isShown(candidate: VerifiedCandidate, shown: Set<string>): boolean {
-  return [candidate.name, bandName(candidate)].some((n) => shown.has(n.trim().toLowerCase()));
+/** Shown already, under this or any other spelling: the search treats a possible match as the same band. */
+export function isShown(candidate: VerifiedCandidate, conversation: Conversation): boolean {
+  return shownBands(conversation).some((band) => mayBeSameArtist(band, candidate));
 }

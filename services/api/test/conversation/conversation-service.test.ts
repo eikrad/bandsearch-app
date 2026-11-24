@@ -234,3 +234,18 @@ test("a conversation belongs to the authenticated user, whatever id the request 
   assert.notEqual(conversationKey("a", 'b","c'), conversationKey('a","b', "c"));
   assert.equal(conversationKey("user-a", undefined), null);
 });
+
+test("a band the ranker spells differently is still remembered as shown (#366)", async () => {
+  const { ask } = chat({
+    route: () => ({ action: "pick" }),
+    rank: ({ user }) => {
+      const offered = [...user.matchAll(/^artist: (.+)$/gm)].map((m) => m[1]!);
+      return rankedRecommendations(offered.slice(0, 3).map((artist) => ({ artist: `The ${artist}`, why })));
+    },
+  });
+  await ask("bands like Alcest", { messages: [] });
+
+  const more = await ask("more please");
+
+  assert.deepEqual(artists(more), ["The Sundrowned", "The Adorn", "The Heretoir"], "bands already shown are not offered again");
+});

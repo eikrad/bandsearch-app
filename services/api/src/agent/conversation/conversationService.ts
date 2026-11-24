@@ -1,3 +1,4 @@
+import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import type { AnswerProgress, ChatMessage, RecommendationMode, TurnKind } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { filterCandidatesByObscurity, type VerifiedCandidate } from "../research/candidateVerifier.js";
@@ -10,7 +11,7 @@ import {
   type ResearchGraphInput,
 } from "../research/researchGraph.js";
 import { writeAnswer } from "./answerWriter.js";
-import { bandName, isShown, shownNames, type Conversation, type ConversationMemory } from "./conversationMemory.js";
+import { isShown, shownBands, type Conversation, type ConversationMemory } from "./conversationMemory.js";
 import { routeTurn } from "./turnRouter.js";
 
 const ROUTE_TIMEOUT_MS = 4000;
@@ -80,8 +81,7 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
   /** Found bands the user has not seen, fit for the requested target; none when the target changed since the search. */
   function unseenBands(conversation: Conversation | undefined, obscurityTarget: string | undefined): VerifiedCandidate[] {
     if (!conversation || conversation.obscurityTarget !== obscurityTarget) return [];
-    const shown = shownNames(conversation);
-    return filterCandidatesByObscurity(conversation.candidates.filter((c) => !isShown(c, shown)), obscurityTarget);
+    return filterCandidatesByObscurity(conversation.candidates.filter((c) => !isShown(c, conversation)), obscurityTarget);
   }
 
   async function route(request: TurnRequest, conversation: Conversation | undefined, unseen: VerifiedCandidate[], listener: TurnListener): Promise<TurnKind> {
@@ -102,9 +102,10 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
   /** The conversation after an answer showed these bands. */
   function remember(request: TurnRequest, conversation: Conversation, recommendations: unknown[]) {
     if (!request.conversationKey) return;
-    const artists = recommendations.map((r) => String((r as { artist?: unknown }).artist ?? "").trim().toLowerCase());
-    const shown = artists.flatMap((artist) =>
-      conversation.candidates.find((c) => [c.name, bandName(c)].some((n) => n.trim().toLowerCase() === artist)) ?? []);
+    const shown = recommendations.flatMap((r) => {
+      const artist = String((r as { artist?: unknown }).artist ?? "").trim();
+      return (artist && findArtist({ name: artist }, conversation.candidates)) || [];
+    });
     memory.set(request.conversationKey, {
       ...conversation,
       shown: shown.length > 0 ? [...conversation.shown, shown].slice(-MAX_REMEMBERED_ANSWERS) : conversation.shown,
@@ -118,7 +119,7 @@ export function createConversationService({ graphDeps, memory, model }: Conversa
       messages: request.messages,
       mode: request.mode,
       obscurityTarget: request.obscurityTarget,
-      excludeNames: conversation ? shownNames(conversation) : undefined,
+      exclude: conversation ? shownBands(conversation) : undefined,
     };
     const { candidates, ...result } = await invokeResearchGraph({ ...graphDeps, ...listener }, input);
     remember(request, {
