@@ -103,16 +103,22 @@ test("POST /recommendations returns recommendation results", async () => {
             artist: "Alcest",
             why: "Matched from profile and query",
             sourceSignals: ["agent_reasoning"],
+            evidenceUrls: [],
+            listenerCount: null,
           },
           {
             artist: "Fen",
             why: "Stylistic overlap",
             sourceSignals: ["agent_reasoning"],
+            evidenceUrls: [],
+            listenerCount: null,
           },
           {
             artist: "Les Discrets",
             why: "Mood similarity",
             sourceSignals: ["agent_reasoning"],
+            evidenceUrls: [],
+            listenerCount: null,
           },
         ],
         assistantReply: "Here are three niche picks that fit your taste. Want something heavier next?",
@@ -132,6 +138,8 @@ test("POST /recommendations returns recommendation results", async () => {
   stringField(firstRecommendation, "artist");
   stringField(firstRecommendation, "why");
   arrayField(firstRecommendation, "sourceSignals");
+  arrayField(firstRecommendation, "evidenceUrls");
+  assert.equal(typeof firstRecommendation.listenerCount === "number" || firstRecommendation.listenerCount === null, true);
   const meta = recordField(result.data, "meta");
   assert.equal(stringField(meta, "modeUsed"), "fresh");
   assert.equal(meta.usedPreferenceContext, false);
@@ -150,6 +158,8 @@ test("POST /recommendations uses injected recommendation pipeline", async () => 
               artist: "Les Discrets",
               why: `Matched from ${input.query}`,
               sourceSignals: ["musicbrainz_search"],
+              evidenceUrls: [],
+              listenerCount: null,
             },
           ],
           meta: { modeUsed: "preference-aware", usedPreferenceContext: true },
@@ -269,7 +279,7 @@ test("POST /recommendations forwards selectedArtistIds to the pipeline", async (
       recommend: async (input) => {
         calls.push(input);
         return {
-          recommendations: [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"] }],
+          recommendations: [{ artist: "Les Discrets", why: "Similar tone", sourceSignals: ["musicbrainz_search"], evidenceUrls: [], listenerCount: null }],
           assistantReply: "",
           meta: { modeUsed: "preference-aware", usedPreferenceContext: true },
         };
@@ -296,7 +306,7 @@ test("POST /recommendations forwards messages to the pipeline", async () => {
       recommend: async (input) => {
         calls.push(input);
         return {
-          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
+          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"], evidenceUrls: [], listenerCount: null }],
           assistantReply: "",
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
         };
@@ -326,7 +336,7 @@ test("POST /recommendations forwards priorityContext to the pipeline", async () 
       recommend: async (input) => {
         calls.push(input);
         return {
-          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"] }],
+          recommendations: [{ artist: "Fen", why: "Matched", sourceSignals: ["musicbrainz_search"], evidenceUrls: [], listenerCount: null }],
           assistantReply: "",
           meta: { modeUsed: "fresh", usedPreferenceContext: true },
         };
@@ -355,7 +365,7 @@ test("POST /recommendations forwards obscurityTarget to the pipeline", async () 
       recommend: async (input) => {
         calls.push(input);
         return {
-          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
           assistantReply: "",
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
         };
@@ -380,7 +390,7 @@ test("POST /recommendations passes obscurityTarget to evalWorker.processEvent", 
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => ({
-        recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+        recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
         assistantReply: "",
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
@@ -410,7 +420,7 @@ test("POST /recommendations passes undefined obscurityTarget when not set", asyn
       recommend: async (input) => {
         pipelineCalls.push(input);
         return {
-          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [] }],
+          recommendations: [{ artist: "Fen", why: "dark", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
           assistantReply: "",
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
         };
@@ -439,6 +449,8 @@ test("POST /recommendations defaults to fresh mode", async () => {
               artist: "Fen",
               why: "Fresh mode recommendation.",
               sourceSignals: ["musicbrainz_search"],
+              evidenceUrls: [],
+              listenerCount: null,
             },
           ],
           meta: { modeUsed: "fresh", usedPreferenceContext: false },
@@ -469,7 +481,7 @@ test("POST /recommendations includes eventId in meta when evalWorker is set", as
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => ({
-        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [] }],
+        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
         assistantReply: "",
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
@@ -492,7 +504,7 @@ test("POST /recommendations passes pre-generated eventId to processEvent", async
   const app = createApp({
     recommendationPipeline: {
       recommend: async () => ({
-        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [] }],
+        recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
         assistantReply: "",
         meta: { modeUsed: "fresh", usedPreferenceContext: false },
       }),
@@ -575,7 +587,7 @@ test("a client that asks for a stream follows the answer and gets the whole resp
         listener?.onReply?.("Try Fe");
         await new Promise((r) => setTimeout(r, 60));
         listener?.onReply?.("Try Fen.");
-        return { recommendations: [{ artist: "Fen" }], assistantReply: "Try Fen.", meta: { turn: "search" } };
+        return { recommendations: [{ artist: "Fen", why: "A specific recommendation.", sourceSignals: [], evidenceUrls: [], listenerCount: null }], assistantReply: "Try Fen.", meta: { turn: "search" } };
       },
     },
   });
@@ -656,7 +668,7 @@ test("a client that stops waiting no longer cancels the search: it runs to its e
       recommendationPipeline: {
         recommend: (_req, listener) => new Promise((resolve) => {
           signal = listener?.signal;
-          finish = () => resolve({ recommendations: [{ artist: "Fen" }], assistantReply: "", meta: { turn: "search" } });
+          finish = () => resolve({ recommendations: [{ artist: "Fen", why: "A specific recommendation.", sourceSignals: [], evidenceUrls: [], listenerCount: null }], assistantReply: "", meta: { turn: "search" } });
         }),
       },
       evalWorker,
@@ -696,7 +708,7 @@ test("a recommendation response carries provenance for its generated text", asyn
     recommendationPipeline: {
       recommend: async () => ({
         recommendations: [
-          { artist: "Fen", why: "Stylistic overlap", sourceSignals: ["agent_reasoning"] },
+          { artist: "Fen", why: "Stylistic overlap", sourceSignals: ["agent_reasoning"], evidenceUrls: [], listenerCount: null },
         ],
         assistantReply: "One pick for you.",
         meta: { modeUsed: "fresh", usedPreferenceContext: false, model: "test-model-7b" },

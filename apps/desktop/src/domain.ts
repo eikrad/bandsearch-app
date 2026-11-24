@@ -6,16 +6,14 @@
 // guard with defaults. What they buy is a name for each payload, so a change on
 // one side stops compiling on the other instead of drifting silently.
 
+import type { Recommendation } from "../../../shared/schemas/src/contracts.js";
+
 /** A recommendation as the API sends it, before it is turned into a card. */
-export type RecommendationItem = {
-  artist: string;
-  why?: string;
+export type RecommendationItem = Pick<Recommendation, "artist"> & Partial<Omit<Recommendation, "artist">> & {
   country?: string;
   genres?: string[];
-  sourceSignals?: string[];
   connection?: string;
   imageUrl?: string | null;
-  musicbrainzArtistId?: string;
 };
 
 export type RecommendationMeta = {

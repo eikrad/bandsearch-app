@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { ChatModelClient } from "../api/src/agent/modelUtils.js";
+import { checkEvidence } from "../api/src/eval/evidenceChecker.js";
 import {
   computeAgreementRate,
   runUnitTests,
@@ -19,6 +20,7 @@ export type CalibrationEntry = {
   bandName: string;
   whyText: string;
   sourceSignals: string[];
+  evidenceUrls: string[];
   listeners: number;
   humanScores: { relevance: number; obscurityFit: number; evidenceQuality: number };
 };
@@ -78,7 +80,9 @@ export async function runCalibration({
       obscurityTarget: e.obscurityTarget ?? null,
       why: e.whyText,
       sourceSignals: e.sourceSignals,
+      evidenceUrls: e.evidenceUrls,
       listeners: e.listeners,
+      ...checkEvidence(e.whyText, e.evidenceUrls),
     })),
     judging,
   );

@@ -66,7 +66,7 @@ function buildStack({ onRunModel }: { onRunModel: (args: ModelArgs) => void }) {
         preferenceContext,
       });
       return {
-        recommendations: [{ artist: "Fen", why: "spy result", sourceSignals: ["agent_reasoning"] }],
+        recommendations: [{ artist: "Fen", why: "spy result", sourceSignals: ["agent_reasoning"], evidenceUrls: [], listenerCount: null }],
         meta: { modeUsed, usedPreferenceContext: preferenceContext.length > 0 },
       };
     },

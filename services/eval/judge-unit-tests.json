@@ -1,18 +1,23 @@
 [
   {
     "id": "ut-01",
-    "description": "fabricated URL in why-text not present in sourceSignals → evidenceQuality should be low",
+    "description": "fabricated URL in why-text not present in evidence_urls → evidenceQuality should be low",
     "input": {
       "bandName": "Phantom Band",
       "query": "post-rock instrumental",
       "obscurityTarget": "underground",
       "why": "Reviewed in depth at https://fake-blog-that-was-not-searched.com/phantom-band",
-      "sourceSignals": ["https://bandcamp.com/realsite"],
+      "sourceSignals": [],
       "listeners": 15000,
       "citationSupportRate": 0.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://bandcamp.com/realsite"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "low" }
+    "expectedDirection": {
+      "evidenceQuality": "low"
+    }
   },
   {
     "id": "ut-02",
@@ -25,24 +30,33 @@
       "sourceSignals": [],
       "listeners": 50000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": true
+      "genericWhyFlag": true,
+      "evidenceUrls": []
     },
-    "expectedDirection": { "evidenceQuality": "low" }
+    "expectedDirection": {
+      "evidenceQuality": "low"
+    }
   },
   {
     "id": "ut-03",
-    "description": "specific cited why-text with URLs present in signals → evidenceQuality should be high",
+    "description": "specific cited why-text with URLs present in evidence_urls → evidenceQuality should be high",
     "input": {
       "bandName": "Verdant Rituals",
       "query": "blackgaze shoegaze metal",
       "obscurityTarget": "underground",
       "why": "Finnish blackgaze duo blending Alcest-style reverb with Nordic folk. See https://bandcamp.com/verdantrituals and https://metalinjection.net/verdantrituals.",
-      "sourceSignals": ["https://bandcamp.com/verdantrituals", "https://metalinjection.net/verdantrituals"],
+      "sourceSignals": [],
       "listeners": 3000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://bandcamp.com/verdantrituals",
+        "https://metalinjection.net/verdantrituals"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "high" }
+    "expectedDirection": {
+      "evidenceQuality": "high"
+    }
   },
   {
     "id": "ut-04",
@@ -52,12 +66,18 @@
       "query": "heavy metal",
       "obscurityTarget": "obscure",
       "why": "Thrash metal legends from San Francisco. Documented at https://metallica.com and https://allmusic.com/metallica.",
-      "sourceSignals": ["https://metallica.com", "https://allmusic.com/metallica"],
+      "sourceSignals": [],
       "listeners": 8000000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://metallica.com",
+        "https://allmusic.com/metallica"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "low" }
+    "expectedDirection": {
+      "obscurityFit": "low"
+    }
   },
   {
     "id": "ut-05",
@@ -67,12 +87,17 @@
       "query": "black metal raw underground",
       "obscurityTarget": "obscure",
       "why": "Romanian raw black metal project releasing self-distributed cassettes. Only available via https://discogs.com/aorticvoid.",
-      "sourceSignals": ["https://discogs.com/aorticvoid"],
+      "sourceSignals": [],
       "listeners": 200,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://discogs.com/aorticvoid"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "high" }
+    "expectedDirection": {
+      "obscurityFit": "high"
+    }
   },
   {
     "id": "ut-06",
@@ -82,12 +107,17 @@
       "query": "atmospheric black metal folk",
       "obscurityTarget": "underground",
       "why": "Kentucky black metal project by Austin Lunn weaving Appalachian folk with black metal. Covered at https://bandcamp.com/panopticon.",
-      "sourceSignals": ["https://bandcamp.com/panopticon"],
+      "sourceSignals": [],
       "listeners": 30000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://bandcamp.com/panopticon"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "high" }
+    "expectedDirection": {
+      "obscurityFit": "high"
+    }
   },
   {
     "id": "ut-07",
@@ -97,12 +127,17 @@
       "query": "blackgaze black metal",
       "obscurityTarget": "underground",
       "why": "San Francisco blackgaze pioneers with wide critical acclaim. Reviewed at https://pitchfork.com/deafheaven.",
-      "sourceSignals": ["https://pitchfork.com/deafheaven"],
+      "sourceSignals": [],
       "listeners": 600000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://pitchfork.com/deafheaven"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "low" }
+    "expectedDirection": {
+      "obscurityFit": "low"
+    }
   },
   {
     "id": "ut-08",
@@ -112,12 +147,17 @@
       "query": "doom metal melancholic",
       "obscurityTarget": "cult",
       "why": "Known for their unique sound and wide influences. They are considered pioneers in the genre by many fans.",
-      "sourceSignals": ["https://bandcamp.com/mistyvoid"],
+      "sourceSignals": [],
       "listeners": 60000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": true
+      "genericWhyFlag": true,
+      "evidenceUrls": [
+        "https://bandcamp.com/mistyvoid"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "low" }
+    "expectedDirection": {
+      "evidenceQuality": "low"
+    }
   },
   {
     "id": "ut-09",
@@ -127,12 +167,18 @@
       "query": "funeral doom nautical themed",
       "obscurityTarget": "cult",
       "why": "German funeral doom band with nautical Moby Dick concept albums. Documented at https://encyclopaedia-metallum.com/ahab and https://rateyourmusic.com/ahab.",
-      "sourceSignals": ["https://encyclopaedia-metallum.com/ahab", "https://rateyourmusic.com/ahab"],
+      "sourceSignals": [],
       "listeners": 100000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://encyclopaedia-metallum.com/ahab",
+        "https://rateyourmusic.com/ahab"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "high" }
+    "expectedDirection": {
+      "obscurityFit": "high"
+    }
   },
   {
     "id": "ut-10",
@@ -142,12 +188,18 @@
       "query": "post-black metal",
       "obscurityTarget": "underground",
       "why": "Belgian post-black metal trio from the Consouling Sounds label. See https://consouling.be/wiegedood and https://bandcamp.com/wiegedood.",
-      "sourceSignals": ["https://consouling.be/wiegedood", "https://bandcamp.com/wiegedood"],
+      "sourceSignals": [],
       "listeners": 20000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://consouling.be/wiegedood",
+        "https://bandcamp.com/wiegedood"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "high" }
+    "expectedDirection": {
+      "evidenceQuality": "high"
+    }
   },
   {
     "id": "ut-11",
@@ -157,12 +209,17 @@
       "query": "dissonant black metal",
       "obscurityTarget": "obscure",
       "why": "Anonymous US project releasing dense, dissonant black metal with labyrinthine song structures on Mystískaos and Gilead Media.",
-      "sourceSignals": ["https://gileadmedia.net/serpentcolumn"],
+      "sourceSignals": [],
       "listeners": 2000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://gileadmedia.net/serpentcolumn"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "high" }
+    "expectedDirection": {
+      "evidenceQuality": "high"
+    }
   },
   {
     "id": "ut-12",
@@ -175,9 +232,12 @@
       "sourceSignals": [],
       "listeners": 0,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": []
     },
-    "expectedDirection": { "obscurityFit": "high" }
+    "expectedDirection": {
+      "obscurityFit": "high"
+    }
   },
   {
     "id": "ut-13",
@@ -187,12 +247,17 @@
       "query": "brutal death metal technical",
       "obscurityTarget": null,
       "why": "Jazz legend whose modal and fusion works are foundational. Documented at https://allmusic.com/milesdavis.",
-      "sourceSignals": ["https://allmusic.com/milesdavis"],
+      "sourceSignals": [],
       "listeners": 2000000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://allmusic.com/milesdavis"
+      ]
     },
-    "expectedDirection": { "relevance": "low" }
+    "expectedDirection": {
+      "relevance": "low"
+    }
   },
   {
     "id": "ut-14",
@@ -202,12 +267,19 @@
       "query": "gothic death metal dark rock",
       "obscurityTarget": "underground",
       "why": "Swedish band pivoting from technical death metal to gothic rock and occult dark rock aesthetics. Covered at https://metalinjection.net/tribulation and https://encyclopaedia-metallum.com/tribulation.",
-      "sourceSignals": ["https://metalinjection.net/tribulation", "https://encyclopaedia-metallum.com/tribulation"],
+      "sourceSignals": [],
       "listeners": 80000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://metalinjection.net/tribulation",
+        "https://encyclopaedia-metallum.com/tribulation"
+      ]
     },
-    "expectedDirection": { "relevance": "high", "evidenceQuality": "high" }
+    "expectedDirection": {
+      "relevance": "high",
+      "evidenceQuality": "high"
+    }
   },
   {
     "id": "ut-15",
@@ -217,12 +289,17 @@
       "query": "cavernous death metal",
       "obscurityTarget": "underground",
       "why": "Dungeon-dwelling death metal act. See https://bandcamp.com/cavernshrine and https://nonexistent-blog.io/review.",
-      "sourceSignals": ["https://bandcamp.com/cavernshrine"],
+      "sourceSignals": [],
       "listeners": 5000,
       "citationSupportRate": 0.5,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://bandcamp.com/cavernshrine"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "low" }
+    "expectedDirection": {
+      "evidenceQuality": "low"
+    }
   },
   {
     "id": "ut-16",
@@ -232,12 +309,18 @@
       "query": "doom metal underground discovery",
       "obscurityTarget": "underground",
       "why": "Founding fathers of heavy metal from Birmingham. Covered extensively at https://allmusic.com/blacksabbath.",
-      "sourceSignals": ["https://allmusic.com/blacksabbath"],
+      "sourceSignals": [],
       "listeners": 5000000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://allmusic.com/blacksabbath"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "low", "discoveryValue": "low" }
+    "expectedDirection": {
+      "obscurityFit": "low",
+      "discoveryValue": "low"
+    }
   },
   {
     "id": "ut-17",
@@ -247,12 +330,17 @@
       "query": "post-punk with a cult following",
       "obscurityTarget": "cult",
       "why": "Leeds post-punk trio with one self-released tape. See https://cellarhymns.bandcamp.com.",
-      "sourceSignals": ["https://cellarhymns.bandcamp.com"],
+      "sourceSignals": [],
       "listeners": 400,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://cellarhymns.bandcamp.com"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "low" }
+    "expectedDirection": {
+      "obscurityFit": "low"
+    }
   },
   {
     "id": "ut-18",
@@ -262,12 +350,17 @@
       "query": "underground slowcore",
       "obscurityTarget": "underground",
       "why": "Dutch slowcore duo with a single demo. See https://saltmarshchoir.bandcamp.com.",
-      "sourceSignals": ["https://saltmarshchoir.bandcamp.com"],
+      "sourceSignals": [],
       "listeners": 300,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://saltmarshchoir.bandcamp.com"
+      ]
     },
-    "expectedDirection": { "obscurityFit": "low" }
+    "expectedDirection": {
+      "obscurityFit": "low"
+    }
   },
   {
     "id": "ut-19",
@@ -277,12 +370,17 @@
       "query": "atmosphärischer Black Metal mit Shoegaze-Einflüssen",
       "obscurityTarget": "underground",
       "why": "English post-black metal trio whose 'Epoch' blends shoegaze textures with blast beats, praised at https://www.angrymetalguy.com/fen-epoch-review/.",
-      "sourceSignals": ["https://www.angrymetalguy.com/fen-epoch-review/"],
+      "sourceSignals": [],
       "listeners": 30000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://www.angrymetalguy.com/fen-epoch-review/"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "low" }
+    "expectedDirection": {
+      "evidenceQuality": "low"
+    }
   },
   {
     "id": "ut-20",
@@ -292,12 +390,17 @@
       "query": "drømmende dream pop med kvindelig vokal og sommerlig klang",
       "obscurityTarget": "obscure",
       "why": "Københavnsk duo, hvis EP 'Varme Nætter' kombinerer reverb-tunge guitarer med hviskende vokal; fremhævet på https://soevnloessommer.bandcamp.com.",
-      "sourceSignals": ["https://soevnloessommer.bandcamp.com"],
+      "sourceSignals": [],
       "listeners": 1800,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://soevnloessommer.bandcamp.com"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "high" }
+    "expectedDirection": {
+      "evidenceQuality": "high"
+    }
   },
   {
     "id": "ut-21",
@@ -307,11 +410,16 @@
       "query": "langsom og tung doom metal med orgel",
       "obscurityTarget": "underground",
       "why": "Aarhusiansk trio med tunge riffs og Hammond-orgel; Doom Charts kalder debutalbummet 'Saltvand' \"a slow-burning hymn to grief\". Se https://doomcharts.com/graa-fjord-saltvand.",
-      "sourceSignals": ["https://doomcharts.com/graa-fjord-saltvand"],
+      "sourceSignals": [],
       "listeners": 9000,
       "citationSupportRate": 1.0,
-      "genericWhyFlag": false
+      "genericWhyFlag": false,
+      "evidenceUrls": [
+        "https://doomcharts.com/graa-fjord-saltvand"
+      ]
     },
-    "expectedDirection": { "evidenceQuality": "high" }
+    "expectedDirection": {
+      "evidenceQuality": "high"
+    }
   }
 ]

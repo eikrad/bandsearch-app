@@ -3,6 +3,11 @@
 **Date:** 2026-05-29  
 **Status:** Draft — approved for implementation (see Roadmap Phase 8)
 
+> **Implementation note (2026-11-24):** Recommendations now carry
+> `evidenceUrls` and nullable search-time `listenerCount` across the API/eval
+> seam; `sourceSignals` are provenance labels. Production and golden eval use
+> those fields without a second listener lookup (metrics version 7).
+
 ---
 
 ## Goal
@@ -163,7 +168,7 @@ CREATE TABLE llm_eval_scores (
   evidence_quality       REAL,   -- 0.0–1.0 (LLM)
   discovery_value        REAL,   -- 0.0–1.0
   search_source_quality  REAL,   -- 0.0–1.0 (URL heuristic, event-level, duplicated per band for joins)
-  citation_support_rate  REAL,   -- 0.0–1.0 (deterministic: why URLs in sourceSignals)
+  citation_support_rate  REAL,   -- 0.0–1.0 (deterministic: why URLs in evidenceUrls)
   generic_why_flag       INTEGER DEFAULT 0,  -- 1 if template-phrase heuristic matched
   reasoning              TEXT,
   judge_model            TEXT NOT NULL,
@@ -212,7 +217,7 @@ CREATE TABLE eval_baselines (
 
 Run on every band before/alongside the LLM judge call:
 
-- `citation_support_rate` = URLs cited in `why` that appear in `sourceSignals` / total URLs in `why`
+- `citation_support_rate` = URLs cited in `why` that appear in `evidenceUrls` / total URLs in `why`
 - `generic_why_flag` = heuristic match for template phrases ("similar sound", "you might enjoy", "fans of X will love")
 
 These feed the LLM judge as context and are stored alongside LLM scores. Large disagreement (e.g. high LLM `evidence_quality` but `citation_support_rate` = 0) flags cases for manual review.
@@ -261,7 +266,7 @@ Layer 2 scores are not trusted for production decisions until the judge is calib
 **Calibration dataset:**
 - ~20–30 hand-labeled band recommendations (query + band + human scores on relevance, obscurity fit, evidence quality)
 - ~15–20 Bandsearch-specific unit tests adapted from GroUSE patterns (not the QA dataset):
-  - Fabricated evidence URL in `why` not in `sourceSignals`
+  - Fabricated evidence URL in `why` not in `evidenceUrls`
   - Generic why-text with no sourceSignals
   - Mainstream band when `obscurityTarget` is `obscure`
   - Correct niche match with grounded evidence

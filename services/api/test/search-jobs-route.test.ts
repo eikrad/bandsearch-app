@@ -8,6 +8,7 @@ import type { EvalEventContext } from "../src/eval/evalWorker.js";
 import { assertRecord } from "./helpers/typeAssertions.js";
 
 type Pipeline = NonNullable<Parameters<typeof createApp>[0]>["recommendationPipeline"];
+type PipelineResult = Awaited<ReturnType<NonNullable<Pipeline>["recommend"]>>;
 type Sent = { status: number; data: Record<string, unknown>; headers: Headers };
 type StreamedEvent = { id: number | null; event: Record<string, unknown> };
 
@@ -16,7 +17,7 @@ const quiet = { warn: () => {}, error: () => {} };
 /** A pipeline the test drives: it reports what the test says and answers when told. */
 function heldPipeline(honourAbort = true) {
   const calls: Array<{ request: Record<string, unknown>; listener: TurnListener }> = [];
-  const answers: Array<(value: { recommendations: unknown[]; assistantReply: string; meta: Record<string, unknown> }) => void> = [];
+  const answers: Array<(value: PipelineResult) => void> = [];
   const failures: Array<(error: unknown) => void> = [];
   const pipeline: NonNullable<Pipeline> = {
     recommend: (request, listener) => new Promise((resolve, reject) => {
@@ -31,7 +32,7 @@ function heldPipeline(honourAbort = true) {
     calls,
     listener: (i = calls.length - 1) => calls[i]!.listener,
     answer: (reply = "Try Fen.", i = answers.length - 1) =>
-      answers[i]!({ recommendations: [{ artist: "Fen" }], assistantReply: reply, meta: { turn: "search", model: "m" } }),
+      answers[i]!({ recommendations: [{ artist: "Fen", why: "A specific recommendation.", sourceSignals: [], evidenceUrls: [], listenerCount: null }], assistantReply: reply, meta: { turn: "search", model: "m" } }),
     fail: (error: unknown, i = failures.length - 1) => failures[i]!(error),
   };
 }
@@ -466,7 +467,7 @@ test("the compatibility route evaluates its finished batch exactly once", async 
   const processed: EvalEventContext[] = [];
   const app = createApp({
     recommendationPipeline: { recommend: async () => ({
-      recommendations: [{ artist: "Fen" }], assistantReply: "Try Fen.", meta: { turn: "search" },
+      recommendations: [{ artist: "Fen", why: "A specific recommendation.", sourceSignals: [], evidenceUrls: [], listenerCount: null }], assistantReply: "Try Fen.", meta: { turn: "search" },
     }) },
     evalWorker: { processEvent: async (event) => { processed.push(event); } },
   });

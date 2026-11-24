@@ -6,6 +6,21 @@ export const CONVERSATION_ID_MAX_LEN = 100;
 
 export type RecommendationMode = "fresh" | "preference-aware";
 
+/** A ranked search result with search-owned evidence for the app and eval. */
+export type Recommendation = {
+  artist: string;
+  musicbrainzArtistId?: string;
+  why: string;
+  /** Categorical provenance labels; URLs live in `evidenceUrls`. */
+  sourceSignals: string[];
+  evidenceUrls: string[];
+  /** Listener count observed during search, or null when search had no count. */
+  listenerCount: number | null;
+};
+
+/** The model-authored fields before the search attaches verified evidence. */
+export type RecommendationDraft = Pick<Recommendation, "artist" | "why" | "sourceSignals">;
+
 export type ObscurityTarget = "cult" | "underground" | "obscure";
 
 const VALID_OBSCURITY_TARGETS: ReadonlySet<string> = new Set(["cult", "underground", "obscure"]);
@@ -163,6 +178,17 @@ export function validateRecommendationItem(item: unknown): ValidateRecommendatio
     }
   }
   return { ok: true };
+}
+
+/** Validates the complete recommendation sent by search to the app and eval. */
+export function validateRecommendation(item: unknown): item is Recommendation {
+  if (!validateRecommendationItem(item).ok) return false;
+  const rec = item as Record<string, unknown>;
+  if (!isStringArray(rec.evidenceUrls)) return false;
+  if (rec.listenerCount !== null && (typeof rec.listenerCount !== "number" || !Number.isFinite(rec.listenerCount) || rec.listenerCount < 0)) {
+    return false;
+  }
+  return true;
 }
 
 export function validateSavedBand(input: unknown): ValidateSavedBandResult {

@@ -3,6 +3,7 @@ import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js"
 import { RANKING_RESERVE_MS } from "./researchBudget.js";
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
+import type { Recommendation, RecommendationDraft } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
 import { REPLY_LANGUAGE_FIELD, REPLY_LANGUAGE_RULE } from "../../replyLanguage.js";
 import { recentTurns, wrapPreferenceContext, wrapUserContent } from "../promptGuards.js";
@@ -23,14 +24,14 @@ function pickReplyFromParsed(parsed: unknown): string {
   return "";
 }
 
-function validateRecommendationOutput(output: unknown[]): unknown[] {
+function validateRecommendationOutput(output: unknown[]): RecommendationDraft[] {
   if (!Array.isArray(output) || output.some((item) => !validateRecommendationItem(item).ok)) {
     throw new Error("invalid recommendation output");
   }
-  return output;
+  return output as RecommendationDraft[];
 }
 
-function normalizeRankPayload(parsed: unknown): { assistantReply: string; recommendations: unknown[] } {
+function normalizeRankPayload(parsed: unknown): { assistantReply: string; recommendations: RecommendationDraft[] } {
   if (Array.isArray(parsed)) {
     return { assistantReply: "", recommendations: validateRecommendationOutput(parsed) };
   }
@@ -70,15 +71,13 @@ export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[])
  * Drops items that still cannot be attributed (should be rare).
  */
 export function attachEvidenceCitationsToRecommendations(
-  recommendations: unknown[],
+  recommendations: RecommendationDraft[],
   candidates: VerifiedCandidate[],
-): unknown[] {
-  const out: unknown[] = [];
+): Recommendation[] {
+  const out: Recommendation[] = [];
   for (const item of recommendations) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    const artist = String(row.artist ?? "").trim();
-    const why = String(row.why ?? "").trim();
+    const artist = item.artist.trim();
+    const why = item.why.trim();
     if (!artist || !why) continue;
 
     const cand = findArtist({ name: artist }, candidates);
@@ -93,7 +92,7 @@ export function attachEvidenceCitationsToRecommendations(
       nextWhy = `${why} (see ${fallback})`;
     }
 
-    const modelSignals = Array.isArray(row.sourceSignals) ? [...(row.sourceSignals as string[])] : [];
+    const modelSignals = item.sourceSignals.filter((signal) => !/^https?:\/\//i.test(signal));
     // Where a band was found is known here; what the model claims about it is not evidence.
     const found = cand && !foundOnTheWeb(cand) ? "lastfm_similarity" : "web_search";
     const signals = [...modelSignals.filter((s) => s !== "web_search" && s !== "lastfm_similarity"), found];
@@ -102,9 +101,11 @@ export function attachEvidenceCitationsToRecommendations(
     }
 
     out.push({
-      ...row,
+      artist,
       why: nextWhy,
       sourceSignals: signals,
+      evidenceUrls,
+      listenerCount: cand?.listenerCount ?? null,
       ...(cand?.mbid ? { musicbrainzArtistId: cand.mbid } : {}),
     });
   }
@@ -223,7 +224,7 @@ export async function createRecommendationRanker({
   modelClient: injectedModelClient,
   chatModel,
 }: CreateRecommendationRankerOptions): Promise<
-  (input: RankInput) => Promise<{ recommendations: unknown[]; assistantReply: string }>
+  (input: RankInput) => Promise<{ recommendations: Recommendation[]; assistantReply: string }>
 > {
   const modelClient = nodeModel("recommendation ranker", { modelClient: injectedModelClient, chatModel }, { temperature: 0.35 });
 
@@ -273,9 +274,7 @@ export async function createRecommendationRanker({
 
     let assistantReply = normalized.assistantReply;
     if (!assistantReply && recommendations.length > 0) {
-      const names = recommendations
-        .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>).artist : null))
-        .filter((n): n is string => typeof n === "string" && Boolean(n.trim()));
+      const names = recommendations.map((r) => r.artist).filter((name) => Boolean(name.trim()));
       assistantReply = `Here are picks grounded in search evidence: ${names.slice(0, 3).join(", ")}. Want to narrow by era, region, or heavier/softer sound?`;
     }
 

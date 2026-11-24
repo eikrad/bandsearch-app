@@ -1,5 +1,5 @@
 import type { EvalRepository, PipelineDiagnostics } from "./evalRepository.js";
-import type { LastFmClient } from "./lastFmClient.js";
+import type { Recommendation } from "../../../../shared/schemas/src/contracts.js";
 import type { JudgeWorker, JudgeInput } from "./judgeWorker.js";
 import { classifyObscurityTier } from "./obscurityScorer.js";
 import { scoreSearchSources, ratioToSourceQuality } from "./searchSourceScorer.js";
@@ -14,7 +14,7 @@ export type EvalEventContext = {
   obscurityTarget?: string | null;
   pipelineVersion: string;
   pipelineDiagnostics: PipelineDiagnostics;
-  recommendations: unknown[];
+  recommendations: Recommendation[];
 };
 
 export type EvalWorker = {
@@ -27,61 +27,32 @@ export function createNoOpEvalWorker(): EvalWorker {
   };
 }
 
-type RecommendationItem = {
-  artist: string;
-  why?: string;
-  sourceSignals?: string[];
-};
-
-function extractRecommendations(recommendations: unknown[]): RecommendationItem[] {
-  if (!Array.isArray(recommendations)) return [];
-  const items: RecommendationItem[] = [];
-  for (const item of recommendations) {
-    if (item && typeof item === "object") {
-      const r = item as Record<string, unknown>;
-      if (typeof r.artist === "string" && r.artist.trim()) {
-        items.push({
-          artist: r.artist.trim(),
-          why: typeof r.why === "string" ? r.why : undefined,
-          sourceSignals: Array.isArray(r.sourceSignals) ? (r.sourceSignals as string[]) : undefined,
-        });
-      }
-    }
-  }
-  return items;
-}
-
 export function createEvalWorker({
   evalRepository,
-  lastFmClient,
   judgeWorker,
 }: {
   evalRepository: EvalRepository;
-  lastFmClient?: LastFmClient;
   judgeWorker?: JudgeWorker;
 }): EvalWorker {
-  async function scoreObscurity(eventId: string, recs: RecommendationItem[]) {
-    if (!lastFmClient) return;
+  async function scoreObscurity(eventId: string, recs: Recommendation[]) {
     await Promise.allSettled(
-      recs.map(async ({ artist }) => {
-        const listeners = await lastFmClient.getListenerCount(artist);
+      recs.map(async ({ artist, listenerCount }) => {
         await evalRepository.upsertBandEvalScore({
           eventId,
           bandName: artist,
-          listeners,
-          obscurityTier: classifyObscurityTier(listeners),
+          listeners: listenerCount,
+          obscurityTier: classifyObscurityTier(listenerCount),
         });
       }),
     );
   }
 
-  async function scoreHeuristics(eventId: string, recs: RecommendationItem[]) {
+  async function scoreHeuristics(eventId: string, recs: Recommendation[]) {
     await Promise.allSettled(
-      recs.map(async ({ artist, why = "", sourceSignals = [] }) => {
-        const urlSignals = sourceSignals.filter((s) => s.startsWith("http"));
-        const ratio = scoreSearchSources(urlSignals);
+      recs.map(async ({ artist, why, evidenceUrls }) => {
+        const ratio = scoreSearchSources(evidenceUrls);
         const sourceQuality = ratioToSourceQuality(ratio);
-        const { citationSupportRate, genericWhyFlag } = checkEvidence(why, sourceSignals);
+        const { citationSupportRate, genericWhyFlag } = checkEvidence(why, evidenceUrls);
         await evalRepository.upsertBandEvalScore({
           eventId,
           bandName: artist,
@@ -95,7 +66,7 @@ export function createEvalWorker({
 
   return {
     async processEvent(ctx) {
-      const recs = extractRecommendations(ctx.recommendations);
+      const recs = ctx.recommendations;
 
       const eventId = await evalRepository.logEvent({
         id: ctx.eventId,
@@ -121,6 +92,7 @@ export function createEvalWorker({
             obscurityTarget: ctx.obscurityTarget,
             why: r.why,
             sourceSignals: r.sourceSignals,
+            evidenceUrls: r.evidenceUrls,
             listeners: dbScore?.listeners,
             citationSupportRate: dbScore?.citationSupportRate,
             genericWhyFlag: dbScore?.genericWhyFlag,

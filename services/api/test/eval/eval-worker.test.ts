@@ -2,19 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEvalWorker, createNoOpEvalWorker } from "../../src/eval/evalWorker.js";
 import { createInMemoryEvalRepository } from "../../src/eval/evalRepository.js";
-import type { LastFmClient } from "../../src/eval/lastFmClient.js";
 import type { JudgeInput, JudgeWorker } from "../../src/eval/judgeWorker.js";
 
 type JudgeEventCall = { eventId: string; bands: JudgeInput[] };
-
-function makeLastFmClient(getListenerCount: LastFmClient["getListenerCount"]): LastFmClient {
-  return {
-    getListenerCount,
-    getArtistInfo: async () => null,
-    getSimilarArtists: async () => [],
-    getTopTags: async () => [],
-  };
-}
 
 const sampleCtx = {
   query: "atmospheric black metal",
@@ -27,7 +17,10 @@ const sampleCtx = {
     reflectionTriggered: false,
     searchBudgetUsed: 4,
   },
-  recommendations: [{ artist: "Wolves in the Throne Room" }, { artist: "Deafheaven" }],
+  recommendations: [
+    { artist: "Wolves in the Throne Room", why: "Atmospheric black metal.", sourceSignals: [], evidenceUrls: [], listenerCount: 80000 },
+    { artist: "Deafheaven", why: "Blackgaze.", sourceSignals: [], evidenceUrls: [], listenerCount: 600000 },
+  ],
 };
 
 test("createEvalWorker: processEvent logs event via evalRepository", async () => {
@@ -53,14 +46,9 @@ test("createEvalWorker: processEvent stores obscurityTarget when provided", asyn
   assert.equal(events[0].obscurityTarget, "underground");
 });
 
-test("createEvalWorker: processEvent enriches each band with obscurity scores", async () => {
+test("createEvalWorker: scores obscurity from each recommendation's search-time count", async () => {
   const repo = createInMemoryEvalRepository();
-  const listenerByArtist = {
-    "Wolves in the Throne Room": 80000,
-    Deafheaven: 600000,
-  };
-  const lastFmClient = makeLastFmClient(async (name) => listenerByArtist[name as keyof typeof listenerByArtist] ?? null);
-  const worker = createEvalWorker({ evalRepository: repo, lastFmClient });
+  const worker = createEvalWorker({ evalRepository: repo });
 
   await worker.processEvent(sampleCtx);
 
@@ -77,12 +65,14 @@ test("createEvalWorker: processEvent enriches each band with obscurity scores", 
   assert.equal(deafheaven.obscurityTier, "mainstream");
 });
 
-test("createEvalWorker: processEvent records unknown tier when Last.fm has no data", async () => {
+test("createEvalWorker: processEvent records unknown tier when search has no listener count", async () => {
   const repo = createInMemoryEvalRepository();
-  const lastFmClient = makeLastFmClient(async () => null);
-  const worker = createEvalWorker({ evalRepository: repo, lastFmClient });
+  const worker = createEvalWorker({ evalRepository: repo });
 
-  await worker.processEvent(sampleCtx);
+  await worker.processEvent({
+    ...sampleCtx,
+    recommendations: sampleCtx.recommendations.map((rec) => ({ ...rec, listenerCount: null })),
+  });
 
   const events = await repo.listEvents();
   const scores = await repo.listBandEvalScores(events[0].id);
@@ -91,27 +81,24 @@ test("createEvalWorker: processEvent records unknown tier when Last.fm has no da
   assert.equal(scores[0].listeners, null);
 });
 
-test("createEvalWorker: processEvent does not throw when one band's lookup fails", async () => {
+test("createEvalWorker: processEvent does not throw when search has a missing count", async () => {
   const repo = createInMemoryEvalRepository();
-  const lastFmClient = makeLastFmClient(
-    async (name) => {
-      if (name === "Deafheaven") throw new Error("boom");
-      return 5000;
-    },
-  );
-  const worker = createEvalWorker({ evalRepository: repo, lastFmClient });
+  const worker = createEvalWorker({ evalRepository: repo });
 
-  await worker.processEvent(sampleCtx);
+  await worker.processEvent({
+    ...sampleCtx,
+    recommendations: sampleCtx.recommendations.map((rec, i) => ({ ...rec, listenerCount: i === 0 ? null : rec.listenerCount })),
+  });
 
   const events = await repo.listEvents();
   const scores = await repo.listBandEvalScores(events[0].id);
   // The successful band is still recorded; the failed one is tolerated.
   const wittr = scores.find((s) => s.bandName === "Wolves in the Throne Room");
   assert.ok(wittr, "WITTR should be scored");
-  assert.equal(wittr.obscurityTier, "underground");
+  assert.equal(wittr.obscurityTier, "unknown");
 });
 
-test("createEvalWorker: processEvent without lastFmClient still stores heuristic scores (no listeners/tier)", async () => {
+test("createEvalWorker: stores search-time obscurity and heuristic scores without lookups", async () => {
   const repo = createInMemoryEvalRepository();
   const worker = createEvalWorker({ evalRepository: repo });
 
@@ -122,8 +109,8 @@ test("createEvalWorker: processEvent without lastFmClient still stores heuristic
   const scores = await repo.listBandEvalScores(events[0].id);
   assert.equal(scores.length, 2, "heuristics always produces a score row per band");
   for (const score of scores) {
-    assert.equal(score.listeners, undefined, "no listener data without Last.fm client");
-    assert.equal(score.obscurityTier, undefined, "no obscurity tier without Last.fm client");
+    assert.equal(typeof score.listeners, "number", "listener count comes from the recommendation");
+    assert.notEqual(score.obscurityTier, "unknown");
     assert.ok(score.sourceQuality, "heuristics always sets sourceQuality");
     assert.ok(["high", "medium", "low"].includes(score.sourceQuality));
   }
@@ -151,12 +138,16 @@ const heuristicsCtx = {
     {
       artist: "Wolves in the Throne Room",
       why: "Atmospheric DSBM. See https://bandcamp.com/wittr for details.",
-      sourceSignals: ["https://bandcamp.com/wittr", "musicbrainz_verification", "web_search"],
+      sourceSignals: ["musicbrainz_verification", "web_search"],
+      evidenceUrls: ["https://bandcamp.com/wittr"],
+      listenerCount: 80000,
     },
     {
       artist: "Deafheaven",
       why: "Known for their blackgaze sound.",
-      sourceSignals: ["https://example.com/deafheaven", "agent_reasoning"],
+      sourceSignals: ["agent_reasoning"],
+      evidenceUrls: ["https://example.com/deafheaven"],
+      listenerCount: 600000,
     },
   ],
 };
@@ -194,13 +185,13 @@ test("createEvalWorker: scoreHeuristics stores citationSupportRate and genericWh
   assert.equal(deafheaven.genericWhyFlag, true, "Deafheaven why is generic ('Known for their')");
 });
 
-test("createEvalWorker: scoreHeuristics does not throw when why/sourceSignals are missing", async () => {
+test("createEvalWorker: scoreHeuristics accepts an empty why and evidence list", async () => {
   const repo = createInMemoryEvalRepository();
   const worker = createEvalWorker({ evalRepository: repo });
 
   const ctxWithMissingFields = {
     ...heuristicsCtx,
-    recommendations: [{ artist: "Unknown Band" }],
+    recommendations: [{ artist: "Unknown Band", why: "", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
   };
 
   await assert.doesNotReject(() => worker.processEvent(ctxWithMissingFields));
@@ -234,22 +225,49 @@ test("createEvalWorker: processEvent does not call judgeEvent when no judgeWorke
   assert.equal(events.length, 1, "event still logged without judge");
 });
 
-test("createEvalWorker: processEvent passes listener and heuristic data to judgeWorker", async () => {
+test("createEvalWorker: processEvent passes search-time listener and evidence data to judgeWorker", async () => {
   const repo = createInMemoryEvalRepository();
-  const lastFmClient = makeLastFmClient(
-    async (name) => (name === "Wolves in the Throne Room" ? 80000 : 600000),
-  );
   const judgeEventCalls: JudgeEventCall[] = [];
   const judgeWorker: JudgeWorker = {
     judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
   };
 
-  const worker = createEvalWorker({ evalRepository: repo, lastFmClient, judgeWorker });
+  const worker = createEvalWorker({ evalRepository: repo, judgeWorker });
   await worker.processEvent(heuristicsCtx);
 
   const wittr = judgeEventCalls[0].bands.find((b) => b.bandName === "Wolves in the Throne Room");
   assert.ok(wittr, "WITTR should be in judge inputs");
-  assert.equal(wittr.listeners, 80000, "listeners enriched from Last.fm scoring");
+  assert.equal(wittr.listeners, 80000, "listener count is passed from search");
+  assert.deepEqual(wittr.evidenceUrls, ["https://bandcamp.com/wittr"]);
   assert.ok(typeof wittr.citationSupportRate === "number", "citationSupportRate populated from heuristics");
   assert.ok(typeof wittr.genericWhyFlag === "boolean", "genericWhyFlag populated from heuristics");
+});
+
+test("createEvalWorker: uses search-time recommendation evidence without refetching listeners", async () => {
+  const repo = createInMemoryEvalRepository();
+  const judgeEventCalls: JudgeEventCall[] = [];
+  const judgeWorker: JudgeWorker = {
+    judgeEvent: async (eventId, bands) => { judgeEventCalls.push({ eventId, bands }); },
+  };
+  const worker = createEvalWorker({ evalRepository: repo, judgeWorker });
+
+  await worker.processEvent({
+    ...sampleCtx,
+    recommendations: [{
+      artist: "Fen",
+      musicbrainzArtistId: "fen-mbid",
+      why: "Atmospheric black metal; https://bandcamp.com/fen",
+      sourceSignals: ["web_search", "musicbrainz_verification"],
+      evidenceUrls: ["https://bandcamp.com/fen"],
+      listenerCount: 4_200,
+    }],
+  });
+
+  const event = (await repo.listEvents())[0]!;
+  const [score] = await repo.listBandEvalScores(event.id);
+  assert.equal(score?.listeners, 4_200);
+  assert.equal(score?.citationSupportRate, 1);
+  assert.equal(score?.sourceQuality, "high");
+  assert.equal(judgeEventCalls[0]?.bands[0]?.listeners, 4_200);
+  assert.deepEqual(judgeEventCalls[0]?.bands[0]?.evidenceUrls, ["https://bandcamp.com/fen"]);
 });

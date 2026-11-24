@@ -6,6 +6,7 @@ import {
   PRIORITY_CONTEXT_MAX_LEN,
   QUERY_MAX_LENGTH,
   validateRecommendationItem,
+  validateRecommendation,
   validateRecommendationHttpBody,
   validateRecommendationMode,
   validateSavedBand,
@@ -97,6 +98,26 @@ test("validateRecommendationItem accepts optional musicbrainzArtistId", () => {
     musicbrainzArtistId: "mbid-123",
   });
   assert.equal(result.ok, true);
+});
+
+test("validateRecommendation accepts the complete search-to-eval recommendation", () => {
+  assert.equal(validateRecommendation({
+    artist: "Fen",
+    musicbrainzArtistId: "mbid-fen",
+    why: "Post-black, see https://bandcamp.com/fen",
+    sourceSignals: ["web_search", "musicbrainz_verification"],
+    evidenceUrls: ["https://bandcamp.com/fen"],
+    listenerCount: 4200,
+  }), true);
+  assert.equal(validateRecommendation({
+    artist: "Fen",
+    why: "Post-black.",
+    sourceSignals: [],
+    evidenceUrls: [],
+    listenerCount: null,
+  }), true);
+  assert.equal(validateRecommendation({ artist: "Fen", why: "Post-black.", sourceSignals: [], evidenceUrls: [] }), false);
+  assert.equal(validateRecommendation({ artist: "Fen", why: "Post-black.", sourceSignals: [], evidenceUrls: [1], listenerCount: null }), false);
 });
 
 test("validateRecommendationHttpBody normalizes recommendation POST body", () => {

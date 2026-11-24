@@ -60,7 +60,7 @@ async function makeGetRequest(app: ReturnType<typeof createApp>, path: string) {
 
 const stubPipeline = {
   recommend: async () => ({
-    recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [] }],
+    recommendations: [{ artist: "Alcest", why: "dreamy", sourceSignals: [], evidenceUrls: [], listenerCount: null }],
     assistantReply: "Here are your picks",
     meta: {
       modeUsed: "fresh",

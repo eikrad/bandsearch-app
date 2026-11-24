@@ -26,7 +26,8 @@ const sampleBands = [
     query: "atmospheric black metal",
     obscurityTarget: "underground",
     why: "Atmospheric DSBM from the Pacific Northwest.",
-    sourceSignals: ["https://bandcamp.com/wittr"],
+    sourceSignals: ["web_search"],
+    evidenceUrls: ["https://bandcamp.com/wittr"],
     listeners: 80000,
     citationSupportRate: 1.0,
     genericWhyFlag: false,
@@ -36,7 +37,8 @@ const sampleBands = [
     query: "atmospheric black metal",
     obscurityTarget: "underground",
     why: "Known for their blackgaze sound.",
-    sourceSignals: [],
+    sourceSignals: ["agent_reasoning"],
+    evidenceUrls: [],
     listeners: 600000,
     citationSupportRate: 1.0,
     genericWhyFlag: true,
@@ -90,6 +92,7 @@ test("buildJudgePrompt: includes all required fields per band", () => {
   assert.ok("obscurity_target" in wittr);
   assert.ok("why" in wittr);
   assert.ok("source_signals" in wittr);
+  assert.ok("evidence_urls" in wittr);
   assert.ok("listeners" in wittr);
   assert.ok("citation_support_rate" in wittr);
   assert.ok("generic_why_flag" in wittr);
