@@ -155,6 +155,40 @@ test("cards without a MusicBrainz ID share saved-band identity by normalized nam
   assert.equal(app.getState().savedBands.length, 1);
 });
 
+test("a card without an ID finds the saved band under any spelling of its name: article, accents (#366)", async () => {
+  const { app } = appWithFakeServer();
+  const arzte = await app.saveBand({ name: "Die Ärzte" });
+  const sigurRos = await app.saveBand({ name: "Sigur Rós" });
+
+  assert.equal((await app.rateBand({ name: "Ärzte, Die" }, 5)).id, arzte.id);
+  assert.equal((await app.rateBand({ name: "Sigur Ros" }, 4)).id, sigurRos.id);
+  assert.equal(app.getState().savedBands.length, 2);
+});
+
+test("ä ö ü ø å æ ß are letters of their own: 'Die Arzte' is not taken for the saved Die Ärzte (#366)", async () => {
+  const { app } = appWithFakeServer();
+  const arzte = await app.saveBand({ name: "Die Ärzte" });
+
+  const other = await app.rateBand({ name: "Die Arzte" }, 2);
+
+  assert.notEqual(other.id, arzte.id);
+});
+
+test("a band saved without an ID is stored under its folded name (#366)", async () => {
+  const { app } = appWithFakeServer();
+  const saved = await app.saveBand({ name: "Die Ärzte" });
+  assert.equal(saved.musicbrainzArtistId, "local-ärzte");
+});
+
+test("a card with a MusicBrainz ID does not take over a band saved without one: that needs the user's word (#366, #367)", async () => {
+  const { app } = appWithFakeServer();
+  const local = await app.saveBand({ name: "Nirvana" });
+
+  const card = await app.rateBand({ name: "Nirvana", musicbrainzArtistId: "mb-nirvana-us" }, 5);
+
+  assert.notEqual(card.id, local.id);
+});
+
 test("saving before the collection has loaded preserves existing stored annotations", async () => {
   const existing: SavedBand = {
     id: "saved-fen", name: "Fen", musicbrainzArtistId: "mb-fen",
