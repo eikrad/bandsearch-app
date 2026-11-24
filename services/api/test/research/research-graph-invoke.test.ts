@@ -325,9 +325,16 @@ test("for Truly Obscure the web is searched at once", async () => {
 });
 
 test("bands the user has seen do not count as enough", async () => {
-  const seen = new Set(["band a", "band b", "band c"]);
-  const { searches } = await runWithLastFm(9, 20_000, { excludeNames: seen });
+  const seen = ["Band A", "band b", "The Band C"].map((name) => ({ name }));
+  const { searches } = await runWithLastFm(9, 20_000, { exclude: seen });
   assert.ok(searches > 0);
+});
+
+test("bands the user has seen are not offered again under another spelling (#366)", async () => {
+  const { evidence } = await runWithLastFm(9, 20_000, { exclude: [{ name: "Band A, The" }, { name: "FEN" }] });
+  assert.doesNotMatch(evidence, /^artist: Band A$/m);
+  assert.doesNotMatch(evidence, /^artist: Fen$/m);
+  assert.match(evidence, /^artist: Band B$/m);
 });
 
 // ------------------------------------------------------------- logging

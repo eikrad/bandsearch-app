@@ -1,7 +1,7 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
-import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
+import { findArtist, mayBeSameArtist, type ArtistRef } from "../../../../../shared/schemas/src/artistIdentity.js";
 import type { AnswerProgress, ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
@@ -69,8 +69,8 @@ export type ResearchGraphInput = {
   messages: ChatMessage[];
   mode: RecommendationMode;
   obscurityTarget?: string;
-  /** Bands the user has already been shown, in lower case: never ranked again. */
-  excludeNames?: ReadonlySet<string>;
+  /** Bands the user has already been shown: never ranked again, under any spelling of them. */
+  exclude?: readonly ArtistRef[];
 };
 
 export const RESEARCH_SCHEMA = new StateSchema({
@@ -79,7 +79,7 @@ export const RESEARCH_SCHEMA = new StateSchema({
   messages: z.custom<ChatMessage[]>(),
   mode: z.custom<RecommendationMode>(),
   obscurityTarget: z.string().optional(),
-  excludeNames: z.custom<ReadonlySet<string> | undefined>(),
+  exclude: z.custom<readonly ArtistRef[] | undefined>(),
   searchPlan: z.custom<SearchPlan | undefined>(),
   /** Last.fm alone found enough bands of the requested size: no web search. */
   enoughFromLastFm: z.boolean(),
@@ -247,7 +247,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         cache: deps.cache?.artists,
       });
       const candidates = await lastFm.enrich(verified, anchors);
-      const enough = enoughFromLastFm(withoutNames(candidates, state.excludeNames), state.obscurityTarget);
+      const enough = enoughFromLastFm(withoutArtists(candidates, state.exclude), state.obscurityTarget);
       log("info", "research_lastfm_first", {
         found: found.length,
         verified: candidates.filter((c) => c.verified).length,
@@ -328,7 +328,7 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
         modelClient: deps.modelClient,
         chatModel: deps.chatModel,
       });
-      const fresh = withoutNames(state.verifiedCandidates, state.excludeNames);
+      const fresh = withoutArtists(state.verifiedCandidates, state.exclude);
       const filteredCandidates = filterCandidatesByObscurity(fresh, state.obscurityTarget);
       log("info", "research_obscurity_filter", {
         obscurityTarget: state.obscurityTarget ?? "none",
@@ -370,10 +370,10 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
   return graph.compile();
 }
 
-/** The candidates not known under any of the names (lower case). */
-function withoutNames(candidates: VerifiedCandidate[], names: ReadonlySet<string> | undefined): VerifiedCandidate[] {
-  if (!names?.size) return candidates;
-  return candidates.filter((c) => ![c.name, c.canonicalName ?? c.name].some((n) => names.has(n.trim().toLowerCase())));
+/** The candidates that may not be any of the excluded artists. */
+function withoutArtists(candidates: VerifiedCandidate[], excluded: readonly ArtistRef[] | undefined): VerifiedCandidate[] {
+  if (!excluded?.length) return candidates;
+  return candidates.filter((c) => !excluded.some((e) => mayBeSameArtist(e, c)));
 }
 
 /** The candidates of the requested size; all of them when there is no size to tell by. */
@@ -427,7 +427,7 @@ export async function invokeResearchGraph(
       messages: input.messages,
       mode: input.mode,
       obscurityTarget: input.obscurityTarget,
-      excludeNames: input.excludeNames,
+      exclude: input.exclude,
       enoughFromLastFm: false,
       braveHits: [],
       newHits: [],
