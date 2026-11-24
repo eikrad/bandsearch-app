@@ -1,3 +1,4 @@
+import { foldArtistName, isSameArtist, realMusicBrainzId } from "../../../shared/schemas/src/artistIdentity.js";
 import type { createChatClient } from "./chatClient.js";
 import type { SavedBand } from "./domain.js";
 
@@ -10,19 +11,22 @@ export type SavedBandTarget = {
 
 export type CategoryNoteUpdates = { categories?: string[]; note?: string };
 
-function normalizeArtistId(artistName: string): string {
-  return `local-${String(artistName || "unknown")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")}`;
+/** The stand-in ID of an artist MusicBrainz did not identify; artist identity reads it as no ID. */
+function localArtistId(artistName: string): string {
+  return `local-${foldArtistName(String(artistName || "")) || "unknown"}`;
 }
 
-/** The same identity rule drives card state and every saved-band write. */
+/**
+ * The same identity rule drives card state and every saved-band write
+ * (artist identity, #366). A MusicBrainz ID is authoritative: a card with one
+ * finds only the band saved under it. A card without one finds the band whose
+ * name is the same artist's. A band that is only possibly the same is not
+ * taken: that needs the user's word (#367).
+ */
 export function findSavedBand(target: SavedBandTarget, bands: SavedBand[]): SavedBand | undefined {
-  const mbid = target.musicbrainzArtistId?.trim();
-  if (mbid) return bands.find((band) => band.musicbrainzArtistId?.trim() === mbid);
-  const fallbackId = normalizeArtistId(target.name);
-  return bands.find((band) => normalizeArtistId(band.name) === fallbackId);
+  const mbid = realMusicBrainzId(target.musicbrainzArtistId);
+  if (mbid) return bands.find((band) => realMusicBrainzId(band.musicbrainzArtistId) === mbid);
+  return bands.find((band) => isSameArtist({ name: target.name }, { name: band.name }));
 }
 
 type SavedBandClient = Pick<ReturnType<typeof createChatClient>,
@@ -65,7 +69,7 @@ export function createSavedBandActions({
     const stored = findSavedBand(target, storedBands);
     if (stored) return stored;
     const result = await client.createPreference({
-      musicbrainzArtistId: target.musicbrainzArtistId?.trim() || normalizeArtistId(target.name),
+      musicbrainzArtistId: target.musicbrainzArtistId?.trim() || localArtistId(target.name),
       name: target.name,
       rating: null,
       categories: [],
