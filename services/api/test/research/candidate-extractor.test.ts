@@ -105,3 +105,21 @@ test("buildExtractorSystemPrompt instructs the model to cap the candidate count"
   assert.ok(prompt.includes("25"), "prompt should mention the cap number");
   assert.ok(/at most/i.test(prompt), "prompt should instruct an upper bound");
 });
+
+// ─── #366: artist identity ────────────────────────────────────────────────────
+
+test("an anchor artist is not a candidate under another spelling either", async () => {
+  const { candidates } = await extractWith(
+    [{ candidates: [{ name: "Cure", hits: [1] }, { name: "Capra", hits: [1] }] }],
+    { anchorArtists: ["The Cure"] },
+  );
+  assert.deepEqual(candidates.map((c) => c.name), ["Capra"]);
+});
+
+test("mergeExtractedCandidates joins the spellings of one artist", () => {
+  const result = mergeExtractedCandidates([
+    { name: "Die Ärzte", evidenceUrls: ["https://a.example"], evidenceSnippets: [], sourceQueries: ["q1"] },
+    { name: "Ärzte, Die", evidenceUrls: ["https://b.example"], evidenceSnippets: [], sourceQueries: ["q2"] },
+  ]);
+  assert.deepEqual(result.map((c) => [c.name, c.evidenceUrls.length]), [["Die Ärzte", 2]]);
+});

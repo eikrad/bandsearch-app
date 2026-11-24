@@ -270,3 +270,33 @@ test("mergeVerifiedCandidates preserves all distinct artists", () => {
   const result = mergeVerifiedCandidates(input);
   assert.equal(result.length, 3);
 });
+
+// ─── #366: artist identity decides which spellings are one artist ─────────────
+
+test("an article in any listed language and the folded accent marks still verify the artist: 'Ärzte' is Die Ärzte", async () => {
+  const { mb } = fakeMusicBrainz([record({ name: "Die Ärzte" }), record({ name: "L'Impératrice" })]);
+  const out = await verifyCandidatesWithMusicBrainz(mb, [extracted("Ärzte"), extracted("Imperatrice")], []);
+  assert.deepEqual(out.map((c) => c.canonicalName), ["Die Ärzte", "L'Impératrice"]);
+});
+
+test("ä ö ü ø å æ ß are letters of their own: 'Die Arzte' does not verify as Die Ärzte", async () => {
+  const { mb } = fakeMusicBrainz([record({ name: "Die Ärzte" })], []);
+  const out = await verifyCandidatesWithMusicBrainz(mb, [extracted("Die Arzte")], []);
+  assert.equal(out[0]!.verified, false);
+});
+
+test("an anchor artist is left out under any spelling of it", async () => {
+  const { mb, asked } = fakeMusicBrainz([record({ name: "Fen" })]);
+  const out = await verifyCandidatesWithMusicBrainz(mb, [extracted("Cure"), extracted("Fen")], ["The Cure"]);
+  assert.deepEqual(asked[0]!.names, ["Fen"]);
+  assert.deepEqual(out.map((c) => c.name), ["Fen"]);
+});
+
+test("mergeVerifiedCandidates joins the spellings of one artist and keeps two artists of one name apart", () => {
+  const row = (name: string, mbid?: string) => ({ name, ...(mbid ? { mbid } : {}), verified: Boolean(mbid), evidenceUrls: [`https://${name.length}.example`], evidenceSnippets: [], sourceQueries: [] });
+  const result = mergeVerifiedCandidates([
+    row("The Cure"), row("Cure, The"),
+    row("Nirvana", "mbid-us"), row("Nirvana", "mbid-uk"),
+  ]);
+  assert.deepEqual(result.map((c) => [c.name, c.mbid]), [["The Cure", undefined], ["Nirvana", "mbid-us"], ["Nirvana", "mbid-uk"]]);
+});

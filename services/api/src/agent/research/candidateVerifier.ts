@@ -1,6 +1,7 @@
 import { fitObscurityTarget, isNearTarget } from "../../obscurityTargets.js";
 import type { MusicBrainzArtistRecord } from "../../integrations/musicbrainz.js";
-import { findArtistNamed } from "./artistNames.js";
+import { mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
+import { findArtistNamed, isAnchorArtist } from "./artistNames.js";
 import { artistKey, type ResearchCache } from "./researchCache.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
 
@@ -51,34 +52,26 @@ export type MusicBrainzVerifyClient = {
   findArtistsByName: (names: string[], options?: { includeAliases?: boolean }) => Promise<MusicBrainzArtistRecord[]>;
 };
 
+/** One entry per artist, the verified one preferred, with the evidence of every spelling it was found under. */
 export function mergeVerifiedCandidates(candidates: VerifiedCandidate[]): VerifiedCandidate[] {
-  const map = new Map<string, VerifiedCandidate>();
+  const merged: VerifiedCandidate[] = [];
   for (const c of candidates) {
-    const key = c.mbid ?? (c.canonicalName ?? c.name).toLowerCase();
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, { ...c });
-    } else {
-      const winner = c.verified && !existing.verified ? c : existing;
-      const other = winner === c ? existing : c;
-      map.set(key, {
-        ...winner,
-        evidenceUrls: [...new Set([...winner.evidenceUrls, ...other.evidenceUrls])],
-        evidenceSnippets: [...new Set([...winner.evidenceSnippets, ...other.evidenceSnippets])],
-        sourceQueries: [...new Set([...winner.sourceQueries, ...other.sourceQueries])],
-      });
+    const i = merged.findIndex((m) => mayBeSameArtist(m, c));
+    if (i === -1) {
+      merged.push({ ...c });
+      continue;
     }
+    const existing = merged[i]!;
+    const winner = c.verified && !existing.verified ? c : existing;
+    const other = winner === c ? existing : c;
+    merged[i] = {
+      ...winner,
+      evidenceUrls: [...new Set([...winner.evidenceUrls, ...other.evidenceUrls])],
+      evidenceSnippets: [...new Set([...winner.evidenceSnippets, ...other.evidenceSnippets])],
+      sourceQueries: [...new Set([...winner.sourceQueries, ...other.sourceQueries])],
+    };
   }
-  return [...map.values()];
-}
-
-export function normalizeAnchorSet(anchorArtists: string[]): Set<string> {
-  const s = new Set<string>();
-  for (const a of anchorArtists) {
-    const t = String(a || "").trim().toLowerCase();
-    if (t) s.add(t);
-  }
-  return s;
+  return merged;
 }
 
 /** Names per MusicBrainz request; more would push matches off its 100-artist result page. */
@@ -96,11 +89,7 @@ export async function verifyCandidatesWithMusicBrainz(
   anchorArtists: string[],
   options: { shouldContinue?: () => boolean; cache?: ResearchCache["artists"] } = {},
 ): Promise<VerifiedCandidate[]> {
-  const anchors = normalizeAnchorSet(anchorArtists);
-  const wanted = candidates.filter((c) => {
-    const key = String(c.name || "").trim().toLowerCase();
-    return key !== "" && !anchors.has(key);
-  });
+  const wanted = candidates.filter((c) => String(c.name || "").trim() !== "" && !isAnchorArtist(c.name, anchorArtists));
   const names = [...new Set(wanted.map((c) => c.name.trim()))];
   const found = new Map<string, MusicBrainzArtistRecord>();
   const unknown = new Set<string>();

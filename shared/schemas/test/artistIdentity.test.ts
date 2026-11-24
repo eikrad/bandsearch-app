@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compareArtists, foldArtistName, isSameArtist, mayBeSameArtist } from "../src/artistIdentity.js";
+import { compareArtists, findArtist, foldArtistName, isSameArtist, mayBeSameArtist, realMusicBrainzId } from "../src/artistIdentity.js";
 
 const MBID_A = "8b8a38a9-a290-4560-84f6-3d4466e8d791";
 const MBID_B = "5b11f4ce-a62d-471e-81fc-a69a8278c7da";
@@ -125,4 +125,22 @@ test("foldArtistName gives one key for the spellings that name the same artist",
   assert.equal(foldArtistName("The Cure"), foldArtistName("cure, the"));
   assert.equal(foldArtistName("Die Ärzte"), "ärzte");
   assert.notEqual(foldArtistName("Die Ärzte"), foldArtistName("Arzte"));
+});
+
+test("findArtist prefers the same artist, then the same spelling, then a possible match", () => {
+  const arzte = { name: "Arzte" };
+  const arzteWithId = { name: "Die Ärzte", mbid: MBID_A };
+  const plain = { name: "Ärzte" };
+  assert.equal(findArtist({ name: "Ärzte" }, [arzte, arzteWithId, plain]), plain);
+  assert.equal(findArtist({ name: "Die Ärzte" }, [arzte, arzteWithId]), arzteWithId);
+  assert.equal(findArtist({ name: "Aerzte" }, [arzteWithId]), arzteWithId);
+  assert.equal(findArtist({ name: "Mudhoney" }, [arzte, arzteWithId]), undefined);
+  assert.equal(findArtist({ name: "x", mbid: MBID_A }, [arzte, arzteWithId]), arzteWithId);
+});
+
+test("realMusicBrainzId drops blanks and local saved-band IDs", () => {
+  assert.equal(realMusicBrainzId(` ${MBID_A} `), MBID_A);
+  assert.equal(realMusicBrainzId("local-nirvana"), undefined);
+  assert.equal(realMusicBrainzId("  "), undefined);
+  assert.equal(realMusicBrainzId(null), undefined);
 });
