@@ -818,3 +818,21 @@ Also in this change:
 Tests: the session against a fake auth client and router; one test per bug
 through the real startup, session, router and mount; the router's echo; and
 each Saved Artists action failing through the real shell and mount.
+
+
+### 17. One home for artist identity (#366, #367)
+
+Found by the architecture review of 2026-11-24. "Is this the same band?" was
+answered in twelve places with different rules (trim+lower, lower only, NFKD
+with every mark stripped, the MusicBrainz ID ignored or not), and the eval
+disagreed with the search: `antiBandRate@8` did not count "Cure" against the
+anti-band "The Cure". The verifier also folded ä to a, which is wrong.
+
+- ✓ `shared/schemas/src/artistIdentity.ts` answers same / possibly / different;
+  verification, dedupe, the Last.fm round, the reflection loop, the ranker's
+  attribution, conversation memory, the eval metrics and the desktop's saved
+  bands all decide by it (#366, `feature/artist-identity`). Metrics version 6
+  and a new golden baseline.
+- Open: a band saved without an ID takes a card's MusicBrainz ID only after
+  the user confirms it is the same band; rows merge when the user already has
+  that ID (#367).
