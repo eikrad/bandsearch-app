@@ -1,3 +1,5 @@
+import { foldArtistName, mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
+import { isAnchorArtist } from "./artistNames.js";
 import type { LastFmArtistInfo, LastFmClient, SimilarArtist } from "../../eval/lastFmClient.js";
 import { errorMessage } from "../modelUtils.js";
 import type { ExtractedCandidate } from "./candidateExtractor.js";
@@ -110,12 +112,11 @@ export function createLastFmEnrichment({
     async similarCandidates(anchorArtists) {
       const anchors = anchorArtists.map((anchor) => ({ anchor, lookup: similarTo(anchor) }));
       await settle(anchors.map((a) => a.lookup), SIMILAR_WAIT_MS);
-      const isAnchor = new Set(anchorArtists.map(artistKey));
       const found = new Map<string, { name: string; total: number; best: { anchor: string; match: number } }>();
       for (const { anchor, lookup } of anchors) {
         for (const { name, match } of lookup.value ?? []) {
-          const key = artistKey(name);
-          if (isAnchor.has(key)) continue;
+          if (isAnchorArtist(name, anchorArtists)) continue;
+          const key = foldArtistName(name);
           const known = found.get(key);
           if (!known) found.set(key, { name, total: match, best: { anchor, match } });
           else {
@@ -144,20 +145,17 @@ export function createLastFmEnrichment({
 
       await settle(pending, LASTFM_WAIT_MS);
 
-      const similarMap = new Map<string, { anchor: string; match: number }>();
-      for (const { anchor, lookup } of anchors) {
-        for (const s of lookup.value ?? []) {
-          const key = artistKey(s.name);
-          const existing = similarMap.get(key);
-          if (!existing || s.match > existing.match) similarMap.set(key, { anchor, match: s.match });
-        }
-      }
+      const similar = anchors.flatMap(({ anchor, lookup }) => (lookup.value ?? []).map((s) => ({ anchor, ...s })));
+      /** The closest similarity Last.fm lists for the candidate, under any spelling of it. */
+      const similarityOf = (c: VerifiedCandidate) => similar
+        .filter((s) => mayBeSameArtist({ name: s.name }, c))
+        .reduce<{ anchor: string; match: number } | undefined>((best, s) => (!best || s.match > best.match ? s : best), undefined);
 
       let matchCount = 0;
       const enriched = candidates.map((c, i): VerifiedCandidate => {
         const known = lookups[i]!.map((l) => l.value).filter((info) => info != null);
         const info = known.find((k) => k.listeners !== null) ?? known[0];
-        const hit = similarMap.get(artistKey(c.canonicalName || c.name)) ?? similarMap.get(artistKey(c.name));
+        const hit = similarityOf(c);
         if (hit) matchCount++;
         // The biography says most about the band itself, so it comes before the similarity.
         const urls = [info?.biography && info.url, hit && similarUrl(hit.anchor)].filter((u): u is string => Boolean(u));

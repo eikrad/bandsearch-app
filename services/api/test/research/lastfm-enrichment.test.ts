@@ -258,3 +258,17 @@ test("a long biography is cut at a word; a page without one is no evidence", asy
   const [bare] = await enrichmentWith(fakeLastFm({}).client).lastFm.enrich([candidate("Fen")], []);
   assert.deepEqual(bare!.evidenceUrls, ["https://blog.example"]);
 });
+
+test("an anchor is not its own similar artist under another spelling (#366)", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Cure", match: 0.9 }, { name: "Fen", match: 0.5 }] });
+  const { lastFm } = enrichmentWith(client);
+  const candidates = await lastFm.similarCandidates(["The Cure"]);
+  assert.deepEqual(candidates.map((c) => c.name), ["Fen"]);
+});
+
+test("a candidate is found in the similar list under another spelling (#366)", async () => {
+  const { client } = fakeLastFm({ similar: [{ name: "Cure", match: 0.9 }] });
+  const { lastFm } = enrichmentWith(client);
+  const [cure] = await lastFm.enrich([candidate("The Cure")], ["Siouxsie"]);
+  assert.ok(cure!.evidenceUrls.includes("https://www.last.fm/music/Siouxsie/+similar"));
+});

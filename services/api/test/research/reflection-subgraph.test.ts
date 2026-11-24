@@ -56,6 +56,7 @@ type RunOptions = {
   maxRounds?: number;
   initialVerified?: VerifiedCandidate[];
   roundsCompleted?: number;
+  extracted?: string[];
 };
 
 async function runSubgraph({
@@ -64,20 +65,25 @@ async function runSubgraph({
   maxRounds = 2,
   initialVerified = [verified("Fen")],
   roundsCompleted = 0,
+  extracted = ["Downfall of Gaia"],
 }: RunOptions = {}) {
   const searchCalls: string[][] = [];
+  const verifiedNames: string[] = [];
   const logs: { level: string; event: string }[] = [];
 
   const { client } = fakeModelClient({
     reflect,
-    extract: () => extractedCandidates([
-      { name: "Downfall of Gaia" },
-    ]),
+    extract: () => extractedCandidates(extracted.map((name) => ({ name }))),
   });
 
   const subgraph = buildReflectionSubgraph({
     modelClient: client,
-    mb: mbClient,
+    mb: {
+      async findArtistsByName(names, options) {
+        verifiedNames.push(...names);
+        return mbClient.findArtistsByName(names, options);
+      },
+    },
     runQueries: async (queries) => {
       searchCalls.push(queries);
       return { hits: [hit], calls: queries.length };
@@ -104,7 +110,7 @@ async function runSubgraph({
     nextExtraQueries: [],
   });
 
-  return { result, searchCalls, logs };
+  return { result, searchCalls, logs, verifiedNames };
 }
 
 // --------------------------------------------------------- assess routing
@@ -266,4 +272,16 @@ test("reflection accumulates new hits onto braveHits", async () => {
 
   assert.equal((result.braveHits as SearchHitInput[]).length, 2);
   assert.deepEqual(result.newHits, [hit]);
+});
+
+test("reflection does not verify again a band it already has under another spelling (#366)", async () => {
+  const { result, verifiedNames } = await runSubgraph({
+    initialVerified: [verified("The Cure")],
+    extracted: ["Cure", "Downfall of Gaia"],
+    maxRounds: 1,
+  });
+
+  assert.deepEqual(verifiedNames, ["Downfall of Gaia"]);
+  const names = (result.verifiedCandidates as VerifiedCandidate[]).map((c) => c.name);
+  assert.deepEqual(names.sort(), ["Downfall of Gaia", "The Cure"]);
 });

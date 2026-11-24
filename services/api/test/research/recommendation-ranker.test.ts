@@ -140,3 +140,13 @@ test("a pick says where it was found, whatever the model claims", () => {
     ["lastfm_similarity"], ["web_search"], ["web_search"],
   ]);
 });
+
+test("a pick spelled differently from its candidate is still attributed to it (#366)", () => {
+  const recs = attachEvidenceCitationsToRecommendations(
+    [{ artist: "Alcest", why: "Shoegaze and black metal", sourceSignals: [] }],
+    [{ name: "Alcést", canonicalName: "Alcést", evidenceUrls: ["https://source.example/a"], evidenceSnippets: [], sourceQueries: [], verified: true, mbid: "mbid-alcest" }],
+  );
+  assert.equal(recs.length, 1);
+  assertRecord(recs[0]);
+  assert.equal(recs[0].musicbrainzArtistId, "mbid-alcest");
+});

@@ -1,3 +1,4 @@
+import { mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
@@ -140,12 +141,7 @@ export function buildReflectionSubgraph(deps: ReflectionSubgraphDeps) {
     })
     .addNode("verify_r", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
-      const seen = new Set<string>();
-      for (const v of state.verifiedCandidates) {
-        seen.add(v.name.toLowerCase());
-        if (v.canonicalName) seen.add(v.canonicalName.toLowerCase());
-      }
-      const toVerify = state.extractedCandidates.filter((c) => !seen.has(c.name.toLowerCase()));
+      const toVerify = state.extractedCandidates.filter((c) => !state.verifiedCandidates.some((v) => mayBeSameArtist(v, c)));
       const fresh = toVerify.length > 0
         ? await verifyCandidatesWithMusicBrainz(deps.mb, toVerify, anchors, {
             shouldContinue: () => deps.budget.remaining() > 0,

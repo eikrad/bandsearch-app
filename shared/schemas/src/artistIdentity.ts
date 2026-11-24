@@ -59,6 +59,24 @@ export function realMusicBrainzId(id: string | null | undefined): string | undef
  * "Cure, The" all fold to "cure". Empty for an empty name.
  */
 export function foldArtistName(name: string): string {
+  return remembered(folded, name, fold);
+}
+
+/** Folding is pure and the search compares the same few hundred names many times over. */
+const folded = new Map<string, string>();
+const variantsOf = new Map<string, string[]>();
+const MAX_REMEMBERED = 5000;
+
+function remembered<T>(cache: Map<string, T>, key: string, compute: (key: string) => T): T {
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  if (cache.size >= MAX_REMEMBERED) cache.clear();
+  const value = compute(key);
+  cache.set(key, value);
+  return value;
+}
+
+function fold(name: string): string {
   const lower = name.trim().toLowerCase().normalize("NFKD").replace(FOLDED_MARKS, "").normalize("NFC");
   const withoutArticle = LEADING_ARTICLE.test(lower)
     ? lower.replace(LEADING_ARTICLE, "")
@@ -69,9 +87,13 @@ export function foldArtistName(name: string): string {
 }
 
 /** The folded name with each letter of its own also written plainly and transliterated. */
-function spellingVariants(folded: string): string[] {
+function spellingVariants(foldedName: string): string[] {
+  return remembered(variantsOf, foldedName, expandLetters);
+}
+
+function expandLetters(foldedName: string): string[] {
   let variants = [""];
-  for (const letter of folded) {
+  for (const letter of foldedName) {
     const options = LETTER_VARIANTS[letter];
     const next = options ? [letter, ...options] : [letter];
     variants = variants.flatMap((v) => next.map((n) => v + n)).slice(0, MAX_VARIANTS);
@@ -109,4 +131,17 @@ export function isSameArtist(a: ArtistRef, b: ArtistRef): boolean {
 /** The same artist or possibly so: what the search and the eval treat as one artist. */
 export function mayBeSameArtist(a: ArtistRef, b: ArtistRef): boolean {
   return compareArtists(a, b) !== "different";
+}
+
+/**
+ * The artist in the list that a mention refers to: the same artist if one is
+ * there, else one spelled the same (an ID on one side only), else a possible
+ * match. Undefined when none may be the same artist.
+ */
+export function findArtist<T extends ArtistRef>(ref: ArtistRef, artists: readonly T[]): T | undefined {
+  const verdicts = artists.map((artist) => compareArtists(ref, artist));
+  const names = foldedNames(ref);
+  return artists.find((_, i) => verdicts[i] === "same")
+    ?? artists.find((artist, i) => verdicts[i] === "possibly" && overlap(names, foldedNames(artist)))
+    ?? artists.find((_, i) => verdicts[i] === "possibly");
 }

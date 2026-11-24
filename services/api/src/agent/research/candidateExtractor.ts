@@ -1,5 +1,7 @@
 
+import { mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import { capAndTrim, wrapSearchHitBlock } from "../promptGuards.js";
+import { isAnchorArtist } from "./artistNames.js";
 import { plainText, wordsAround } from "./textSnippets.js";
 import type { ChatModelClient } from "../modelUtils.js";
 import { invokeModel, parseModelJsonResponse } from "../modelUtils.js";
@@ -40,48 +42,29 @@ const RETRY_ADDENDUM =
   "Invalid JSON before. Reply with ONLY one JSON object: " +
   '{"candidates":[{"name":"string","hits":[1]}]}';
 
-function normalizeAnchors(anchors: string[]): Set<string> {
-  const s = new Set<string>();
-  for (const a of anchors) {
-    const t = String(a || "").trim().toLowerCase();
-    if (t) s.add(t);
-  }
-  return s;
-}
-
+/** One entry per artist, under the first spelling it was found under, with the evidence of every spelling. */
 export function mergeExtractedCandidates(rows: ExtractedCandidate[]): ExtractedCandidate[] {
-  const map = new Map<string, ExtractedCandidate>();
+  const merged: ExtractedCandidate[] = [];
+  const cleaned = (values: unknown[] | undefined) =>
+    (values ?? []).flatMap((v) => (typeof v === "string" && v.trim() ? [v.trim()] : []));
   for (const row of rows) {
     const name = String(row.name || "").trim();
     if (!name) continue;
-    const key = name.toLowerCase();
-    const existing = map.get(key);
+    const existing = merged.find((m) => mayBeSameArtist(m, { name }));
     if (!existing) {
-      map.set(key, {
+      merged.push({
         name,
         evidenceUrls: [...(row.evidenceUrls || [])],
         evidenceSnippets: [...(row.evidenceSnippets || [])],
         sourceQueries: [...(row.sourceQueries || [])],
       });
-    } else {
-      const urls = new Set(existing.evidenceUrls);
-      for (const u of row.evidenceUrls || []) {
-        if (typeof u === "string" && u.trim()) urls.add(u.trim());
-      }
-      existing.evidenceUrls = [...urls];
-      const snips = new Set(existing.evidenceSnippets);
-      for (const s of row.evidenceSnippets || []) {
-        if (typeof s === "string" && s.trim()) snips.add(s.trim());
-      }
-      existing.evidenceSnippets = [...snips];
-      const qs = new Set(existing.sourceQueries);
-      for (const q of row.sourceQueries || []) {
-        if (typeof q === "string" && q.trim()) qs.add(q.trim());
-      }
-      existing.sourceQueries = [...qs];
+      continue;
     }
+    existing.evidenceUrls = [...new Set([...existing.evidenceUrls, ...cleaned(row.evidenceUrls)])];
+    existing.evidenceSnippets = [...new Set([...existing.evidenceSnippets, ...cleaned(row.evidenceSnippets)])];
+    existing.sourceQueries = [...new Set([...existing.sourceQueries, ...cleaned(row.sourceQueries)])];
   }
-  return [...map.values()];
+  return merged;
 }
 
 /** Evidence per candidate: enough to judge a band by, short enough for the ranker's prompt. */
@@ -109,7 +92,7 @@ function hitsOf(raw: unknown, hits: SearchHitInput[]): SearchHitInput[] {
 
 const unique = (values: string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
 
-function extractFromParsed(parsed: unknown, hits: SearchHitInput[], anchors: Set<string>): ExtractedCandidate[] {
+function extractFromParsed(parsed: unknown, hits: SearchHitInput[], anchors: string[]): ExtractedCandidate[] {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
   const list = (parsed as Record<string, unknown>).candidates;
   if (!Array.isArray(list)) return [];
@@ -118,7 +101,7 @@ function extractFromParsed(parsed: unknown, hits: SearchHitInput[], anchors: Set
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
     const name = typeof o.name === "string" ? o.name.trim() : "";
-    if (!name || anchors.has(name.toLowerCase())) continue;
+    if (!name || isAnchorArtist(name, anchors)) continue;
     const mentions = hitsOf(o.hits, hits);
     if (mentions.length === 0) continue;
     out.push({
@@ -172,7 +155,7 @@ export async function createCandidateExtractor({
     systemText: string,
     userContent: string,
     shown: SearchHitInput[],
-    anchors: Set<string>,
+    anchors: string[],
   ): Promise<ExtractedCandidate[]> {
     const prompt = [
       { role: "system" as const, content: systemText },
@@ -189,14 +172,14 @@ export async function createCandidateExtractor({
     hits: SearchHitInput[];
     anchorArtists: string[];
   }): Promise<ExtractedCandidate[]> {
-    const anchors = normalizeAnchors(input.anchorArtists || []);
+    const anchors = (input.anchorArtists || []).map((a) => String(a || "").trim()).filter(Boolean);
     const hits = Array.isArray(input.hits) ? input.hits : [];
     if (hits.length === 0) return [];
 
     const { text: hitBlock, shown } = formatHitsForPrompt(hits);
     const anchorLine =
-      anchors.size > 0
-        ? `exclude_anchor_artist_names_case_insensitive: ${[...anchors].join(", ")}`
+      anchors.length > 0
+        ? `exclude_anchor_artist_names_case_insensitive: ${[...new Set(anchors.map((a) => a.toLowerCase()))].join(", ")}`
         : "exclude_anchor_artist_names_case_insensitive: (none)";
 
     const userContent = `${anchorLine}\n\nsearch_results:\n${hitBlock}`;

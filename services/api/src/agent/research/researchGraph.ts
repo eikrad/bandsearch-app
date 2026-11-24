@@ -1,6 +1,7 @@
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import * as z from "zod";
 
+import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import type { AnswerProgress, ChatMessage, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { errorMessage, type ChatModelClient } from "../modelUtils.js";
 import { createBraveSearchClient } from "../../integrations/braveSearch.js";
@@ -14,7 +15,7 @@ import { asksLastFmFirst, enoughFromLastFm } from "./lastFmFirst.js";
 import { createRecommendationRanker } from "./recommendationRanker.js";
 import { buildReflectionSubgraph } from "./reflectionSubgraph.js";
 import { createResearchBudget, RANKING_RESERVE_MS, type ResearchBudget } from "./researchBudget.js";
-import { artistKey, type ResearchCache } from "./researchCache.js";
+import type { ResearchCache } from "./researchCache.js";
 import { createWebSearchPlanner, fallbackSearchPlan, type SearchPlan } from "./webSearchPlanner.js";
 import type { ChatModelFactory } from "../../llm/chatModel.js";
 
@@ -295,15 +296,15 @@ export async function buildResearchGraph(deps: ResearchGraphDeps, budget: Resear
     .addNode("verify", async (state) => {
       const anchors = state.searchPlan?.anchorArtists ?? [];
       // Bands of the Last.fm round are verified already; what the web adds about them is merged in.
-      const known = new Map(state.verifiedCandidates.map((c) => [artistKey(c.name), c]));
+      const knownAs = (c: ExtractedCandidate) => findArtist(c, state.verifiedCandidates);
       const fresh = await verifyCandidatesWithMusicBrainz(
         mb,
-        state.extractedCandidates.filter((c) => !known.has(artistKey(c.name))),
+        state.extractedCandidates.filter((c) => !knownAs(c)),
         anchors,
         { shouldContinue: () => researchScope.remaining() > 0, cache: deps.cache?.artists },
       );
       const again = state.extractedCandidates.flatMap((c) => {
-        const earlier = known.get(artistKey(c.name));
+        const earlier = knownAs(c);
         return earlier ? [{ ...earlier, ...c, name: earlier.name }] : [];
       });
       const verified = mergeVerifiedCandidates([...again, ...fresh]);

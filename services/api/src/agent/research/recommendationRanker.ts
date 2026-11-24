@@ -1,4 +1,5 @@
 
+import { findArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 import type { ChatMessage, ObscurityTarget, RecommendationMode } from "../../../../../shared/schemas/src/contracts.js";
 import { validateObscurityTarget, validateRecommendationItem } from "../../../../../shared/schemas/src/contracts.js";
 import { OBSCURITY_TARGET_RANGES, fitObscurityTarget } from "../../obscurityTargets.js";
@@ -62,17 +63,6 @@ export function whyContainsEvidenceCitation(why: string, evidenceUrls: string[])
   return false;
 }
 
-function findCandidateForArtist(
-  artistName: string,
-  candidates: VerifiedCandidate[],
-): VerifiedCandidate | undefined {
-  const key = String(artistName || "").trim().toLowerCase();
-  return candidates.find(
-    (c) =>
-      c.name.trim().toLowerCase() === key
-      || (c.canonicalName && c.canonicalName.trim().toLowerCase() === key),
-  );
-}
 
 /**
  * Ensure each recommendation's `why` cites an evidence URL; append one if the model omitted it.
@@ -90,7 +80,7 @@ export function attachEvidenceCitationsToRecommendations(
     const why = String(row.why ?? "").trim();
     if (!artist || !why) continue;
 
-    const cand = findCandidateForArtist(artist, candidates);
+    const cand = findArtist({ name: artist }, candidates);
     // A candidate found in a snippet without a URL is still attributable to its MusicBrainz record.
     const recordUrl = cand?.mbid ? `https://musicbrainz.org/artist/${cand.mbid}` : undefined;
     const evidenceUrls = cand?.evidenceUrls.length ? cand.evidenceUrls : recordUrl ? [recordUrl] : [];

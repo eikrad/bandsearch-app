@@ -2,26 +2,19 @@
  * Deciding whether two spellings name the same artist. MusicBrainz's search
  * always returns its nearest names, so a hit proves nothing by itself:
  * "Watching the Rain" used to be verified as Oasis.
+ *
+ * What counts as the same spelling is artist identity's rule (#366); this
+ * module only orders it for choosing among MusicBrainz's results.
  */
+import { isSameArtist, mayBeSameArtist } from "../../../../../shared/schemas/src/artistIdentity.js";
 
 const lower = (name: string) => name.trim().toLowerCase();
 
-/** Case, accents, punctuation and spaces removed; the plain lower-case name when nothing else is left ("!!!"). */
-function simplified(name: string): string {
-  const letters = lower(name).normalize("NFKD").replace(/[^\p{L}\p{N}]/gu, "");
-  return letters || lower(name);
-}
-
-/** The name without its leading English article: "The Moving Sidewalks" is also listed as "Moving Sidewalks". */
-export function withoutArticle(name: string): string {
-  return name.trim().replace(/^the\s+(?=\S)/i, "");
-}
-
+/** Closest first: verification never accepts a spelling that is only possibly the artist. */
 const closeness: Array<(a: string, b: string) => boolean> = [
   (a, b) => a.trim() === b.trim(),
   (a, b) => lower(a) === lower(b),
-  (a, b) => simplified(a) === simplified(b),
-  (a, b) => simplified(withoutArticle(a)) === simplified(withoutArticle(b)),
+  (a, b) => isSameArtist({ name: a }, { name: b }),
 ];
 
 type NamedArtist = { name: string; score: number; aliases: string[] };
@@ -39,4 +32,9 @@ export function findArtistNamed<T extends NamedArtist>(name: string, artists: T[
     }
   }
   return null;
+}
+
+/** An anchor artist of the request, under any spelling of it: anchors are never candidates. */
+export function isAnchorArtist(name: string, anchorArtists: readonly string[]): boolean {
+  return anchorArtists.some((anchor) => mayBeSameArtist({ name: anchor }, { name }));
 }
