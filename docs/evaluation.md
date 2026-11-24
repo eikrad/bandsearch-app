@@ -24,7 +24,9 @@ involved.
 
 Every run appends one line to `services/eval/history/golden-runs.jsonl`
 (committed): git commit, the model the API reported, and per query the
-status, `nuggetCoverage@8`, `antiBandRate@8`, latency and top 8. It then
+status, `nuggetCoverage@8`, `antiBandRate@8`, latency and top 8. Anti-bands
+and the top-8 overlap tell bands apart by the search's own artist identity, so
+"Cure" counts against the anti-band "The Cure" (#366, metrics version 6). It then
 rewrites `services/eval/reports/dashboard.html` (gitignored), a self-contained
 page that compares each run with the latest run labelled `baseline` and with
 the previous run: flipped queries with a sign test, how much the top 8 changed
