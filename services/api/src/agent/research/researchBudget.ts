@@ -1,5 +1,10 @@
-/** Time held back from research for final ranking; at most one third of a small budget. */
-export const RANKING_RESERVE_MS = 12_000;
+/**
+ * Time held back from research for final ranking, and the ranker's cap,
+ * including its evidence retry; at most one third of a small budget. 20 s is
+ * about twice the ranker's 90th percentile: at 12 s, 5% of rankings were cut
+ * off and their search thrown away (#369).
+ */
+export const RANKING_RESERVE_MS = 20_000;
 
 export type ResearchBudget = {
   allocate(cap: number): number;

@@ -257,7 +257,7 @@ remembered. The cache holds public artist data only.
 limits the whole operation, including retries, even if a transport ignores
 cancellation. The graph closes every scope on success or failure.
 
-A child research scope ends up to 12 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
+A child research scope ends up to 20 s (`RANKING_RESERVE_MS`) early, reserving at most one third of a
 small configured budget for final ranking. Main-graph conditional edges bypass
 remaining research stages and enter `rank` at that cutoff. Last.fm lookups still under way are cancelled there. Verification keeps
 completed candidates and stops between batches; optional reflection and
@@ -265,8 +265,10 @@ Last.fm enrichment cannot consume the reserve. Model calls and HTTP requests
 receive abort signals; retries and Brave/MusicBrainz rate-limit waits stop when
 cancelled. Graph-level JSON repair retries stay inside the shared cap. Brave diagnostics count attempted queries, including cancelled ones.
 
-Ranking, including its evidence-repair retry, shares one 12 s cap and must finish
-before the total deadline. A failed or timed-out ranker fails the request with the route's generic
+Ranking, including its evidence-repair retry, shares one 20 s cap and must finish
+before the total deadline. A follow-up pick asks the same ranker and gets the same
+20 s. `research_ranked` logs how long ranking took and how many answers it needed;
+`research_rank_failed` logs the same when it fails (#369). A failed or timed-out ranker fails the request with the route's generic
 `502 recommendation_unavailable`; it does not fabricate recommendations from
 partial research. A successful ranker can still return an
 empty discovery result.

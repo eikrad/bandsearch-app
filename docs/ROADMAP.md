@@ -719,7 +719,8 @@ Implemented in #300; integration into `staging` is pending. Promotion to
 
 `researchBudget.ts` owns operation caps, the complete graph deadline,
 cancellation and cleanup. Research reserves up to 12 seconds (at most one third
-of a small configured budget) for final ranking. At the research cutoff, the
+of a small configured budget) for final ranking; raised to 20 seconds in #369,
+because 5% of rankings ran past 12. At the research cutoff, the
 graph keeps completed verification results and bypasses later research stages.
 Ranking and its retry share one cap within the total deadline; a failed ranker
 fails the request.

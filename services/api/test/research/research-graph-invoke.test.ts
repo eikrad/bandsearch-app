@@ -360,6 +360,20 @@ test("invokeResearchGraph emits a log event per node", async () => {
   }
 });
 
+test("the ranking log says how long ranking took and how many answers it needed (#369)", async () => {
+  const { client, fetchImpl } = happyPath();
+  const events: Array<{ event: string; details: Record<string, unknown> }> = [];
+
+  await invokeResearchGraph(
+    graphDeps({ modelClient: client, fetchImpl, onLog: (_level, event, details) => events.push({ event, details }) }),
+    input,
+  );
+
+  const ranked = events.find((e) => e.event === "research_ranked")!;
+  assert.equal(ranked.details.attempts, 1);
+  assert.equal(typeof ranked.details.durationMs, "number");
+});
+
 test("the obscurity filter log shows where candidates fall against the target range, before and after filtering (#325)", async () => {
   const { client } = happyPath();
   const { fetchImpl } = fakeFetch({

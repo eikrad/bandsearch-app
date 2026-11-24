@@ -93,9 +93,9 @@ test("verification keeps completed candidates, cancels a stalled batch and leave
   const outcome = result.catch((error: unknown) => error);
   await stalled.promise;
   try {
-    t.mock.timers.tick(48_000);
+    t.mock.timers.tick(40_000);
     await flushGraph();
-    assert.equal(settled, true, "research stops at 48 seconds, preserving the 12-second ranking reserve");
+    assert.equal(settled, true, "research stops at 40 seconds, preserving the 20-second ranking reserve");
     assert.equal(batchSignal?.aborted, true);
     const value = await result;
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1);
@@ -132,8 +132,9 @@ test("a ranker retry shares the original ranking cap and receives cancellation t
     },
   };
   const { fetchImpl } = fakeFetch({});
+  const logs: Array<{ event: string; details: Record<string, unknown> }> = [];
   let settled = false;
-  const outcome = invokeResearchGraph(graphDeps({ chatModel: () => client, fetchImpl }), input)
+  const outcome = invokeResearchGraph(graphDeps({ chatModel: () => client, fetchImpl, onLog: (_level, event, details) => logs.push({ event, details }) }), input)
     .then(() => { settled = true; return null; }, (error: unknown) => { settled = true; return error; });
   await firstStarted.promise;
   t.mock.timers.tick(10_000);
@@ -142,7 +143,13 @@ test("a ranker retry shares the original ranking cap and receives cancellation t
   try {
     t.mock.timers.tick(2000);
     await flushGraph();
-    assert.equal(settled, true, "retrying must not restart the 12-second ranking cap");
+    assert.equal(settled, false, "ranking has 20 seconds, not 12");
+    t.mock.timers.tick(8000);
+    await flushGraph();
+    assert.equal(settled, true, "retrying must not restart the 20-second ranking cap");
+    const failed = logs.find((l) => l.event === "research_rank_failed");
+    assert.equal(failed?.details.attempts, 2, "the log tells a retry from one slow answer");
+    assert.equal(failed?.details.durationMs, 20_000);
     assert.equal(retrySignal?.aborted, true);
     assert.match(String(await outcome), /timeout/);
     t.mock.timers.tick(60_000);
@@ -258,9 +265,9 @@ test("the research cutoff during reflection cancels its search and ranks the evi
   const outcome = result.catch((error: unknown) => error);
   await reflectionSearch.promise;
   try {
-    t.mock.timers.tick(48_000);
+    t.mock.timers.tick(40_000);
     await flushGraph();
-    assert.equal(settled, true, "research stops at 48 seconds, preserving the 12-second ranking reserve");
+    assert.equal(settled, true, "research stops at 40 seconds, preserving the 20-second ranking reserve");
     assert.equal(reflectionSignal?.aborted, true, "the reflection search receives cancellation");
     const value = await result;
     assert.equal(value.pipelineDiagnostics.verifiedCount, 1, "the verified candidate from the initial pass is kept");
