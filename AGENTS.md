@@ -1,7 +1,7 @@
 # Agent instructions
 
 ## Agent skills
-Use /feature-worklfow when useful
+Use /feature-workflow when useful
 ### Issue tracker
 
 Issues are tracked in GitHub Issues for this repository using the `gh` CLI. See `docs/agents/issue-tracker.md`.

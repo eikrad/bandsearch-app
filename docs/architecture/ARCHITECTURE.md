@@ -18,7 +18,7 @@ graph LR
     GRAPH --> LLM[Scaleway LLM\nplan · extract · reflect · rank]
     GRAPH --> BRAVE[Brave Search API\nniche artist discovery]
     GRAPH --> MB[MusicBrainz\nartist verification]
-    GRAPH --> DB[(SQLite / Turso)]
+    API --> DB[(SQLite / Turso)]
 ```
 
 ---
@@ -87,8 +87,12 @@ The API is an Express.js application structured as follows:
 | `server.ts` | Entry point — validates env, initializes pipeline, starts HTTP listener |
 | `app.ts` | Express app factory — middleware (helmet, CORS, rate-limit, JSON logging) and route registration |
 | `routes/registerBandsearchRoutes.ts` | Mounts all route handlers (auth, recommendations, preferences, sessions, artist search) |
+| `routes/recommendationRoutes.ts` | Recommendation and search-job routes; hands each search to the job store and the eval hook |
+| `searchJobs/searchJobs.ts` | In-memory search jobs that outlive the request ([Search jobs](#search-jobs)) |
 | `recommendationPipeline.ts` | Lifecycle manager for the research graph — exposes `recommend()` and `whenReady()` |
-| `agent/research/researchService.ts` | Thin wrapper around `invokeResearchGraph()` with error handling |
+| `agent/conversation/conversationService.ts` | Decides how a chat message is answered ([Conversation turns](#conversation-turns)) and calls `invokeResearchGraph()` for a search |
+| `agent/research/researchGraph.ts` | The LangGraph research pipeline ([LangGraph pipeline](#langgraph-pipeline)) |
+| `storage/createStorage.ts` | Opens the database chosen by `PREFERENCE_STORE` ([Storage](#storage)) |
 
 ### REST routes
 
@@ -103,7 +107,7 @@ Registered by `routes/registerBandsearchRoutes.ts` (auth, recommendations, sessi
 | Artists | `GET /artists/search`, `GET /artists/image` |
 | Preferences | `GET/POST /preferences`, `PATCH/DELETE /preferences/:id`, `GET /preferences/context`, `GET /preferences/export`, `POST /preferences/import`, `POST /preferences/turso/test` |
 | Preference groups | `GET/POST /preferences/groups`, `POST /preferences/groups/auto`, `PATCH/DELETE /preferences/groups/:id`, `POST /preferences/groups/:id/artists`, `DELETE /preferences/groups/:id/artists/:savedBandId` |
-| Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [README § Privacy & transparency](../../README.md#privacy--transparency) |
+| Account (GDPR) | `GET /account/export` (Art. 15/20 data export), `POST /account/delete` (Art. 17 erasure, password-confirmed) — see [deployment.md § Privacy and transparency](../deployment.md#privacy-and-transparency) |
 | Eval (404 unless `EVAL_DASHBOARD_ENABLED=true`) | `GET /eval/events`, `GET /eval/metrics`, `POST /eval/baseline`, `GET /eval/baselines`, `GET /eval/dashboard` (Basic Auth if `EVAL_DASHBOARD_PASSWORD` is set) |
 
 ---
@@ -139,7 +143,9 @@ validates it and hands one function — pipeline call, eval hook, provenance —
 the job store, `searchJobs/searchJobs.ts`, which runs it whether or not anyone
 listens. The store is in memory: ids of 128 random bits, owner-checked on every
 call (someone else's job is a 404), one running job per user, finished jobs kept
-an hour, bounded in jobs and events. A restart loses them.
+an hour, bounded in jobs and events. At 200 jobs, a search from another user is
+refused with `503 search_capacity_exceeded`; replacing one's own running search
+stays possible. A restart loses them.
 
 `AnswerEvent`s (shared contracts): `progress` per stage, `reply` with the text
 so far, then `done` with the response, `error` (the same public error a JSON
@@ -181,13 +187,18 @@ The core recommendation logic is a LangGraph state machine defined in `agent/res
 | `messages` | `ChatMessage[]` | Conversation history |
 | `mode` | `RecommendationMode` | `fresh` or `preference-aware` |
 | `obscurityTarget` | `string` (optional) | User-selected obscurity target (`Cult Following` / `Underground` / `Truly Obscure`); filters candidates before ranking |
+| `exclude` | `ArtistRef[]` (optional) | Bands already shown in the conversation; never ranked again, under any spelling |
 | `searchPlan` | `SearchPlan` | Planner output (anchor artists, style signals, queries) |
+| `enoughFromLastFm` | `boolean` | Last.fm alone found enough bands of the requested size; no web search |
 | `braveHits` | `SearchHitInput[]` | Raw web search results |
+| `newHits` | `SearchHitInput[]` | Hits of the latest reflection search, not yet extracted |
 | `extractedCandidates` | `ExtractedCandidate[]` | Band names extracted from snippets |
 | `verifiedCandidates` | `VerifiedCandidate[]` | MusicBrainz-verified candidates with metadata |
 | `searchCallsUsed` | `number` | Brave API call counter |
 | `reflectionUsed` | `boolean` | Whether reflection ran |
-| `recommendations` | `unknown[]` | Final ranked output |
+| `roundsCompleted` | `number` | Reflection rounds done |
+| `nextExtraQueries` | `string[]` | Queries the reflector asked for |
+| `recommendations` | `Recommendation[]` | Final ranked output (`shared/schemas/src/contracts.ts`) |
 | `assistantReply` | `string` | Optional conversational prose |
 
 ### Main graph
@@ -198,7 +209,7 @@ flowchart TD
     plan --> lastfm_first["lastfm_first\nLast.fm similar artists\n+ MusicBrainz"]
     lastfm_first -->|"enough of the requested size"| rank
     lastfm_first -->|"too few"| brave_initial["brave_initial\nBrave Search API\nup to RESEARCH_MAX_INITIAL_SEARCHES"]
-    brave_initial --> candidate_round["candidate_pool_round\nLLM + MusicBrainz — extracts,\ndeduplicates and verifies"]
+    brave_initial --> candidate_round["candidate_round\nLLM + MusicBrainz — extracts,\ndeduplicates and verifies"]
     candidate_round --> reflect_if_needed["reflect_if_needed\nReflection Subgraph\n(continues below the verified target)"]
     reflect_if_needed --> enrich_lastfm["enrich_lastfm\nLast.fm (optional) — similar-artist\nmatches + listener counts"]
     enrich_lastfm --> rank["rank\nLLM — final ranked list\nwith evidence-grounded why text"]
@@ -214,30 +225,30 @@ flowchart TD
 | `plan` | LLM | Generates up to `RESEARCH_MAX_INITIAL_SEARCHES` targeted Brave queries from user taste (FFO/Bandcamp-style) |
 | `lastfm_first` | Last.fm (optional), MusicBrainz | Takes the 40 bands closest to the anchors from Last.fm's similar-artist lists, verifies and enriches them. With 8 verified ones inside the target's range (12 without a target) the run goes straight to `rank` without a web search (`lastFmFirst.ts`); otherwise up to 12 in range join the web search's candidates. Skipped for Truly Obscure, which those lists hardly know, and for demands they cannot show (vocals, lyrics, instruments, labels) |
 | `brave_initial` | Brave Search API | Executes up to `RESEARCH_MAX_INITIAL_SEARCHES` planned queries (12 hits each), subject to the total call budget and research deadline. All Brave calls of the process share one rate gate (Free plan: 1 request/s) |
-| `candidate_pool_round` | LLM, MusicBrainz | Shared by the first search and reflection rounds. Extracts names from the round's new hits, merges evidence by artist identity and verifies new candidates. MusicBrainz searches names in batches (50 each), then retries missed names with aliases; it adds `mbid`, tags, country and life span. A candidate verifies only by the same name or alias (`artistNames.ts`) |
+| `candidate_round` | LLM, MusicBrainz | Runs the candidate pool round (`candidatePoolRound.ts`), shared by the first search and reflection rounds. Extracts names from the round's new hits, merges evidence by artist identity and verifies new candidates. MusicBrainz searches names in batches (50 each), then retries missed names with aliases; it adds `mbid`, tags, country and life span. A candidate verifies only by a name or alias that is certainly the same artist by artist identity (`artistNames.ts`, `shared/schemas/src/artistIdentity.ts`) |
 | `reflect_if_needed` | Reflection Subgraph | Skips assessment when the verified pool has reached the configured target (8 by default); otherwise asks for more queries and runs bounded rounds. The code-enforced target takes precedence over the model's `sufficient` answer |
 | `enrich_lastfm` | Last.fm (optional) | Adds similar-artist matches (vs. anchor artists), listener counts, listener tags and the start of the biography (evidence with the artist's page as source) to verified candidates; no-op if `LASTFM_API_KEY` unset. The lookups start when a name is known (`plan`, `extract`) and run alongside the other stages; this node waits at most 5 s for the rest and keeps every answer that arrived (`lastFmEnrichment.ts`) |
 | `rank` | LLM | Produces final ranked list with evidence-grounded `why` text and optional prose reply |
 
 ### Reflection subgraph (`reflectionSubgraph.ts`)
 
-Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. It skips the reflector once the code-owned target of verified candidates is met. Below target, the reflector supplies queries and each additional search goes through the same `candidate_pool_round` module as the first search. It can run up to `maxRounds` (default 2) additional rounds while the total call budget remains and at least 25 s of research time remain.
+Embedded as a compiled LangGraph subgraph within `reflect_if_needed`. It skips the reflector once the code-owned target of verified candidates is met. Below target, the reflector supplies queries and each additional search goes through the same candidate pool round (`candidatePoolRound.ts`) as the first search. It can run up to `maxRounds` (default 2) additional rounds while the total call budget remains and at least 25 s of research time remain.
 
 ```mermaid
 flowchart TD
     subSTART(["START"]) --> assess["assess\nLLM — evaluates results,\ngenerates extraQueries if gaps found"]
     assess -->|"target reached, no queries or budget gone"| subEND(["END"])
     assess -->|"needs more data"| search["search\nBrave Search API\nexecutes extra queries"]
-    search --> candidate_round["candidate_pool_round\nshared extraction, identity\ndeduplication and verification"]
+    search --> candidate_round["candidate_round\nshared extraction, identity\ndeduplication and verification"]
     candidate_round -->|"maxRounds or budget gone"| subEND
     candidate_round -->|"rounds remaining"| assess
 ```
 
 | Node | Model / Service | Description |
 |------|----------------|-------------|
-| `assess` | LLM | Evaluates current results and generates `extraQueries`. Its `sufficient` flag cannot override the target; code stops only when the verified count reaches the target or the search-call budget is spent |
+| `assess` | LLM | Evaluates current results and generates `extraQueries`. Its `sufficient` flag cannot override the target; code stops when the verified count reaches the target, no queries come back, or the search-call budget is spent |
 | `search` | Brave Search API | Executes extra queries against remaining budget; stores new hits in `newHits` separately from the accumulated `braveHits` |
-| `candidate_pool_round` | LLM, MusicBrainz | Calls the shared `candidatePoolRound.ts` implementation on `newHits`; it applies the same extraction, identity deduplication, evidence merge and verification rules as the first search |
+| `candidate_round` | LLM, MusicBrainz | Calls the shared `candidatePoolRound.ts` implementation on `newHits`; it applies the same extraction, identity deduplication, evidence merge and verification rules as the first search |
 
 ### Artist cache (`researchCache.ts`)
 
@@ -275,20 +286,20 @@ empty discovery result.
 | Integration | Used in | Purpose |
 |-------------|---------|--------|
 | **Brave Search API** | `brave_initial`, `search` | Web discovery for niche and underground artists |
-| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `candidate_pool_round`, `assess`, `rank` (since 2026-10-05; the only provider since #303); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
-| **MusicBrainz** | `candidate_pool_round` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
-| **Wikidata + Last.fm** | `/artists/image` endpoint, `enrich_lastfm` node | Artist image resolution with Last.fm fallback; similar-artist matches and listener counts feeding the ranker |
+| **Scaleway Generative APIs** (`@langchain/openai`, OpenAI-compatible) | `plan`, `candidate_round`, `assess`, `rank`, the turn router and answer writer (since 2026-10-05; the only provider since #303); the LLM judge | Research model `SCW_MODEL`, judge `SCW_JUDGE_MODEL` — see [ADR 0004](../adr/0004-llm-models-per-role-on-scaleway.md) |
+| **MusicBrainz** | `lastfm_first`, `candidate_round` | Artist verification (mbid, tags, country, life span). One request a second per IP; a `503` (servers busy) is retried in its own slot |
+| **Wikidata + Last.fm** | `/artists/image` endpoint, `lastfm_first` and `enrich_lastfm` nodes | Artist image resolution with Last.fm fallback; similar artists as candidates; similar-artist matches, listener counts, tags and biographies feeding the ranker |
 | **LangSmith** (optional) | Graph invocation | Distributed tracing for the LangGraph pipeline |
 
 ---
 
 ## Evaluation layer
 
-An async, non-blocking quality-scoring system that runs after the HTTP response is sent. Full design in [2026-05-29-eval-architecture.md](2026-05-29-eval-architecture.md).
+An async, non-blocking quality-scoring system that runs once a search job has its answer, off the path to the user, and only with `EVAL_DASHBOARD_ENABLED=true`. Full design in [2026-05-29-eval-architecture.md](2026-05-29-eval-architecture.md).
 
 ```mermaid
 flowchart LR
-    RESPONSE[HTTP Response\nsent to user] -->|async · non-blocking| EVAL
+    RESPONSE[Search job\nfinished] -->|async · non-blocking| EVAL
 
     subgraph EVAL [Evaluation Pipeline]
         direction TB
@@ -298,7 +309,7 @@ flowchart LR
         T1 --> T15 --> T2
     end
 
-    EVAL --> DB[(recommendation_events\nllm_eval_scores\neval_baselines)]
+    EVAL --> DB[(recommendation_events\nband_eval_scores\neval_baselines)]
 ```
 
 | Tier | Mechanism | When | Signals |
@@ -306,7 +317,7 @@ flowchart LR
 | **1 — Automatic metrics** | Runs immediately | After every request | Obscurity score (Last.fm listener count), funnel counts (hits / extracted / verified), search source quality |
 | **1.5 — Deterministic checks** | Runs immediately | After every request | Citation support rate (evidence URLs per recommendation), generic-why detection |
 | **2 — LLM-as-Judge** | Async, fire-and-forget | When `SCW_SECRET_KEY` is set (and eval is enabled) | The Scaleway judge (`SCW_JUDGE_MODEL`) scores each band on `relevance`, `obscurity_fit`, `evidence_quality`, `discovery_value` |
-Eval data is stored in `recommendation_events`, `llm_eval_scores` and `eval_baselines`, in a local SQLite file (never Turso) and only while `EVAL_DASHBOARD_ENABLED=true`; otherwise the eval store is a no-op.
+Eval data is stored in `recommendation_events`, `band_eval_scores` and `eval_baselines`, in a local SQLite file (never Turso) and only while `EVAL_DASHBOARD_ENABLED=true`; otherwise the eval store is a no-op.
 
 A dashboard at `GET /eval/dashboard` visualizes this data; set `EVAL_DASHBOARD_ENABLED=true` to expose it, and `EVAL_DASHBOARD_PASSWORD` to gate it behind HTTP Basic Auth (recommended whenever the API is publicly reachable — see `.env.example`).
 
@@ -365,7 +376,7 @@ repositories never silently fall back to another database or memory.
 | `turso` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Cross-device cloud sync — every statement over the network |
 | `turso-sync` | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` + `TURSO_SYNC_PATH` | Local replica synced with Turso Cloud — reads/writes stay local, so the app keeps working offline |
 
-Tables: `saved_bands` (rating, categories, notes), `artist_groups`
+Tables: `saved_bands` (rating, categories, notes), `artist_groups`, `artist_group_members`, `recommendation_feedback`
 
 ### Session store
 
@@ -461,4 +472,5 @@ flowchart TD
 | **Dedup cache for Brave** | `BraveDedupCache` (Map) prevents redundant API calls within a single recommendation request |
 | **Reflection as nested subgraph** | LangGraph subgraph encapsulates the reflection loop's own state and conditional edges cleanly, keeping the main graph linear |
 | **Symmetric merge helpers** | `mergeExtractedCandidates` and `mergeVerifiedCandidates` follow the same contract (flat array → deduped array); reused across reflection rounds and as a defensive layer inside `formatEvidenceForPrompt` |
-| **Defensive ranker dedup** | `formatEvidenceForPrompt` deduplicates `verifiedCandidates` by `mbid › canonicalName › name` before building the LLM evidence block, regardless of upstream state |
+| **Defensive ranker dedup** | `formatEvidenceForPrompt` deduplicates `verifiedCandidates` with `mergeVerifiedCandidates` (artist identity, possible matches included) before building the LLM evidence block, regardless of upstream state |
+| **One rule for artist identity** | `shared/schemas/src/artistIdentity.ts` decides whether two mentions name the same artist (same / possibly / different) for verification, dedupe, conversation memory, the eval metrics and the desktop's saved bands (#366) |

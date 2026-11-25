@@ -43,7 +43,7 @@ version 7), so version 6 judge and golden scores are not directly comparable.
 Record a new `baseline` after this change.
 
 The judge is checked the same way: `npm run calibrate -w services/eval` scores
-the 25 hand-labelled examples and 20 directional checks with the configured
+the 25 hand-labelled examples and 21 directional checks with the configured
 judge (`--judge <model>` compares candidates) and appends the agreement to
 `services/eval/history/judge-runs.jsonl`.
 
