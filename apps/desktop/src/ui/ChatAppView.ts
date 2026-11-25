@@ -16,7 +16,7 @@ import {
   startCategoryNoteDraft,
 } from "../cardActionLogic.js";
 
-function getTheme(modeValue: string) {
+export function getTheme(modeValue: string) {
   const isWarm = modeValue === "preference-aware";
   return {
     pageBg: "#0d0f14",
@@ -36,7 +36,7 @@ function getTheme(modeValue: string) {
   };
 }
 
-function ModePill({ modeValue, modeOptions, onModeChange }: { modeValue: string; modeOptions: { value: string; label: string }[]; onModeChange: (v: string) => void }) {
+export function ModePill({ modeValue, modeOptions, onModeChange }: { modeValue: string; modeOptions: { value: string; label: string }[]; onModeChange: (v: string) => void }) {
   return React.createElement(
     "div",
     { className: "mode-pill" },
@@ -749,18 +749,19 @@ function UserMessageBubble({ msg, isLastUser, isSearching, searchFailed, theme, 
   );
 }
 
-function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread", isSearching = false, searchFailed = false }: {
+export function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode = "thread", isSearching = false, searchFailed = false, prototypeCollapseEarlier = false }: {
   messages: MessageViewProps[] | null | undefined;
   theme: ReturnType<typeof getTheme>;
   isMobile: boolean;
   handlers: ChatHandlers;
   assistantCardsMode?: string;
+  prototypeCollapseEarlier?: boolean; // Throwaway #334 comparison only.
   isSearching?: boolean;
   searchFailed?: boolean;
 }) {
   if (!messages?.length) return null;
   const railLatest = assistantCardsMode === "rail-latest";
-  const lastAssistantCardsIdx = railLatest ? findLastAssistantWithCardsIndex(messages) : -1;
+  const lastAssistantCardsIdx = railLatest || prototypeCollapseEarlier ? findLastAssistantWithCardsIndex(messages) : -1;
   const lastUserIdx = messages
     ? messages.reduce((last: number, msg, idx: number) => (msg.role === "user" ? idx : last), -1)
     : -1;
@@ -784,7 +785,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
         const assistantText = typeof msg.content === "string" ? msg.content.trim() : "";
         const hasCards = msg.cards?.length > 0;
         const isLatestCardTurn = railLatest && hasCards && idx === lastAssistantCardsIdx;
-        const isEarlierCardTurn = railLatest && hasCards && idx < lastAssistantCardsIdx;
+        const isEarlierCardTurn = (railLatest || prototypeCollapseEarlier) && hasCards && idx < lastAssistantCardsIdx;
 
         if (!assistantText && !hasCards) return null;
 
@@ -825,7 +826,7 @@ function MessageThread({ messages, theme, isMobile, handlers, assistantCardsMode
 
         let cardsBlock: React.ReactNode = null;
         if (hasCards) {
-          if (!railLatest) {
+          if (!railLatest && !(prototypeCollapseEarlier && isEarlierCardTurn)) {
             cardsBlock = cardGrid(msg.cards);
           } else if (isLatestCardTurn) {
             cardsBlock = null;

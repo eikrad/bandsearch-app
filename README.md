@@ -6,6 +6,18 @@
 
 AI-powered music recommendations for niche and lesser-known artists. Describe bands you love, and Bandsearch surfaces similar but lesser-known picks — verified against MusicBrainz and ranked by a language model (Scaleway-hosted by default).
 
+## Throwaway Android Chat prototype (#334)
+
+This branch is a design experiment, not a release or a PR candidate. Run
+`npm run prototype:android-chat` to create `/tmp/bandsearch-android-chat-prototype.html`,
+then open it at phone width. Add `?variant=A`, `B`, or `C` to compare layouts;
+the bottom arrows switch them. Tap the layout name for sample-state controls.
+`npm run prototype:android-chat -- --phone` loads it into an already-installed
+Bandsearch debug APK over USB/ADB, without reinstalling or changing account data.
+Force-stop and reopen the app to leave the prototype.
+
+See [the findings and limits](docs/research/2026-11-25-android-chat-prototype.md).
+
 ## Features
 
 - **Niche artist discovery** — an LLM plans targeted Brave searches (FFO/Bandcamp-style) to find obscure artists that match your taste

@@ -507,3 +507,29 @@ change.
 - Advanced visual analytics of saved artist clusters and connection paths.
 
 This remains explicitly post-MVP and must not delay the core recommendation workflow.
+
+## Android Chat prototype (#334) — not a production decision
+
+The throwaway `prototype/android-chat-layout` branch compares three layouts:
+A pins a full composer (stacked input/Recommend, disclosure under it); B pins
+a compact input/Recommend row and puts the unchanged disclosure at the start
+of the transcript, with feedback after the latest batch; C scrolls the whole
+page, including the composer, with earlier cards inline. A and B collapse
+earlier card batches behind a 44 px summary. All keep the mode control,
+obscurity picker, Save and five stars visible, and Copy inline.
+
+The header uses a title/Chats/New chat row and a full-width mode row. Cards
+use Save + five 44 px stars on the first action row, Category/Note + Copy on
+the second. A top safe-area inset and the visual viewport constrain the shell;
+the Chat/Saved/Settings tabs disappear on a measured keyboard resize, not
+on focus. The status slot sits above tabs (above the keyboard when tabs hide).
+A separate 48 px prototype switcher reserves space beneath the app controls;
+it is instrumentation and must not be copied into the product.
+
+**Unchosen and not built into the product:** disclosure relocation in B, the
+composer and earlier-turn layout, and the header arrangement need the owner's
+visual decision on #334. No legal wording is removed or rewritten. Existing
+card field ordering and rendering come from ChatAppView, including pre-existing
+differences from the target spec; those are not new design decisions. The
+prototype's chat list/rename/delete use sample data only (#352/#373/#374).
+See `docs/research/2026-11-25-android-chat-prototype.md` for measurements and limits.

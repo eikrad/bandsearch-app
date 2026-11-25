@@ -658,5 +658,197 @@
   "errors.searchDisconnected": {
     "status": "draft",
     "source": "00e928a98e25"
+  },
+  "prototype334.badge": {
+    "status": "draft",
+    "source": "bbe2d13dfd1f"
+  },
+  "prototype334.A": {
+    "status": "draft",
+    "source": "2b8ad6bb4cf1"
+  },
+  "prototype334.B": {
+    "status": "draft",
+    "source": "6db79110747d"
+  },
+  "prototype334.C": {
+    "status": "draft",
+    "source": "c1bb16ed0a54"
+  },
+  "prototype334.previous": {
+    "status": "draft",
+    "source": "b1abbb294437"
+  },
+  "prototype334.next": {
+    "status": "draft",
+    "source": "b2a6b61959d4"
+  },
+  "prototype334.inspect": {
+    "status": "draft",
+    "source": "a4b2f55315f4"
+  },
+  "prototype334.title": {
+    "status": "draft",
+    "source": "5a641e6e956f"
+  },
+  "prototype334.chats": {
+    "status": "draft",
+    "source": "ef5b4049bb36"
+  },
+  "prototype334.newChat": {
+    "status": "draft",
+    "source": "db18382a249e"
+  },
+  "prototype334.continue": {
+    "status": "draft",
+    "source": "82446b4de12b"
+  },
+  "prototype334.chat": {
+    "status": "draft",
+    "source": "460b3a7da007"
+  },
+  "prototype334.saved": {
+    "status": "draft",
+    "source": "b5c120b316c2"
+  },
+  "prototype334.settings": {
+    "status": "draft",
+    "source": "74a883a037bc"
+  },
+  "prototype334.fresh": {
+    "status": "draft",
+    "source": "357bc07968ba"
+  },
+  "prototype334.warm": {
+    "status": "draft",
+    "source": "9acbdf0e131c"
+  },
+  "prototype334.query": {
+    "status": "draft",
+    "source": "f0432826d03d"
+  },
+  "prototype334.recommend": {
+    "status": "draft",
+    "source": "beef09f237c7"
+  },
+  "prototype334.rename": {
+    "status": "draft",
+    "source": "3064d79a295c"
+  },
+  "prototype334.delete": {
+    "status": "draft",
+    "source": "e2d0a54968ea"
+  },
+  "prototype334.save": {
+    "status": "draft",
+    "source": "1509f561f241"
+  },
+  "prototype334.undo": {
+    "status": "draft",
+    "source": "a8283ade3185"
+  },
+  "prototype334.removed": {
+    "status": "draft",
+    "source": "150baea42ed8"
+  },
+  "prototype334.changed": {
+    "status": "draft",
+    "source": "b53bb806ad26"
+  },
+  "prototype334.empty": {
+    "status": "draft",
+    "source": "90ac4a7039f1"
+  },
+  "prototype334.sampleReply": {
+    "status": "draft",
+    "source": "90b9a27712d3"
+  },
+  "prototype334.question": {
+    "status": "draft",
+    "source": "22471b40e4dc"
+  },
+  "prototype334.followUp": {
+    "status": "draft",
+    "source": "eb8ccfa6ad67"
+  },
+  "prototype334.sampleName": {
+    "status": "draft",
+    "source": "65239d04e9df"
+  },
+  "prototype334.otherName": {
+    "status": "draft",
+    "source": "72a68a1e817e"
+  },
+  "prototype334.disclosure": {
+    "status": "draft",
+    "source": "e6d023382895"
+  },
+  "prototype334.demoOnly": {
+    "status": "draft",
+    "source": "0bf3772f20b4"
+  },
+  "prototype334.reset": {
+    "status": "draft",
+    "source": "2b321dce25c0"
+  },
+  "prototype334.feedback": {
+    "status": "draft",
+    "source": "fa4555e1d42c"
+  },
+  "prototype334.restored": {
+    "status": "draft",
+    "source": "f5fb8afa5ae8"
+  },
+  "prototype334.keyboard": {
+    "status": "draft",
+    "source": "d3c3e45fcc68"
+  },
+  "prototype334.state": {
+    "status": "draft",
+    "source": "79eb2c8f37c6"
+  },
+  "prototype334.on": {
+    "status": "draft",
+    "source": "2348f9987442"
+  },
+  "prototype334.off": {
+    "status": "draft",
+    "source": "c3eefb58d7c4"
+  },
+  "prototype334.fenWhy": {
+    "status": "draft",
+    "source": "f0670d7e6791"
+  },
+  "prototype334.fenConnection": {
+    "status": "draft",
+    "source": "45ad73e36a66"
+  },
+  "prototype334.wodenWhy": {
+    "status": "draft",
+    "source": "bbc967e78d0c"
+  },
+  "prototype334.wodenConnection": {
+    "status": "draft",
+    "source": "0cc81f13a9f2"
+  },
+  "prototype334.earlierWhy": {
+    "status": "draft",
+    "source": "1646fbb05c86"
+  },
+  "prototype334.copied": {
+    "status": "draft",
+    "source": "4e95bb1efc70"
+  },
+  "prototype334.link": {
+    "status": "draft",
+    "source": "b534e11f5e83"
+  },
+  "prototype334.titleLabel": {
+    "status": "draft",
+    "source": "09c3e4caec5c"
+  },
+  "prototype334.info": {
+    "status": "draft",
+    "source": "c52377ccc420"
   }
 }
