@@ -252,6 +252,8 @@
     "copied": "Copied sample card",
     "link": "External link: {{url}}",
     "titleLabel": "Chat name",
-    "info": "All changes here stay in this sample. Closing the app returns to the installed app."
+    "info": "All changes here stay in this sample. Closing the app returns to the installed app.",
+    "aiNotice": "AI information",
+    "dismissAiNotice": "Dismiss AI notice"
   }
 }

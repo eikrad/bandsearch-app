@@ -850,5 +850,13 @@
   "prototype334.info": {
     "status": "draft",
     "source": "c52377ccc420"
+  },
+  "prototype334.aiNotice": {
+    "status": "draft",
+    "source": "e6fab634cee2"
+  },
+  "prototype334.dismissAiNotice": {
+    "status": "draft",
+    "source": "eea525fada85"
   }
 }

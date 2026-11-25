@@ -252,6 +252,8 @@
     "copied": "Kopieret eksempelkort",
     "link": "Eksternt link: {{url}}",
     "titleLabel": "Chatnavn",
-    "info": "Alle ændringer her forbliver i dette eksempel. Lukning af appen vender tilbage til den installerede app."
+    "info": "Alle ændringer her forbliver i dette eksempel. Lukning af appen vender tilbage til den installerede app.",
+    "aiNotice": "AI-oplysninger",
+    "dismissAiNotice": "Luk AI-meddelelse"
   }
 }

@@ -1,7 +1,8 @@
 # Android Chat layout prototype — #334
 
 Throwaway branch `prototype/android-chat-layout`, based on `origin/staging`
-`eeec61b`. Never merge; no PR. The owner has not chosen a layout yet.
+`eeec61b`. Never merge; no PR. The owner prefers B, with a visible, dismissible AI notice (2026-11-25).
+The updated notice still needs visual feedback.
 
 ## Run
 
@@ -28,9 +29,11 @@ external links report their destination without leaving the sample.
   picker, stacked input and Recommend, unchanged disclosure below the input.
   Earlier picks collapse.
 - **B — Compact composer:** fixed header, scrolling transcript, pinned picker
-  and input/Recommend row. Disclosure is at the start of the transcript and
-  feedback follows the latest batch. Earlier picks collapse. Moving disclosure
-  is a candidate for owner approval, not an accepted spec change.
+  and input/Recommend row. The full unchanged disclosure sits above the
+  composer controls with a 44 px dismiss button; feedback follows the latest
+  batch. Earlier picks collapse. The owner preferred B but found the earlier
+  disclosure placement too easy to miss. Dismissal lasts for that sample chat;
+  a new chat shows it again (prototype default, not yet confirmed).
 - **C — Scrolling page:** header, all earlier cards and full composer scroll as
   one page. The composer is reached after the cards.
 
@@ -41,7 +44,7 @@ placement are sample interactions. Category/Note is the current inline editor;
 its alternatives belong to #335. The variant bar reserves 48 px; account for
 that space when comparing with the final product.
 
-## Local observations (Chromium, 360 × 792)
+## Initial local observations (before dismissible notice, Chromium, 360 × 792)
 
 - No document horizontal overflow in A/B/C.
 - Visible buttons, inputs, links and summaries met 44 × 44 px in the sampled
@@ -53,7 +56,21 @@ that space when comparing with the final product.
   to the input is necessary. This is the alternative being evaluated.
 - These are local layout observations, not a real IME or Android-back result.
 
-## Phone status
+## Updated B observations (dismissible notice)
+
+- B is now the default. The full disclosure is visible above the controls;
+  closing it preserves card-level AI labels. A new chat shows it again, while
+  submitting the first query after dismissing it keeps it hidden for that chat.
+- Local Chromium at 360 px: composer height 179.56 px with the notice, 105 px
+  after dismissal. At a simulated 457 px viewport, transcript space is
+  122.44 px and 197 px respectively. Input and submit remain above the switcher.
+- A/B/C still have no horizontal overflow or undersized controls in the sampled
+  English states. Rename, delete and undo still work. These are local checks,
+  not real keyboard results.
+- Loading the update onto the phone is pending USB reconnection: ADB currently
+  lists no devices.
+
+## Earlier phone status (before dismissible notice)
 
 After USB reconnection, the prototype loaded successfully into the installed
 OPPO CPH2709 debug WebView. Tauri's local assets bypass CDP Fetch interception,
@@ -70,11 +87,11 @@ No APK was replaced and no account data was changed.
 
 ## Still needed on the phone
 
-Compare A/B/C with the real keyboard open; inspect header fit and insets,
+Validate updated B with the real keyboard open; inspect header fit and insets,
 scroll cards while typing, toggle stars and Save, inspect the status slot,
 open the chat list, rename and undo deletion. Back should dismiss the IME first
-and walk from Chats to Chat. Record actual heights and the owner's chosen
-combination on #334; then update the final spec during #314's handoff.
+and walk from Chats to Chat. Record actual heights and confirmation of the updated B
+notice on #334; then update the final spec during #314's handoff.
 
 ## Validation
 

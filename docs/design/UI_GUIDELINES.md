@@ -512,8 +512,8 @@ This remains explicitly post-MVP and must not delay the core recommendation work
 
 The throwaway `prototype/android-chat-layout` branch compares three layouts:
 A pins a full composer (stacked input/Recommend, disclosure under it); B pins
-a compact input/Recommend row and puts the unchanged disclosure at the start
-of the transcript, with feedback after the latest batch; C scrolls the whole
+a compact input/Recommend row and puts the unchanged disclosure in a dismissible notice directly above
+the composer controls, with feedback after the latest batch; C scrolls the whole
 page, including the composer, with earlier cards inline. A and B collapse
 earlier card batches behind a 44 px summary. All keep the mode control,
 obscurity picker, Save and five stars visible, and Copy inline.
@@ -526,9 +526,12 @@ on focus. The status slot sits above tabs (above the keyboard when tabs hide).
 A separate 48 px prototype switcher reserves space beneath the app controls;
 it is instrumentation and must not be copied into the product.
 
-**Unchosen and not built into the product:** disclosure relocation in B, the
-composer and earlier-turn layout, and the header arrangement need the owner's
-visual decision on #334. No legal wording is removed or rewritten. Existing
+**Owner preference (2026-11-25), not built into the product:** B, with the
+KI/AI notice visible above the composer and dismissible with a 44 px × button.
+The updated prototype retains dismissal for the current sample chat; a new
+chat shows the notice again. This reset rule is a prototype default, pending
+owner feedback. Card-level AI markings remain visible. Final keyboard and
+other layout checks on #334 are still pending. No legal wording is removed or rewritten. Existing
 card field ordering and rendering come from ChatAppView, including pre-existing
 differences from the target spec; those are not new design decisions. The
 prototype's chat list/rename/delete use sample data only (#352/#373/#374).

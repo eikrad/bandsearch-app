@@ -20,7 +20,9 @@ h1 { font-size: 15px; font-weight: 700; }
 .prototype-composer form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .prototype-composer .recommend-btn { background: var(--prototype-accent); color: #0a0d14; font-weight: 600; }
 .prototype-disclosure { font-size: 11px; line-height: 1.4; color: #8896a8; margin: 8px 0; }
-.prototype-transcript > .prototype-disclosure { margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2a3a; }
+.prototype-ai-notice { display: flex; align-items: flex-start; gap: 4px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid #1e2a3a; }
+.prototype-ai-notice .prototype-disclosure { flex: 1; margin: 0; }
+.prototype-ai-notice > button { flex: 0 0 44px; padding: 0; font-size: 20px; background: transparent; }
 .obscurity-target-picker { width: 100%; }
 .obscurity-target-picker button { flex: 1; padding: 4px; font-size: 12px; }
 .feedback-reaction-bar { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }

@@ -252,6 +252,8 @@
     "copied": "Kopierte Beispielkarte",
     "link": "Externer Link: {{url}}",
     "titleLabel": "Chat-Name",
-    "info": "Alle Änderungen hier bleiben in diesem Beispiel. Beim Schließen der App kehrst du zur installierten App zurück."
+    "info": "Alle Änderungen hier bleiben in diesem Beispiel. Beim Schließen der App kehrst du zur installierten App zurück.",
+    "aiNotice": "KI-Informationen",
+    "dismissAiNotice": "KI-Hinweis schließen"
   }
 }

@@ -458,8 +458,9 @@ Tester werden direkt in der App über neue Versionen informiert. Windows & Linux
 ## Phase 11 — Android
 
 - [ ] #334 — Chat layout prototype: three variants prepared on the throwaway
-      `prototype/android-chat-layout` branch. Local 360 px checks pass; real
-      keyboard validation and the owner’s layout choice are pending. See
+      `prototype/android-chat-layout` branch. Owner prefers B with a dismissible
+      AI notice; updated-notice confirmation and real keyboard validation
+      remain pending. See
       [prototype notes](research/2026-11-25-android-chat-prototype.md).
       F-Droid (#158) remains a later follow-up, outside signed-APK v1.
 

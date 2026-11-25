@@ -19,7 +19,7 @@ const variants: Variant[] = ['A', 'B', 'C'];
 const route = () => location.hash.slice(2).split('?')[0] || 'chat';
 const variantFromUrl = (): Variant => {
   const value = new URLSearchParams(location.search || location.hash.split('?')[1]).get('variant');
-  return value === 'B' || value === 'C' ? value : 'A';
+  return value === 'A' || value === 'C' ? value : 'B';
 };
 function card(name: string, why: string, connection: string): CardViewProps {
   return { target: { name, suggestedNote: why }, title: name, why, country: 'UK', genres: ['Atmospheric black metal'], signals: [], connection, imageUrl: null, saved: false, rating: null, savedBandId: null, categories: [], note: why, noteEdited: false,
@@ -46,6 +46,8 @@ function App() {
   const [target, setTarget] = React.useState<ObscurityTarget | undefined>('underground');
   const [restored, setRestored] = React.useState(false);
   const [feedback, setFeedback] = React.useState(false);
+  const [dismissedNotices, setDismissedNotices] = React.useState<Set<string>>(() => new Set());
+  const noticeKey = active ?? 'new';
   const [inspect, setInspect] = React.useState(false);
   const [simulated, setSimulated] = React.useState(false);
   const [viewport, setViewport] = React.useState({ height: visualViewport?.height ?? innerHeight, width: innerWidth, top: 0, keyboard: false });
@@ -96,13 +98,14 @@ function App() {
     onCopyAll: text => { void navigator.clipboard?.writeText(text); setStatus(t('prototype334.copied')); },
     onOpenLink: url => setStatus(t('prototype334.link', { url })),
   };
-  function newChat() { setActive(null); setRestored(false); navigate('chat'); }
+  function newChat() { setActive(null); setRestored(false); setDismissedNotices(old => { const next = new Set(old); next.delete('new'); return next; }); navigate('chat'); }
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); const input = e.currentTarget.elements.namedItem('query') as HTMLInputElement;
     const query = input.value.trim(); if (!query) return; input.value = ''; input.blur(); setRestored(false);
     const id = active ?? String(Date.now());
     const messages: MessageViewProps[] = [{ id: `${Date.now()}q`, role: 'user', content: query }, { id: `${Date.now()}a`, role: 'assistant', content: t('prototype334.sampleReply'), cards: [card('Fen', t('prototype334.fenWhy'), t('prototype334.fenConnection'))] }];
     setChats(old => active ? old.map(c => c.id === active ? { ...c, messages: [...c.messages, ...messages] } : c) : [{ id, title: query.length > 60 ? query.slice(0, 59).replace(/\s+\S*$/, '') + '…' : query, date: '2026-11-25', messages }, ...old]);
+    if (!active && dismissedNotices.has('new')) setDismissedNotices(old => new Set([...old, id]));
     setActive(id); setFeedback(true);
   }
   const disclosure = h('p', { className: 'prototype-disclosure' }, t('prototype334.disclosure'));
@@ -110,10 +113,12 @@ function App() {
   const modes = h(ModePill, { modeValue: mode, modeOptions: [{ value: 'fresh', label: t('prototype334.fresh') }, { value: 'preference-aware', label: t('prototype334.warm') }], onModeChange: setMode });
   const header = h('header', { className: 'prototype-header' }, h('div', { className: 'prototype-title-row' }, h('h1', null, t('prototype334.title')), h('div', null, button(t('prototype334.chats'), () => navigate('chats')), button(t('prototype334.newChat'), newChat))), modes,
     restored && current ? h('div', { className: 'prototype-restored' }, button(t('prototype334.continue'), () => setRestored(false)), button(t('prototype334.newChat'), newChat)) : null);
-  const composer = h('div', { className: 'prototype-composer' }, variant !== 'B' ? feedbackBar : null,
+  const composer = h('div', { className: 'prototype-composer' },
+    variant === 'B' && !dismissedNotices.has(noticeKey) ? h('aside', { className: 'prototype-ai-notice', 'aria-label': t('prototype334.aiNotice') }, disclosure, button('×', () => setDismissedNotices(old => new Set([...old, noticeKey])), { 'aria-label': t('prototype334.dismissAiNotice'), title: t('prototype334.dismissAiNotice') })) : null,
+    variant !== 'B' ? feedbackBar : null,
     h(ObscurityTargetPicker, { target, onTargetChange: setTarget }),
     h('form', { onSubmit: submit }, h('input', { name: 'query', placeholder: t('prototype334.query'), autoComplete: 'off', className: 'query-input', 'aria-label': t('prototype334.query') }), h('button', { type: 'submit', className: 'recommend-btn' }, t('prototype334.recommend'))), variant !== 'B' ? disclosure : null);
-  const thread = h('div', { className: 'prototype-transcript' }, variant === 'B' ? disclosure : null,
+  const thread = h('div', { className: 'prototype-transcript' },
     current?.messages.length ? h(MessageThread, { messages: current.messages, theme, isMobile: true, handlers, prototypeCollapseEarlier: variant !== 'C' }) : h('p', { className: 'prototype-empty' }, t('prototype334.empty')),
     variant === 'B' ? feedbackBar : null);
   const list = h('section', { className: 'prototype-list' }, h('header', { className: 'prototype-title-row' }, button('←', () => navigate('chat'), { 'aria-label': t('common.back') }), h('h1', null, t('prototype334.chats'))),
@@ -126,7 +131,7 @@ function App() {
     status ? h('div', { className: 'prototype-status', role: 'status' }, status, deleted ? button(t('prototype334.undo'), () => { setChats(old => [...old, deleted].sort((a, b) => b.date.localeCompare(a.date))); setDeleted(null); setStatus(''); }) : null) : null,
     !keyboard ? h('nav', { className: 'prototype-tabs' }, ...(['chat', 'saved', 'settings'] as const).map(tab => button(t(`prototype334.${tab}`), () => navigate(tab), { 'aria-current': screen === tab || (tab === 'chat' && screen === 'chats') ? 'page' : undefined, key: tab }))) : null,
     h('aside', { className: 'prototype-switcher', 'aria-label': t('prototype334.badge') }, button('←', () => cycle(-1), { 'aria-label': t('prototype334.previous') }), button(t(`prototype334.${variant}`), () => setInspect(!inspect), { 'aria-label': t('prototype334.inspect'), 'aria-expanded': inspect }), button('→', () => cycle(1), { 'aria-label': t('prototype334.next') })),
-    inspect ? h('aside', { className: 'prototype-inspector' }, h('strong', null, t('prototype334.badge')), h('p', null, t('prototype334.info')), h('p', null, t('prototype334.state', { width: viewport.width, height: Math.round(height), keyboard: t(keyboard ? 'prototype334.on' : 'prototype334.off'), count: chats.length })), button(t('prototype334.reset'), () => { setChats(sample()); setActive('one'); setRestored(false); setFeedback(false); navigate('chat'); }), button(t('prototype334.restored'), () => { setRestored(!restored); navigate('chat'); }), button(t('prototype334.feedback'), () => setFeedback(!feedback)), button(t('prototype334.keyboard'), () => setSimulated(!simulated))) : null);
+    inspect ? h('aside', { className: 'prototype-inspector' }, h('strong', null, t('prototype334.badge')), h('p', null, t('prototype334.info')), h('p', null, t('prototype334.state', { width: viewport.width, height: Math.round(height), keyboard: t(keyboard ? 'prototype334.on' : 'prototype334.off'), count: chats.length })), button(t('prototype334.reset'), () => { setChats(sample()); setActive('one'); setDismissedNotices(new Set()); setRestored(false); setFeedback(false); navigate('chat'); }), button(t('prototype334.restored'), () => { setRestored(!restored); navigate('chat'); }), button(t('prototype334.feedback'), () => setFeedback(!feedback)), button(t('prototype334.keyboard'), () => setSimulated(!simulated))) : null);
 }
 if (!location.hash) history.replaceState(null, '', '#/chat');
 createRoot(document.getElementById('root')!).render(h(App));
