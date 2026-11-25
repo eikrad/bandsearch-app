@@ -4,6 +4,52 @@ Weekly dependency and health checks for the Bandsearch application.
 
 ---
 
+## 2026-11-25
+
+### Checks performed
+- `git fetch origin`; branch `claude/eloquent-volta-upd44z` created from `origin/staging` (`eeec61b`). No open PRs at the start of the run. No open `security-audit` issue (but see the weekly-audit fix below: the workflow could not open one).
+- GitHub Actions: the latest runs on `staging` (PR #347 into `main`) and on `main` (CI push, Release, release-please for v0.4.6, Weekly Security Audit on 2026-11-23) all succeeded. All recent feature-PR CI runs were green.
+- Toolchain as last week: Node 26.12.1 (from `.nvmrc`) and npm 11.20.0 (the npm Node 26.12.1 ships, which CI uses), installed in a scratch directory; a local copy of that Node as the stand-in for the gitignored `binaries/node-*` sidecar.
+- Baseline (before changes) `npm ci` + `npm run ci` (lint + typecheck + test) - **green**: desktop 558/559 (1 skip: `tauri-config.test.ts`, before the sidecar stand-in was in place; 559/559 afterwards), api 1071/1071, eval 121/121, schemas 57/57. Rust: `cargo build --locked` ok, `cargo test --locked` 28/28. **Nothing broken on `staging`** as far as the checks go, but the weekly audit workflow was silently broken (below).
+- Security: `npm audit`, `cargo audit --file apps/desktop/src-tauri/Cargo.lock` (cargo-audit 0.23.0), `pip-audit` on the `uv export` requirements (empty: `dependencies = []`). Outdated survey: `npm outdated` (root and per workspace), `cargo update --dry-run`, `cargo info` for the Tauri crates.
+- Playwright E2E run locally again: Playwright 1.65.1 expects Chromium build 1255, the CDN is blocked, so the pre-installed build 1243 was linked in its place in a scratch `PLAYWRIGHT_BROWSERS_PATH` (nothing under `/opt` changed). `npm run test:e2e` with the CI dummy keys: 19/19 passed.
+
+### Fixes applied
+- **Weekly Security Audit never reported anything (`fix(ci)`, `.github/workflows/weekly-audit.yml`).** Each audit step ran `REPORT=$(audit ...) || true` and then `STATUS=$?`. `$?` there is the status of `|| true`, so it was always 0, `has_vulns` was always `false`, and the "Open or update security issue" step never ran. The 2026-11-23 run passed although `Cargo.lock` already contained `url` 2.5.8 (RUSTSEC-2026-0592, published 2026-11-20). Verified locally that `cargo audit` exits 1 on the old lockfile and 0 on the new one, and that `pip-audit` on the empty export exits 0, so the fix will not open a false issue for Python. The steps now use `STATUS=0; REPORT=$(audit ...) || STATUS=$?`. Note: scheduled workflows run from `main`, so the fix only takes effect once `staging` is merged into `main`; the first run after that may open an issue for `main`'s older `Cargo.lock` until this PR's lockfile is released too.
+- **Security (Rust, `Cargo.lock` only, `cargo update -p url -p cookie`)**: `url` 2.5.8 -> 2.5.9 (RUSTSEC-2026-0592, stack overflow in `Url::origin()` on nested `blob:` URLs; via `reqwest`/`tauri-plugin-updater` and the Tauri build crates), `cookie` 0.18.1 -> 0.18.3 (RUSTSEC-2026-0594, medium 6.5: private-cookie nonces can repeat in processes that fork; via `reqwest`). `form_urlencoded` 1.2.2 -> 1.2.3 comes with `url`. `cargo audit`: 2 vulnerabilities -> **0**.
+- **Tauri family, Rust (`cargo update -p wry -p tao -p tauri-plugin -p tauri-winres`)**: `wry` 0.57.0 -> 0.57.4, `tao` 0.37.1 -> 0.37.3, `tauri-plugin` 2.7.1 -> 2.7.4, `tauri-winres` 0.3.6 -> 0.3.7. `wry` 0.57.4 adds `dom_query` 0.30 / `html5ever` 0.40 and friends to the lockfile, but only for Android targets (checked with `cargo tree --target`), so nothing new is compiled for Linux, Windows or macOS. `tauri` 2.12.7, `tauri-build` 2.7.6, `tauri-plugin-updater` 2.14.1 and `tauri-plugin-opener` 2.7.3 are already the newest 2.x releases. The JS side (`@tauri-apps/api` 2.12.5, `@tauri-apps/cli` 2.12.6, `@tauri-apps/plugin-opener` 2.7.3) is also already at the newest release and on the same 2.12 minor, so nothing to move there.
+- **Safe npm updates** (`npm update`, `package-lock.json` only, `package.json` ranges unchanged):
+  - LangChain, moved together: `@langchain/core` 1.4.1 -> 1.5.1, `@langchain/openai` 1.8.4 -> 1.8.5. `@langchain/langgraph` 1.7.5, `-checkpoint` 1.2.3 and `-sdk` 1.17.0 stay and accept `@langchain/core` 1.5 (`npm ls`: one deduped `@langchain/core`, no invalid peers). Transitive: `langsmith` 0.13.0 -> 0.14.0, `openai` 7.60.0 -> 7.64.0.
+  - API: `express-rate-limit` 8.7.4 -> 8.7.5, `object-inspect` 1.14.0.
+  - Desktop: `i18next` 27.2.5 -> 27.2.9.
+  - Dev tooling: `typescript-eslint` and all `@typescript-eslint/*` 8.73.0 -> 8.74.0, `@types/node` 26.6.6 -> 26.6.10, `@types/react` 19.3.0 -> 19.3.3, `@types/estree` 1.0.11, `brace-expansion` 5.1.0. `@types/express` 5.0.6 depends on `@types/body-parser` `*`, so `npm update` moved it 1.19.6 -> 2.2.0; 2.x is the typing for body-parser 2, which is what Express 5 uses, and the typecheck passes.
+- `allowScripts` unchanged: no package with an install script changed version (`better-sqlite3` stays 13.2.0, `esbuild` 0.28.2); `npm ci` with npm 11.20.0 is silent.
+- After all changes, with npm 11.20.0: `npm ci`, `npm run ci` (desktop 559/559, api 1071/1071, eval 121/121, schemas 57/57), `npm run build --workspace @bandsearch/desktop`, E2E 19/19, `cargo build --locked` and `cargo test --locked` (28/28) all green. The Rust build did not change `gen/schemas`.
+
+### Security audit results
+| Ecosystem | Tool | Result |
+|---|---|---|
+| npm | `npm audit` | 0 at baseline and after. |
+| Python | `pip-audit` | nothing to audit (`dependencies = []`); "No known vulnerabilities found", exit 0. |
+| Rust | `cargo audit` | **2 vulnerabilities at baseline, both new**: `url` 2.5.8 (RUSTSEC-2026-0592) and `cookie` 0.18.1 (RUSTSEC-2026-0594) -> **0**. Informational warnings unchanged (transitive, no fix available): unmaintained `chrono` (RUSTSEC-2026-0543), `proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`; unsound `glib` 0.18. |
+
+### Other observations
+- `cargo clippy --all-targets -- -D warnings` (Rust 1.97) still fails with the one `needless_borrow` lint, now at `apps/desktop/src-tauri/src/main.rs:626` (was 623; `build_app_menu(&app.handle())` should be `build_app_menu(app.handle())`). No workflow runs clippy. Still not changed here (code, not dependencies).
+- `apps/desktop/src-tauri/Cargo.toml` still declares `rust-version = "1.77"`, although the Tauri crates need Rust 1.90. Unchanged; owner's call whether to raise it.
+- The weekly audit caches the `cargo-audit` binary under a key without a version (`cargo-audit-${{ runner.os }}`), so it is never upgraded. The advisory database is fetched fresh on every run, so findings stay current; only new cargo-audit features or fixes are missed. Not changed.
+- Still worth doing before the next release (from last week): a test build that installs an update from the previous release, to confirm the in-app update flow with `tauri-plugin-updater` 2.14. The `wry`/`tao` patch updates this week were only compiled on Linux; the release workflow builds Windows and macOS.
+- `pnpm-lock.yaml` is still present and not used by CI (tracked in #205).
+- A full `cargo update` would move ~200 crates within semver; only the security and Tauri-family updates above were applied, as in previous weeks. Dependabot is configured for the rest.
+
+### Majors / not fixable - flagged, NOT applied
+| Package | Current | Latest | Why held back |
+|---|---|---|---|
+| `typescript` | 6.0.3 | 7.0.2 | Major. `typescript-eslint` 8.74.0 (newest) still requires `typescript` `>=4.8.4 <6.1.0`. Unchanged; wait for a `typescript-eslint` release that accepts 7.x. |
+| `@tursodatabase/sync` (`services/api`) | 0.7.2 | 0.8.4 | Pre-1.0 minor bump (breaking by semver convention); needs owner review of the sync API. A new patch (0.8.4) appeared this week; still held. |
+| `tauri` and Tauri crates | 2.12.7 | 3.0.0-alpha.6 | Pre-release of the next major only (`tauri-build` 3.0.0-alpha.4, plugins 3.0.0-alpha.3); nothing to do. |
+
+---
+
 ## 2026-11-18
 
 ### Checks performed
