@@ -359,7 +359,7 @@ The existing migration script targets local SQLite and Postgres (Postgres since 
 **Action:**
 1. Extend `migrate.js` (or create a parallel `migrate-turso.js`) to run `CREATE TABLE IF NOT EXISTS` statements against a Turso URL using `@libsql/client`. ✓ Done (`migrate.ts` handles `PREFERENCE_STORE=turso`)
 2. Include all tables from preferences, auth, and sessions. ✓ Done (`migrations/002_full_schema.sql`)
-3. Document the migration command in the README: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso`. ✓ Done
+3. Document the migration command in the README: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run migrate:turso`. ✓ Done (now in `docs/deployment.md`)
 
 ---
 
@@ -401,7 +401,7 @@ Implemented: `save_api_endpoint_url` Tauri command + `apiEndpointUrl` on `gemini
 3. Verify from the desktop app: create an invite (`npm run invite:create`, the
    instance runs `AUTH_MODE=enforced`), register with it, log in, get recommendations, save artists, create groups, chat sessions persist across restarts.
 4. Verify cold-start latency on the Render free tier is acceptable (free tier spins down after 15 min inactivity; first request takes 30–60 s — upgrade to Starter $7/month for always-on if needed).
-5. Document free-tier limitations (cold starts, no SLA) in the README.
+5. Document free-tier limitations (cold starts, no SLA). ✓ Done (`docs/deployment.md`, Hosting on Render)
 
 ---
 
