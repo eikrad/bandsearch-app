@@ -12,8 +12,10 @@ Throwaway branch `prototype/android-chat-layout`, based on `origin/staging`
 - Tap the variant name to show instrumentation: reset sample, restored-chat
   bar, feedback bar and a simulated 457 px visual viewport.
 - `npm run prototype:android-chat -- --phone` uses the installed debug APK's
-  WebView over ADB. It intercepts only the prototype document, supplying the
-  self-contained HTML; it does not install an APK or access account data.
+  WebView over ADB. It navigates to a fresh `about:blank` document and supplies
+  the self-contained HTML; it does not install an APK or access account data.
+  On the phone the variant parameter lives in the hash (for example
+  `about:blank#/chat?variant=B`), since blank pages cannot change their query.
   Force-stop and reopen Bandsearch to return to the installed app.
 
 All mutations are in-memory sample interactions. No actual search, server
@@ -53,10 +55,18 @@ that space when comparing with the final product.
 
 ## Phone status
 
-The OPPO CPH2709 was detected and the installed debug app launched. Before the
-prototype load, ADB lost the device (`no devices/emulators found`). The loader
-and real-keyboard/inset measurements remain unverified pending reconnection.
-No APK was replaced and the prototype has not yet been shown on the phone.
+After USB reconnection, the prototype loaded successfully into the installed
+OPPO CPH2709 debug WebView. Tauri's local assets bypass CDP Fetch interception,
+so the loader uses `Page.navigate(about:blank)` and `Page.setDocumentContent`.
+The fresh document removes the installed app's running JavaScript context.
+
+Measured with the keyboard closed: width 360 px, visual viewport 792.67 px,
+top safe-area padding 40 px, bottom inset 16 px (plus the 48 px prototype bar).
+No horizontal overflow or undersized visible controls. A's composer is 234.58
+px on this WebView; B's is 105 px. A/B variant switching retains sample state.
+The screen slept during the keyboard test; automated touch injection did not
+reliably open the IME. Real keyboard and Back checks await a manual tap.
+No APK was replaced and no account data was changed.
 
 ## Still needed on the phone
 

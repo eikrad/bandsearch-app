@@ -22,8 +22,8 @@ async function main() {
   if (!/^\d+$/.test(pid)) throw new Error('Open the installed Bandsearch debug app first.');
   const port = execFileSync(adb, ['forward', 'tcp:0', `localabstract:webview_devtools_remote_${pid}`], { encoding: 'utf8' }).trim();
   try {
-    const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json() as { url: string; webSocketDebuggerUrl?: string }[];
-    const page = pages.find(p => p.url.startsWith('https://tauri.localhost'));
+    const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json() as { url: string; title: string; webSocketDebuggerUrl?: string }[];
+    const page = pages.find(p => p.url.startsWith('https://tauri.localhost') || (p.url.startsWith('about:blank') && p.title === 'Bandsearch · prototype 334'));
     if (!page?.webSocketDebuggerUrl) throw new Error('Bandsearch debug WebView not available.');
     const ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('WebView connection failed')); });
@@ -33,26 +33,21 @@ async function main() {
       const key = ++id;
       return new Promise((resolve, reject) => { pending.set(key, { resolve, reject }); ws.send(JSON.stringify({ id: key, method, params })); });
     }
-    let loaded!: () => void;
-    const loadedPromise = new Promise<void>(resolve => { loaded = resolve; });
     ws.onmessage = event => {
       const message = JSON.parse(String(event.data)) as { id?: number; result?: unknown; error?: { message: string }; method?: string; params?: { requestId: string } };
       if (message.id) {
         const entry = pending.get(message.id); pending.delete(message.id);
         if (message.error) entry?.reject(new Error(message.error.message)); else entry?.resolve(message.result);
       }
-      if (message.method === 'Fetch.requestPaused' && message.params) {
-        void send('Fetch.fulfillRequest', { requestId: message.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }, { name: 'Cache-Control', value: 'no-store' }], body: Buffer.from(html).toString('base64') }).then(loaded);
-      }
     };
     try {
-      await send('Fetch.enable', { patterns: [{ urlPattern: '*tauri.localhost/*prototype=android-chat*', resourceType: 'Document', requestStage: 'Request' }] });
-      const navigating = send('Page.navigate', { url: 'https://tauri.localhost/?prototype=android-chat&variant=A#/chat' });
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        await Promise.race([Promise.all([loadedPromise, navigating]), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Timed out loading the prototype in the WebView')), 15000); })]);
-      } finally { clearTimeout(timer); }
-      await send('Fetch.disable');
+      // Tauri's intercepted local assets bypass CDP Fetch. Start a fresh document
+      // so none of the installed app's timers/listeners survives into the sample.
+      await send('Page.navigate', { url: 'about:blank' });
+      const tree = await send('Page.getFrameTree') as { frameTree: { frame: { id: string } } };
+      await send('Page.setDocumentContent', { frameId: tree.frameTree.frame.id, html });
+      const ready = await send('Runtime.evaluate', { expression: "document.title", returnByValue: true }) as { result: { value?: string } };
+      if (ready.result.value !== 'Bandsearch · prototype 334') throw new Error('Prototype document did not load');
       console.log('Prototype loaded on the phone. A/B/C switcher is at the bottom. Restart the app to exit.');
     } finally { ws.close(); }
   } finally { execFileSync(adb, ['forward', '--remove', `tcp:${port}`]); }

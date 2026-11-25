@@ -16,8 +16,9 @@ const h = React.createElement;
 type Variant = 'A' | 'B' | 'C';
 type Chat = { id: string; title: string; date: string; messages: MessageViewProps[] };
 const variants: Variant[] = ['A', 'B', 'C'];
+const route = () => location.hash.slice(2).split('?')[0] || 'chat';
 const variantFromUrl = (): Variant => {
-  const value = new URLSearchParams(location.search).get('variant');
+  const value = new URLSearchParams(location.search || location.hash.split('?')[1]).get('variant');
   return value === 'B' || value === 'C' ? value : 'A';
 };
 function card(name: string, why: string, connection: string): CardViewProps {
@@ -40,7 +41,7 @@ function App() {
   const [variant, setVariant] = React.useState(variantFromUrl);
   const [chats, setChats] = React.useState(sample);
   const [active, setActive] = React.useState<string | null>('one');
-  const [screen, setScreen] = React.useState(location.hash.slice(2) || 'chat');
+  const [screen, setScreen] = React.useState(route());
   const [mode, setMode] = React.useState('fresh');
   const [target, setTarget] = React.useState<ObscurityTarget | undefined>('underground');
   const [restored, setRestored] = React.useState(false);
@@ -56,15 +57,15 @@ function App() {
   const current = chats.find(c => c.id === active);
   const theme = getTheme(mode);
   const keyboard = simulated || viewport.keyboard;
-  function navigate(next: string) { location.hash = '/' + next; }
+  function navigate(next: string) { location.hash = '/' + next + (location.protocol === 'about:' ? '?variant=' + variant : ''); }
   function cycle(delta: number) {
     const next = variants[(variants.indexOf(variant) + delta + 3) % 3]!;
     const url = new URL(location.href); url.searchParams.set('variant', next);
-    history.replaceState(null, '', url); setVariant(next);
+    history.replaceState(null, '', location.protocol === 'about:' ? `#/${screen}?variant=${next}` : url); setVariant(next);
   }
   React.useEffect(() => onLanguageChange(() => languageChanged()), []);
   React.useEffect(() => {
-    const change = () => setScreen(location.hash.slice(2) || 'chat');
+    const change = () => setScreen(route());
     addEventListener('hashchange', change); return () => removeEventListener('hashchange', change);
   }, []);
   React.useEffect(() => {
@@ -127,5 +128,5 @@ function App() {
     h('aside', { className: 'prototype-switcher', 'aria-label': t('prototype334.badge') }, button('←', () => cycle(-1), { 'aria-label': t('prototype334.previous') }), button(t(`prototype334.${variant}`), () => setInspect(!inspect), { 'aria-label': t('prototype334.inspect'), 'aria-expanded': inspect }), button('→', () => cycle(1), { 'aria-label': t('prototype334.next') })),
     inspect ? h('aside', { className: 'prototype-inspector' }, h('strong', null, t('prototype334.badge')), h('p', null, t('prototype334.info')), h('p', null, t('prototype334.state', { width: viewport.width, height: Math.round(height), keyboard: t(keyboard ? 'prototype334.on' : 'prototype334.off'), count: chats.length })), button(t('prototype334.reset'), () => { setChats(sample()); setActive('one'); setRestored(false); setFeedback(false); navigate('chat'); }), button(t('prototype334.restored'), () => { setRestored(!restored); navigate('chat'); }), button(t('prototype334.feedback'), () => setFeedback(!feedback)), button(t('prototype334.keyboard'), () => setSimulated(!simulated))) : null);
 }
-if (!location.hash) history.replaceState(null, '', `${location.pathname}${location.search}#/chat`);
+if (!location.hash) history.replaceState(null, '', '#/chat');
 createRoot(document.getElementById('root')!).render(h(App));
