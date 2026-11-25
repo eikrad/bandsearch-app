@@ -29,8 +29,8 @@ jobs:
       - name: npm security audit (all workspaces)
         id: npm
         run: |
-          REPORT=$(npm audit 2>&1) || true
-          STATUS=$?
+          STATUS=0
+          REPORT=$(npm audit 2>&1) || STATUS=$?
           {
             echo "report<<NPMEOF"
             echo "$REPORT"
@@ -51,8 +51,8 @@ jobs:
         id: py
         run: |
           pip install pip-audit --quiet
-          REPORT=$(pip-audit -r /tmp/reqs.txt --format columns 2>&1) || true
-          STATUS=$?
+          STATUS=0
+          REPORT=$(pip-audit -r /tmp/reqs.txt --format columns 2>&1) || STATUS=$?
           {
             echo "report<<PYEOF"
             echo "$REPORT"
@@ -75,8 +75,8 @@ jobs:
       - name: Rust security audit (cargo-audit)
         id: cargo
         run: |
-          REPORT=$(cargo audit --file apps/desktop/src-tauri/Cargo.lock 2>&1) || true
-          STATUS=$?
+          STATUS=0
+          REPORT=$(cargo audit --file apps/desktop/src-tauri/Cargo.lock 2>&1) || STATUS=$?
           {
             echo "report<<CARGOEOF"
             echo "$REPORT"
