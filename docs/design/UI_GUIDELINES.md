@@ -508,7 +508,7 @@ change.
 
 This remains explicitly post-MVP and must not delay the core recommendation workflow.
 
-## Android Chat prototype (#334) — not a production decision
+## Android Chat layout decision (#334) — not yet built into the product
 
 The throwaway `prototype/android-chat-layout` branch compares three layouts:
 A pins a full composer (stacked input/Recommend, disclosure under it); B pins
@@ -526,12 +526,13 @@ on focus. The status slot sits above tabs (above the keyboard when tabs hide).
 A separate 48 px prototype switcher reserves space beneath the app controls;
 it is instrumentation and must not be copied into the product.
 
-**Owner preference (2026-11-25), not built into the product:** B, with the
+**Owner-approved layout (2026-11-26), implementation pending (#156/#154):** B, with the
 KI/AI notice visible above the composer and dismissible with a 44 px × button.
 The updated prototype retains dismissal for the current sample chat; a new
-chat shows the notice again. This reset rule is a prototype default, pending
-owner feedback. Card-level AI markings remain visible. Final keyboard and
-other layout checks on #334 are still pending. No legal wording is removed or rewritten. Existing
+chat shows the notice again. Card-level AI markings remain visible. The owner
+confirmed the updated arrangement on the phone. Instrumented real-keyboard
+measurements and Back checks remain implementation validation; visual approval
+does not establish those results. No legal wording is removed or rewritten. Existing
 card field ordering and rendering come from ChatAppView, including pre-existing
 differences from the target spec; those are not new design decisions. The
 prototype's chat list/rename/delete use sample data only (#352/#373/#374).

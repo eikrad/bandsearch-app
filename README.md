@@ -10,7 +10,7 @@ AI-powered music recommendations for niche and lesser-known artists. Describe ba
 
 This branch is a design experiment, not a release or a PR candidate. Run
 `npm run prototype:android-chat` to create `/tmp/bandsearch-android-chat-prototype.html`,
-then open it at phone width. B is the current preferred variant, with a
+then open it at phone width. B is the owner-approved layout (2026-11-26), with a
 dismissible AI notice above the composer. Add `?variant=A`, `B`, or `C` to compare layouts;
 the bottom arrows switch them. Tap the layout name for sample-state controls.
 `npm run prototype:android-chat -- --phone` loads it into an already-installed

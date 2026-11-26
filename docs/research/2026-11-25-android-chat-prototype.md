@@ -1,8 +1,9 @@
 # Android Chat layout prototype — #334
 
 Throwaway branch `prototype/android-chat-layout`, based on `origin/staging`
-`eeec61b`. Never merge; no PR. The owner prefers B, with a visible, dismissible AI notice (2026-11-25).
-The updated notice still needs visual feedback.
+`eeec61b`. Never merge; no PR. The owner approved B with the visible,
+dismissible AI notice on the phone on 2026-11-26 ("ja ist gut").
+The layout decision feeds production implementation in #156/#154.
 
 ## Run
 
@@ -33,7 +34,7 @@ external links report their destination without leaving the sample.
   composer controls with a 44 px dismiss button; feedback follows the latest
   batch. Earlier picks collapse. The owner preferred B but found the earlier
   disclosure placement too easy to miss. Dismissal lasts for that sample chat;
-  a new chat shows it again (prototype default, not yet confirmed).
+  a new chat shows it again. The owner approved the updated arrangement.
 - **C — Scrolling page:** header, all earlier cards and full composer scroll as
   one page. The composer is reached after the cards.
 
@@ -67,8 +68,11 @@ that space when comparing with the final product.
 - A/B/C still have no horizontal overflow or undersized controls in the sampled
   English states. Rename, delete and undo still work. These are local checks,
   not real keyboard results.
-- Loading the update onto the phone is pending USB reconnection: ADB currently
-  lists no devices.
+- On 2026-11-26 the update loaded into the OPPO CPH2709 WebView after USB
+  reconnection. Measured with the keyboard closed: width 360 px, visual viewport
+  792.67 px, composer 179.58 px, transcript 365.08 px, top inset 40 px. No
+  horizontal overflow or visible controls below 44 px. The owner then approved
+  the arrangement. This was visual acceptance, not an instrumented IME test.
 
 ## Earlier phone status (before dismissible notice)
 
@@ -85,13 +89,14 @@ The screen slept during the keyboard test; automated touch injection did not
 reliably open the IME. Real keyboard and Back checks await a manual tap.
 No APK was replaced and no account data was changed.
 
-## Still needed on the phone
+## Production implementation validation still needed
 
 Validate updated B with the real keyboard open; inspect header fit and insets,
 scroll cards while typing, toggle stars and Save, inspect the status slot,
 open the chat list, rename and undo deletion. Back should dismiss the IME first
-and walk from Chats to Chat. Record actual heights and confirmation of the updated B
-notice on #334; then update the final spec during #314's handoff.
+and walk from Chats to Chat. Record actual keyboard-open heights during
+implementation; carry the chosen B layout into the final spec during #314's
+handoff. The notice placement no longer needs a design decision.
 
 ## Validation
 
