@@ -5,6 +5,10 @@ Throwaway branch `prototype/android-note-sheet`, built on
 **Nothing here is built in the product.** The chosen pattern goes into the
 rewritten #156/#154 at the #314 handoff.
 
+**Decision (owner, 2026-11-27, after comparing on the phone): C, full screen.**
+The `UI_GUIDELINES.md` text that says "sheet" for this editor is corrected at
+the handoff, marked as not yet built.
+
 ## Run
 
 - `npm run prototype:android-note` writes a self-contained HTML file at
