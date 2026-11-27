@@ -7,6 +7,7 @@
 import type { SavedBandTarget, CategoryNoteUpdates } from "../savedBandActions.js";
 import type { ArtistGroup, ArtistSearchResult } from "../domain.js";
 import type { StatusMessage } from "../statusMessage.js";
+import type { CardViewProps } from "../chatRenderAdapter.js";
 
 export type ChatHandlers = {
   onModeChange(mode: string): unknown;
@@ -29,6 +30,8 @@ export type ChatHandlers = {
   onUnsave?(savedBandId: string, artistName: string): unknown;
   /** Editing implies saving; identity is resolved against current saved bands. */
   onSaveCategoryNote?(target: SavedBandTarget, updates: CategoryNoteUpdates): unknown;
+  /** Throwaway #335 prototype only: open the Category/Note editor outside the card. */
+  prototypeOpenEditor?(card: CardViewProps): void;
 };
 
 /** One saved artist as the saved-artists screen renders it. */

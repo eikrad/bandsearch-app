@@ -179,7 +179,7 @@ function RatingStars({
 // what gets recommended... the distinction from an artist group — which does
 // not affect recommendations — is otherwise invisible," and a note stays
 // labelled as the model's own words until the user edits it (ADR 0002).
-function CategoryNoteSheet({
+export function CategoryNoteSheet({
   card,
   theme,
   onSave,
@@ -484,7 +484,9 @@ function RecommendationCard({ card, theme, isMobile, handlers }: { card: CardVie
     React.createElement(
       "div",
       { style: cardStyles.actions },
-      renderCardActions(card, theme, handlers, () => setSheetOpen((open) => !open)),
+      renderCardActions(card, theme, handlers, () =>
+        // Throwaway #335: the prototype opens its sheet/full-screen editor instead.
+        handlers.prototypeOpenEditor ? handlers.prototypeOpenEditor(card) : setSheetOpen((open) => !open)),
     ),
     sheetOpen
       ? React.createElement(CategoryNoteSheet, {

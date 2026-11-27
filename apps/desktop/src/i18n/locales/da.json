@@ -255,5 +255,14 @@
     "info": "Alle ændringer her forbliver i dette eksempel. Lukning af appen vender tilbage til den installerede app.",
     "aiNotice": "AI-oplysninger",
     "dismissAiNotice": "Luk AI-meddelelse"
+  },
+  "prototype335": {
+    "A": "A · Inline i kortet",
+    "B": "B · Bundpanel",
+    "C": "C · Fuld skærm",
+    "previous": "Forrige editor",
+    "next": "Næste editor",
+    "editorFor": "Kategori og note for {{name}}",
+    "close": "Luk"
   }
 }

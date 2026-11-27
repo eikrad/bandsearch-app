@@ -62,3 +62,23 @@ h1 { font-size: 15px; font-weight: 700; }
 .prototype-list time { font-size: 12px; color: #8896a8; }
 .prototype-list-actions { display: flex; gap: 8px; margin-top: 4px; }
 .prototype-list form { display: flex; flex-wrap: wrap; gap: 8px; }
+/* THROWAWAY #335: the Category/Note editor at 44 px, in three containers. */
+.category-note-sheet { gap: 12px !important; }
+.category-note-sheet > p { font-size: 13px !important; }
+.category-note-sheet label { font-size: 13px !important; }
+.category-note-sheet input, .category-note-sheet textarea { font-size: 16px !important; padding: 10px !important; }
+.category-note-sheet > div:last-child { gap: 8px !important; }
+.category-note-sheet > div:last-child button { min-height: 44px; font-size: 15px !important; padding: 0 20px !important; }
+.p335-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.p335-head h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 700; color: #f0f4f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p335-head > button { flex: 0 0 44px; padding: 0; font-size: 20px; background: transparent; border-color: transparent; }
+.p335-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 40; }
+/* Bottom edge = bottom of the visible area, so the keyboard pushes the sheet up. */
+.p335-sheet { position: fixed; left: 0; right: 0; max-width: 760px; margin: auto; top: calc(var(--prototype-top, 0px) + var(--prototype-height, 100dvh)); transform: translateY(-100%); max-height: calc(var(--prototype-height, 100dvh) - 24px - env(safe-area-inset-top)); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 4px 16px calc(12px + env(safe-area-inset-bottom)); background: #151a23; border-top: 1px solid #243044; border-radius: 16px 16px 0 0; z-index: 41; }
+.p335-grip { width: 40px; height: 4px; margin: 4px auto 0; border-radius: 2px; background: #3a4a63; }
+.p335-sheet .category-note-sheet, .p335-full .category-note-sheet { border: 0 !important; padding: 0 !important; margin: 8px 0 0 !important; background: transparent !important; }
+.p335-full { position: fixed; left: 0; right: 0; max-width: 760px; margin: auto; top: var(--prototype-top, 0px); height: var(--prototype-height, 100dvh); display: flex; flex-direction: column; box-sizing: border-box; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: #0d0f14; z-index: 41; }
+.p335-full > .p335-head { flex: none; padding: 4px 16px 8px; border-bottom: 1px solid #1e2a3a; }
+.p335-full-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 16px; }
+.p335-full textarea { min-height: 132px; }
+.category-note-sheet label { display: grid; gap: 4px; color: #8896a8; } /* works around the label-style bug, see the findings */

@@ -255,5 +255,14 @@
     "info": "Alle Änderungen hier bleiben in diesem Beispiel. Beim Schließen der App kehrst du zur installierten App zurück.",
     "aiNotice": "KI-Informationen",
     "dismissAiNotice": "KI-Hinweis schließen"
+  },
+  "prototype335": {
+    "A": "A · Inline in der Karte",
+    "B": "B · Bottom-Sheet",
+    "C": "C · Vollbild",
+    "previous": "Vorheriger Editor",
+    "next": "Nächster Editor",
+    "editorFor": "Kategorie und Notiz für {{name}}",
+    "close": "Schließen"
   }
 }

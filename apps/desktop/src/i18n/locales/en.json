@@ -255,5 +255,14 @@
     "info": "All changes here stay in this sample. Closing the app returns to the installed app.",
     "aiNotice": "AI information",
     "dismissAiNotice": "Dismiss AI notice"
+  },
+  "prototype335": {
+    "A": "A · Inline in the card",
+    "B": "B · Bottom sheet",
+    "C": "C · Full screen",
+    "previous": "Previous editor",
+    "next": "Next editor",
+    "editorFor": "Category and note for {{name}}",
+    "close": "Close"
   }
 }
